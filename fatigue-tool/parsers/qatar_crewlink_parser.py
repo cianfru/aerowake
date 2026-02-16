@@ -1,0 +1,786 @@
+"""
+Airline Grid Roster Parser
+============================
+
+Parses grid/table layout rosters commonly used by airlines (CrewLink, etc.) where:
+- Each date is a column header
+- Data for that day is stacked vertically below it (RPT, flights, times)
+- Multi-sector days have multiple flight entries stacked
+
+Design: Pattern-based recognition, works with ANY airline using similar grid layout
+Supports: Qatar Airways, Emirates, Etihad, and other airlines with CrewLink-style rosters
+"""
+
+import re
+import pdfplumber
+from datetime import datetime, timedelta
+from typing import List, Dict, Optional
+import pytz
+import airportsdata
+
+from models.data_models import Airport, FlightSegment, Duty
+
+
+# Load global IATA airport database (~7,800 airports with timezones and coordinates)
+# This replaces the old hardcoded KNOWN_AIRPORTS dict
+_IATA_DB = airportsdata.load('IATA')
+
+
+def _lookup_airport(iata_code: str) -> Optional[Airport]:
+    """
+    Look up an airport by IATA code from the airportsdata database.
+
+    Returns Airport object with timezone and coordinates, or None if not found.
+    """
+    entry = _IATA_DB.get(iata_code.upper())
+    if entry:
+        return Airport(
+            code=entry['iata'],
+            timezone=entry['tz'],
+            latitude=entry['lat'],
+            longitude=entry['lon']
+        )
+    return None
+
+
+class CrewLinkRosterParser:
+    """
+    Generic pattern-based parser for airline grid-format rosters (CrewLink-style)
+    
+    KEY DESIGN: Pattern recognition, not airline-specific
+    - Detects RPT:HH:MM pattern (reporting time)
+    - Detects flight pattern: [prefix]NNNN AAA HH:MM AAA HH:MM
+      (prefix = optional airline code like 6E, QR, EK)
+    - Handles unknown airports gracefully (auto-creates with UTC)
+    - Works with ANY airline using similar grid layout
+    
+    Supported: Qatar Airways, Emirates, Etihad, and other airlines with CrewLink rosters
+    """
+    
+    def __init__(self, auto_create_airports: bool = True, timezone_format: str = 'auto'):
+        """
+        Initialize parser
+
+        Args:
+            auto_create_airports: Create placeholder for unknown airports not in airportsdata
+            timezone_format: 'auto', 'local', 'zulu', or 'homebase'
+                - 'auto': Detect from PDF header (default, recommended)
+                - 'local': Times in roster are in local timezone of each airport
+                - 'zulu': Times in roster are in UTC/Zulu (all times are UTC)
+                - 'homebase': Times are in home base timezone (DOH)
+        """
+        self.airport_cache = {}  # Runtime cache for resolved Airport objects
+        self.auto_create_airports = auto_create_airports
+        self.timezone_format = timezone_format.lower()
+        self.unknown_airports = set()  # Track codes not found in airportsdata
+
+        if self.timezone_format not in ['auto', 'local', 'zulu', 'homebase']:
+            raise ValueError(f"timezone_format must be 'auto', 'local', 'zulu', or 'homebase', got '{timezone_format}'")
+
+        self.home_timezone = 'Asia/Qatar'  # Default DOH, will be updated from pilot_info
+        self.home_base_code = 'DOH'  # Default, will be updated from pilot_info
+
+    def _get_or_create_airport(self, code: str) -> Optional[Airport]:
+        """
+        Look up airport from airportsdata (~7,800 IATA airports).
+        Falls back to UTC placeholder only if the code is truly unknown.
+        """
+        if code in self.airport_cache:
+            return self.airport_cache[code]
+
+        # Primary lookup: airportsdata (covers ~7,800 airports)
+        airport = _lookup_airport(code)
+        if airport:
+            self.airport_cache[code] = airport
+            return airport
+
+        # Code not in airportsdata
+        if not self.auto_create_airports:
+            self.unknown_airports.add(code)
+            return None
+
+        # Create UTC placeholder as last resort
+        placeholder = Airport(
+            code=code,
+            timezone='UTC',
+            latitude=0.0,
+            longitude=0.0
+        )
+
+        self.airport_cache[code] = placeholder
+        self.unknown_airports.add(code)
+
+        print(f"⚠️  Airport {code} not found in airportsdata ({len(_IATA_DB)} entries). Using UTC placeholder.")
+        print(f"    Fatigue/circadian calculations for sectors involving {code} may be inaccurate.")
+
+        return placeholder
+    
+    def _get_home_base_code(self) -> str:
+        """Return the pilot's home base IATA code (e.g. 'DOH')."""
+        return self.home_base_code
+
+    def parse_roster(self, pdf_path: str) -> Dict:
+        """
+        Main entry point - parses airline grid-format roster PDF
+        
+        Returns:
+            Dict with pilot info and parsed duties
+        """
+        with pdfplumber.open(pdf_path) as pdf:
+            page = pdf.pages[0]
+            
+            # Auto-detect timezone format if set to 'auto'
+            if self.timezone_format == 'auto':
+                detected_format = self._detect_timezone_format(page)
+                self.timezone_format = detected_format
+                print(f"   ℹ️  Detected timezone format: {detected_format.upper()}")
+            
+            # Extract pilot info from header
+            pilot_info = self._extract_pilot_info(page)
+            
+            # FIXED: Update home timezone and base code from pilot base
+            if pilot_info.get('base'):
+                self.home_base_code = pilot_info['base']
+                base_airport = self._get_or_create_airport(pilot_info['base'])
+                if base_airport:
+                    self.home_timezone = base_airport.timezone
+            
+            pilot_info['timezone_format'] = self.timezone_format
+            
+            # Extract the main schedule table
+            table = self._extract_schedule_table(page)
+            
+            # Parse the grid into duties
+            duties = self._parse_grid_to_duties(table, pilot_info['year'])
+            
+            return {
+                'pilot_info': pilot_info,
+                'duties': duties,
+                'statistics': self._extract_statistics(page),
+                'unknown_airports': list(self.unknown_airports)
+            }
+    
+    def _detect_timezone_format(self, page) -> str:
+        """
+        Auto-detect timezone format from PDF header.
+
+        Uses regex with flexible whitespace to handle pdfplumber extraction
+        artifacts (extra spaces, newlines between words, reordered columns).
+
+        Looks for phrases like:
+        - "All times are in Local" -> 'local'
+        - "All times are in UTC" -> 'zulu'
+        - "All times are Home Base" -> 'homebase'
+
+        Returns:
+            'local', 'zulu', or 'homebase'
+        """
+        text = page.extract_text() or ''
+
+        # Clean PDF artifacts
+        text_clean = re.sub(r'\(cid:\d+\)', ' ', text)
+        text_clean = re.sub(r'[\x00-\x1F\x7F]', ' ', text_clean)
+        # Collapse multiple whitespace (spaces, tabs) into single space
+        text_clean = re.sub(r'[ \t]+', ' ', text_clean)
+        text_lower = text_clean.lower()
+
+        # Debug: print any line containing "time" for troubleshooting
+        for line in text_lower.split('\n'):
+            if 'time' in line:
+                print(f"   [TZ-DETECT] Found line with 'time': {repr(line.strip())}")
+
+        # Pattern 1: UTC/Zulu format
+        # Matches: "all times are in utc", "times utc", "times: utc", etc.
+        if re.search(r'(?:all\s+)?times?\s*(?:are\s+)?(?:in\s+)?[:\-–]?\s*(?:utc|zulu)', text_lower):
+            print("   📍 Timezone format detected: UTC/ZULU")
+            return 'zulu'
+
+        # Pattern 2: Local time format
+        # Matches: "all times are in local", "times are local", "times: local", etc.
+        if re.search(r'(?:all\s+)?times?\s*(?:are\s+)?(?:in\s+)?[:\-–]?\s*local', text_lower):
+            print("   📍 Timezone format detected: LOCAL TIME")
+            return 'local'
+
+        # Pattern 3: Home base format
+        # Matches: "all times are base", "all times are home base", "times in home base", "home base time"
+        if re.search(r'(?:all\s+)?times?\s*(?:are\s+)?(?:in\s+)?[:\-–]?\s*(?:home\s*)?base(?:\s|$)', text_lower) or \
+           re.search(r'home\s*base\s+time', text_lower):
+            print("   📍 Timezone format detected: HOME BASE")
+            return 'homebase'
+
+        # Default to local
+        print("   ⚠️  Could not detect timezone format from PDF header, defaulting to LOCAL")
+        return 'local'
+    
+    def _extract_pilot_info(self, page) -> Dict:
+        """
+        Extract pilot and roster metadata from PDF header
+        
+        Extracts:
+        - Pilot name
+        - Pilot ID
+        - Pilot base
+        - Aircraft type
+        - Roster period (start and end dates)
+        - Block hours and duty hours statistics
+        - Timezone format (local vs UTC)
+        
+        Returns:
+            Dict with keys: name, id, base, aircraft, period_start, period_end,
+            block_hours, duty_hours, year, month
+        """
+        text = page.extract_text()
+        
+        # CRITICAL FIX: Clean PDF extraction artifacts
+        # pdfplumber may include (cid:X) markers for special characters like tabs
+        # These MUST be removed before regex matching
+        text_clean = re.sub(r'\(cid:\d+\)', ' ', text)
+        
+        # Debug: Print first 500 chars of cleaned text
+        print(f"\n   [DEBUG] First 500 chars of cleaned PDF text:")
+        print(f"   {repr(text_clean[:500])}\n")
+        
+        # Initialize with defaults
+        info = {
+            'name': None,
+            'id': None,
+            'base': 'DOH',  # Default
+            'aircraft': 'A320',  # Default
+            'year': None,
+            'month': None,
+            'period_start': None,
+            'period_end': None,
+            'block_hours': '00:00',
+            'duty_hours': '00:00'
+        }
+        
+        # ----
+        # 1. EXTRACT PILOT NAME
+        # ----
+        # Pattern handles extra whitespace and stops at "All times"
+        # Improved to handle PDF artifacts and various formatting
+        name_match = re.search(r'Name\s+:\s*(.+?)(?:\n|All times|ID\s+:)', text_clean, re.DOTALL)
+        if name_match:
+            info['name'] = name_match.group(1).strip()
+            print(f"   ✓ Extracted pilot name: {info['name']}")
+        else:
+            # Fallback: Try without requiring whitespace after colon
+            name_match = re.search(r'Name\s*:\s*(.+?)(?:\n|$)', text_clean)
+            if name_match:
+                info['name'] = name_match.group(1).strip()
+                print(f"   ✓ Extracted pilot name (fallback): {info['name']}")
+            else:
+                print(f"   ⚠️  Could not extract pilot name from PDF header")
+                print(f"   [DEBUG] Text around 'Name': {repr(text_clean[:200])}")
+        
+        # ----
+        # 2. EXTRACT ID, BASE, AIRCRAFT
+        # ----
+        # Format in PDF: "ID    :134614 (DOH CP-A320)"
+        # Improved pattern with flexible spacing
+        id_pattern = r'ID\s+:\s*(\d+)\s*\(\s*([A-Z]{3})\s+CP-(\w+)\)'
+        id_match = re.search(id_pattern, text_clean)
+        
+        if id_match:
+            info['id'] = id_match.group(1)
+            info['base'] = id_match.group(2)
+            info['aircraft'] = id_match.group(3)
+            print(f"   ✓ Extracted pilot ID: {info['id']} | Base: {info['base']} | Aircraft: {info['aircraft']}")
+        else:
+            # Try simpler pattern without CP prefix
+            id_match_simple = re.search(r'ID\s*:\s*(\d+)', text_clean)
+            if id_match_simple:
+                info['id'] = id_match_simple.group(1)
+                print(f"   ✓ Extracted pilot ID: {info['id']} (base/aircraft not found)")
+            else:
+                print(f"   ⚠️  Could not extract pilot ID from PDF header")
+        
+        # ----
+        # 3. EXTRACT ROSTER PERIOD (ENHANCED)
+        # ----
+        # Format: "Period: 01-Feb-2026 - 28-Feb-2026 | Published"
+        # This is ESSENTIAL for determining the month being analyzed
+        period_match = re.search(
+            r'Period:\s*(\d{2}-\w{3}-\d{4})\s*-\s*(\d{2}-\w{3}-\d{4})',
+            text_clean
+        )
+        
+        if period_match:
+            info['period_start'] = period_match.group(1)
+            info['period_end'] = period_match.group(2)
+            
+            # Also extract month and year from period_start
+            date_parts = re.search(r'\d+-(\w{3})-(\d{4})', info['period_start'])
+            if date_parts:
+                info['month'] = date_parts.group(1)
+                info['year'] = int(date_parts.group(2))
+            
+            print(f"   ✓ Period: {info['period_start']} to {info['period_end']}")
+            print(f"   ✓ Extracted period: {info['month']} {info['year']}")
+        else:
+            # Fallback to simpler pattern
+            period_match_simple = re.search(r'Period:\s*\d+-([A-Za-z]+)-(\d{4})', text_clean)
+            if period_match_simple:
+                info['month'] = period_match_simple.group(1)
+                info['year'] = int(period_match_simple.group(2))
+                print(f"   ✓ Extracted period: {info['month']} {info['year']}")
+            else:
+                print(f"   ⚠️  Period extraction failed")
+        
+        # ----
+        # 4. EXTRACT STATISTICS (BLOCK HOURS, DUTY HOURS)
+        # ----
+        # Format: "VALUE 71:45 114:30 0 24 00:00 0 0 0 17"
+        #         (block hrs, duty hrs, ...)
+        stats_match = re.search(r'VALUE\s+([\d:]+)\s+([\d:]+)', text_clean)
+        
+        if stats_match:
+            info['block_hours'] = stats_match.group(1)
+            info['duty_hours'] = stats_match.group(2)
+            print(f"   ✓ Statistics: {info['block_hours']} block hours, {info['duty_hours']} duty hours")
+        else:
+            print(f"   ⚠️  Statistics extraction failed")
+        
+        # ----
+        # 5. DETECT TIMEZONE FORMAT
+        # ----
+        # This determines how to interpret all times in the duty details
+        if "All times are in Local" in text_clean:
+            print(f"   ✓ Timezone: LOCAL TIMES")
+        elif "All times are in UTC" in text_clean or "Zulu" in text_clean:
+            print(f"   ✓ Timezone: UTC/ZULU TIMES")
+        else:
+            print(f"   ℹ️  Timezone not explicitly stated, assuming LOCAL")
+        
+        return info
+    
+    def _extract_schedule_table(self, page) -> List[List[str]]:
+        """
+        Extract the main schedule grid using pdfplumber table detection
+        """
+        # Use aggressive table detection for complex grid
+        table = page.extract_table({
+            "vertical_strategy": "lines",
+            "horizontal_strategy": "lines",
+            "snap_tolerance": 5,
+            "join_tolerance": 3,
+            "edge_min_length": 10,
+        })
+        
+        if not table:
+            # Fallback: try text strategy
+            table = page.extract_table({
+                "vertical_strategy": "text",
+                "horizontal_strategy": "text",
+                "snap_tolerance": 5,
+            })
+        
+        return table if table else []
+    
+    def _parse_grid_to_duties(self, table: List[List[str]], year: int) -> List[Duty]:
+        """
+        Parse the grid table into Duty objects
+        
+        Grid structure:
+        Row 0: Date headers (e.g., "01Feb Sun", "02Feb Mon", ...)
+        Row 1+: Data rows (RPT, flights, times, block/duty hours)
+        """
+        if not table or len(table) < 2:
+            return []
+        
+        duties = []
+        
+        # First row = date headers
+        date_headers = table[0]
+        
+        # Identify which columns are dates (skip empty/label columns)
+        date_columns = []
+        for col_idx, header in enumerate(date_headers):
+            if header and re.match(r'\d{2}[A-Z][a-z]{2}', header):
+                # Parse date like "01Feb" -> datetime
+                date_str = header.split('\n')[0].split()[0]  # Get "01Feb"
+                day = int(date_str[:2])
+                month_str = date_str[2:]
+                month = datetime.strptime(month_str, '%b').month
+                date = datetime(year, month, day)
+                
+                date_columns.append({
+                    'col_idx': col_idx,
+                    'date': date,
+                    'date_str': date_str
+                })
+        
+        # For each date column, extract vertical stack of data
+        for date_col in date_columns:
+            col_idx = date_col['col_idx']
+            date = date_col['date']
+
+            # Collect all non-empty cells in this column
+            column_data = []
+            for row_idx in range(1, len(table)):
+                cell = table[row_idx][col_idx]
+                if cell and cell.strip():
+                    column_data.append(cell.strip())
+
+            # Parse this column's data into a duty (if any)
+            duty = self._parse_column_to_duty(date, column_data)
+            if duty:
+                # Check if this is a TRUE continuation of the previous duty:
+                # A continuation means the pilot is at an outstation (layover)
+                # and the next day's flights depart FROM that outstation back home,
+                # with no separate RPT because it's the same duty period.
+                #
+                # Conditions (ALL must be true):
+                # 1. No RPT line in this column (used departure-1h fallback)
+                # 2. Previous duty's last arrival is NOT the home base
+                #    (home base departures are always new duties, not continuations)
+                # 3. Previous duty's last arrival matches this duty's first departure
+                #    (pilot is at the outstation)
+                # 4. Previous duty exists and both have segments
+                has_rpt = any(
+                    re.match(r'R\s*P\s*T\s*:', line)
+                    for item in column_data
+                    for line in item.split('\n')
+                )
+                prev_ended_at_outstation = (
+                    duties
+                    and duties[-1].segments
+                    and duties[-1].segments[-1].arrival_airport.code != self._get_home_base_code()
+                )
+                is_continuation = (
+                    not has_rpt
+                    and prev_ended_at_outstation
+                    and duty.segments
+                    and duties[-1].segments[-1].arrival_airport.code == duty.segments[0].departure_airport.code
+                )
+                if is_continuation:
+                    # Merge: append segments to previous duty, update release time
+                    prev_duty = duties[-1]
+                    prev_duty.segments.extend(duty.segments)
+                    prev_duty.release_time_utc = duty.release_time_utc
+                    print(f"  ✓ Merged {date.strftime('%d%b')} segments into previous duty "
+                          f"({prev_duty.date.strftime('%d%b')}) — layover continuation, no RPT")
+                else:
+                    duties.append(duty)
+
+        return duties
+    
+    def _parse_column_to_duty(self, date: datetime, column_data: List[str]) -> Optional[Duty]:
+        """
+        Parse a single date column vertical data stack into a Duty
+        Enhanced to validate times against segment data
+        """
+        if not column_data:
+            return None
+        
+        # Combine all data and split by newlines
+        full_text = '\n'.join(column_data)
+        lines = [line.strip() for line in full_text.split('\n') if line.strip()]
+        
+        if not lines:
+            return None
+        
+        # Check if non-flying day (OFF, standby, leave, sick, rest, training)
+        # These activity codes mean the pilot has no operating duty on this date.
+        first_item = lines[0].upper()
+        _NON_FLYING_CODES = {
+            'OFF', 'GOFF', 'DOFF',          # Days off
+            'SBY', 'PSBY', 'STANDBY',       # Standby (home or phone)
+            'LVE', 'LEAVE',                  # Annual/other leave
+            'SICK', 'REST', 'SR',            # Sick, rest, special rest
+            '6ESEC', '6EVS', 'EVNT',         # Training/events
+        }
+        if any(code in first_item for code in _NON_FLYING_CODES):
+            return None  # Non-flying day, no duty
+        
+        # Extract report time (RPT) and flight segments first
+        # We need to know the departure airport to properly localize report time
+        report_time = None
+        report_hour = None
+        report_minute = None
+        
+        for line in lines:
+            # Tolerate OCR artifacts that insert spaces inside "RPT"
+            # (e.g., "R PT:05:55" or "RP T:05:55" from pdfplumber)
+            rpt_match = re.match(r'R\s*P\s*T\s*:\s*(\d{2})\s*:\s*(\d{2})', line)
+            if rpt_match:
+                report_hour = int(rpt_match.group(1))
+                report_minute = int(rpt_match.group(2))
+                break
+        
+        # Extract flight segments first to determine departure airport
+        segments = self._extract_segments_from_lines(lines, date)
+        
+        if not segments:
+            return None
+        
+        # Now create report time using proper timezone conversion
+        if report_hour is not None:
+            report_time_naive = datetime(date.year, date.month, date.day, report_hour, report_minute)
+            
+            # Get timezone from departure airport (first segment's departure)
+            dep_airport = segments[0].departure_airport
+            
+            # FIXED: Added 'homebase' format conversion
+            if self.timezone_format == 'local':
+                # Report time is in LOCAL timezone of departure airport
+                dep_tz = pytz.timezone(dep_airport.timezone)
+                report_time = dep_tz.localize(report_time_naive)
+            elif self.timezone_format == 'homebase':
+                # Report time is in HOME BASE timezone
+                home_tz = pytz.timezone(self.home_timezone)
+                report_time = home_tz.localize(report_time_naive)
+            else:  # zulu
+                # Report time is already in UTC
+                report_time = pytz.utc.localize(report_time_naive)
+            
+            # Validate report time against first departure
+            first_departure = segments[0].scheduled_departure_utc
+            if report_time > first_departure:
+                # Report is after departure - move to previous day
+                if self.timezone_format == 'local':
+                    dep_tz = pytz.timezone(dep_airport.timezone)
+                    report_time_naive_prev = report_time_naive - timedelta(days=1)
+                    report_time = dep_tz.localize(report_time_naive_prev)
+                elif self.timezone_format == 'homebase':
+                    home_tz = pytz.timezone(self.home_timezone)
+                    report_time_naive_prev = report_time_naive - timedelta(days=1)
+                    report_time = home_tz.localize(report_time_naive_prev)
+                print(f"  ⚠️  Report time adjusted to previous day (was after first departure)")
+        else:
+            # Fallback: report time = departure time - 1 hour
+            report_time = segments[0].scheduled_departure_utc - timedelta(hours=1)
+            print(f"  ⚠️  No RPT line found for {date.strftime('%d%b')} — using departure-1h as fallback")
+        
+        if not report_time:
+            return None  # No valid duty
+        
+        # Calculate release time: last landing + 30 minutes post-flight duty per EASA FTL
+        # EASA defines FDP as report time to END OF LAST LANDING (not +1 hour)
+        last_landing = segments[-1].scheduled_arrival_utc
+        release_time = last_landing + timedelta(minutes=30)
+        # Ensure release_time is in UTC
+        if release_time.tzinfo and release_time.utcoffset() != timedelta(0):
+            release_time = release_time.astimezone(pytz.utc)
+        
+        # Final validation: ensure report < release
+        if report_time >= release_time:
+            print(f"  ⚠️  Invalid duty: report >= release, adjusting release time")
+            release_time = report_time + timedelta(hours=1)  # Minimum 1h duty
+        
+        # Create duty
+        # Use departure airport timezone as home base (will be corrected by parent parser)
+        duty = Duty(
+            duty_id=f"D{date.strftime('%Y%m%d')}",
+            date=date,
+            report_time_utc=report_time.astimezone(pytz.utc),
+            release_time_utc=release_time,
+            segments=segments,
+            home_base_timezone=segments[0].departure_airport.timezone
+        )
+        
+        return duty
+    
+    def _extract_segments_from_lines(
+        self, 
+        lines: List[str], 
+        date: datetime
+    ) -> List[FlightSegment]:
+        """
+        Extract flight segments using PATTERN DETECTION
+        
+        Pattern recognition (works with any flights):
+        - Flight number: 3-4 digits OR airline prefix + digits (e.g., 6E1306, QR490)
+        - Airport code: 3 uppercase letters
+        - Time: HH:MM format
+        - Sequence: FlightNum to Airport to Time to Airport to Time
+        """
+        segments = []
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            
+            # PATTERN 1: Look for flight number
+            # Case A: Pure numeric (490, 1060) - 3 to 4 digits
+            # Case B: Airline-prefixed (6E1306, QR490, EK231) - 1-3 alphanumeric prefix + digits
+            # Must NOT be a time (contains ':'), airport code (exactly 3 uppercase letters),
+            # or annotation like (320), PIC, REQ, SR, etc.
+            is_flight_number = (
+                ':' not in line
+                and not re.match(r'^[A-Z]{3}$', line)
+                and not re.match(r'^\(', line)
+                and (
+                    re.match(r'^\d{3,4}$', line)  # Pure numeric: 490, 1060
+                    or re.match(r'^[A-Z0-9]{2}[A-Z]?\d{1,5}$', line)  # Prefixed: 6E1306, QR490
+                )
+            )
+            if is_flight_number:
+                flight_num = line
+                
+                # Look ahead for: AIRPORT TIME AIRPORT TIME
+                if i + 4 >= len(lines):
+                    i += 1
+                    continue
+                
+                # PATTERN 2: Departure airport (3 letters)
+                dep_code = lines[i + 1]
+                if not re.match(r'^[A-Z]{3}$', dep_code):
+                    i += 1
+                    continue
+                
+                # PATTERN 3: Departure time (HH:MM)
+                dep_time_str = lines[i + 2]
+                if not re.search(r'\d{2}:\d{2}', dep_time_str):
+                    i += 1
+                    continue
+                
+                # PATTERN 4: Arrival airport (3 letters)
+                arr_code = lines[i + 3]
+                if not re.match(r'^[A-Z]{3}$', arr_code):
+                    i += 1
+                    continue
+                
+                # PATTERN 5: Arrival time (HH:MM)
+                arr_time_str = lines[i + 4]
+                if not re.search(r'\d{2}:\d{2}', arr_time_str):
+                    i += 1
+                    continue
+                
+                # VALID FLIGHT PATTERN DETECTED!
+                dep_airport = self._get_or_create_airport(dep_code)
+                arr_airport = self._get_or_create_airport(arr_code)
+                
+                # Skip if airports couldn't be created
+                if not dep_airport or not arr_airport:
+                    i += 5
+                    continue
+                
+                # Parse times
+                dep_time = self._parse_time(dep_time_str, date)
+                arr_time = self._parse_time(arr_time_str, date)
+                
+                if not dep_time or not arr_time:
+                    i += 5
+                    continue
+                
+                # FIXED: Convert to UTC based on timezone format
+                try:
+                    if self.timezone_format == 'local':
+                        # Times are in LOCAL timezone of each airport
+                        dep_tz = pytz.timezone(dep_airport.timezone)
+                        arr_tz = pytz.timezone(arr_airport.timezone)
+                        
+                        dep_utc = dep_tz.localize(dep_time).astimezone(pytz.utc)
+                        arr_utc = arr_tz.localize(arr_time).astimezone(pytz.utc)
+                    
+                    elif self.timezone_format == 'homebase':
+                        # NEW: Times are in HOME BASE timezone (DOH)
+                        home_tz = pytz.timezone(self.home_timezone)
+                        
+                        dep_utc = home_tz.localize(dep_time).astimezone(pytz.utc)
+                        arr_utc = home_tz.localize(arr_time).astimezone(pytz.utc)
+                    
+                    else:  # timezone_format == 'zulu'
+                        # Times are already in UTC/Zulu
+                        dep_utc = pytz.utc.localize(dep_time)
+                        arr_utc = pytz.utc.localize(arr_time)
+                    
+                    # Safety: if arrival is before departure, the flight crosses midnight
+                    # This handles cases where (+1) marker was missing or stripped
+                    if arr_utc <= dep_utc:
+                        arr_utc += timedelta(days=1)
+
+                    segment = FlightSegment(
+                        flight_number=flight_num,  # Keep as-is from PDF
+                        departure_airport=dep_airport,
+                        arrival_airport=arr_airport,
+                        scheduled_departure_utc=dep_utc,
+                        scheduled_arrival_utc=arr_utc
+                    )
+
+                    segments.append(segment)
+
+                except Exception as e:
+                    print(f"⚠️  Error creating segment for flight {flight_num}: {e}")
+
+                # Skip past the 5 standard elements
+                i += 5
+
+                # Scan trailing lines for activity codes (IR, DH) and aircraft type.
+                # These appear AFTER the arrival time in Qatar CrewLink PDF columns.
+                # Known activity codes with operational meaning:
+                #   IR = Inflight Rest (pilot is relief crew, always 4-pilot augmented)
+                #   DH = Deadhead (pilot as passenger, not operating)
+                # Ignored codes (no fatigue relevance):
+                #   REQ = Requested duty (bidding metadata)
+                #   PIC, SR, CB, SIM, GND = other annotations
+                _ACTIVITY_CODES = {'IR', 'DH'}
+                _IGNORED_CODES = {'REQ', 'PIC', 'SR', 'CB', 'SIM', 'GND', 'DOFF'}
+
+                scan_limit = min(i + 3, len(lines))
+                while i < scan_limit:
+                    token = lines[i].strip().upper()
+                    clean = token.strip('()')  # "(359)" -> "359"
+
+                    if token in _ACTIVITY_CODES:
+                        segment.activity_code = token
+                        i += 1
+                    elif token in _IGNORED_CODES:
+                        i += 1  # Skip irrelevant codes
+                    elif re.match(r'^\(\w{2,3}\)$', token):
+                        # Parenthesized aircraft type e.g. (359), (351), (77W)
+                        i += 1
+                    elif re.match(r'^[A-Z0-9]{2,3}$', clean) and not re.match(r'^[A-Z]{3}$', token):
+                        # Bare aircraft type code e.g. 359, 77W (not an airport)
+                        i += 1
+                    else:
+                        break  # Unknown token — likely start of next segment
+
+                continue
+            
+            i += 1
+        
+        return segments
+    
+    def _parse_time(self, time_str: str, date: datetime) -> Optional[datetime]:
+        """Parse time string like "07:45" or "02:25(+1)" into datetime.
+
+        The (+N) marker indicates the time is N days after the base date.
+        """
+        # Extract (+N) day offset before removing it
+        day_offset = 0
+        offset_match = re.search(r'\(\+(\d+)\)', time_str)
+        if offset_match:
+            day_offset = int(offset_match.group(1))
+
+        # Remove (+N) marker for time parsing
+        time_str = re.sub(r'\(\+\d+\)', '', time_str).strip()
+
+        # Parse HH:MM
+        match = re.match(r'(\d{2}):(\d{2})', time_str)
+        if match:
+            hour = int(match.group(1))
+            minute = int(match.group(2))
+            return datetime(date.year, date.month, date.day, hour, minute) + timedelta(days=day_offset)
+
+        return None
+    
+    def _extract_statistics(self, page) -> Dict:
+        """Extract summary statistics from bottom of page"""
+        text = page.extract_text()
+        
+        stats = {}
+        
+        # Look for statistics table
+        stats_match = re.search(
+            r'BLOCK\s+HOURS.*?VALUE\s+([\d:]+)\s+([\d:]+)',
+            text,
+            re.DOTALL
+        )
+        
+        if stats_match:
+            stats['block_hours'] = stats_match.group(1)
+            stats['duty_hours'] = stats_match.group(2)
+        
+        return stats

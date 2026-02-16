@@ -1,0 +1,32 @@
+Fix: Generate post-duty sleep after night flights at hotel layovers
+
+Problem:
+- No sleep generated after duties ending at hotel layovers
+- Pilots arriving at hotels had no recovery sleep calculated
+- Led to inaccurate fatigue predictions and unrealistic sleep debt
+
+Root Cause:
+- Inverted logic in _generate_post_duty_sleep() environment detection
+- Condition checked if next duty departs from DIFFERENT location (wrong)
+- Should check if next duty departs from SAME location (layover)
+
+Solution:
+1. Fixed environment detection logic to correctly identify hotel layovers
+2. Added post-duty sleep to API response (sleep_strategies dictionary)
+3. Changed sleep times to display in actual location timezone (not home TZ)
+4. Added location_timezone and environment metadata to API response
+
+Changes:
+- core_model.py: Fixed _generate_post_duty_sleep() logic
+- core_model.py: Added post-duty sleep to API exposure
+- core_model.py: Changed timezone display to use location TZ
+- Added 4 comprehensive test files
+
+Impact:
+- Post-duty hotel sleep now correctly generated and visible in API
+- Sleep times shown in pilot's actual location timezone
+- More accurate fatigue predictions for multi-day trips with layovers
+- EASA-compliant rest period modeling
+
+Tests:
+All tests passing - post-duty sleep correctly generated and exposed in API
