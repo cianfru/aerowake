@@ -1,6 +1,6 @@
 // src/lib/api-client.ts
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://web-production-7a4fb.up.railway.app';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://aerowake-production.up.railway.app';
 
 // ============================================================================
 // TYPES (matching your existing types in src/types/fatigue.ts)
