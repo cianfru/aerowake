@@ -1058,18 +1058,40 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       });
     }
     
-    // Deduplicate EXACT duplicates only (same day, same hour range, same duty).
-    // Previously this dropped ALL overlapping bars on the same day — which
-    // incorrectly removed valid sleep bars (e.g., a rest-day bar + a pre-duty
-    // nap on the same day, or overnight continuation + daytime nap).
-    // Now we only remove bars that are truly redundant (identical positioning
-    // from the same related duty).
+    // Deduplicate sleep bars on the same day with overlapping time ranges.
+    // Sleep bars can come from two sources:
+    //   1. duties[].sleepEstimate (isPreDuty: true)
+    //   2. restDaysSleep[] (isPreDuty: false)
+    // The backend may generate entries in both for the same calendar night,
+    // producing duplicate or near-duplicate bars. Pre-duty bars take priority
+    // since they have richer context (linked to actual duty).
+    //
+    // Step 1: Exact dedup (same day + same time range regardless of source)
     const seen = new Set<string>();
-    const deduped = bars.filter(bar => {
-      // Round to 2 decimal places to avoid floating-point near-duplicates
-      const key = `${bar.dayIndex}|${bar.startHour.toFixed(2)}|${bar.endHour.toFixed(2)}|${bar.sleepStrategy ?? ''}|${bar.isPreDuty}`;
+    const exactDeduped = bars.filter(bar => {
+      // Key on day + time only (NOT strategy or isPreDuty) — any bar at the
+      // same position is a duplicate regardless of which source generated it
+      const key = `${bar.dayIndex}|${bar.startHour.toFixed(1)}|${bar.endHour.toFixed(1)}`;
       if (seen.has(key)) return false;
       seen.add(key);
+      return true;
+    });
+
+    // Step 2: Remove near-overlapping bars on the same day.
+    // E.g., a 23:00-07:00 rest_day bar and a 22:00-06:00 pre-duty bar
+    // that overlap by >50% are effectively the same sleep period.
+    const deduped = exactDeduped.filter((bar, idx) => {
+      for (let j = 0; j < idx; j++) {
+        const other = exactDeduped[j];
+        if (other.dayIndex !== bar.dayIndex) continue;
+        // Calculate overlap
+        const overlapStart = Math.max(bar.startHour, other.startHour);
+        const overlapEnd = Math.min(bar.endHour, other.endHour);
+        const overlap = Math.max(0, overlapEnd - overlapStart);
+        const barLength = bar.endHour - bar.startHour;
+        // If >50% of this bar overlaps with an earlier bar, drop it
+        if (barLength > 0 && overlap / barLength > 0.5) return false;
+      }
       return true;
     });
 
