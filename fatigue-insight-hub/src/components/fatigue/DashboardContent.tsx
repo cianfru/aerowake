@@ -122,6 +122,10 @@ export function DashboardContent({
                 statistics={analysisResults.statistics}
                 month={analysisResults.month}
                 pilotId={settings.pilotId}
+                pilotName={analysisResults.pilotName}
+                pilotBase={analysisResults.pilotBase}
+                pilotAircraft={analysisResults.pilotAircraft}
+                homeBaseTimezone={analysisResults.homeBaseTimezone}
                 onDutySelect={onDutySelect}
                 selectedDuty={selectedDuty}
                 restDaysSleep={analysisResults.restDaysSleep}

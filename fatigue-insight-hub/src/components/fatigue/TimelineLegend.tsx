@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface TimelineLegendProps {
   showDiscretion?: boolean;
@@ -23,7 +22,13 @@ export function TimelineLegend({ showDiscretion, variant = 'homebase' }: Timelin
 
       {expanded && (
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] p-2.5 rounded-lg bg-secondary/30 border border-border/30 animate-fade-in">
-          {/* WOCL */}
+          {/* Home Base Night — dynamic position, label without hours */}
+          <span className="flex items-center gap-1.5">
+            <span className="h-3.5 w-8 rounded-sm" style={{ background: 'rgba(30, 58, 138, 0.18)' }} />
+            <span className="text-muted-foreground">HB Night</span>
+          </span>
+
+          {/* WOCL — dynamic position, label without hours */}
           <span className="flex items-center gap-1.5">
             <span className="h-3.5 w-8 rounded-sm wocl-hatch" />
             <span className="text-muted-foreground">WOCL</span>

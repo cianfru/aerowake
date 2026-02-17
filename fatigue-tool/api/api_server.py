@@ -160,6 +160,10 @@ class SleepBlockResponse(BaseModel):
     sleep_start_time_home_tz: Optional[str] = None    # HH:mm
     sleep_end_time_home_tz: Optional[str] = None      # HH:mm
 
+    # UTC timestamps for chronogram UTC-normalised rendering
+    start_utc: Optional[str] = None   # ISO 8601 UTC e.g. "2026-02-01T20:30:00+00:00"
+    end_utc: Optional[str] = None     # ISO 8601 UTC
+
     # Per-block quality factor breakdown (populated for all sleep types)
     quality_factors: Optional[QualityFactorsResponse] = None
 
@@ -204,6 +208,10 @@ class SleepQualityResponse(BaseModel):
     sleep_end_hour_home_tz: Optional[float] = None
     sleep_start_time_home_tz: Optional[str] = None    # HH:mm
     sleep_end_time_home_tz: Optional[str] = None      # HH:mm
+
+    # UTC timestamps for chronogram UTC-normalised rendering
+    start_utc: Optional[str] = None   # Earliest block start_utc (ISO 8601 UTC)
+    end_utc: Optional[str] = None     # Latest block end_utc (ISO 8601 UTC)
 
     # Scientific methodology (surfaces calculation transparency)
     explanation: Optional[str] = None              # Human-readable strategy description
@@ -472,6 +480,8 @@ def _build_sleep_quality(duty_timeline) -> Optional[SleepQualityResponse]:
         sleep_end_hour_home_tz=latest.get('sleep_end_hour_home_tz'),
         sleep_start_time_home_tz=earliest.get('sleep_start_time_home_tz'),
         sleep_end_time_home_tz=latest.get('sleep_end_time_home_tz'),
+        start_utc=earliest.get('start_utc'),
+        end_utc=latest.get('end_utc'),
     )
 
 
