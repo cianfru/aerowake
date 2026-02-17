@@ -1803,9 +1803,23 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                             </div>
                                           );
                                         })}
+                                      {/* Crew composition badge for augmented (LR/ULR) duties */}
+                                      {bar.duty.crewComposition !== 'standard' && (
+                                        <div className={cn(
+                                          "absolute -top-2 left-1 text-[7px] font-bold px-1 py-0 rounded leading-tight z-20 border",
+                                          bar.duty.crewComposition === 'augmented_4'
+                                            ? "bg-purple-500/90 text-white border-purple-400/60"
+                                            : "bg-blue-500/90 text-white border-blue-400/60"
+                                        )}>
+                                          {bar.duty.crewComposition === 'augmented_4' ? '4P' : '3P'}
+                                        </div>
+                                      )}
                                       {/* Discretion warning indicator */}
                                       {usedDiscretion && (
-                                        <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-critical flex items-center justify-center">
+                                        <div className={cn(
+                                          "absolute -top-1 h-3 w-3 rounded-full bg-critical flex items-center justify-center",
+                                          bar.duty.crewComposition !== 'standard' ? "-right-1" : "-right-1"
+                                        )}>
                                           <AlertTriangle className="h-2 w-2 text-critical-foreground" />
                                         </div>
                                       )}
@@ -1831,7 +1845,52 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         <span className="text-muted-foreground">Flights:</span>
                                         <span>{bar.duty.flightSegments.map(s => s.flightNumber).join(', ')}</span>
                                       </div>
-                                      
+
+                                      {/* Crew Composition Section (for augmented duties) */}
+                                      {bar.duty.crewComposition !== 'standard' && (
+                                        <div className="border-t border-border pt-2 mt-2">
+                                          <span className="text-muted-foreground font-medium flex items-center gap-1">
+                                            <Brain className="h-3 w-3" />
+                                            Crew & Rest
+                                          </span>
+                                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
+                                            <span className="text-muted-foreground">Crew:</span>
+                                            <span className={cn(
+                                              "font-medium",
+                                              bar.duty.crewComposition === 'augmented_4' ? "text-purple-400" : "text-blue-400"
+                                            )}>
+                                              {bar.duty.crewComposition === 'augmented_4' ? '4-Pilot ULR' : '3-Pilot LR'}
+                                            </span>
+                                            {bar.duty.restFacilityClass && (
+                                              <>
+                                                <span className="text-muted-foreground">Rest Facility:</span>
+                                                <span className="capitalize">{bar.duty.restFacilityClass.replace('_', ' ')}</span>
+                                              </>
+                                            )}
+                                            {bar.duty.inflightRestBlocks.length > 0 && (
+                                              <>
+                                                <span className="text-muted-foreground">In-Flight Rest:</span>
+                                                <span>
+                                                  {bar.duty.inflightRestBlocks.length} block{bar.duty.inflightRestBlocks.length > 1 ? 's' : ''} · {bar.duty.inflightRestBlocks.reduce((sum, b) => sum + b.effectiveSleepHours, 0).toFixed(1)}h eff
+                                                </span>
+                                              </>
+                                            )}
+                                            {bar.duty.returnToDeckPerformance != null && (
+                                              <>
+                                                <span className="text-muted-foreground">Return to Deck:</span>
+                                                <span className={cn(
+                                                  "font-medium",
+                                                  bar.duty.returnToDeckPerformance < 60 ? "text-critical" :
+                                                  bar.duty.returnToDeckPerformance < 70 ? "text-warning" : "text-success"
+                                                )}>
+                                                  {Math.round(bar.duty.returnToDeckPerformance)}%
+                                                </span>
+                                              </>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
+
                                       {/* EASA ORO.FTL Section */}
                                       {(maxFdp || bar.duty.extendedFdpHours) && (
                                         <div className="border-t border-border pt-2 mt-2">
@@ -1965,17 +2024,28 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         width: `${Math.max(barWidth, 0.5)}%`,
                                         background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(147, 130, 220, 0.5) 2px, rgba(147, 130, 220, 0.5) 4px)',
                                         borderRadius: '2px',
+                                        border: '1px solid rgba(147, 130, 220, 0.6)',
                                         zIndex: 25,
                                       }}
                                     />
                                   </TooltipTrigger>
                                   <TooltipContent side="top" className="max-w-xs p-3">
                                     <div className="space-y-1 text-xs">
-                                      <div className="font-semibold border-b pb-1">
-                                        In-Flight Rest
+                                      <div className="font-semibold border-b pb-1 flex items-center gap-2">
+                                        <span>In-Flight Rest</span>
                                         {bar.crewSet && (
-                                          <Badge variant="outline" className="ml-2 text-[10px] capitalize">
+                                          <Badge variant="outline" className="text-[10px] capitalize">
                                             {bar.crewSet.replace('_', ' ')}
+                                          </Badge>
+                                        )}
+                                        {bar.relatedDuty.crewComposition !== 'standard' && (
+                                          <Badge variant="outline" className={cn(
+                                            "text-[10px]",
+                                            bar.relatedDuty.crewComposition === 'augmented_4'
+                                              ? "border-purple-400/60 text-purple-400"
+                                              : "border-blue-400/60 text-blue-400"
+                                          )}>
+                                            {bar.relatedDuty.crewComposition === 'augmented_4' ? '4-Pilot' : '3-Pilot'}
                                           </Badge>
                                         )}
                                       </div>
@@ -1988,6 +2058,12 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                            <>
                                              <span className="text-muted-foreground">WOCL:</span>
                                              <span className="text-warning">Yes</span>
+                                           </>
+                                         )}
+                                         {bar.relatedDuty.restFacilityClass && (
+                                           <>
+                                             <span className="text-muted-foreground">Facility:</span>
+                                             <span className="capitalize">{bar.relatedDuty.restFacilityClass.replace('_', ' ')}</span>
                                            </>
                                          )}
                                        </div>
@@ -2064,8 +2140,11 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                     : 'hover:scale-105'
                 )}
               >
-                {duty.isUlr && (
-                  <span className="absolute -top-1 -right-1 text-[8px] bg-primary text-primary-foreground rounded-full px-1 leading-tight">ULR</span>
+                {duty.crewComposition === 'augmented_4' && (
+                  <span className="absolute -top-1.5 -right-1.5 text-[7px] font-bold bg-purple-500 text-white rounded-full px-1 py-px leading-tight">4P ULR</span>
+                )}
+                {duty.crewComposition === 'augmented_3' && (
+                  <span className="absolute -top-1.5 -right-1.5 text-[7px] font-bold bg-blue-500 text-white rounded-full px-1 py-px leading-tight">3P LR</span>
                 )}
                 {duty.dayOfWeek}, {format(duty.date, 'MMM dd')}
               </button>
