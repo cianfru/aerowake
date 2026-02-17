@@ -535,6 +535,23 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     });
 
     // ── Rest-day sleep blocks → UTC intervals ──────────────────
+    // Build duty time-ranges so we can skip rest-day sleep that
+    // overlaps an actual duty window (the backend generates 23-07
+    // rest blocks even on nights with duties — filter them out).
+    const dutyRanges = duties
+      .filter(d => d.flightSegments.length > 0)
+      .map(d => {
+        const sIso = d.reportTimeUtc ?? d.flightSegments[0]?.departureTimeUtcIso;
+        const lastSeg = d.flightSegments[d.flightSegments.length - 1];
+        const eIso = lastSeg?.arrivalTimeUtcIso;
+        if (!sIso || !eIso) return null;
+        return { start: new Date(sIso).getTime(), end: new Date(eIso).getTime() };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+
+    const overlapsAnyDuty = (sMs: number, eMs: number) =>
+      dutyRanges.some(r => sMs < r.end && eMs > r.start);
+
     if (restDaysSleep) {
       restDaysSleep.forEach((restDay) => {
         const dummyDuty = duties[0]; // link to first duty for context
@@ -549,6 +566,11 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             }
           }
           if (!sUtc || !eUtc) return;
+
+          // Skip rest-day sleep that overlaps with any duty window
+          const sMs = new Date(sUtc).getTime();
+          const eMs = new Date(eUtc).getTime();
+          if (overlapsAnyDuty(sMs, eMs)) return;
 
           const blockRecovery = Math.min(100, Math.max(0, (blk.effectiveHours / 8) * 100));
           allIntervals.push({
