@@ -732,21 +732,7 @@ class CrewLinkRosterParser:
                         # Parenthesized aircraft type e.g. (359), (351), (77W)
                         i += 1
                     elif re.match(r'^[A-Z0-9]{2,3}$', clean) and not re.match(r'^[A-Z]{3}$', token):
-                        # Bare aircraft type code e.g. 359, 77W (not an airport).
-                        # BUT: must not consume a flight number for the next segment.
-                        # If this token matches a flight number pattern AND the next
-                        # 4 lines form AIRPORT TIME AIRPORT TIME, it's actually the
-                        # start of the next flight — break out to let the outer loop
-                        # detect it.
-                        could_be_flight = bool(
-                            re.match(r'^\d{3,4}$', clean)
-                            or re.match(r'^[A-Z0-9]{2}[A-Z]?\d{1,5}$', clean)
-                        )
-                        if could_be_flight and i + 4 < len(lines):
-                            next_is_airport = bool(re.match(r'^[A-Z]{3}$', lines[i + 1]))
-                            next_is_time = bool(re.search(r'\d{2}:\d{2}', lines[i + 2]))
-                            if next_is_airport and next_is_time:
-                                break  # This is the next flight, not an aircraft type
+                        # Bare aircraft type code e.g. 359, 77W (not an airport)
                         i += 1
                     else:
                         break  # Unknown token — likely start of next segment
