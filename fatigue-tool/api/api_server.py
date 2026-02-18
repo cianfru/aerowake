@@ -512,7 +512,15 @@ def _build_ulr_data(duty_timeline, duty) -> tuple:
     rest_periods = []
     if hasattr(duty, 'inflight_rest_plan') and duty.inflight_rest_plan:
         rest_periods = duty.inflight_rest_plan.rest_periods
-    for i, block in enumerate(getattr(duty_timeline, 'inflight_rest_blocks', [])):
+
+    # Only emit IR overlay bars when the PDF actually contained an `IR` activity code
+    # on at least one segment.  For AUGMENTED_3 duties with no IR marker (e.g. the
+    # outbound operating leg of a ULR pair), AugmentedCrewRestPlanner still generates
+    # internal rest blocks to drive the fatigue model, but these should NOT appear as
+    # IR overlay bars on the chronogram — the pilot is on the flight deck, not resting.
+    has_pdf_ir = getattr(duty, 'has_inflight_rest_segments', False)
+
+    for i, block in enumerate(getattr(duty_timeline, 'inflight_rest_blocks', []) if has_pdf_ir else []):
         period = rest_periods[i] if i < len(rest_periods) else None
 
         # Convert UTC block times to home-base TZ for chronogram positioning.
