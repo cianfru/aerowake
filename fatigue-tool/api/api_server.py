@@ -661,6 +661,9 @@ def _build_rest_days_sleep(sleep_strategies: dict) -> List[RestDaySleepResponse]
                 if end_date and end_date != start_date:
                     covered.add(end_date)
             ulr_duty_covered_dates[key] = covered
+            logger.info(f"[ULR-SUPPRESS] duty={key} covered_dates={sorted(covered)}")
+
+    logger.info(f"[ULR-SUPPRESS] rest_keys={sorted(k for k in sleep_strategies if k.startswith('rest_'))}")
 
     # Include rest day sleep (rest_*), post-duty sleep (post_duty_*), AND
     # duty-keyed ULR pre-duty sleep (e.g. 'D20260116').  The ULR blocks are
@@ -702,6 +705,7 @@ def _build_rest_days_sleep(sleep_strategies: dict) -> List[RestDaySleepResponse]
                     rest_date_str in covered
                     for covered in ulr_duty_covered_dates.values()
                 )
+                logger.info(f"[ULR-SUPPRESS] rest={rest_date_str} suppressed={suppressed}")
                 if suppressed:
                     continue  # Already rendered by the ULR pre-duty strategy
 
