@@ -276,18 +276,20 @@ class CrewLinkRosterParser:
         # ----
         # 2. EXTRACT ID, BASE, AIRCRAFT
         # ----
-        # Format in PDF: "ID    :134614 (DOH CP-A320)"
-        # Improved pattern with flexible spacing
-        id_pattern = r'ID\s+:\s*(\d+)\s*\(\s*([A-Z]{3})\s+CP-(\w+)\)'
+        # Format in PDF: "ID    :134614 (DOH CP-A320)" or "ID :134811 (DOH FO-A350)"
+        # Role prefix can be CP (Captain), FO (First Officer), or other 2-letter codes.
+        # Improved pattern with flexible spacing and generic role prefix.
+        id_pattern = r'ID\s+:\s*(\d+)\s*\(\s*([A-Z]{3})\s+([A-Z]{2})-(\w+)\)'
         id_match = re.search(id_pattern, text_clean)
-        
+
         if id_match:
             info['id'] = id_match.group(1)
             info['base'] = id_match.group(2)
-            info['aircraft'] = id_match.group(3)
-            print(f"   ✓ Extracted pilot ID: {info['id']} | Base: {info['base']} | Aircraft: {info['aircraft']}")
+            info['role'] = id_match.group(3)   # CP, FO, etc.
+            info['aircraft'] = id_match.group(4)
+            print(f"   ✓ Extracted pilot ID: {info['id']} | Base: {info['base']} | Role: {info['role']} | Aircraft: {info['aircraft']}")
         else:
-            # Try simpler pattern without CP prefix
+            # Try simpler pattern without role prefix
             id_match_simple = re.search(r'ID\s*:\s*(\d+)', text_clean)
             if id_match_simple:
                 info['id'] = id_match_simple.group(1)
@@ -745,7 +747,24 @@ class CrewLinkRosterParser:
                         # Parenthesized aircraft type e.g. (359), (351), (77W)
                         i += 1
                     elif re.match(r'^[A-Z0-9]{2,3}$', clean) and not re.match(r'^[A-Z]{3}$', token):
-                        # Bare aircraft type code e.g. 359, 77W (not an airport)
+                        # Bare aircraft type code e.g. 359, 77W (not an airport).
+                        # IMPORTANT: do NOT consume if the token looks like a flight number
+                        # followed by airport + time (i.e. it is the START of the next segment).
+                        # Flight number pattern: 3-4 pure digits OR 2-letter prefix + digits.
+                        looks_like_flight_num = bool(
+                            re.match(r'^\d{3,4}$', token)
+                            or re.match(r'^[A-Z0-9]{2}[A-Z]?\d{1,5}$', token)
+                        )
+                        next_is_airport = (
+                            i + 1 < len(lines)
+                            and re.match(r'^[A-Z]{3}$', lines[i + 1].strip().upper())
+                        )
+                        next_is_time = (
+                            i + 2 < len(lines)
+                            and re.search(r'\d{2}:\d{2}', lines[i + 2])
+                        )
+                        if looks_like_flight_num and next_is_airport and next_is_time:
+                            break  # Next segment starts here — stop consuming trailing tokens
                         i += 1
                     else:
                         break  # Unknown token — likely start of next segment
