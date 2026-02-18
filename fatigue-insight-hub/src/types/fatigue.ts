@@ -153,20 +153,6 @@ export interface DutyAnalysis {
     // Location context for display
     locationTimezone?: string;      // IANA timezone e.g. "Europe/London"
     environment?: 'home' | 'hotel' | 'layover';
-    // Individual sleep blocks (for split/nap strategies with multiple blocks)
-    sleepBlocks?: {
-      sleepStartDayHomeTz?: number;
-      sleepStartHourHomeTz?: number;
-      sleepEndDayHomeTz?: number;
-      sleepEndHourHomeTz?: number;
-      sleepStartIso?: string;
-      sleepEndIso?: string;
-      sleepType: 'main' | 'nap' | 'inflight';
-      durationHours: number;
-      effectiveHours: number;
-      qualityFactor: number;
-      environment?: string | null;
-    }[];
     // Detailed sleep quality data from backend
     explanation?: string;
     confidenceBasis?: string;

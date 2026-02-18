@@ -44,9 +44,6 @@ interface FlightSegmentBar {
   startHour: number;
   endHour: number;
   performance: number;
-  // DH (deadhead/positioning) indicator
-  isDeadhead?: boolean;
-  activityCode?: string | null;
   // Flight phase breakdown (when zoomed in)
   phases?: {
     phase: FlightPhase;
@@ -73,7 +70,6 @@ interface SleepBar {
   effectiveSleep: number;
   sleepEfficiency: number;
   sleepStrategy: string;
-  sleepType?: 'main' | 'nap' | 'inflight'; // Distinguishes nap from main sleep
   isPreDuty: boolean; // Sleep before the duty on this day
   relatedDuty: DutyAnalysis;
   isOvernightStart?: boolean; // First part of overnight bar (ends at 24:00)
@@ -187,8 +183,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             startHour: 0,
             endHour: arrHour,
             performance: seg.performance,
-            isDeadhead: seg.isDeadhead,
-            activityCode: seg.activityCode,
           });
           lastEndHour = arrHour;
         } else if (depHour < 12 && arrHour < 12) {
@@ -210,8 +204,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             startHour: depHour,
             endHour: arrHour,
             performance: seg.performance,
-            isDeadhead: seg.isDeadhead,
-            activityCode: seg.activityCode,
           });
           lastEndHour = arrHour;
         }
@@ -304,9 +296,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         startHour: depHour,
         endHour: arrHour,
         performance: seg.performance,
-        isDeadhead: seg.isDeadhead,
-        activityCode: seg.activityCode,
-        phases: seg.isDeadhead ? undefined : phases, // No phase breakdown for DH
+        phases,
       });
     });
     
@@ -498,84 +488,28 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         sleepEndZulu: isoToZulu(sleepEstimate.sleepEndIso) ?? undefined,
       };
       
-      // When multiple sleep blocks are available (split/nap strategies),
-      // render each block individually instead of using top-level times
-      const blocks = sleepEstimate.sleepBlocks;
-      if (blocks && blocks.length > 1) {
-        // Multiple blocks: render each one separately
-        blocks.forEach((block) => {
-          const startDay = block.sleepStartDayHomeTz;
-          const startHour = block.sleepStartHourHomeTz;
-          const endDay = block.sleepEndDayHomeTz;
-          const endHour = block.sleepEndHourHomeTz;
-
-          if (startDay == null || startHour == null || endDay == null || endHour == null) return;
-
-          const validHours = startHour >= 0 && startHour <= 24 && endHour >= 0 && endHour <= 24;
-          const anyPartVisible = startDay <= daysInMonth && endDay >= 1 && validHours;
-          if (!anyPartVisible) return;
-
-          const clampedStartDay = Math.max(1, Math.min(startDay, daysInMonth));
-          const clampedEndDay = Math.max(1, Math.min(endDay, daysInMonth));
-          const clampedStartHour = startDay < 1 ? 0 : startHour;
-          const clampedEndHour = endDay > daysInMonth ? 24 : endHour;
-
-          const blockRecovery = (block.effectiveHours / 8) * 100;
-          const blockBar = {
-            recoveryScore: Math.min(100, Math.max(0, blockRecovery)),
-            effectiveSleep: block.effectiveHours,
-            sleepEfficiency: block.qualityFactor,
-            sleepStrategy: sleepEstimate.sleepStrategy,
-            sleepType: block.sleepType as 'main' | 'nap' | 'inflight',
-            isPreDuty: true,
-            relatedDuty: duty,
-            originalStartHour: startHour,
-            originalEndHour: endHour,
-          };
-
-          if (clampedStartDay === clampedEndDay && clampedEndHour > clampedStartHour) {
-            bars.push({ ...blockBar, dayIndex: clampedStartDay, startHour: clampedStartHour, endHour: clampedEndHour });
-          } else if (clampedStartDay !== clampedEndDay || clampedEndHour <= clampedStartHour) {
-            // Overnight block
-            if (clampedStartDay >= 1 && clampedStartDay <= daysInMonth) {
-              bars.push({ ...blockBar, dayIndex: clampedStartDay, startHour: clampedStartHour, endHour: 24, isOvernightStart: true });
-            }
-            const nextDay = clampedStartDay === clampedEndDay ? clampedStartDay + 1 : clampedEndDay;
-            if (nextDay >= 1 && nextDay <= daysInMonth && clampedEndHour > 0) {
-              bars.push({ ...blockBar, dayIndex: nextDay, startHour: 0, endHour: clampedEndHour, isOvernightContinuation: true });
-            }
-          }
-        });
-
-        // Enrich bars from this duty
-        const barsFromThisDuty = bars.filter(b => b.relatedDuty === duty && !b.qualityFactors);
-        barsFromThisDuty.forEach(b => Object.assign(b, sleepBarExtras));
-        return; // forEach continue - skip single-block logic
-      }
-
-      // SINGLE BLOCK: Use top-level precomputed day/hour values
       // PREFER home-base timezone day/hour values for chronogram positioning
       // This ensures sleep bars align with duty bars (which are already in home TZ)
-      const hasHomeTz =
-        sleepEstimate.sleepStartDayHomeTz != null &&
-        sleepEstimate.sleepStartHourHomeTz != null &&
-        sleepEstimate.sleepEndDayHomeTz != null &&
+      const hasHomeTz = 
+        sleepEstimate.sleepStartDayHomeTz != null && 
+        sleepEstimate.sleepStartHourHomeTz != null && 
+        sleepEstimate.sleepEndDayHomeTz != null && 
         sleepEstimate.sleepEndHourHomeTz != null;
-
+      
       // Fallback to location-timezone precomputed values if home_tz not available
       const hasPrecomputed = hasHomeTz || (
-        sleepEstimate.sleepStartDay != null &&
-        sleepEstimate.sleepStartHour != null &&
-        sleepEstimate.sleepEndDay != null &&
+        sleepEstimate.sleepStartDay != null && 
+        sleepEstimate.sleepStartHour != null && 
+        sleepEstimate.sleepEndDay != null && 
         sleepEstimate.sleepEndHour != null);
-
+      
       if (hasPrecomputed) {
         // Use home-base timezone values when available, fall back to location values
         const startDay = sleepEstimate.sleepStartDayHomeTz ?? sleepEstimate.sleepStartDay!;
         const endDay = sleepEstimate.sleepEndDayHomeTz ?? sleepEstimate.sleepEndDay!;
         const startHour = sleepEstimate.sleepStartHourHomeTz ?? sleepEstimate.sleepStartHour!;
         const endHour = sleepEstimate.sleepEndHourHomeTz ?? sleepEstimate.sleepEndHour!;
-
+        
         // Clamp to visible month range instead of dropping blocks that
         // cross month boundaries.  A sleep block from Jan 31 → Feb 1 should
         // still render its visible portion rather than being silently dropped.
@@ -598,7 +532,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               effectiveSleep: sleepEstimate.effectiveSleepHours,
               sleepEfficiency: sleepEstimate.sleepEfficiency,
               sleepStrategy: sleepEstimate.sleepStrategy,
-              sleepType: 'main',
               isPreDuty: true,
               relatedDuty: duty,
               originalStartHour: startHour,
@@ -616,7 +549,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 effectiveSleep: sleepEstimate.effectiveSleepHours,
                 sleepEfficiency: sleepEstimate.sleepEfficiency,
                 sleepStrategy: sleepEstimate.sleepStrategy,
-                sleepType: 'main',
                 isPreDuty: true,
                 relatedDuty: duty,
                 isOvernightStart: true,
@@ -634,7 +566,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 effectiveSleep: sleepEstimate.effectiveSleepHours,
                 sleepEfficiency: sleepEstimate.sleepEfficiency,
                 sleepStrategy: sleepEstimate.sleepStrategy,
-                sleepType: 'main',
                 isPreDuty: true,
                 relatedDuty: duty,
                 isOvernightContinuation: true,
@@ -654,7 +585,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 effectiveSleep: sleepEstimate.effectiveSleepHours,
                 sleepEfficiency: sleepEstimate.sleepEfficiency,
                 sleepStrategy: sleepEstimate.sleepStrategy,
-                sleepType: 'main',
                 isPreDuty: true,
                 relatedDuty: duty,
                 isOvernightStart: true,
@@ -671,7 +601,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 effectiveSleep: sleepEstimate.effectiveSleepHours,
                 sleepEfficiency: sleepEstimate.sleepEfficiency,
                 sleepStrategy: sleepEstimate.sleepStrategy,
-                sleepType: 'main',
                 isPreDuty: true,
                 relatedDuty: duty,
                 isOvernightContinuation: true,
@@ -1447,16 +1376,10 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                 <PopoverTrigger asChild>
                               <button
                                     type="button"
-                                    className={cn(
-                                      "absolute z-[5] flex items-center justify-end px-1 border cursor-pointer hover:brightness-110 transition-all",
-                                      bar.sleepType === 'nap'
-                                        ? "border-dotted border-amber-400/40 bg-amber-500/10"
-                                        : "border-dashed border-primary/20 bg-primary/5"
-                                    )}
+                                    className="absolute z-[5] flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all border-primary/20 bg-primary/5"
                                     style={{
                                       top: 0,
-                                      height: bar.sleepType === 'nap' ? '60%' : '100%',
-                                      marginTop: bar.sleepType === 'nap' ? '20%' : undefined,
+                                      height: '100%',
                                       left: `${(bar.startHour / 24) * 100}%`,
                                       width: `${Math.max(barWidth, 1)}%`,
                                       borderRadius,
@@ -1468,8 +1391,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                     {/* Show recovery info if bar is wide enough */}
                                     {barWidth > 6 && (
                                       <div className={cn("flex items-center gap-0.5 text-[8px] font-medium", classes.text)}>
-                                        <span>{bar.sleepType === 'nap' ? '💤' : getStrategyIcon(bar.sleepStrategy)}</span>
-                                        <span>{bar.sleepType === 'nap' ? 'nap' : `${Math.round(bar.recoveryScore)}%`}</span>
+                                        <span>{getStrategyIcon(bar.sleepStrategy)}</span>
+                                        <span>{Math.round(bar.recoveryScore)}%</span>
                                       </div>
                                     )}
                                   </button>
@@ -1479,8 +1402,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                       {/* Header */}
                                       <div className="flex items-center justify-between border-b border-border pb-2">
                                         <div className="font-semibold flex items-center gap-1.5">
-                                          <span className="text-base">{bar.sleepType === 'nap' ? '💤' : bar.isPreDuty ? '🛏️' : '🔋'}</span>
-                                          <span>{bar.sleepType === 'nap' ? 'Nap' : bar.isPreDuty ? 'Pre-Duty Sleep' : 'Recovery Sleep'}</span>
+                                          <span className="text-base">{bar.isPreDuty ? '🛏️' : '🔋'}</span>
+                                          <span>{bar.isPreDuty ? 'Pre-Duty Sleep' : 'Recovery Sleep'}</span>
                                         </div>
                                         <div className={cn("text-lg font-bold", classes.text)}>
                                           {Math.round(bar.recoveryScore)}%
@@ -1752,7 +1675,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                           }
                                           
                                           // Standard rendering (not zoomed or non-flight segments)
-                                          const isDH = segment.isDeadhead;
                                           return (
                                             <div
                                               key={segIndex}
@@ -1763,35 +1685,17 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                               )}
                                               style={{
                                                 width: `${segmentWidth}%`,
-                                                backgroundColor: segment.type === 'ground'
-                                                  ? 'hsl(var(--muted))'
-                                                  : isDH
-                                                    ? 'hsl(var(--muted))'
-                                                    : getPerformanceColor(segment.performance),
-                                                // DH diagonal stripes pattern
-                                                ...(isDH ? {
-                                                  backgroundImage: `repeating-linear-gradient(
-                                                    45deg,
-                                                    transparent,
-                                                    transparent 3px,
-                                                    hsla(var(--foreground) / 0.15) 3px,
-                                                    hsla(var(--foreground) / 0.15) 5px
-                                                  )`,
-                                                } : {}),
+                                                backgroundColor: segment.type === 'ground' 
+                                                  ? 'hsl(var(--muted))' 
+                                                  : getPerformanceColor(segment.performance),
                                               }}
                                             >
                                               {/* Segment separator line */}
                                               {segIndex > 0 && (
                                                 <div className="absolute left-0 top-0 bottom-0 w-px bg-background/70" />
                                               )}
-                                              {/* DH label for deadhead flights */}
-                                              {isDH && segment.type === 'flight' && segmentWidth > 6 && (
-                                                <span className="text-[7px] font-bold text-muted-foreground truncate px-0.5 tracking-wider">
-                                                  DH
-                                                </span>
-                                              )}
-                                              {/* Flight number label for operating flights */}
-                                              {!isDH && segment.type === 'flight' && segment.flightNumber && segmentWidth > 8 && (
+                                              {/* Flight number label for flights */}
+                                              {segment.type === 'flight' && segment.flightNumber && segmentWidth > 8 && (
                                                 <span className="text-[8px] font-medium text-background truncate px-0.5">
                                                   {segment.flightNumber}
                                                 </span>
@@ -1930,19 +1834,10 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         <span className="text-muted-foreground font-medium">Flight Segments:</span>
                                         <div className="flex flex-col gap-1 mt-1">
                                           {bar.segments.filter(s => s.type === 'flight').map((segment, i) => (
-                                            <div key={i} className={cn(
-                                              "flex items-center justify-between text-[10px] p-1 rounded",
-                                              segment.isDeadhead && "border border-dashed border-muted-foreground/40"
-                                            )} style={{ backgroundColor: segment.isDeadhead ? 'hsl(var(--muted))' : `${getPerformanceColor(segment.performance)}20` }}>
-                                              <span className="font-medium">
-                                                {segment.isDeadhead && <span className="text-muted-foreground mr-1">DH</span>}
-                                                {segment.flightNumber}
-                                              </span>
+                                            <div key={i} className="flex items-center justify-between text-[10px] p-1 rounded" style={{ backgroundColor: `${getPerformanceColor(segment.performance)}20` }}>
+                                              <span className="font-medium">{segment.flightNumber}</span>
                                               <span className="text-muted-foreground">{segment.departure} → {segment.arrival}</span>
-                                              {segment.isDeadhead
-                                                ? <span className="text-muted-foreground italic text-[9px]">PAX</span>
-                                                : <span style={{ color: getPerformanceColor(segment.performance) }} className="font-medium">{Math.round(segment.performance)}%</span>
-                                              }
+                                              <span style={{ color: getPerformanceColor(segment.performance) }} className="font-medium">{Math.round(segment.performance)}%</span>
                                             </div>
                                           ))}
                                         </div>
