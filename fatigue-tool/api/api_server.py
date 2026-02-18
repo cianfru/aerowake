@@ -628,27 +628,29 @@ def _build_rest_days_sleep(sleep_strategies: dict) -> List[RestDaySleepResponse]
     """
     rest_days = []
 
-    # Build the set of calendar days already covered by duty-keyed ULR
-    # pre-duty strategies, so we can suppress gap-fill recovery entries
-    # that overlap those days.
+    # Build suppression sets for gap-fill recovery entries that would overlap
+    # duty-keyed ULR pre-duty blocks.
     #
-    # We store every day touched by a ULR block (start_day AND end_day),
-    # not just (start_day, start_hour), because the gap-fill may place
-    # a layover hotel nap (e.g. GRU 05:00→13:00 DOH) on the same day
-    # as the continuation (0:00→7:00) of a ULR overnight block, causing
-    # a visual overlap even though the start hours differ.
-    ulr_covered_days: set = set()          # calendar days touched by ULR blocks
-    ulr_covered_nights: set = set()        # (start_day, start_hour) for exact-match
+    # IMPORTANT: Only track the ULR block's START day (not end day).
+    # Tracking end_day caused over-suppression when Night 1 was clamped past
+    # midnight (e.g. starts 01:00 DOH Jan 12 instead of 23:00 Jan 11) — the
+    # gap-fill block for Jan 11 (end_day=12) was incorrectly suppressed even
+    # though the clamped ULR block no longer covers that night.
+    #
+    # ulr_covered_days: start days of ULR blocks — suppress gap-fill blocks
+    #   whose start day matches (handles 23:00-start overnight blocks and
+    #   any same-day naps that share a start day with a ULR block).
+    # ulr_covered_nights: (start_day, start_hour) pairs for exact-match
+    #   suppression of gap-fill blocks that start at exactly the same time.
+    ulr_covered_days: set = set()     # START days of ULR blocks only
+    ulr_covered_nights: set = set()   # (start_day, start_hour) exact pairs
     for key, data in sleep_strategies.items():
         if not key.startswith('rest_') and data.get('strategy_type') == 'ulr_pre_duty':
             for blk in data.get('sleep_blocks', []):
                 sd = blk.get('sleep_start_day')
-                ed = blk.get('sleep_end_day')
                 sh = blk.get('sleep_start_hour')
                 if sd is not None:
                     ulr_covered_days.add(sd)
-                if ed is not None:
-                    ulr_covered_days.add(ed)
                 if sd is not None and sh is not None:
                     ulr_covered_nights.add((sd, round(sh, 1)))
 
@@ -677,20 +679,22 @@ def _build_rest_days_sleep(sleep_strategies: dict) -> List[RestDaySleepResponse]
                     continue  # Skip if no date info available
 
             # Suppress gap-fill recovery entries that would overlap a ULR pre-duty
-            # block on the same calendar day.  We check both the exact night
-            # match (23:00 start) and any day touched by a ULR block, because
-            # layover hotel naps (e.g. GRU 05:00→13:00 DOH) can land on the
-            # same day as a ULR block's continuation (0:00→7:00).
+            # block on the same START day.  We match on:
+            #   - exact_match: same (start_day, start_hour) as a ULR block
+            #   - start_day_match: gap-fill START day equals a ULR block START day
+            #     (catches hotel naps on the same day as a ULR Night 2 start)
+            # We do NOT check end_day: a clamped ULR Night 1 that was pushed past
+            # midnight (start_day=12) should not suppress the gap-fill for Jan 11
+            # simply because that block ends on day 12.
             if key.startswith('rest_'):
                 blocks = data.get('sleep_blocks', [])
                 if blocks:
                     sd = blocks[0].get('sleep_start_day')
-                    ed = blocks[0].get('sleep_end_day')
                     sh = blocks[0].get('sleep_start_hour')
                     exact_match = (sd is not None and sh is not None
                                    and (sd, round(sh, 1)) in ulr_covered_nights)
-                    day_overlap = (sd in ulr_covered_days or ed in ulr_covered_days)
-                    if exact_match or day_overlap:
+                    start_day_match = (sd is not None and sd in ulr_covered_days)
+                    if exact_match or start_day_match:
                         continue  # Already rendered by the ULR pre-duty strategy
 
             rest_days.append(RestDaySleepResponse(
