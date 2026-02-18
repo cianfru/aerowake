@@ -415,35 +415,49 @@ class SleepStrategyMixin:
         blocks = []
         quality_analyses = []
 
+        # Earliest permissible sleep start — cannot begin before previous duty ends.
+        # Compare in UTC throughout to avoid DST / pytz ambiguity.
+        earliest_sleep_utc = (
+            previous_duty.release_time_utc if previous_duty is not None
+            else None
+        )
+
         # Night 1: 2 nights before duty
         night1_start = report_local.replace(hour=23, minute=0, second=0) - timedelta(days=2)
         night1_end = report_local.replace(hour=7, minute=0, second=0) - timedelta(days=1)
 
-        night1_quality = self.calculate_sleep_quality(
-            sleep_start=night1_start,
-            sleep_end=night1_end,
-            location='home',
-            previous_duty_end=previous_duty.release_time_utc if previous_duty else None,
-            next_event=night1_end + timedelta(hours=12),
-            location_timezone=sleep_tz.zone
-        )
-        quality_analyses.append(night1_quality)
+        # Clamp Night 1 start to previous duty release (UTC comparison).
+        if earliest_sleep_utc is not None:
+            if night1_start.astimezone(pytz.utc) < earliest_sleep_utc:
+                night1_start = earliest_sleep_utc.astimezone(sleep_tz)
 
-        n1s_day, n1s_hour = self._home_tz_day_hour(night1_start)
-        n1e_day, n1e_hour = self._home_tz_day_hour(night1_end)
-        blocks.append(SleepBlock(
-            start_utc=night1_start.astimezone(pytz.utc),
-            end_utc=night1_end.astimezone(pytz.utc),
-            location_timezone=sleep_tz.zone,
-            duration_hours=night1_quality.actual_sleep_hours,
-            quality_factor=night1_quality.sleep_efficiency,
-            effective_sleep_hours=night1_quality.effective_sleep_hours,
-            environment='home',
-            sleep_start_day=n1s_day,
-            sleep_start_hour=n1s_hour,
-            sleep_end_day=n1e_day,
-            sleep_end_hour=n1e_hour,
-        ))
+        # Only emit Night 1 if at least 30 minutes of sleep remain.
+        if night1_end - night1_start >= timedelta(minutes=30):
+            night1_quality = self.calculate_sleep_quality(
+                sleep_start=night1_start,
+                sleep_end=night1_end,
+                location='home',
+                previous_duty_end=previous_duty.release_time_utc if previous_duty else None,
+                next_event=night1_end + timedelta(hours=12),
+                location_timezone=sleep_tz.zone
+            )
+            quality_analyses.append(night1_quality)
+
+            n1s_day, n1s_hour = self._home_tz_day_hour(night1_start)
+            n1e_day, n1e_hour = self._home_tz_day_hour(night1_end)
+            blocks.append(SleepBlock(
+                start_utc=night1_start.astimezone(pytz.utc),
+                end_utc=night1_end.astimezone(pytz.utc),
+                location_timezone=sleep_tz.zone,
+                duration_hours=night1_quality.actual_sleep_hours,
+                quality_factor=night1_quality.sleep_efficiency,
+                effective_sleep_hours=night1_quality.effective_sleep_hours,
+                environment='home',
+                sleep_start_day=n1s_day,
+                sleep_start_hour=n1s_hour,
+                sleep_end_day=n1e_day,
+                sleep_end_hour=n1e_hour,
+            ))
 
         # Night 2: night before duty
         night2_start = report_local.replace(hour=23, minute=0, second=0) - timedelta(days=1)
@@ -458,13 +472,10 @@ class SleepStrategyMixin:
             night2_end = latest_wake_local
 
         # Clamp night2_start so it cannot begin before previous duty ends.
-        # This prevents the sleep bar overlapping an active inbound duty when
-        # the ULR outbound pair has a short (<48h) inter-duty gap.
-        if previous_duty is not None:
-            earliest_sleep_utc = previous_duty.release_time_utc
-            earliest_sleep_local = earliest_sleep_utc.astimezone(sleep_tz)
-            if night2_start < earliest_sleep_local:
-                night2_start = earliest_sleep_local
+        # Compare in UTC to avoid DST / pytz ambiguity.
+        if earliest_sleep_utc is not None:
+            if night2_start.astimezone(pytz.utc) < earliest_sleep_utc:
+                night2_start = earliest_sleep_utc.astimezone(sleep_tz)
 
         # Only emit Night 2 if there is at least 30 minutes of sleep available.
         if night2_end - night2_start >= timedelta(minutes=30):
@@ -501,12 +512,10 @@ class SleepStrategyMixin:
             nap_start = report_local - timedelta(hours=4)
             nap_end = report_local - timedelta(hours=2)
 
-            # Guard: nap cannot start before previous duty ends.
-            if previous_duty is not None:
-                earliest_nap_utc = previous_duty.release_time_utc
-                earliest_nap_local = earliest_nap_utc.astimezone(sleep_tz)
-                if nap_start < earliest_nap_local:
-                    nap_start = earliest_nap_local
+            # Guard: nap cannot start before previous duty ends (UTC comparison).
+            if earliest_sleep_utc is not None:
+                if nap_start.astimezone(pytz.utc) < earliest_sleep_utc:
+                    nap_start = earliest_sleep_utc.astimezone(sleep_tz)
 
             # Only emit nap if at least 20 minutes remain.
             if nap_end - nap_start >= timedelta(minutes=20):
