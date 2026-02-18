@@ -35,14 +35,22 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
 
     Priority order (highest wins):
       1. IR activity code on segment → AUGMENTED_4, Crew B (definitive 4-pilot)
-      2. Return leg of IR duty (same layover station) → AUGMENTED_4, Crew A
-      3. FDP > 18h (no IR marker) → AUGMENTED_4, fallback heuristic
-      4. FDP > 13h with single segment > 9h block → AUGMENTED_3, fallback heuristic
-      5. Otherwise → STANDARD (no change)
+      2. Outbound paired with an IR return (pre-pass look-ahead) → AUGMENTED_4, Crew A
+      3. Return leg of IR duty (same layover station) → AUGMENTED_4, Crew A
+      4. FDP > 18h (no IR marker) → AUGMENTED_4, fallback heuristic
+      5. FDP > 13h with single segment > 9h block → AUGMENTED_3, fallback heuristic
+      6. Otherwise → STANDARD (no change)
 
     IR semantics (Qatar CrewLink PDF):
-      IR = Inflight Rest. Pilot is relief crew (Crew B) on that sector.
-      The paired return sector has the same 4-pilot crew with pilot as Crew A.
+      IR = Inflight Rest. Pilot is operating crew (Crew A) on the OUTBOUND and
+      resting crew (Crew B) on the sector marked IR.
+      The PDF only marks IR on the sector where the pilot is in the bunk.
+      Both legs are 4-pilot: the outbound has no IR code in the PDF because the
+      pilot is on deck, but the aircraft still carries 4 pilots.
+
+      Pre-pass (Rule 2): collect the *departure* airports of all IR-marked duties
+      (i.e. the layover stations), then find the duty whose *arrival* airport
+      matches — that is the outbound operating leg, also AUGMENTED_4 / CREW_A.
 
     DH semantics:
       DH = Deadhead. Pilot is passenger, not operating. Flagged on segment
@@ -53,7 +61,30 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
     import logging
     logger = logging.getLogger(__name__)
 
-    # Track IR duty arrival airport for return-leg pairing
+    # ------------------------------------------------------------------
+    # PRE-PASS: collect layover stations of IR-marked duties.
+    # An IR duty departs FROM the layover station (e.g. QR774 departs GRU).
+    # The outbound that ARRIVES at the same station (QR773 arrives GRU)
+    # is the paired operating leg — also 4-pilot, Crew A.
+    #
+    # Important: exclude the pilot's home base from this set.  The IR code
+    # marks the sector where the pilot is in the bunk; when the pilot operates
+    # the outbound from home and rests on the return, the PDF marks IR on the
+    # return departure (the layover), NOT the home base.  If we included the
+    # home base here every flight returning home would be mis-tagged AUGMENTED_4.
+    # ------------------------------------------------------------------
+    home_base = roster.pilot_base or 'DOH'
+    ir_departure_airports = set()  # NON-home layover airports that IR duties depart FROM
+    for duty in roster.duties:
+        if duty.segments and duty.has_inflight_rest_segments:
+            dep_code = duty.segments[0].departure_airport.code
+            if dep_code != home_base:  # Skip if IR departs from home (shouldn't happen)
+                ir_departure_airports.add(dep_code)
+
+    # ------------------------------------------------------------------
+    # MAIN PASS
+    # ------------------------------------------------------------------
+    # Track IR duty arrival airport for forward return-leg pairing (Rule 3)
     previous_ir_arrival = None
 
     for duty in roster.duties:
@@ -67,7 +98,7 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
             duty.is_ulr = True
             duty.ulr_crew_set = ULRCrewSet.CREW_B
             duty.rest_facility_class = RestFacilityClass.CLASS_1
-            # Remember arrival station for return-leg pairing
+            # Remember arrival station for return-leg pairing (Rule 3)
             previous_ir_arrival = duty.segments[-1].arrival_airport.code
             logger.info(
                 f"Duty {duty.duty_id}: IR detected → AUGMENTED_4 / CREW_B "
@@ -75,7 +106,22 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
             )
             continue
 
-        # --- Rule 2: Return leg of IR duty ---
+        # --- Rule 2: Outbound paired with an IR return (pre-pass look-ahead) ---
+        # If this duty ARRIVES at a station that is the departure airport of an
+        # IR-marked duty, it is the operating leg of the same 4-pilot pairing.
+        arr_code = duty.segments[-1].arrival_airport.code
+        if arr_code in ir_departure_airports:
+            duty.crew_composition = CrewComposition.AUGMENTED_4
+            duty.is_ulr = True
+            duty.ulr_crew_set = ULRCrewSet.CREW_A
+            duty.rest_facility_class = RestFacilityClass.CLASS_1
+            logger.info(
+                f"Duty {duty.duty_id}: outbound operating leg arriving {arr_code} "
+                f"→ AUGMENTED_4 / CREW_A (paired with IR return from {arr_code})"
+            )
+            continue
+
+        # --- Rule 3: Return leg of IR duty (forward scan fallback) ---
         if previous_ir_arrival:
             dep_code = duty.segments[0].departure_airport.code
             if dep_code == previous_ir_arrival:
@@ -92,7 +138,7 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
             # Duty doesn't depart from IR layover — reset tracker
             previous_ir_arrival = None
 
-        # --- Rule 3: FDP > 18h (no IR marker) → AUGMENTED_4 fallback ---
+        # --- Rule 4: FDP > 18h (no IR marker) → AUGMENTED_4 fallback ---
         if duty.fdp_hours > 18.0:
             duty.is_ulr = True
             duty.crew_composition = CrewComposition.AUGMENTED_4
@@ -102,7 +148,7 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
                 f"→ AUGMENTED_4 (FDP heuristic, no IR marker)"
             )
 
-        # --- Rule 4: FDP > 13h with long sector → AUGMENTED_3 fallback ---
+        # --- Rule 5: FDP > 13h with long sector → AUGMENTED_3 fallback ---
         elif duty.fdp_hours > 13.0 and any(
             seg.block_time_hours > 9.0 for seg in duty.segments
         ):
