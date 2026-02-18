@@ -631,26 +631,39 @@ def _build_rest_days_sleep(sleep_strategies: dict) -> List[RestDaySleepResponse]
     # Build suppression sets for gap-fill recovery entries that would overlap
     # duty-keyed ULR pre-duty blocks.
     #
-    # IMPORTANT: Only track the ULR block's START day (not end day).
-    # Tracking end_day caused over-suppression when Night 1 was clamped past
-    # midnight (e.g. starts 01:00 DOH Jan 12 instead of 23:00 Jan 11) — the
-    # gap-fill block for Jan 11 (end_day=12) was incorrectly suppressed even
-    # though the clamped ULR block no longer covers that night.
+    # ulr_covered_days tracks calendar days that ULR blocks genuinely cover:
+    #   - Always: the START day of every ULR block (handles naps and first half
+    #     of overnight blocks that start on that day).
+    #   - For genuine overnight blocks (start_day != end_day): also the END day,
+    #     because the block continues into the early morning of end_day and a
+    #     gap-fill hotel nap starting on that same day (e.g. GRU 23:00 local =
+    #     05:00 DOH next day) would overlap.
+    #   - For clamped intra-day blocks (start_day == end_day): end_day is already
+    #     == start_day, so tracking start_day alone is sufficient and adding end_day
+    #     would be redundant. This is the key case that caused the original
+    #     over-suppression bug: a Night 1 clamped to start at 01:00 DOH Jan 12
+    #     (after inbound landing) has start_day=end_day=12; tracking only that day
+    #     correctly avoids suppressing the gap-fill for Jan 11 (whose end_day=12
+    #     coincidentally matches the clamped block's day).
     #
-    # ulr_covered_days: start days of ULR blocks — suppress gap-fill blocks
-    #   whose start day matches (handles 23:00-start overnight blocks and
-    #   any same-day naps that share a start day with a ULR block).
-    # ulr_covered_nights: (start_day, start_hour) pairs for exact-match
-    #   suppression of gap-fill blocks that start at exactly the same time.
-    ulr_covered_days: set = set()     # START days of ULR blocks only
+    # ulr_covered_nights: exact (start_day, start_hour) pairs for fine-grained
+    #   suppression of gap-fill blocks that start at the same hour as a ULR block.
+    ulr_covered_days: set = set()     # calendar days covered by ULR blocks (see above)
     ulr_covered_nights: set = set()   # (start_day, start_hour) exact pairs
     for key, data in sleep_strategies.items():
         if not key.startswith('rest_') and data.get('strategy_type') == 'ulr_pre_duty':
             for blk in data.get('sleep_blocks', []):
                 sd = blk.get('sleep_start_day')
+                ed = blk.get('sleep_end_day')
                 sh = blk.get('sleep_start_hour')
                 if sd is not None:
                     ulr_covered_days.add(sd)
+                # Only suppress the end day for genuine overnight blocks where
+                # the block crosses into the next calendar day (start_day != end_day).
+                # Clamped intra-day blocks (start_day == end_day) are already covered
+                # by the start_day entry above.
+                if ed is not None and ed != sd:
+                    ulr_covered_days.add(ed)
                 if sd is not None and sh is not None:
                     ulr_covered_nights.add((sd, round(sh, 1)))
 
@@ -678,14 +691,13 @@ def _build_rest_days_sleep(sleep_strategies: dict) -> List[RestDaySleepResponse]
                 else:
                     continue  # Skip if no date info available
 
-            # Suppress gap-fill recovery entries that would overlap a ULR pre-duty
-            # block on the same START day.  We match on:
-            #   - exact_match: same (start_day, start_hour) as a ULR block
-            #   - start_day_match: gap-fill START day equals a ULR block START day
-            #     (catches hotel naps on the same day as a ULR Night 2 start)
-            # We do NOT check end_day: a clamped ULR Night 1 that was pushed past
-            # midnight (start_day=12) should not suppress the gap-fill for Jan 11
-            # simply because that block ends on day 12.
+            # Suppress gap-fill recovery entries whose start day is already covered
+            # by a ULR pre-duty block.  ulr_covered_days contains:
+            #   - Start days of all ULR blocks
+            #   - End days of genuine overnight ULR blocks (start_day != end_day)
+            #     so that layover hotel naps starting on that morning are suppressed
+            # Clamped intra-day blocks (start_day == end_day) contribute only their
+            # one day, avoiding over-suppression of the previous night's gap-fill.
             if key.startswith('rest_'):
                 blocks = data.get('sleep_blocks', [])
                 if blocks:
@@ -693,8 +705,8 @@ def _build_rest_days_sleep(sleep_strategies: dict) -> List[RestDaySleepResponse]
                     sh = blocks[0].get('sleep_start_hour')
                     exact_match = (sd is not None and sh is not None
                                    and (sd, round(sh, 1)) in ulr_covered_nights)
-                    start_day_match = (sd is not None and sd in ulr_covered_days)
-                    if exact_match or start_day_match:
+                    day_covered = (sd is not None and sd in ulr_covered_days)
+                    if exact_match or day_covered:
                         continue  # Already rendered by the ULR pre-duty strategy
 
             rest_days.append(RestDaySleepResponse(
