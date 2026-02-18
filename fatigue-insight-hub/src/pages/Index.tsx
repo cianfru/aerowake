@@ -252,8 +252,6 @@ const Index = () => {
             sleepStartHour: block.sleep_start_hour ?? undefined,
             sleepEndDay: block.sleep_end_day ?? undefined,
             sleepEndHour: block.sleep_end_hour ?? undefined,
-            startUtc: block.start_utc ?? undefined,
-            endUtc: block.end_utc ?? undefined,
           })),
           totalSleepHours: restDay.total_sleep_hours,
           effectiveSleepHours: restDay.effective_sleep_hours,
@@ -369,8 +367,6 @@ const Index = () => {
                 sleepEndTimeHomeTz,
                 locationTimezone,
                 environment: sleepEnvironment2,
-                startUtc: sleep.start_utc ?? undefined,
-                endUtc: sleep.end_utc ?? undefined,
                 // Pass individual sleep blocks for split/nap visualization
                 sleepBlocks: (sleep.sleep_blocks ?? []).map((blk: any) => ({
                   sleepStartDayHomeTz: blk.sleep_start_day_home_tz ?? blk.sleep_start_day ?? undefined,
@@ -379,8 +375,6 @@ const Index = () => {
                   sleepEndHourHomeTz: blk.sleep_end_hour_home_tz ?? blk.sleep_end_hour ?? undefined,
                   sleepStartIso: blk.sleep_start_iso ?? undefined,
                   sleepEndIso: blk.sleep_end_iso ?? undefined,
-                  startUtc: blk.start_utc ?? undefined,
-                  endUtc: blk.end_utc ?? undefined,
                   sleepType: blk.sleep_type ?? 'main',
                   durationHours: blk.duration_hours ?? 0,
                   effectiveHours: blk.effective_hours ?? 0,
@@ -430,8 +424,6 @@ const Index = () => {
               arrivalTime: seg.arrival_time_home_tz || seg.arrival_time_local,
               departureTimeUtc: isoToZulu(seg.departure_time),
               arrivalTimeUtc: isoToZulu(seg.arrival_time),
-              departureTimeUtcIso: seg.departure_time,  // Full ISO 8601 UTC
-              arrivalTimeUtcIso: seg.arrival_time,       // Full ISO 8601 UTC
               blockHours: seg.block_hours,
               performance: segmentPerformances[idx] || duty.avg_performance,
               departureTimeAirportLocal: seg.departure_time_airport_local,

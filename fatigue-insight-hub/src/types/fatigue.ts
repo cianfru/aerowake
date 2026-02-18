@@ -43,8 +43,6 @@ export interface FlightSegment {
   arrivalTime: string;        // HH:mm in home base local time
   departureTimeUtc?: string;  // HH:mmZ (Zulu time, formatted)
   arrivalTimeUtc?: string;    // HH:mmZ (Zulu time, formatted)
-  departureTimeUtcIso?: string;  // Full ISO 8601 UTC e.g. "2026-02-01T06:30:00+00:00"
-  arrivalTimeUtcIso?: string;    // Full ISO 8601 UTC e.g. "2026-02-01T10:45:00+00:00"
   blockHours: number;
   performance: number;
   // New airport-local time fields
@@ -140,9 +138,6 @@ export interface DutyAnalysis {
     // ISO timestamps for precise date/time positioning
     sleepStartIso?: string;
     sleepEndIso?: string;
-    // UTC timestamps for chronogram UTC-normalised rendering
-    startUtc?: string;   // ISO 8601 UTC
-    endUtc?: string;     // ISO 8601 UTC
     // Pre-computed day/hour values in LOCATION timezone (legacy)
     sleepStartDay?: number;   // Day of month (1-31)
     sleepStartHour?: number;  // Hour (0-24, decimal)
@@ -166,8 +161,6 @@ export interface DutyAnalysis {
       sleepEndHourHomeTz?: number;
       sleepStartIso?: string;
       sleepEndIso?: string;
-      startUtc?: string;   // ISO 8601 UTC
-      endUtc?: string;     // ISO 8601 UTC
       sleepType: 'main' | 'nap' | 'inflight';
       durationHours: number;
       effectiveHours: number;
@@ -267,9 +260,6 @@ export interface RestDaySleepBlock {
   sleepStartHour?: number;
   sleepEndDay?: number;
   sleepEndHour?: number;
-  // UTC timestamps for chronogram UTC-normalised rendering
-  startUtc?: string;   // ISO 8601 UTC
-  endUtc?: string;     // ISO 8601 UTC
 }
 
 // Rest day sleep (transformed from backend)

@@ -14,7 +14,6 @@ import { useChronogramZoom } from '@/hooks/useChronogramZoom';
 import { HumanPerformanceTimeline } from './HumanPerformanceTimeline';
 import { TimelineLegend } from './TimelineLegend';
 import { getRecoveryScore, getRecoveryClasses, getStrategyIcon, parseTimeToHours, decimalToHHmm, isoToZulu, getPerformanceColor } from '@/lib/fatigue-utils';
-import { splitByUtcDay, utcOffsetForTimezone } from '@/lib/chronogram-utils';
 
 interface ChronogramProps {
   duties: DutyAnalysis[];
@@ -24,7 +23,6 @@ interface ChronogramProps {
   pilotName?: string;
   pilotBase?: string;
   pilotAircraft?: string;
-  homeBaseTimezone?: string;   // IANA timezone e.g. "Asia/Qatar"
   onDutySelect: (duty: DutyAnalysis) => void;
   selectedDuty: DutyAnalysis | null;
   restDaysSleep?: RestDaySleep[];
@@ -106,13 +104,13 @@ interface InFlightRestBar {
   relatedDuty: DutyAnalysis;
 }
 
-// WOCL and HB Night are positioned dynamically based on homeBaseTimezone offset.
-// In home-base local time: WOCL = 02:00–06:00, Night = 23:00–07:00
-// On the UTC grid these shift by the timezone offset (e.g. DOH UTC+3: WOCL → 23Z–03Z).
+// WOCL (Window of Circadian Low) is typically 02:00 - 06:00
+const WOCL_START = 2;
+const WOCL_END = 6;
 
 // getPerformanceColor imported from @/lib/fatigue-utils
 
-export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilotBase, pilotAircraft, homeBaseTimezone, onDutySelect, selectedDuty, restDaysSleep }: ChronogramProps) {
+export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilotBase, pilotAircraft, onDutySelect, selectedDuty, restDaysSleep }: ChronogramProps) {
   const [infoOpen, setInfoOpen] = useState(false);
   
   // Zoom functionality
@@ -158,201 +156,232 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     return Array.from(dutyDayIndices).sort((a, b) => a - b).map(dayNum => addDays(monthStart, dayNum - 1));
   }, [duties, daysInMonth, monthStart]);
 
-  // ── Helpers: extract decimal UTC hour from ISO strings ──────
-  /** Decimal UTC hour (0–23.9̅) from an ISO-8601 string. Returns null on failure. */
-  const isoToUtcHour = (iso: string | undefined | null): number | null => {
-    if (!iso) return null;
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.getUTCHours() + d.getUTCMinutes() / 60;
-  };
-
-  // Calculate flight segment bars for a duty.
-  // Now uses UTC ISO timestamps (departureTimeUtcIso / arrivalTimeUtcIso)
-  // so that segments align with the UTC grid. The parent DutyBar already
-  // carries utcStartHour/utcEndHour from splitByUtcDay — we pass those
-  // bounds so segments are clipped to the current day-row.
-  const calculateSegments = (
-    duty: DutyAnalysis,
-    isOvernightContinuation: boolean,
-    /** UTC hour where this DutyBar fragment starts (from splitByUtcDay). */
-    barStartHour?: number,
-    /** UTC hour where this DutyBar fragment ends (from splitByUtcDay). */
-    barEndHour?: number,
-  ): FlightSegmentBar[] => {
+  // Calculate flight segment bars for a duty
+  const calculateSegments = (duty: DutyAnalysis, isOvernightContinuation: boolean): FlightSegmentBar[] => {
     const segments: FlightSegmentBar[] = [];
     const flightSegs = duty.flightSegments;
     if (flightSegs.length === 0) return [];
 
-    const fragStart = barStartHour ?? 0;
-    const fragEnd = barEndHour ?? 24;
+    // For overnight continuation, we show the portion of the duty after midnight
+    if (isOvernightContinuation) {
+      // Collect only after-midnight segments and add ground time between them
+      let lastEndHour = 0; // Track where the previous segment ended (starts at 00:00)
 
-    // Build per-segment UTC hours
-    interface SegTiming {
-      depUtcHour: number;
-      arrUtcHour: number;
-      seg: typeof flightSegs[number];
-    }
-    const timings: SegTiming[] = [];
-    flightSegs.forEach((seg) => {
-      const dep = isoToUtcHour(seg.departureTimeUtcIso);
-      const arr = isoToUtcHour(seg.arrivalTimeUtcIso);
-      if (dep == null || arr == null) return;
-      // For flights crossing UTC midnight, the arrival UTC hour will be
-      // less than the departure UTC hour. We handle this via the parent
-      // DutyBar's splitByUtcDay fragmentation: each row only sees the
-      // portion that falls within [fragStart, fragEnd].
-      //
-      // To correctly compute which segments fall within this fragment,
-      // we need the absolute UTC timestamp, not just hour-within-day.
-      // So we store raw hours and use the ISO dates for ordering.
-      timings.push({
-        depUtcHour: dep,
-        arrUtcHour: arr,
-        seg,
+      flightSegs.forEach((seg) => {
+        const [depH, depM] = seg.departureTime.split(':').map(Number);
+        const [arrH, arrM] = seg.arrivalTime.split(':').map(Number);
+        const depHour = depH + depM / 60;
+        const arrHour = arrH + arrM / 60;
+
+        if (arrHour < depHour) {
+          // This flight crosses midnight — show the portion from 00:00 to arrival
+          // Add ground time gap if the continuation doesn't start right at 00:00
+          if (lastEndHour < arrHour && lastEndHour > 0.25) {
+            // There was a previous after-midnight segment; fill ground between them
+          }
+          segments.push({
+            type: 'flight',
+            flightNumber: seg.flightNumber,
+            departure: seg.departure,
+            arrival: seg.arrival,
+            startHour: 0,
+            endHour: arrHour,
+            performance: seg.performance,
+            isDeadhead: seg.isDeadhead,
+            activityCode: seg.activityCode,
+          });
+          lastEndHour = arrHour;
+        } else if (depHour < 12 && arrHour < 12) {
+          // Both times are in early morning (after midnight) — show full segment
+          // Add ground time from the previous after-midnight endpoint
+          if (depHour > lastEndHour + 0.25) {
+            segments.push({
+              type: 'ground',
+              startHour: lastEndHour,
+              endHour: depHour,
+              performance: duty.avgPerformance,
+            });
+          }
+          segments.push({
+            type: 'flight',
+            flightNumber: seg.flightNumber,
+            departure: seg.departure,
+            arrival: seg.arrival,
+            startHour: depHour,
+            endHour: arrHour,
+            performance: seg.performance,
+            isDeadhead: seg.isDeadhead,
+            activityCode: seg.activityCode,
+          });
+          lastEndHour = arrHour;
+        }
       });
-    });
-
-    if (timings.length === 0) return [];
-
-    // Determine the UTC day for this fragment by looking at barStartHour.
-    // For continuation rows (start=0), we want segments whose arrival
-    // falls in the [0, fragEnd] window. For start rows, segments whose
-    // departure falls in [fragStart, 24] window.
-
-    // Use ISO timestamps to determine which segments overlap this fragment.
-    // We do this by comparing actual Date objects (not just hour-of-day).
-    const reportDate = duty.reportTimeUtc
-      ? new Date(duty.reportTimeUtc)
-      : (timings[0].seg.departureTimeUtcIso ? new Date(timings[0].seg.departureTimeUtcIso) : null);
-
-    // Check-in segment: only on the first fragment (not overnight continuation)
-    if (!isOvernightContinuation && reportDate) {
-      const reportHour = reportDate.getUTCHours() + reportDate.getUTCMinutes() / 60;
-      const firstDepHour = timings[0].depUtcHour;
-
-      // Only add check-in if it falls within this fragment and there's a visible gap
-      if (reportHour >= fragStart && reportHour < fragEnd && firstDepHour > reportHour) {
-        const checkInEnd = Math.min(firstDepHour, fragEnd);
-        segments.push({
-          type: 'checkin',
-          startHour: reportHour,
-          endHour: checkInEnd,
-          performance: Math.min(100, duty.avgPerformance + 10),
-        });
-      }
+      return segments;
     }
 
-    // Add each flight segment, clipping to [fragStart, fragEnd]
-    let prevEndHour: number | null = null;
+    // Use actual report time from parser if available, otherwise fall back to estimated check-in
+    const [firstDepH, firstDepM] = flightSegs[0].departureTime.split(':').map(Number);
+    const firstDepHour = firstDepH + firstDepM / 60;
+    // Use reportTimeLocal directly when available, fall back to default offset from first departure
+    const reportHour = parseTimeToHours(duty.reportTimeLocal);
+    const checkInHour = Math.max(0, reportHour ?? (firstDepHour - DEFAULT_CHECK_IN_MINUTES / 60));
 
-    timings.forEach((t) => {
-      let depH = t.depUtcHour;
-      let arrH = t.arrUtcHour;
+    // Add check-in segment
+    segments.push({
+      type: 'checkin',
+      startHour: checkInHour,
+      endHour: firstDepHour,
+      performance: Math.min(100, duty.avgPerformance + 10), // Higher at start
+    });
+    
+    // Add each flight segment
+    // Track midnight crossing so we stop adding segments for the departure-day bar
+    let passedMidnight = false;
 
-      // Handle midnight-crossing flights:
-      // If arrival < departure, the flight crosses UTC midnight.
-      // For the pre-midnight fragment (fragEnd=24), cap arrival at 24.
-      // For the post-midnight fragment (fragStart=0), set departure to 0.
-      if (arrH < depH) {
-        if (fragEnd === 24 && fragStart > 0) {
-          // Pre-midnight fragment: show departure → 24
-          arrH = 24;
-        } else if (fragStart === 0 && fragEnd < 24) {
-          // Post-midnight fragment: show 0 → arrival
-          depH = 0;
-        } else {
-          return; // Doesn't fit this fragment
+    flightSegs.forEach((seg, index) => {
+      if (passedMidnight) return;
+
+      const [depH, depM] = seg.departureTime.split(':').map(Number);
+      const [arrH, arrM] = seg.arrivalTime.split(':').map(Number);
+      const depHour = depH + depM / 60;
+      let arrHour = arrH + arrM / 60;
+
+      // Add ground time between flights if there's a gap
+      if (index > 0) {
+        const prevSeg = flightSegs[index - 1];
+        const [prevArrH, prevArrM] = prevSeg.arrivalTime.split(':').map(Number);
+        const prevArrHour = prevArrH + prevArrM / 60;
+
+        // Midnight crossed between consecutive segments
+        // (previous arrived in PM, this departs in AM next day)
+        if (prevArrHour > depHour) {
+          // Fill remaining ground time up to midnight and stop
+          if (prevArrHour < 23.75) {
+            segments.push({
+              type: 'ground',
+              startHour: prevArrHour,
+              endHour: 24,
+              performance: duty.avgPerformance,
+            });
+          }
+          passedMidnight = true;
+          return;
+        }
+
+        if (depHour > prevArrHour + 0.25) { // More than 15 min gap
+          segments.push({
+            type: 'ground',
+            startHour: prevArrHour,
+            endHour: depHour,
+            performance: duty.avgPerformance,
+          });
         }
       }
 
-      // Skip segments entirely outside this fragment
-      if (arrH <= fragStart || depH >= fragEnd) return;
-
-      // Clip to fragment bounds
-      const clippedDep = Math.max(depH, fragStart);
-      const clippedArr = Math.min(arrH, fragEnd);
-      if (clippedArr - clippedDep < 0.01) return; // Negligibly small
-
-      // Add ground time between flights if there's a gap > 15 min
-      if (prevEndHour != null && clippedDep > prevEndHour + 0.25) {
-        segments.push({
-          type: 'ground',
-          startHour: prevEndHour,
-          endHour: clippedDep,
-          performance: duty.avgPerformance,
-        });
+      // Handle overnight: if arrival is before departure, cap at midnight
+      if (arrHour < depHour) {
+        arrHour = 24; // Cap at midnight for this day's bar
+        passedMidnight = true;
       }
 
-      // Generate flight phase breakdown
+      // Generate flight phase breakdown for this segment
+      // Phases: Takeoff (15%), Climb (10%), Cruise (50%), Descent (10%), Approach (10%), Landing (5%)
+      const flightDuration = arrHour - depHour;
       const phases: FlightSegmentBar['phases'] = [
-        { phase: 'takeoff' as FlightPhase, performance: t.seg.performance + 5, widthPercent: 15 },
-        { phase: 'climb' as FlightPhase, performance: t.seg.performance + 3, widthPercent: 10 },
-        { phase: 'cruise' as FlightPhase, performance: t.seg.performance, widthPercent: 50 },
-        { phase: 'descent' as FlightPhase, performance: t.seg.performance - 2, widthPercent: 10 },
-        { phase: 'approach' as FlightPhase, performance: t.seg.performance - 4, widthPercent: 10 },
-        { phase: 'landing' as FlightPhase, performance: duty.landingPerformance || t.seg.performance - 5, widthPercent: 5 },
+        { phase: 'takeoff' as FlightPhase, performance: seg.performance + 5, widthPercent: 15 },
+        { phase: 'climb' as FlightPhase, performance: seg.performance + 3, widthPercent: 10 },
+        { phase: 'cruise' as FlightPhase, performance: seg.performance, widthPercent: 50 },
+        { phase: 'descent' as FlightPhase, performance: seg.performance - 2, widthPercent: 10 },
+        { phase: 'approach' as FlightPhase, performance: seg.performance - 4, widthPercent: 10 },
+        { phase: 'landing' as FlightPhase, performance: duty.landingPerformance || seg.performance - 5, widthPercent: 5 },
       ];
 
       segments.push({
         type: 'flight',
-        flightNumber: t.seg.flightNumber,
-        departure: t.seg.departure,
-        arrival: t.seg.arrival,
-        startHour: clippedDep,
-        endHour: clippedArr,
-        performance: t.seg.performance,
-        isDeadhead: t.seg.isDeadhead,
-        activityCode: t.seg.activityCode,
-        phases: t.seg.isDeadhead ? undefined : phases,
+        flightNumber: seg.flightNumber,
+        departure: seg.departure,
+        arrival: seg.arrival,
+        startHour: depHour,
+        endHour: arrHour,
+        performance: seg.performance,
+        isDeadhead: seg.isDeadhead,
+        activityCode: seg.activityCode,
+        phases: seg.isDeadhead ? undefined : phases, // No phase breakdown for DH
       });
-      prevEndHour = clippedArr;
     });
-
+    
     return segments;
   };
 
-  // ── UTC-normalised duty bars ───────────────────────────────────
-  // Build an interval per duty using true UTC timestamps, then
-  // fragment at UTC midnight boundaries via splitByUtcDay.
-  // No manual overnight-detection heuristic needed.
+  // Convert duties to bar positions with individual flight segments
   const dutyBars = useMemo(() => {
-    // Build UTC intervals from duties
-    const intervals = duties
-      .filter(d => d.flightSegments.length > 0)
-      .map(duty => {
-        // Start: report_time_utc (preferred) or first segment departure UTC
-        const startIso = duty.reportTimeUtc
-          ?? duty.flightSegments[0]?.departureTimeUtcIso;
-        // End: last segment arrival UTC
-        const lastSeg = duty.flightSegments[duty.flightSegments.length - 1];
-        const endIso = lastSeg?.arrivalTimeUtcIso;
+    const bars: DutyBar[] = [];
+    
+    duties.forEach((duty) => {
+      // Extract day-of-month from dateString (YYYY-MM-DD) to avoid timezone issues
+      // Fallback to Date.getDate() if dateString not available
+      const dayOfMonth = duty.dateString 
+        ? Number(duty.dateString.split('-')[2]) 
+        : duty.date.getDate();
+      
+      // Calculate start and end times from flight segments
+      if (duty.flightSegments.length > 0) {
+        const firstSegment = duty.flightSegments[0];
+        const lastSegment = duty.flightSegments[duty.flightSegments.length - 1];
+        
+        const [startH, startM] = firstSegment.departureTime.split(':').map(Number);
+        const [endH, endM] = lastSegment.arrivalTime.split(':').map(Number);
 
-        if (!startIso || !endIso) return null;
-        return { startUtc: startIso, endUtc: endIso, duty };
-      })
-      .filter((x): x is NonNullable<typeof x> => x !== null);
-
-    // Fragment at UTC midnight boundaries
-    const fragments = splitByUtcDay(intervals);
-
-    // Convert fragments to DutyBars
-    return fragments
-      .filter(f => f.utcDay >= 1 && f.utcDay <= daysInMonth)
-      .map(f => {
-        const isStart = f.utcStartHour > 0;
-        const isContinuation = f.utcStartHour === 0 && f.utcEndHour < 24;
-        return {
-          dayIndex: f.utcDay,
-          startHour: f.utcStartHour,
-          endHour: f.utcEndHour,
-          duty: f.duty,
-          isOvernightStart: isStart && f.utcEndHour === 24,
-          isOvernightContinuation: isContinuation,
-          segments: calculateSegments(f.duty, isContinuation, f.utcStartHour, f.utcEndHour),
-        } as DutyBar;
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+        // FDP starts at report time (actual RPT from parser) or estimated check-in
+        const startHour = startH + startM / 60;
+        // Use reportTimeLocal directly when available, fall back to default offset from first departure
+        const reportHour = parseTimeToHours(duty.reportTimeLocal);
+        const checkInHour = Math.max(0, reportHour ?? (startHour - DEFAULT_CHECK_IN_MINUTES / 60));
+        const endHour = endH + endM / 60;
+        
+        // Detect overnight duty - FDP crosses midnight:
+        // 1. End time is numerically less than start time (e.g., depart 18:00, arrive 04:00)
+        // 2. Departure after 16:00 AND arrival before 10:00 (covers night ops)
+        // This ensures flights like 18:00→02:00 or 20:00→05:00 are properly split
+        const isOvernight = endHour < startHour || (startHour >= 16 && endHour < 10);
+        
+        if (isOvernight) {
+          // First bar: from check-in to midnight (24:00) on departure day
+          bars.push({
+            dayIndex: dayOfMonth,
+            startHour: checkInHour,
+            endHour: 24, // Always ends at midnight for display
+            duty,
+            isOvernightStart: true,
+            segments: calculateSegments(duty, false),
+          });
+          
+          // Second bar: from midnight (00:00) to arrival on next day
+          // Only add if the duty actually continues past midnight
+          if (dayOfMonth < daysInMonth && endHour > 0) {
+            bars.push({
+              dayIndex: dayOfMonth + 1,
+              startHour: 0,
+              endHour: endHour,
+              duty,
+              isOvernightContinuation: true,
+              segments: calculateSegments(duty, true),
+            });
+          }
+        } else {
+          // Same-day duty - no overnight crossing
+          bars.push({
+            dayIndex: dayOfMonth,
+            startHour: checkInHour,
+            endHour: endHour,
+            duty,
+            segments: calculateSegments(duty, false),
+          });
+        }
+      }
+    });
+    
+    return bars;
   }, [duties, daysInMonth]);
 
   // Compute FDP limit markers - these need to be rendered separately from duty bars
@@ -401,63 +430,64 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     return markers;
   }, [dutyBars, daysInMonth]);
 
-  // ── UTC-normalised sleep bars ──────────────────────────────────
-  // Collect all sleep blocks (from duties + rest days), convert to
-  // UTC intervals, fragment at midnight boundaries, then build bars.
+  // Calculate sleep/rest period bars showing recovery using backend timing
+  // Uses ISO timestamps for accurate date/day positioning when available
   const sleepBars = useMemo(() => {
     const bars: SleepBar[] = [];
-
-    // Compute the home-base UTC offset for fallback conversion
-    const hbOffset = homeBaseTimezone
-      ? utcOffsetForTimezone(homeBaseTimezone, month)
-      : 0;
-
-    /** Convert a home-base-TZ ISO string to a UTC ISO string by subtracting the offset. */
-    const homeTzIsoToUtc = (iso: string): string | null => {
-      if (!iso) return null;
-      const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
-      if (!m) return null;
-      const localDate = new Date(
-        Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]),
-                 Number(m[4]), Number(m[5]))
-      );
-      // Subtract offset: local = UTC + offset → UTC = local − offset
-      localDate.setTime(localDate.getTime() - hbOffset * 3600_000);
-      return localDate.toISOString();
+    
+    // Helper to parse HH:mm to decimal hours
+    const parseTime = (timeStr: string): number => {
+      const [h, m] = timeStr.split(':').map(Number);
+      return h + (m || 0) / 60;
     };
     
-    // ── Collect all sleep intervals ──────────────────────────────
-    interface SleepInterval {
-      startUtc: string;
-      endUtc: string;
-      recoveryScore: number;
-      effectiveSleep: number;
-      sleepEfficiency: number;
-      sleepStrategy: string;
-      sleepType: 'main' | 'nap' | 'inflight';
-      isPreDuty: boolean;
-      relatedDuty: DutyAnalysis;
-      originalStartHour?: number;
-      originalEndHour?: number;
-      sleepStartZulu?: string;
-      sleepEndZulu?: string;
-      qualityFactors?: SleepQualityFactors;
-      explanation?: string;
-      confidenceBasis?: string;
-      confidence?: number;
-      references?: SleepReference[];
-      woclOverlapHours?: number;
-    }
+    // Helper to extract day-of-month and hour from ISO timestamp.
+    // IMPORTANT: Do NOT use `new Date(iso)` here because it converts to the browser's local timezone,
+    // which can shift sleep blocks onto the wrong day/hour and create visual overlap.
+    // We intentionally parse the date/time *as written in the ISO string*.
+    const parseIsoTimestamp = (isoStr: string): { dayOfMonth: number; hour: number } | null => {
+      if (!isoStr) return null;
 
-    const allIntervals: SleepInterval[] = [];
+      // Fast-path for standard ISO strings: YYYY-MM-DDTHH:mm...
+      const m = isoStr.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+      if (m) {
+        const dayOfMonth = Number(m[3]);
+        const hour = Number(m[4]) + Number(m[5]) / 60;
+        if (!Number.isFinite(dayOfMonth) || !Number.isFinite(hour)) return null;
+        return { dayOfMonth, hour };
+      }
 
-    // ── Duty sleep blocks → UTC intervals ──────────────────────
+      // Fallback for unexpected formats
+      try {
+        const date = new Date(isoStr);
+        if (Number.isNaN(date.getTime())) return null;
+        return {
+          dayOfMonth: date.getDate(),
+          hour: date.getHours() + date.getMinutes() / 60,
+        };
+      } catch {
+        return null;
+      }
+    };
+    
     duties.forEach((duty) => {
+      // Extract day-of-month from dateString to avoid timezone issues
+      const dutyDayOfMonth = duty.dateString 
+        ? Number(duty.dateString.split('-')[2]) 
+        : duty.date.getDate();
       const sleepEstimate = duty.sleepEstimate;
-      if (!sleepEstimate) return;
+
+      if (!sleepEstimate) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`❌ Duty ${duty.dutyId} missing sleepEstimate - skipping sleep bar`);
+        }
+        return;
+      }
 
       const recoveryScore = getRecoveryScore(sleepEstimate);
-      const extras = {
+      
+      // Common quality factor fields for all sleep bars from this duty
+      const sleepBarExtras = {
         qualityFactors: sleepEstimate.qualityFactors,
         explanation: sleepEstimate.explanation,
         confidenceBasis: sleepEstimate.confidenceBasis,
@@ -467,220 +497,702 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         sleepStartZulu: isoToZulu(sleepEstimate.sleepStartIso) ?? undefined,
         sleepEndZulu: isoToZulu(sleepEstimate.sleepEndIso) ?? undefined,
       };
-
-      // Normalised block shape for the union of sleepBlocks[] and the
-      // top-level sleepEstimate (which is used as a single-block fallback).
-      interface NormBlock {
-        startUtc?: string;
-        endUtc?: string;
-        sleepStartIso?: string;
-        sleepEndIso?: string;
-        effectiveHours?: number;
-        qualityFactor?: number;
-        sleepType?: string;
-      }
-
+      
+      // When multiple sleep blocks are available (split/nap strategies),
+      // render each block individually instead of using top-level times
       const blocks = sleepEstimate.sleepBlocks;
-      const blocksToProcess: NormBlock[] = blocks && blocks.length > 0
-        ? blocks.map(b => ({
-            startUtc: b.startUtc,
-            endUtc: b.endUtc,
-            sleepStartIso: b.sleepStartIso,
-            sleepEndIso: b.sleepEndIso,
-            effectiveHours: b.effectiveHours,
-            qualityFactor: b.qualityFactor,
-            sleepType: b.sleepType,
-          }))
-        : [{
-            startUtc: sleepEstimate.startUtc,
-            endUtc: sleepEstimate.endUtc,
-            sleepStartIso: sleepEstimate.sleepStartIso,
-            sleepEndIso: sleepEstimate.sleepEndIso,
-            effectiveHours: sleepEstimate.effectiveSleepHours,
-            qualityFactor: sleepEstimate.sleepEfficiency,
-            sleepType: 'main',
-          }];
+      if (blocks && blocks.length > 1) {
+        // Multiple blocks: render each one separately
+        blocks.forEach((block) => {
+          const startDay = block.sleepStartDayHomeTz;
+          const startHour = block.sleepStartHourHomeTz;
+          const endDay = block.sleepEndDayHomeTz;
+          const endHour = block.sleepEndHourHomeTz;
 
-      blocksToProcess.forEach((blk) => {
-        // Prefer explicit UTC; fall back by converting home-TZ ISO
-        let sUtc = blk.startUtc ?? sleepEstimate.startUtc;
-        let eUtc = blk.endUtc ?? sleepEstimate.endUtc;
-        if (!sUtc || !eUtc) {
-          const iso = blk.sleepStartIso ?? sleepEstimate.sleepStartIso;
-          const eIso = blk.sleepEndIso ?? sleepEstimate.sleepEndIso;
-          if (iso && eIso) {
-            sUtc = homeTzIsoToUtc(iso) ?? undefined;
-            eUtc = homeTzIsoToUtc(eIso) ?? undefined;
-          }
-        }
-        if (!sUtc || !eUtc) return;
+          if (startDay == null || startHour == null || endDay == null || endHour == null) return;
 
-        const blockRecovery = blk.effectiveHours != null
-          ? Math.min(100, Math.max(0, (blk.effectiveHours / 8) * 100))
-          : recoveryScore;
+          const validHours = startHour >= 0 && startHour <= 24 && endHour >= 0 && endHour <= 24;
+          const anyPartVisible = startDay <= daysInMonth && endDay >= 1 && validHours;
+          if (!anyPartVisible) return;
 
-        allIntervals.push({
-          startUtc: sUtc,
-          endUtc: eUtc,
-          recoveryScore: blockRecovery,
-          effectiveSleep: blk.effectiveHours ?? sleepEstimate.effectiveSleepHours,
-          sleepEfficiency: blk.qualityFactor ?? sleepEstimate.sleepEfficiency,
-          sleepStrategy: sleepEstimate.sleepStrategy,
-          sleepType: (blk.sleepType as 'main' | 'nap' | 'inflight') ?? 'main',
-          isPreDuty: true,
-          relatedDuty: duty,
-          ...extras,
-        });
-      });
-    });
+          const clampedStartDay = Math.max(1, Math.min(startDay, daysInMonth));
+          const clampedEndDay = Math.max(1, Math.min(endDay, daysInMonth));
+          const clampedStartHour = startDay < 1 ? 0 : startHour;
+          const clampedEndHour = endDay > daysInMonth ? 24 : endHour;
 
-    // ── Rest-day sleep blocks → UTC intervals ──────────────────
-    if (restDaysSleep) {
-      restDaysSleep.forEach((restDay) => {
-        const dummyDuty = duties[0]; // link to first duty for context
-        if (!dummyDuty) return;
-        restDay.sleepBlocks.forEach((blk) => {
-          let sUtc = blk.startUtc;
-          let eUtc = blk.endUtc;
-          if (!sUtc || !eUtc) {
-            if (blk.sleepStartIso && blk.sleepEndIso) {
-              sUtc = homeTzIsoToUtc(blk.sleepStartIso) ?? undefined;
-              eUtc = homeTzIsoToUtc(blk.sleepEndIso) ?? undefined;
+          const blockRecovery = (block.effectiveHours / 8) * 100;
+          const blockBar = {
+            recoveryScore: Math.min(100, Math.max(0, blockRecovery)),
+            effectiveSleep: block.effectiveHours,
+            sleepEfficiency: block.qualityFactor,
+            sleepStrategy: sleepEstimate.sleepStrategy,
+            sleepType: block.sleepType as 'main' | 'nap' | 'inflight',
+            isPreDuty: true,
+            relatedDuty: duty,
+            originalStartHour: startHour,
+            originalEndHour: endHour,
+          };
+
+          if (clampedStartDay === clampedEndDay && clampedEndHour > clampedStartHour) {
+            bars.push({ ...blockBar, dayIndex: clampedStartDay, startHour: clampedStartHour, endHour: clampedEndHour });
+          } else if (clampedStartDay !== clampedEndDay || clampedEndHour <= clampedStartHour) {
+            // Overnight block
+            if (clampedStartDay >= 1 && clampedStartDay <= daysInMonth) {
+              bars.push({ ...blockBar, dayIndex: clampedStartDay, startHour: clampedStartHour, endHour: 24, isOvernightStart: true });
+            }
+            const nextDay = clampedStartDay === clampedEndDay ? clampedStartDay + 1 : clampedEndDay;
+            if (nextDay >= 1 && nextDay <= daysInMonth && clampedEndHour > 0) {
+              bars.push({ ...blockBar, dayIndex: nextDay, startHour: 0, endHour: clampedEndHour, isOvernightContinuation: true });
             }
           }
-          if (!sUtc || !eUtc) return;
+        });
 
-          const blockRecovery = Math.min(100, Math.max(0, (blk.effectiveHours / 8) * 100));
-          allIntervals.push({
-            startUtc: sUtc,
-            endUtc: eUtc,
-            recoveryScore: blockRecovery,
-            effectiveSleep: blk.effectiveHours,
-            sleepEfficiency: blk.qualityFactor,
-            sleepStrategy: restDay.strategyType ?? 'recovery',
-            sleepType: blk.sleepType ?? 'main',
-            isPreDuty: false,
-            relatedDuty: dummyDuty,
-          });
+        // Enrich bars from this duty
+        const barsFromThisDuty = bars.filter(b => b.relatedDuty === duty && !b.qualityFactors);
+        barsFromThisDuty.forEach(b => Object.assign(b, sleepBarExtras));
+        return; // forEach continue - skip single-block logic
+      }
+
+      // SINGLE BLOCK: Use top-level precomputed day/hour values
+      // PREFER home-base timezone day/hour values for chronogram positioning
+      // This ensures sleep bars align with duty bars (which are already in home TZ)
+      const hasHomeTz =
+        sleepEstimate.sleepStartDayHomeTz != null &&
+        sleepEstimate.sleepStartHourHomeTz != null &&
+        sleepEstimate.sleepEndDayHomeTz != null &&
+        sleepEstimate.sleepEndHourHomeTz != null;
+
+      // Fallback to location-timezone precomputed values if home_tz not available
+      const hasPrecomputed = hasHomeTz || (
+        sleepEstimate.sleepStartDay != null &&
+        sleepEstimate.sleepStartHour != null &&
+        sleepEstimate.sleepEndDay != null &&
+        sleepEstimate.sleepEndHour != null);
+
+      if (hasPrecomputed) {
+        // Use home-base timezone values when available, fall back to location values
+        const startDay = sleepEstimate.sleepStartDayHomeTz ?? sleepEstimate.sleepStartDay!;
+        const endDay = sleepEstimate.sleepEndDayHomeTz ?? sleepEstimate.sleepEndDay!;
+        const startHour = sleepEstimate.sleepStartHourHomeTz ?? sleepEstimate.sleepStartHour!;
+        const endHour = sleepEstimate.sleepEndHourHomeTz ?? sleepEstimate.sleepEndHour!;
+
+        // Clamp to visible month range instead of dropping blocks that
+        // cross month boundaries.  A sleep block from Jan 31 → Feb 1 should
+        // still render its visible portion rather than being silently dropped.
+        const validHours = startHour >= 0 && startHour <= 24 && endHour >= 0 && endHour <= 24;
+        const anyPartVisible = startDay <= daysInMonth && endDay >= 1 && validHours;
+
+        if (anyPartVisible) {
+          // Clamp days to visible range
+          const clampedStartDay = Math.max(1, Math.min(startDay, daysInMonth));
+          const clampedEndDay = Math.max(1, Math.min(endDay, daysInMonth));
+          const clampedStartHour = startDay < 1 ? 0 : startHour;
+          const clampedEndHour = endDay > daysInMonth ? 24 : endHour;
+          if (clampedStartDay === clampedEndDay && clampedEndHour > clampedStartHour) {
+            // Same-day sleep (e.g., afternoon nap)
+            bars.push({
+              dayIndex: clampedStartDay,
+              startHour: clampedStartHour,
+              endHour: clampedEndHour,
+              recoveryScore,
+              effectiveSleep: sleepEstimate.effectiveSleepHours,
+              sleepEfficiency: sleepEstimate.sleepEfficiency,
+              sleepStrategy: sleepEstimate.sleepStrategy,
+              sleepType: 'main',
+              isPreDuty: true,
+              relatedDuty: duty,
+              originalStartHour: startHour,
+              originalEndHour: endHour,
+            });
+          } else if (clampedStartDay !== clampedEndDay) {
+            // Overnight sleep: crosses midnight into different day
+            // Part 1: startHour to 24:00 on start day
+            if (clampedStartDay >= 1 && clampedStartDay <= daysInMonth) {
+              bars.push({
+                dayIndex: clampedStartDay,
+                startHour: clampedStartHour,
+                endHour: 24,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                sleepType: 'main',
+                isPreDuty: true,
+                relatedDuty: duty,
+                isOvernightStart: true,
+                originalStartHour: startHour,
+                originalEndHour: endHour,
+              });
+            }
+            // Part 2: 00:00 to endHour on end day
+            if (clampedEndDay >= 1 && clampedEndDay <= daysInMonth && clampedEndHour > 0) {
+              bars.push({
+                dayIndex: clampedEndDay,
+                startHour: 0,
+                endHour: clampedEndHour,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                sleepType: 'main',
+                isPreDuty: true,
+                relatedDuty: duty,
+                isOvernightContinuation: true,
+                originalStartHour: startHour,
+                originalEndHour: endHour,
+              });
+            }
+          }
+          // If same day but endHour <= startHour, treat as overnight (endDay = startDay + 1)
+          else if (clampedStartDay === clampedEndDay && clampedEndHour <= clampedStartHour) {
+            if (clampedStartDay >= 1 && clampedStartDay <= daysInMonth) {
+              bars.push({
+                dayIndex: clampedStartDay,
+                startHour: clampedStartHour,
+                endHour: 24,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                sleepType: 'main',
+                isPreDuty: true,
+                relatedDuty: duty,
+                isOvernightStart: true,
+                originalStartHour: startHour,
+                originalEndHour: endHour,
+              });
+            }
+            if (clampedStartDay + 1 <= daysInMonth && clampedEndHour > 0) {
+              bars.push({
+                dayIndex: clampedStartDay + 1,
+                startHour: 0,
+                endHour: clampedEndHour,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                sleepType: 'main',
+                isPreDuty: true,
+                relatedDuty: duty,
+                isOvernightContinuation: true,
+                originalStartHour: startHour,
+                originalEndHour: endHour,
+              });
+            }
+          }
+
+          // Enrich bars from this duty now (before moving to next duty)
+          const barsFromThisDuty = bars.filter(b => b.relatedDuty === duty && !b.qualityFactors);
+          barsFromThisDuty.forEach(b => Object.assign(b, sleepBarExtras));
+          return; // forEach continue - skip fallback
+        }
+      }
+      // FALLBACK when precomputed data is missing or invalid
+      {
+        // FALLBACK: Parse ISO timestamps (legacy behavior)
+        const sleepStartIso = sleepEstimate.sleepStartIso ? parseIsoTimestamp(sleepEstimate.sleepStartIso) : null;
+        const sleepEndIso = sleepEstimate.sleepEndIso ? parseIsoTimestamp(sleepEstimate.sleepEndIso) : null;
+        
+        if (sleepStartIso && sleepEndIso) {
+          // Use ISO timestamps for precise day placement
+          const startDay = sleepStartIso.dayOfMonth;
+          const endDay = sleepEndIso.dayOfMonth;
+          const startHour = sleepStartIso.hour;
+          const endHour = sleepEndIso.hour;
+          
+          if (startDay === endDay) {
+            // Same-day sleep (e.g., afternoon nap)
+            bars.push({
+              dayIndex: startDay,
+              startHour,
+              endHour,
+              recoveryScore,
+              effectiveSleep: sleepEstimate.effectiveSleepHours,
+              sleepEfficiency: sleepEstimate.sleepEfficiency,
+              sleepStrategy: sleepEstimate.sleepStrategy,
+              isPreDuty: true,
+              relatedDuty: duty,
+              originalStartHour: startHour,
+              originalEndHour: endHour,
+            });
+          } else {
+            // Multi-day span: the backend may send the entire rest period as one block.
+            // Only render the last night of sleep (the night before the duty).
+            const daySpan = endDay - startDay;
+            
+            if (daySpan <= 1) {
+              // Normal overnight sleep (1 day crossing)
+              if (startDay >= 1 && startDay <= daysInMonth) {
+                bars.push({
+                  dayIndex: startDay,
+                  startHour,
+                  endHour: 24,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                  isOvernightStart: true,
+                  originalStartHour: startHour,
+                  originalEndHour: endHour,
+                });
+              }
+              if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) {
+                bars.push({
+                  dayIndex: endDay,
+                  startHour: 0,
+                  endHour,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                  isOvernightContinuation: true,
+                  originalStartHour: startHour,
+                  originalEndHour: endHour,
+                });
+              }
+            } else {
+              // Multi-day rest period (>1 day span): only render the last night before the duty.
+              // Estimate sleep start as ~22:00 on the night before endDay, ending at endHour on endDay.
+              const lastNightDay = endDay - 1;
+              const estimatedSleepStart = 22; // Reasonable default for pre-duty sleep
+              
+              if (lastNightDay >= 1 && lastNightDay <= daysInMonth) {
+                bars.push({
+                  dayIndex: lastNightDay,
+                  startHour: estimatedSleepStart,
+                  endHour: 24,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                  isOvernightStart: true,
+                  originalStartHour: estimatedSleepStart,
+                  originalEndHour: endHour,
+                });
+              }
+              if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) {
+                bars.push({
+                  dayIndex: endDay,
+                  startHour: 0,
+                  endHour,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                  isOvernightContinuation: true,
+                  originalStartHour: estimatedSleepStart,
+                  originalEndHour: endHour,
+                });
+              }
+            }
+          }
+        } else {
+          // FALLBACK: Use HH:mm times (legacy behavior - may be inaccurate for overnight)
+          const sleepStart = sleepEstimate.sleepStartTime ? parseTime(sleepEstimate.sleepStartTime) : null;
+          const sleepEnd = sleepEstimate.sleepEndTime ? parseTime(sleepEstimate.sleepEndTime) : null;
+          
+          if (sleepStart !== null && sleepEnd !== null) {
+            if (sleepStart > sleepEnd) {
+              // Assume overnight sleep: spans midnight
+              if (dutyDayOfMonth > 1) {
+                bars.push({
+                  dayIndex: dutyDayOfMonth - 1,
+                  startHour: sleepStart,
+                  endHour: 24,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                });
+              }
+              bars.push({
+                dayIndex: dutyDayOfMonth,
+                startHour: 0,
+                endHour: sleepEnd,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                isPreDuty: true,
+                relatedDuty: duty,
+              });
+            } else {
+              // Same-day sleep
+              bars.push({
+                dayIndex: dutyDayOfMonth,
+                startHour: sleepStart,
+                endHour: sleepEnd,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                isPreDuty: true,
+                relatedDuty: duty,
+              });
+            }
+          } else if (duty.flightSegments.length > 0) {
+            // Fallback: estimate sleep window from total hours
+            const firstSeg = duty.flightSegments[0];
+            const [depH, depM] = firstSeg.departureTime.split(':').map(Number);
+            const dutyStart = depH + depM / 60;
+            const sleepDuration = sleepEstimate.totalSleepHours;
+            
+            // Estimate wake time as 1.5h before duty
+            const wakeTime = Math.max(0, dutyStart - 1.5);
+            let estimatedSleepStart = wakeTime - sleepDuration;
+            
+            if (estimatedSleepStart < 0) {
+              estimatedSleepStart += 24;
+              if (dutyDayOfMonth > 1) {
+                bars.push({
+                  dayIndex: dutyDayOfMonth - 1,
+                  startHour: estimatedSleepStart,
+                  endHour: 24,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                });
+              }
+              if (wakeTime > 0) {
+                bars.push({
+                  dayIndex: dutyDayOfMonth,
+                  startHour: 0,
+                  endHour: wakeTime,
+                  recoveryScore,
+                  effectiveSleep: sleepEstimate.effectiveSleepHours,
+                  sleepEfficiency: sleepEstimate.sleepEfficiency,
+                  sleepStrategy: sleepEstimate.sleepStrategy,
+                  isPreDuty: true,
+                  relatedDuty: duty,
+                });
+              }
+            } else {
+              bars.push({
+                dayIndex: dutyDayOfMonth,
+                startHour: estimatedSleepStart,
+                endHour: wakeTime,
+                recoveryScore,
+                effectiveSleep: sleepEstimate.effectiveSleepHours,
+                sleepEfficiency: sleepEstimate.sleepEfficiency,
+                sleepStrategy: sleepEstimate.sleepStrategy,
+                isPreDuty: true,
+                relatedDuty: duty,
+              });
+            }
+          }
+        }
+      }
+      
+      // Enrich all bars from this duty with quality factor data
+      const barsFromThisDuty = bars.filter(b => b.relatedDuty === duty && !b.qualityFactors);
+      barsFromThisDuty.forEach(b => Object.assign(b, sleepBarExtras));
+    });
+    
+    // Add rest day sleep bars (from separate rest_days_sleep array)
+    if (restDaysSleep) {
+      restDaysSleep.forEach((restDay) => {
+        // Rest-day level quality factor extras
+        const restDayExtras = {
+          qualityFactors: restDay.qualityFactors,
+          explanation: restDay.explanation,
+          confidenceBasis: restDay.confidenceBasis,
+          confidence: restDay.confidence,
+          references: restDay.references,
+        };
+        
+        restDay.sleepBlocks.forEach((block) => {
+          // Calculate recovery score for rest day sleep
+          const baseScore = (block.effectiveHours / 8) * 100;
+          const efficiencyBonus = block.qualityFactor * 20;
+          const recoveryScore = Math.min(100, Math.max(0, baseScore + efficiencyBonus));
+
+          // Compute Zulu times from ISO timestamps
+          const blockZuluTimes = {
+            sleepStartZulu: isoToZulu(block.sleepStartIso) ?? undefined,
+            sleepEndZulu: isoToZulu(block.sleepEndIso) ?? undefined,
+          };
+
+          // PREFER home-base timezone positioning for rest day blocks too
+          const hasHomeTzBlock = 
+            block.sleepStartDayHomeTz != null && 
+            block.sleepStartHourHomeTz != null && 
+            block.sleepEndDayHomeTz != null && 
+            block.sleepEndHourHomeTz != null;
+          
+          let startDay: number;
+          let endDay: number;
+          let startHour: number;
+          let endHour: number;
+          
+          if (hasHomeTzBlock) {
+            startDay = block.sleepStartDayHomeTz!;
+            endDay = block.sleepEndDayHomeTz!;
+            startHour = block.sleepStartHourHomeTz!;
+            endHour = block.sleepEndHourHomeTz!;
+          } else {
+            // Fallback: parse ISO timestamps (location timezone)
+            const parseIso = (isoStr: string): { dayOfMonth: number; hour: number } | null => {
+              if (!isoStr) return null;
+              const m = isoStr.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+              if (m) {
+                const dayOfMonth = Number(m[3]);
+                const hour = Number(m[4]) + Number(m[5]) / 60;
+                if (!Number.isFinite(dayOfMonth) || !Number.isFinite(hour)) return null;
+                return { dayOfMonth, hour };
+              }
+              try {
+                const date = new Date(isoStr);
+                if (Number.isNaN(date.getTime())) return null;
+                return { dayOfMonth: date.getDate(), hour: date.getHours() + date.getMinutes() / 60 };
+              } catch { return null; }
+            };
+            
+            const sleepStartIso = parseIso(block.sleepStartIso);
+            const sleepEndIso = parseIso(block.sleepEndIso);
+            
+            if (!sleepStartIso || !sleepEndIso) return;
+            startDay = sleepStartIso.dayOfMonth;
+            endDay = sleepEndIso.dayOfMonth;
+            startHour = sleepStartIso.hour;
+            endHour = sleepEndIso.hour;
+          }
+            
+            // Create a pseudo-duty for tooltip display purposes
+            const pseudoDuty: DutyAnalysis = {
+              date: restDay.date,
+              dayOfWeek: format(restDay.date, 'EEE'),
+              dutyHours: 0,
+              blockHours: 0,
+              sectors: 0,
+              minPerformance: 100,
+              avgPerformance: 100,
+              landingPerformance: 100,
+              sleepDebt: 0,
+              woclExposure: 0,
+              priorSleep: restDay.totalSleepHours,
+              overallRisk: 'LOW',
+              minPerformanceRisk: 'LOW',
+              landingRisk: 'LOW',
+              smsReportable: false,
+              flightSegments: [],
+              crewComposition: 'standard',
+              restFacilityClass: null,
+              isUlr: false,
+              acclimatizationState: 'acclimatized',
+              ulrCompliance: null,
+              inflightRestBlocks: [],
+              returnToDeckPerformance: null,
+              preDutyAwakeHours: 0,
+            };
+            
+            if (startDay === endDay) {
+              // Same-day sleep
+              bars.push({
+                dayIndex: startDay,
+                startHour,
+                endHour,
+                recoveryScore,
+                effectiveSleep: block.effectiveHours,
+                sleepEfficiency: block.qualityFactor,
+                sleepStrategy: restDay.strategyType,
+                isPreDuty: false,
+                relatedDuty: pseudoDuty,
+                ...restDayExtras,
+                ...blockZuluTimes,
+              });
+            } else {
+              // Overnight sleep: crosses midnight
+              // Part 1: startHour to 24:00 on start day
+              if (startDay >= 1 && startDay <= daysInMonth) {
+                bars.push({
+                  dayIndex: startDay,
+                  startHour,
+                  endHour: 24,
+                  recoveryScore,
+                  effectiveSleep: block.effectiveHours,
+                  sleepEfficiency: block.qualityFactor,
+                  sleepStrategy: restDay.strategyType,
+                  isPreDuty: false,
+                  relatedDuty: pseudoDuty,
+                  isOvernightStart: true,
+                  originalStartHour: startHour,
+                  originalEndHour: endHour,
+                  ...restDayExtras,
+                  ...blockZuluTimes,
+                });
+              }
+              // Part 2: 00:00 to endHour on end day
+              if (endDay >= 1 && endDay <= daysInMonth && endHour > 0) {
+                bars.push({
+                  dayIndex: endDay,
+                  startHour: 0,
+                  endHour,
+                  recoveryScore,
+                  effectiveSleep: block.effectiveHours,
+                  sleepEfficiency: block.qualityFactor,
+                  sleepStrategy: restDay.strategyType,
+                  isPreDuty: false,
+                  relatedDuty: pseudoDuty,
+                  isOvernightContinuation: true,
+                  originalStartHour: startHour,
+                  originalEndHour: endHour,
+                  ...restDayExtras,
+                  ...blockZuluTimes,
+                });
+              }
+            }
         });
       });
     }
-
-    // ── Fragment at UTC midnight boundaries ─────────────────────
-    const fragments = splitByUtcDay(allIntervals);
-
-    // ── Convert fragments to SleepBars ─────────────────────────
-    fragments
-      .filter(f => f.utcDay >= 1 && f.utcDay <= daysInMonth)
-      .forEach(f => {
-        const isStart = f.utcStartHour > 0 && f.utcEndHour === 24;
-        const isCont = f.utcStartHour === 0 && f.utcEndHour < 24;
-        bars.push({
-          dayIndex: f.utcDay,
-          startHour: f.utcStartHour,
-          endHour: f.utcEndHour,
-          recoveryScore: f.recoveryScore,
-          effectiveSleep: f.effectiveSleep,
-          sleepEfficiency: f.sleepEfficiency,
-          sleepStrategy: f.sleepStrategy,
-          sleepType: f.sleepType,
-          isPreDuty: f.isPreDuty,
-          relatedDuty: f.relatedDuty,
-          isOvernightStart: isStart,
-          isOvernightContinuation: isCont,
-          originalStartHour: f.originalStartHour,
-          originalEndHour: f.originalEndHour,
-          sleepStartZulu: f.sleepStartZulu,
-          sleepEndZulu: f.sleepEndZulu,
-          qualityFactors: f.qualityFactors,
-          explanation: f.explanation,
-          confidenceBasis: f.confidenceBasis,
-          confidence: f.confidence,
-          references: f.references,
-          woclOverlapHours: f.woclOverlapHours,
-        });
-      });
-    // ── Dedup ──────────────────────────────────────────────────
+    
+    // Deduplicate sleep bars on the same day with overlapping time ranges.
+    // Sleep bars can come from two sources:
+    //   1. duties[].sleepEstimate (isPreDuty: true)
+    //   2. restDaysSleep[] (isPreDuty: false)
+    // The backend may generate entries in both for the same calendar night,
+    // producing duplicate or near-duplicate bars. Pre-duty bars take priority
+    // since they have richer context (linked to actual duty).
+    //
+    // Step 1: Exact dedup (same day + same time range regardless of source)
     const seen = new Set<string>();
-    const deduped = bars.filter(bar => {
+    const exactDeduped = bars.filter(bar => {
+      // Key on day + time only (NOT strategy or isPreDuty) — any bar at the
+      // same position is a duplicate regardless of which source generated it
       const key = `${bar.dayIndex}|${bar.startHour.toFixed(1)}|${bar.endHour.toFixed(1)}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
 
-    // NOTE: we intentionally do NOT remove near-overlapping bars.
-    // On a UTC-normalised grid, overlaps surface fatigue-model errors.
-    return deduped;
-  }, [duties, restDaysSleep, daysInMonth, homeBaseTimezone, month]);
-
-
-  // ── UTC in-flight rest bars ────────────────────────────────────
-  // Already stored as UTC timestamps — use directly via splitByUtcDay.
-  const inflightRestBars = useMemo(() => {
-    const intervals = duties.flatMap(duty =>
-      (duty.inflightRestBlocks ?? []).map(block => ({
-        startUtc: block.startUtc,
-        endUtc: block.endUtc,
-        durationHours: block.durationHours,
-        effectiveSleepHours: block.effectiveSleepHours,
-        isDuringWocl: block.isDuringWocl,
-        crewSet: block.crewSet,
-        relatedDuty: duty,
-      }))
-    );
-
-    return splitByUtcDay(intervals)
-      .filter(f => f.utcDay >= 1 && f.utcDay <= daysInMonth)
-      .map(f => ({
-        dayIndex: f.utcDay,
-        startHour: f.utcStartHour,
-        endHour: f.utcEndHour,
-        durationHours: f.durationHours,
-        effectiveSleepHours: f.effectiveSleepHours,
-        isDuringWocl: f.isDuringWocl,
-        crewSet: f.crewSet,
-        relatedDuty: f.relatedDuty,
-      } as InFlightRestBar));
-  }, [duties, daysInMonth]);
-
-  // ── Dynamic circadian overlays (UTC positions) ─────────────
-  // Compute where the home-base night (23–07 local) and WOCL (02–06 local)
-  // fall on the 0–24 UTC grid, shifting by the timezone offset.
-  const overlays = useMemo(() => {
-    const offset = homeBaseTimezone
-      ? utcOffsetForTimezone(homeBaseTimezone, month)
-      : 0;
-
-    // Convert local hour to UTC hour, wrapping around 0–24
-    const toUtc = (localHour: number) => ((localHour - offset) % 24 + 24) % 24;
-
-    const nightStartUtc = toUtc(23); // e.g. DOH UTC+3 → 20Z
-    const nightEndUtc = toUtc(7);    // e.g. DOH UTC+3 → 4Z
-    const woclStartUtc = toUtc(2);   // e.g. DOH UTC+3 → 23Z
-    const woclEndUtc = toUtc(6);     // e.g. DOH UTC+3 → 3Z
-
-    // Each overlay may wrap around midnight (e.g. 20Z–04Z spans two bands).
-    // Return band(s) as [{start, end}] arrays.
-    const makeBands = (start: number, end: number) => {
-      if (start < end) {
-        // Single contiguous band
-        return [{ start, end }];
-      } else {
-        // Wraps around midnight: two bands
-        return [
-          { start: 0, end },        // left band (00:00 → end)
-          { start, end: 24 },       // right band (start → 24:00)
-        ];
+    // Step 2: Remove near-overlapping bars on the same day.
+    // E.g., a 23:00-07:00 rest_day bar and a 22:00-06:00 pre-duty bar
+    // that overlap by >50% are effectively the same sleep period.
+    const deduped = exactDeduped.filter((bar, idx) => {
+      for (let j = 0; j < idx; j++) {
+        const other = exactDeduped[j];
+        if (other.dayIndex !== bar.dayIndex) continue;
+        // Calculate overlap
+        const overlapStart = Math.max(bar.startHour, other.startHour);
+        const overlapEnd = Math.min(bar.endHour, other.endHour);
+        const overlap = Math.max(0, overlapEnd - overlapStart);
+        const barLength = bar.endHour - bar.startHour;
+        // If >50% of this bar overlaps with an earlier bar, drop it
+        if (barLength > 0 && overlap / barLength > 0.5) return false;
       }
+      return true;
+    });
+
+    return deduped;
+  }, [duties, restDaysSleep, daysInMonth]);
+
+  // Calculate in-flight rest bars for augmented/ULR duties
+  // IMPORTANT: Duty bars are positioned in HOME BASE LOCAL time, so inflight rest
+  // bars must also be converted from UTC to local time for proper alignment.
+  const inflightRestBars = useMemo(() => {
+    const bars: InFlightRestBar[] = [];
+
+    // Helper: derive UTC→local offset from duty's first segment
+    const getLocalOffsetHours = (duty: DutyAnalysis): number => {
+      if (!duty.flightSegments || duty.flightSegments.length === 0) return 0;
+      const seg = duty.flightSegments[0];
+      // Use explicit UTC offset if available
+      if (seg.departureUtcOffset != null && typeof seg.departureUtcOffset === 'number') {
+        return seg.departureUtcOffset;
+      }
+      // Derive from comparing local vs UTC departure times
+      if (seg.departureTime && seg.departureTimeUtc) {
+        const [lH, lM] = seg.departureTime.split(':').map(Number);
+        const utcStr = seg.departureTimeUtc.replace('Z', '');
+        const [uH, uM] = utcStr.split(':').map(Number);
+        if (Number.isFinite(lH) && Number.isFinite(uH)) {
+          let diff = (lH + lM / 60) - (uH + uM / 60);
+          if (diff > 12) diff -= 24;
+          if (diff < -12) diff += 24;
+          return diff;
+        }
+      }
+      return 0;
     };
 
-    return {
-      nightBands: makeBands(nightStartUtc, nightEndUtc),
-      woclBands: makeBands(woclStartUtc, woclEndUtc),
-      offset,
-    };
-  }, [homeBaseTimezone, month]);
+    duties.forEach((duty) => {
+      if (!duty.inflightRestBlocks || duty.inflightRestBlocks.length === 0) return;
+
+      const dutyDayOfMonth = duty.dateString
+        ? Number(duty.dateString.split('-')[2])
+        : duty.date.getDate();
+
+      const utcOffset = getLocalOffsetHours(duty);
+
+      duty.inflightRestBlocks.forEach((block) => {
+        // Parse ISO UTC timestamps
+        const startMatch = block.startUtc.match(/T(\d{2}):(\d{2})/);
+        const endMatch = block.endUtc.match(/T(\d{2}):(\d{2})/);
+        if (!startMatch || !endMatch) return;
+
+        // Convert UTC hours to local time for alignment with duty bars
+        let startHour = Number(startMatch[1]) + Number(startMatch[2]) / 60 + utcOffset;
+        let endHour = Number(endMatch[1]) + Number(endMatch[2]) / 60 + utcOffset;
+
+        // Also check if the UTC date differs from the duty date (rest block may span days in UTC)
+        const startDateMatch = block.startUtc.match(/(\d{4})-(\d{2})-(\d{2})/);
+        const endDateMatch = block.endUtc.match(/(\d{4})-(\d{2})-(\d{2})/);
+        const startDayUtc = startDateMatch ? Number(startDateMatch[3]) : dutyDayOfMonth;
+        const endDayUtc = endDateMatch ? Number(endDateMatch[3]) : dutyDayOfMonth;
+
+        // Adjust day index based on UTC→local conversion crossing midnight
+        let startDayLocal = startDayUtc;
+        if (startHour >= 24) { startHour -= 24; startDayLocal += 1; }
+        if (startHour < 0) { startHour += 24; startDayLocal -= 1; }
+
+        let endDayLocal = endDayUtc;
+        if (endHour >= 24) { endHour -= 24; endDayLocal += 1; }
+        if (endHour < 0) { endHour += 24; endDayLocal -= 1; }
+
+        const pushBar = (dayIdx: number, sH: number, eH: number) => {
+          if (dayIdx < 1 || dayIdx > daysInMonth) return;
+          bars.push({
+            dayIndex: dayIdx,
+            startHour: sH,
+            endHour: eH,
+            durationHours: block.durationHours,
+            effectiveSleepHours: block.effectiveSleepHours,
+            isDuringWocl: block.isDuringWocl,
+            crewSet: block.crewSet,
+            relatedDuty: duty,
+          });
+        };
+
+        if (startDayLocal === endDayLocal) {
+          if (endHour > startHour) {
+            pushBar(startDayLocal, startHour, endHour);
+          } else {
+            // Crosses midnight in local time
+            pushBar(startDayLocal, startHour, 24);
+            pushBar(startDayLocal + 1, 0, endHour);
+          }
+        } else {
+          // Multi-day: first day until midnight, last day from midnight
+          pushBar(startDayLocal, startHour, 24);
+          pushBar(endDayLocal, 0, endHour);
+        }
+      });
+    });
+
+    return bars;
+  }, [duties, daysInMonth]);
 
   // Get duty warnings based on actual duty data
   const getDayWarnings = (dayOfMonth: number) => {
@@ -792,7 +1304,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                 <span className="flex items-center gap-1"><span className="h-3 w-3 rounded" style={{ backgroundColor: 'hsl(25, 95%, 50%)' }} /> 40-60% (High Risk)</span>
                 <span className="flex items-center gap-1"><span className="h-3 w-3 rounded" style={{ backgroundColor: 'hsl(0, 80%, 50%)' }} /> &lt;40% (Critical)</span>
               </div>
-              <p className="mt-2">Purple hatched area = WOCL (Window of Circadian Low, 02–06 home base), blue shading = Home Base Night</p>
+              <p className="mt-2">Purple shaded area = WOCL (Window of Circadian Low: 02:00-06:00)</p>
             </div>
           </CollapsibleContent>
         </Collapsible>
@@ -901,37 +1413,21 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                       className="flex-1 text-center text-[11px] text-muted-foreground flex items-center justify-center"
                       style={{ width: `${(3/24) * 100}%` }}
                     >
-                      {hour.toString().padStart(2, '0')}Z
+                      {hour.toString().padStart(2, '0')}:00
                     </div>
                   ))}
                 </div>
 
                 {/* Grid with WOCL shading and duty bars */}
                 <div className="relative">
-                  {/* Home Base Night overlay — dynamic position on UTC grid */}
-                  {overlays.nightBands.map((band, i) => (
-                    <div
-                      key={`night-${i}`}
-                      className="absolute top-0 bottom-0 pointer-events-none"
-                      style={{
-                        left: `${(band.start / 24) * 100}%`,
-                        width: `${((band.end - band.start) / 24) * 100}%`,
-                        background: 'rgba(30, 58, 138, 0.07)',
-                      }}
-                    />
-                  ))}
-
-                  {/* WOCL hatched pattern — dynamic position on UTC grid */}
-                  {overlays.woclBands.map((band, i) => (
-                    <div
-                      key={`wocl-${i}`}
-                      className="absolute top-0 bottom-0 wocl-hatch"
-                      style={{
-                        left: `${(band.start / 24) * 100}%`,
-                        width: `${((band.end - band.start) / 24) * 100}%`,
-                      }}
-                    />
-                  ))}
+                  {/* WOCL hatched pattern */}
+                  <div
+                    className="absolute top-0 bottom-0 wocl-hatch"
+                    style={{
+                      left: `${(WOCL_START / 24) * 100}%`,
+                      width: `${((WOCL_END - WOCL_START) / 24) * 100}%`,
+                    }}
+                  />
 
                   {/* Grid lines */}
                   <div className="absolute inset-0 flex pointer-events-none">
@@ -955,7 +1451,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                         className="relative border-b border-border/20"
                         style={{ height: `${ROW_HEIGHT}px` }}
                       >
-                        {/* Sleep/Rest bars for this day showing recovery */}
+                        {/* Sleep/Rest bars for this day showing recovery - SEPARATE LANE at top */}
                         {sleepBars
                           .filter((bar) => bar.dayIndex === dayNum)
                           .map((bar, barIndex) => {
@@ -980,10 +1476,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         : "border-dashed border-primary/20 bg-primary/5"
                                     )}
                                     style={{
-                                      // Single-lane: sleep bars span full row height.
-                                      // Nap bars are slightly shorter for visual distinction.
-                                      top: bar.sleepType === 'nap' ? '15%' : 0,
-                                      height: bar.sleepType === 'nap' ? '70%' : '100%',
+                                      top: 0,
+                                      height: bar.sleepType === 'nap' ? '60%' : '100%',
+                                      marginTop: bar.sleepType === 'nap' ? '20%' : undefined,
                                       left: `${(bar.startHour / 24) * 100}%`,
                                       width: `${Math.max(barWidth, 1)}%`,
                                       borderRadius,
@@ -1202,7 +1697,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                             );
                           })}
 
-                        {/* Duty bars for this day with flight phase segments */}
+                        {/* Duty bars for this day with flight phase segments - SEPARATE LANE at bottom */}
                         {dutyBars
                           .filter((bar) => bar.dayIndex === dayNum)
                           .map((bar, barIndex) => {
@@ -1228,7 +1723,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                         usedDiscretion ? "ring-2 ring-critical hover:ring-critical/80" : "hover:ring-foreground"
                                       )}
                                       style={{
-                                        // Single-lane: duty bars span full row height
                                         top: 0,
                                         height: '100%',
                                         left: `${(bar.startHour / 24) * 100}%`,
@@ -1546,9 +2040,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
                                     <div
                                       className="absolute pointer-events-auto cursor-help"
                                       style={{
-                                        // Single-lane: in-flight rest spans full row height
-                                        top: '10%',
-                                        height: '80%',
+                                        top: 13,
+                                        height: 13,
                                         left: `${(bar.startHour / 24) * 100}%`,
                                         width: `${Math.max(barWidth, 0.5)}%`,
                                         background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(147, 130, 220, 0.5) 2px, rgba(147, 130, 220, 0.5) 4px)',
@@ -1645,7 +2138,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
 
             {/* X-axis label */}
             <div className="mt-2 text-center text-xs text-muted-foreground">
-              UTC
+              Time of Day (Home Base)
             </div>
           </div>
         </div>

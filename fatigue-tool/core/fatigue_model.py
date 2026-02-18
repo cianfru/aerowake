@@ -1078,9 +1078,6 @@ class BorbelyFatigueModel:
                             # Location timezone (actual local time where pilot sleeps)
                             'sleep_start_time_location_tz': sleep_start_local.strftime('%H:%M'),
                             'sleep_end_time_location_tz': sleep_end_local.strftime('%H:%M'),
-                            # UTC timestamps for chronogram UTC-normalised rendering
-                            'start_utc': sleep_start.astimezone(pytz.utc).isoformat(),
-                            'end_utc': sleep_end.astimezone(pytz.utc).isoformat(),
                             'sleep_type': 'main',
                             'duration_hours': rest_quality.actual_sleep_hours,
                             'effective_hours': rest_quality.effective_sleep_hours,
@@ -1261,9 +1258,6 @@ class BorbelyFatigueModel:
                         'sleep_end_hour_home_tz': trail_end_home.hour + trail_end_home.minute / 60.0,
                         'sleep_start_time_location_tz': trail_start_loc.strftime('%H:%M'),
                         'sleep_end_time_location_tz': trail_end_loc.strftime('%H:%M'),
-                        # UTC timestamps for chronogram UTC-normalised rendering
-                        'start_utc': trail_sleep_start.astimezone(pytz.utc).isoformat(),
-                        'end_utc': trail_sleep_end.astimezone(pytz.utc).isoformat(),
                         'sleep_type': 'main',
                         'duration_hours': trail_quality.actual_sleep_hours,
                         'effective_hours': trail_quality.effective_sleep_hours,
@@ -1406,9 +1400,6 @@ class BorbelyFatigueModel:
                     # Location timezone (actual local time where pilot sleeps)
                     'sleep_start_time_location_tz': sleep_start_local.strftime('%H:%M'),
                     'sleep_end_time_location_tz': sleep_end_local.strftime('%H:%M'),
-                    # UTC timestamps for chronogram UTC-normalised rendering
-                    'start_utc': block.start_utc.isoformat(),
-                    'end_utc': block.end_utc.isoformat(),
                     'sleep_type': sleep_type,
                     'duration_hours': block.duration_hours,
                     'effective_hours': block.effective_sleep_hours,
