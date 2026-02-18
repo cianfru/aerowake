@@ -568,11 +568,24 @@ class CrewLinkRosterParser:
             print(f"  ⚠️  Invalid duty: report >= release, adjusting release time")
             release_time = report_time + timedelta(hours=1)  # Minimum 1h duty
         
+        # Derive duty date from report_time in home base timezone.
+        # Using the PDF column date directly is wrong for layover duties where
+        # the departure airport is in a different timezone (e.g. GRU UTC-3):
+        # a 00:10 GRU report on "03Jan" column = 06:10 DOH, still 03 Jan in DOH —
+        # but a very early local report could cross the home-base date boundary.
+        # Anchoring to home TZ ensures the chronogram row always matches.
+        home_tz_parser = pytz.timezone(self.home_timezone)
+        report_in_home_tz = report_time.astimezone(home_tz_parser)
+        duty_date = datetime(
+            report_in_home_tz.year,
+            report_in_home_tz.month,
+            report_in_home_tz.day
+        )
+
         # Create duty
-        # Use departure airport timezone as home base (will be corrected by parent parser)
         duty = Duty(
-            duty_id=f"D{date.strftime('%Y%m%d')}",
-            date=date,
+            duty_id=f"D{duty_date.strftime('%Y%m%d')}",
+            date=duty_date,
             report_time_utc=report_time.astimezone(pytz.utc),
             release_time_utc=release_time,
             segments=segments,

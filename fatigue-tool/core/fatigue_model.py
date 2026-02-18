@@ -1002,7 +1002,12 @@ class BorbelyFatigueModel:
                     if block_hours < 3.0:
                         break
 
-                    rest_day_key = f"rest_{candidate_date.isoformat()}"
+                    # Key by HOME BASE TZ date so RestDaySleepResponse.date aligns
+                    # with the chronogram row (which is always in home base time).
+                    # candidate_date is in rest_tz (layover or home), so convert the
+                    # sleep start to home TZ to get the correct calendar date.
+                    sleep_start_home_date = sleep_start.astimezone(home_tz).date()
+                    rest_day_key = f"rest_{sleep_start_home_date.isoformat()}"
 
                     rest_quality = self.sleep_calculator.calculate_sleep_quality(
                         sleep_start=sleep_start,
@@ -1061,6 +1066,9 @@ class BorbelyFatigueModel:
                             'sleep_end_time': sleep_end_home.strftime('%H:%M'),
                             'sleep_start_iso': sleep_start_home.isoformat(),
                             'sleep_end_iso': sleep_end_home.isoformat(),
+                            # UTC — always unambiguous, for future timezone-toggle rendering
+                            'sleep_start_utc': sleep_start.astimezone(pytz.utc).isoformat(),
+                            'sleep_end_utc': sleep_end.astimezone(pytz.utc).isoformat(),
                             'sleep_start_day': sleep_start_home.day,
                             'sleep_start_hour': sleep_start_home.hour + sleep_start_home.minute / 60.0,
                             'sleep_end_day': sleep_end_home.day,
@@ -1207,6 +1215,9 @@ class BorbelyFatigueModel:
                     'sleep_end_time': sleep_end_home.strftime('%H:%M'),
                     'sleep_start_iso': sleep_start_home.isoformat(),
                     'sleep_end_iso': sleep_end_home.isoformat(),
+                    # UTC — always unambiguous, for future timezone-toggle rendering
+                    'sleep_start_utc': block.start_utc.astimezone(pytz.utc).isoformat(),
+                    'sleep_end_utc': block.end_utc.astimezone(pytz.utc).isoformat(),
                     'sleep_start_day': sleep_start_home.day,
                     'sleep_start_hour': sleep_start_home.hour + sleep_start_home.minute / 60.0,
                     'sleep_end_day': sleep_end_home.day,

@@ -160,6 +160,11 @@ class SleepBlockResponse(BaseModel):
     sleep_start_time_home_tz: Optional[str] = None    # HH:mm
     sleep_end_time_home_tz: Optional[str] = None      # HH:mm
 
+    # UTC ISO timestamps — always Z-suffixed, timezone-unambiguous.
+    # Use these as the canonical source for any future timezone-toggle rendering.
+    sleep_start_utc: Optional[str] = None  # e.g. "2026-02-01T22:00:00+00:00"
+    sleep_end_utc: Optional[str] = None    # e.g. "2026-02-02T06:30:00+00:00"
+
     # Per-block quality factor breakdown (populated for all sleep types)
     quality_factors: Optional[QualityFactorsResponse] = None
 
@@ -190,6 +195,11 @@ class SleepQualityResponse(BaseModel):
     sleep_end_time: Optional[str] = None    # HH:mm of latest block (home-base TZ)
     sleep_start_iso: Optional[str] = None   # Earliest block start (ISO, home-base TZ)
     sleep_end_iso: Optional[str] = None     # Latest block end (ISO, home-base TZ)
+
+    # UTC span of the full sleep window (earliest start → latest end).
+    # Always +00:00 offset — use for future timezone-toggle rendering.
+    sleep_start_utc: Optional[str] = None   # e.g. "2026-02-01T22:00:00+00:00"
+    sleep_end_utc: Optional[str] = None     # e.g. "2026-02-02T06:30:00+00:00"
 
     # DEPRECATED: use _home_tz fields below instead (identical values).
     sleep_start_day: Optional[int] = None       # Day of month (1-31) — home-base TZ
@@ -462,6 +472,8 @@ def _build_sleep_quality(duty_timeline) -> Optional[SleepQualityResponse]:
         references=sqd.get('references', []),
         sleep_start_iso=earliest.get('sleep_start_iso'),
         sleep_end_iso=latest.get('sleep_end_iso'),
+        sleep_start_utc=earliest.get('sleep_start_utc'),
+        sleep_end_utc=latest.get('sleep_end_utc'),
         sleep_start_day=earliest.get('sleep_start_day'),
         sleep_start_hour=earliest.get('sleep_start_hour'),
         sleep_end_day=latest.get('sleep_end_day'),
