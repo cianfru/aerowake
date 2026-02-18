@@ -457,64 +457,86 @@ class SleepStrategyMixin:
         if night2_end > latest_wake_local:
             night2_end = latest_wake_local
 
-        night2_quality = self.calculate_sleep_quality(
-            sleep_start=night2_start,
-            sleep_end=night2_end,
-            location='home',
-            previous_duty_end=None,
-            next_event=report_local,
-            location_timezone=sleep_tz.zone
-        )
-        quality_analyses.append(night2_quality)
+        # Clamp night2_start so it cannot begin before previous duty ends.
+        # This prevents the sleep bar overlapping an active inbound duty when
+        # the ULR outbound pair has a short (<48h) inter-duty gap.
+        if previous_duty is not None:
+            earliest_sleep_utc = previous_duty.release_time_utc
+            earliest_sleep_local = earliest_sleep_utc.astimezone(sleep_tz)
+            if night2_start < earliest_sleep_local:
+                night2_start = earliest_sleep_local
 
-        n2s_day, n2s_hour = self._home_tz_day_hour(night2_start)
-        n2e_day, n2e_hour = self._home_tz_day_hour(night2_end)
-        blocks.append(SleepBlock(
-            start_utc=night2_start.astimezone(pytz.utc),
-            end_utc=night2_end.astimezone(pytz.utc),
-            location_timezone=sleep_tz.zone,
-            duration_hours=night2_quality.actual_sleep_hours,
-            quality_factor=night2_quality.sleep_efficiency,
-            effective_sleep_hours=night2_quality.effective_sleep_hours,
-            environment='home',
-            sleep_start_day=n2s_day,
-            sleep_start_hour=n2s_hour,
-            sleep_end_day=n2e_day,
-            sleep_end_hour=n2e_hour,
-        ))
+        # Only emit Night 2 if there is at least 30 minutes of sleep available.
+        if night2_end - night2_start >= timedelta(minutes=30):
+            night2_quality = self.calculate_sleep_quality(
+                sleep_start=night2_start,
+                sleep_end=night2_end,
+                location='home',
+                previous_duty_end=previous_duty.release_time_utc if previous_duty else None,
+                next_event=report_local,
+                location_timezone=sleep_tz.zone
+            )
+            quality_analyses.append(night2_quality)
 
-        # Optional pre-departure nap for evening departures
+            n2s_day, n2s_hour = self._home_tz_day_hour(night2_start)
+            n2e_day, n2e_hour = self._home_tz_day_hour(night2_end)
+            blocks.append(SleepBlock(
+                start_utc=night2_start.astimezone(pytz.utc),
+                end_utc=night2_end.astimezone(pytz.utc),
+                location_timezone=sleep_tz.zone,
+                duration_hours=night2_quality.actual_sleep_hours,
+                quality_factor=night2_quality.sleep_efficiency,
+                effective_sleep_hours=night2_quality.effective_sleep_hours,
+                environment='home',
+                sleep_start_day=n2s_day,
+                sleep_start_hour=n2s_hour,
+                sleep_end_day=n2e_day,
+                sleep_end_hour=n2e_hour,
+            ))
+
+        # Optional pre-departure nap for evening departures.
+        # Skip the nap if it would start before the previous duty releases.
         report_hour = report_local.hour
         if report_hour >= 18 or report_hour < 2:
             nap_start = report_local - timedelta(hours=4)
             nap_end = report_local - timedelta(hours=2)
-            nap_quality = self.calculate_sleep_quality(
-                sleep_start=nap_start,
-                sleep_end=nap_end,
-                location='home',
-                previous_duty_end=None,
-                next_event=report_local,
-                is_nap=True,
-                location_timezone=sleep_tz.zone
-            )
-            quality_analyses.append(nap_quality)
 
-            nps_day, nps_hour = self._home_tz_day_hour(nap_start)
-            npe_day, npe_hour = self._home_tz_day_hour(nap_end)
-            blocks.append(SleepBlock(
-                start_utc=nap_start.astimezone(pytz.utc),
-                end_utc=nap_end.astimezone(pytz.utc),
-                location_timezone=sleep_tz.zone,
-                duration_hours=nap_quality.actual_sleep_hours,
-                quality_factor=nap_quality.sleep_efficiency,
-                effective_sleep_hours=nap_quality.effective_sleep_hours,
-                is_anchor_sleep=False,
-                environment='home',
-                sleep_start_day=nps_day,
-                sleep_start_hour=nps_hour,
-                sleep_end_day=npe_day,
-                sleep_end_hour=npe_hour,
-            ))
+            # Guard: nap cannot start before previous duty ends.
+            if previous_duty is not None:
+                earliest_nap_utc = previous_duty.release_time_utc
+                earliest_nap_local = earliest_nap_utc.astimezone(sleep_tz)
+                if nap_start < earliest_nap_local:
+                    nap_start = earliest_nap_local
+
+            # Only emit nap if at least 20 minutes remain.
+            if nap_end - nap_start >= timedelta(minutes=20):
+                nap_quality = self.calculate_sleep_quality(
+                    sleep_start=nap_start,
+                    sleep_end=nap_end,
+                    location='home',
+                    previous_duty_end=previous_duty.release_time_utc if previous_duty else None,
+                    next_event=report_local,
+                    is_nap=True,
+                    location_timezone=sleep_tz.zone
+                )
+                quality_analyses.append(nap_quality)
+
+                nps_day, nps_hour = self._home_tz_day_hour(nap_start)
+                npe_day, npe_hour = self._home_tz_day_hour(nap_end)
+                blocks.append(SleepBlock(
+                    start_utc=nap_start.astimezone(pytz.utc),
+                    end_utc=nap_end.astimezone(pytz.utc),
+                    location_timezone=sleep_tz.zone,
+                    duration_hours=nap_quality.actual_sleep_hours,
+                    quality_factor=nap_quality.sleep_efficiency,
+                    effective_sleep_hours=nap_quality.effective_sleep_hours,
+                    is_anchor_sleep=False,
+                    environment='home',
+                    sleep_start_day=nps_day,
+                    sleep_start_hour=nps_hour,
+                    sleep_end_day=npe_day,
+                    sleep_end_hour=npe_hour,
+                ))
 
         total_effective = sum(q.effective_sleep_hours for q in quality_analyses)
 
