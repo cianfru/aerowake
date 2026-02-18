@@ -619,8 +619,27 @@ def _build_rest_days_sleep(sleep_strategies: dict) -> List[RestDaySleepResponse]
     Post-duty sleep (e.g., hotel rest after landing at 2AM) is included here
     so the frontend can display it in the chronogram even though it's technically
     not a "rest day" - it's recovery sleep after a duty.
+
+    De-duplication: gap-fill `rest_YYYY-MM-DD` entries whose night is already
+    covered by a ULR `ulr_pre_duty` strategy block for the same duty are
+    suppressed.  Without this, the last 1-2 nights before a ULR departure
+    appear twice (once as "recovery", once as "ulr_pre_duty"), producing
+    overlapping sleep bars on the chronogram for those nights.
     """
     rest_days = []
+
+    # Build a set of (start_day, end_day) tuples already covered by duty-keyed
+    # ULR pre-duty strategies so we can skip duplicates from the gap fill.
+    ulr_covered_nights: set = set()
+    for key, data in sleep_strategies.items():
+        if not key.startswith('rest_') and data.get('strategy_type') == 'ulr_pre_duty':
+            for blk in data.get('sleep_blocks', []):
+                sd = blk.get('sleep_start_day')
+                ed = blk.get('sleep_end_day')
+                sh = blk.get('sleep_start_hour')
+                if sd is not None and sh is not None:
+                    # Identify by the calendar date of the night (23:00 start day)
+                    ulr_covered_nights.add((sd, round(sh, 1)))
 
     # Include both rest day sleep (rest_*) and post-duty sleep (post_duty_*)
     for key, data in sleep_strategies.items():
@@ -636,6 +655,18 @@ def _build_rest_days_sleep(sleep_strategies: dict) -> List[RestDaySleepResponse]
                     date_str = blocks[0]['sleep_start_iso'].split('T')[0]
                 else:
                     continue  # Skip if no date info available
+
+            # Suppress gap-fill recovery entries whose exact night is already
+            # emitted by a ULR pre-duty strategy (same start_day + start_hour).
+            # This prevents the chronogram from rendering two overlapping bars
+            # (one labelled "recovery", one "ulr_pre_duty") on the same night.
+            if key.startswith('rest_'):
+                blocks = data.get('sleep_blocks', [])
+                if blocks:
+                    sd = blocks[0].get('sleep_start_day')
+                    sh = blocks[0].get('sleep_start_hour')
+                    if sd is not None and sh is not None and (sd, round(sh, 1)) in ulr_covered_nights:
+                        continue  # Already rendered by the ULR pre-duty strategy
 
             rest_days.append(RestDaySleepResponse(
                 date=date_str,
