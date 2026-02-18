@@ -923,6 +923,10 @@ class BorbelyFatigueModel:
             for sleep_block in strategy.sleep_blocks:
                 sleep_blocks.append(sleep_block)
 
+            if getattr(duty, 'is_augmented_crew', False):
+                blk_dates = [(b.start_utc.isoformat()[:10], b.end_utc.isoformat()[:10]) for b in strategy.sleep_blocks]
+                logger.info(f"[ULR-STRATEGY] duty={strategy_key} type={strategy.strategy_type} blocks={blk_dates}")
+
             # Store strategy data for API exposure
             self._store_strategy_response(
                 strategy, strategy_key, sleep_strategies, home_tz
@@ -1060,6 +1064,7 @@ class BorbelyFatigueModel:
                     sleep_start_local = sleep_start
                     sleep_end_local = sleep_end
 
+                    logger.info(f"[GAP-FILL] generated key={rest_day_key} sleep={sleep_start.astimezone(pytz.utc).isoformat()[:16]}→{sleep_end.astimezone(pytz.utc).isoformat()[:16]}")
                     sleep_strategies[rest_day_key] = {
                         'strategy_type': 'recovery',
                         'confidence': 0.95 if is_at_home else 0.85,
