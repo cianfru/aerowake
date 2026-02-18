@@ -628,44 +628,39 @@ def _build_rest_days_sleep(sleep_strategies: dict) -> List[RestDaySleepResponse]
     """
     rest_days = []
 
-    # Build suppression sets for gap-fill recovery entries that would overlap
-    # duty-keyed ULR pre-duty blocks.
+    # Build a per-duty suppression map: for each ULR duty key, the set of
+    # ISO date strings (YYYY-MM-DD, home-base TZ) that its sleep blocks cover.
     #
-    # ulr_covered_days tracks calendar days that ULR blocks genuinely cover:
-    #   - Always: the START day of every ULR block (handles naps and first half
-    #     of overnight blocks that start on that day).
-    #   - For genuine overnight blocks (start_day != end_day): also the END day,
-    #     because the block continues into the early morning of end_day and a
-    #     gap-fill hotel nap starting on that same day (e.g. GRU 23:00 local =
-    #     05:00 DOH next day) would overlap.
-    #   - For clamped intra-day blocks (start_day == end_day): end_day is already
-    #     == start_day, so tracking start_day alone is sufficient and adding end_day
-    #     would be redundant. This is the key case that caused the original
-    #     over-suppression bug: a Night 1 clamped to start at 01:00 DOH Jan 12
-    #     (after inbound landing) has start_day=end_day=12; tracking only that day
-    #     correctly avoids suppressing the gap-fill for Jan 11 (whose end_day=12
-    #     coincidentally matches the clamped block's day).
+    # A gap-fill rest_YYYY-MM-DD entry is suppressed only when the ULR duty
+    # responsible for the SAME inter-duty gap has a block on that exact date.
+    # Using a GLOBAL set across all ULR duties caused false suppression: a
+    # gap-fill night between duty A and duty B was incorrectly hidden because a
+    # different ULR duty C→D happened to cover that same calendar day number.
     #
-    # ulr_covered_nights: exact (start_day, start_hour) pairs for fine-grained
-    #   suppression of gap-fill blocks that start at the same hour as a ULR block.
-    ulr_covered_days: set = set()     # calendar days covered by ULR blocks (see above)
-    ulr_covered_nights: set = set()   # (start_day, start_hour) exact pairs
+    # Coverage rules per block (all dates in home-base TZ / ISO string):
+    #   - The block's start ISO date is always covered (the 23:00 evening).
+    #   - For genuine overnight blocks (start date != end date): also cover the
+    #     end date, because the block continues into that morning and a layover
+    #     hotel nap starting on end-date (e.g. GRU 23:00 local = 05:00 DOH
+    #     next day) would overlap. Clamped intra-day blocks (same date) already
+    #     contribute via start date, so no double-add is needed.
+    #
+    # ulr_duty_covered_dates: duty_key → set of YYYY-MM-DD strings
+    ulr_duty_covered_dates: dict = {}   # duty_key → set[str]
+
     for key, data in sleep_strategies.items():
         if not key.startswith('rest_') and data.get('strategy_type') == 'ulr_pre_duty':
+            covered: set = set()
             for blk in data.get('sleep_blocks', []):
-                sd = blk.get('sleep_start_day')
-                ed = blk.get('sleep_end_day')
-                sh = blk.get('sleep_start_hour')
-                if sd is not None:
-                    ulr_covered_days.add(sd)
-                # Only suppress the end day for genuine overnight blocks where
-                # the block crosses into the next calendar day (start_day != end_day).
-                # Clamped intra-day blocks (start_day == end_day) are already covered
-                # by the start_day entry above.
-                if ed is not None and ed != sd:
-                    ulr_covered_days.add(ed)
-                if sd is not None and sh is not None:
-                    ulr_covered_nights.add((sd, round(sh, 1)))
+                iso_start = blk.get('sleep_start_iso', '')
+                iso_end   = blk.get('sleep_end_iso', '')
+                start_date = iso_start[:10] if iso_start else None   # YYYY-MM-DD
+                end_date   = iso_end[:10]   if iso_end   else None
+                if start_date:
+                    covered.add(start_date)
+                if end_date and end_date != start_date:
+                    covered.add(end_date)
+            ulr_duty_covered_dates[key] = covered
 
     # Include rest day sleep (rest_*), post-duty sleep (post_duty_*), AND
     # duty-keyed ULR pre-duty sleep (e.g. 'D20260116').  The ULR blocks are
@@ -691,23 +686,24 @@ def _build_rest_days_sleep(sleep_strategies: dict) -> List[RestDaySleepResponse]
                 else:
                     continue  # Skip if no date info available
 
-            # Suppress gap-fill recovery entries whose start day is already covered
-            # by a ULR pre-duty block.  ulr_covered_days contains:
-            #   - Start days of all ULR blocks
-            #   - End days of genuine overnight ULR blocks (start_day != end_day)
-            #     so that layover hotel naps starting on that morning are suppressed
-            # Clamped intra-day blocks (start_day == end_day) contribute only their
-            # one day, avoiding over-suppression of the previous night's gap-fill.
+            # Suppress gap-fill recovery entries that are already rendered by a
+            # ULR pre-duty strategy for the same inter-duty gap.
+            #
+            # Match by FULL ISO date string (YYYY-MM-DD) extracted from the key
+            # (rest_2026-02-05 → "2026-02-05") against the per-duty covered-dates
+            # set built above.  This is unambiguous across month boundaries and
+            # avoids the day-of-month integer collision that caused false suppression
+            # when multiple ULR duties shared the same day number (e.g. day 5 of
+            # two different months, or two ULR duties in the same month whose
+            # covered-day sets merged globally).
             if key.startswith('rest_'):
-                blocks = data.get('sleep_blocks', [])
-                if blocks:
-                    sd = blocks[0].get('sleep_start_day')
-                    sh = blocks[0].get('sleep_start_hour')
-                    exact_match = (sd is not None and sh is not None
-                                   and (sd, round(sh, 1)) in ulr_covered_nights)
-                    day_covered = (sd is not None and sd in ulr_covered_days)
-                    if exact_match or day_covered:
-                        continue  # Already rendered by the ULR pre-duty strategy
+                rest_date_str = key[5:]   # strip "rest_" prefix → "YYYY-MM-DD"
+                suppressed = any(
+                    rest_date_str in covered
+                    for covered in ulr_duty_covered_dates.values()
+                )
+                if suppressed:
+                    continue  # Already rendered by the ULR pre-duty strategy
 
             rest_days.append(RestDaySleepResponse(
                 date=date_str,
