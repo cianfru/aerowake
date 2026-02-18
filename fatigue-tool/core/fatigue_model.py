@@ -1182,16 +1182,6 @@ class BorbelyFatigueModel:
 
                 trail_rest_key = f"rest_{trail_candidate_date.isoformat()}"
 
-                # Skip if this date already has a rest-day or duty sleep entry
-                # (the inter-duty gap loop may have already generated one)
-                if trail_rest_key in sleep_strategies:
-                    trail_night += 1
-                    trail_candidate_date += timedelta(days=1)
-                    trail_bedtime = trail_tz.localize(
-                        datetime.combine(trail_candidate_date, time(23, 0))
-                    )
-                    continue
-
                 trail_quality = self.sleep_calculator.calculate_sleep_quality(
                     sleep_start=trail_sleep_start,
                     sleep_end=trail_sleep_end,
