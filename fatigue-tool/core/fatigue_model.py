@@ -952,9 +952,21 @@ class BorbelyFatigueModel:
                     rest_tz = home_tz
                     rest_env = 'home'
 
-                # Find the last sleep block generated for this gap
+                # Find the last sleep block generated for this gap.
+                #
+                # For AUGMENTED_4 / ULR duties, strategy.sleep_blocks come from
+                # _ulr_sleep_strategy(), which anchors blocks at
+                # `report_time - 2 nights` (i.e. immediately before the duty).
+                # Using those as the anchor here would skip all the nights in the
+                # middle of a long home rest (e.g. days 6-9 of a day-5-to-day-11
+                # gap), so we always start the gap fill from previous_duty
+                # release_time for augmented duties.
+                #
+                # For standard duties, strategy.sleep_blocks are the inter-duty
+                # recovery blocks already placed in the gap, so we advance the
+                # anchor past them to avoid overlap.
                 last_block_end_utc = previous_duty.release_time_utc
-                if strategy.sleep_blocks:
+                if not getattr(duty, 'is_augmented_crew', False) and strategy.sleep_blocks:
                     last_block_end_utc = max(
                         b.end_utc for b in strategy.sleep_blocks
                     )
