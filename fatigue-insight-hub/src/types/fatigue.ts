@@ -180,8 +180,19 @@ export interface DutyAnalysis {
   inflightRestBlocks: {
     startUtc: string;
     endUtc: string;
+    // Home-base TZ positioning — use these for chronogram bar placement
+    startHomeTz: string | null;          // HH:MM
+    endHomeTz: string | null;            // HH:MM
+    startDayHomeTz: number | null;       // 1-31
+    startHourHomeTz: number | null;      // 0-24 decimal
+    endDayHomeTz: number | null;
+    endHourHomeTz: number | null;
+    startIsoHomeTz: string | null;
+    endIsoHomeTz: string | null;
     durationHours: number;
     effectiveSleepHours: number;
+    qualityFactor: number;
+    environment: string;
     crewMemberId: string | null;
     crewSet: 'crew_a' | 'crew_b' | null;
     isDuringWocl: boolean;

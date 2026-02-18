@@ -1044,30 +1044,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       const utcOffset = getLocalOffsetHours(duty);
 
       duty.inflightRestBlocks.forEach((block) => {
-        // Parse ISO UTC timestamps
-        const startMatch = block.startUtc.match(/T(\d{2}):(\d{2})/);
-        const endMatch = block.endUtc.match(/T(\d{2}):(\d{2})/);
-        if (!startMatch || !endMatch) return;
-
-        // Convert UTC hours to local time for alignment with duty bars
-        let startHour = Number(startMatch[1]) + Number(startMatch[2]) / 60 + utcOffset;
-        let endHour = Number(endMatch[1]) + Number(endMatch[2]) / 60 + utcOffset;
-
-        // Also check if the UTC date differs from the duty date (rest block may span days in UTC)
-        const startDateMatch = block.startUtc.match(/(\d{4})-(\d{2})-(\d{2})/);
-        const endDateMatch = block.endUtc.match(/(\d{4})-(\d{2})-(\d{2})/);
-        const startDayUtc = startDateMatch ? Number(startDateMatch[3]) : dutyDayOfMonth;
-        const endDayUtc = endDateMatch ? Number(endDateMatch[3]) : dutyDayOfMonth;
-
-        // Adjust day index based on UTC→local conversion crossing midnight
-        let startDayLocal = startDayUtc;
-        if (startHour >= 24) { startHour -= 24; startDayLocal += 1; }
-        if (startHour < 0) { startHour += 24; startDayLocal -= 1; }
-
-        let endDayLocal = endDayUtc;
-        if (endHour >= 24) { endHour -= 24; endDayLocal += 1; }
-        if (endHour < 0) { endHour += 24; endDayLocal -= 1; }
-
         const pushBar = (dayIdx: number, sH: number, eH: number) => {
           if (dayIdx < 1 || dayIdx > daysInMonth) return;
           bars.push({
@@ -1082,18 +1058,60 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
           });
         };
 
-        if (startDayLocal === endDayLocal) {
-          if (endHour > startHour) {
-            pushBar(startDayLocal, startHour, endHour);
+        // Prefer pre-computed home-TZ fields (most reliable, no offset arithmetic)
+        const hasHomeTz = block.startDayHomeTz != null && block.startHourHomeTz != null;
+
+        if (hasHomeTz) {
+          const startDay = block.startDayHomeTz!;
+          const endDay = block.endDayHomeTz!;
+          const startHour = block.startHourHomeTz!;
+          const endHour = block.endHourHomeTz!;
+
+          if (startDay === endDay) {
+            pushBar(startDay, startHour, endHour);
           } else {
-            // Crosses midnight in local time
-            pushBar(startDayLocal, startHour, 24);
-            pushBar(startDayLocal + 1, 0, endHour);
+            // Crosses midnight in home TZ
+            pushBar(startDay, startHour, 24);
+            pushBar(endDay, 0, endHour);
           }
         } else {
-          // Multi-day: first day until midnight, last day from midnight
-          pushBar(startDayLocal, startHour, 24);
-          pushBar(endDayLocal, 0, endHour);
+          // Fallback: legacy UTC offset arithmetic (old behaviour, kept for safety)
+          const startMatch = block.startUtc?.match(/T(\d{2}):(\d{2})/);
+          const endMatch = block.endUtc?.match(/T(\d{2}):(\d{2})/);
+          if (!startMatch || !endMatch) return;
+
+          // Convert UTC hours to local time for alignment with duty bars
+          let startHour = Number(startMatch[1]) + Number(startMatch[2]) / 60 + utcOffset;
+          let endHour = Number(endMatch[1]) + Number(endMatch[2]) / 60 + utcOffset;
+
+          // Also check if the UTC date differs from the duty date (rest block may span days in UTC)
+          const startDateMatch = block.startUtc.match(/(\d{4})-(\d{2})-(\d{2})/);
+          const endDateMatch = block.endUtc.match(/(\d{4})-(\d{2})-(\d{2})/);
+          const startDayUtc = startDateMatch ? Number(startDateMatch[3]) : dutyDayOfMonth;
+          const endDayUtc = endDateMatch ? Number(endDateMatch[3]) : dutyDayOfMonth;
+
+          // Adjust day index based on UTC→local conversion crossing midnight
+          let startDayLocal = startDayUtc;
+          if (startHour >= 24) { startHour -= 24; startDayLocal += 1; }
+          if (startHour < 0) { startHour += 24; startDayLocal -= 1; }
+
+          let endDayLocal = endDayUtc;
+          if (endHour >= 24) { endHour -= 24; endDayLocal += 1; }
+          if (endHour < 0) { endHour += 24; endDayLocal -= 1; }
+
+          if (startDayLocal === endDayLocal) {
+            if (endHour > startHour) {
+              pushBar(startDayLocal, startHour, endHour);
+            } else {
+              // Crosses midnight in local time
+              pushBar(startDayLocal, startHour, 24);
+              pushBar(startDayLocal + 1, 0, endHour);
+            }
+          } else {
+            // Multi-day: first day until midnight, last day from midnight
+            pushBar(startDayLocal, startHour, 24);
+            pushBar(endDayLocal, 0, endHour);
+          }
         }
       });
     });
