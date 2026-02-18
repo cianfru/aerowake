@@ -474,6 +474,16 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         return;
       }
 
+      // ULR pre-duty sleep spans multiple nights (Night 1 + Night 2) and is
+      // rendered individually — one bar per night — via the restDaysSleep path
+      // (strategy key = duty ID in sleep_strategies).  Rendering it here from
+      // the aggregate sleepStartDay→sleepEndDay span produces a single
+      // mis-positioned bar that overwrites the correctly-split recovery bars.
+      // Skip the duties-loop path for ULR duties; restDaysSleep handles them.
+      if (sleepEstimate.sleepStrategy === 'ulr_pre_duty') {
+        return;
+      }
+
       const recoveryScore = getRecoveryScore(sleepEstimate);
       
       // Common quality factor fields for all sleep bars from this duty

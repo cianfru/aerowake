@@ -641,16 +641,25 @@ def _build_rest_days_sleep(sleep_strategies: dict) -> List[RestDaySleepResponse]
                     # Identify by the calendar date of the night (23:00 start day)
                     ulr_covered_nights.add((sd, round(sh, 1)))
 
-    # Include both rest day sleep (rest_*) and post-duty sleep (post_duty_*)
+    # Include rest day sleep (rest_*), post-duty sleep (post_duty_*), AND
+    # duty-keyed ULR pre-duty sleep (e.g. 'D20260116').  The ULR blocks are
+    # stored per-duty so the frontend duties-loop path skips them (it can't
+    # handle the multi-night aggregate correctly); emitting them here lets
+    # the restDaysSleep path render each night individually.
     for key, data in sleep_strategies.items():
-        if key.startswith('rest_') or key.startswith('post_duty_'):
-            # Extract date from key (rest_2024-01-15 or post_duty_D001)
+        is_ulr_duty_key = (
+            not key.startswith('rest_')
+            and not key.startswith('post_duty_')
+            and data.get('strategy_type') == 'ulr_pre_duty'
+        )
+        if key.startswith('rest_') or key.startswith('post_duty_') or is_ulr_duty_key:
+            # Extract date from key (rest_2024-01-15, post_duty_D001, or duty-ID)
             if key.startswith('rest_'):
                 date_str = key.replace('rest_', '')
             else:
-                # For post-duty, use the date from the first sleep block if available
+                # For post-duty and ULR duty keys: derive date from first sleep block
                 blocks = data.get('sleep_blocks', [])
-                if blocks and 'sleep_start_iso' in blocks[0]:
+                if blocks and blocks[0].get('sleep_start_iso'):
                     # Extract date from ISO timestamp (YYYY-MM-DDTHH:mm...)
                     date_str = blocks[0]['sleep_start_iso'].split('T')[0]
                 else:
