@@ -584,14 +584,19 @@ class CrewLinkRosterParser:
             report_in_home_tz.day
         )
 
-        # Create duty
+        # Create duty.
+        # IMPORTANT: home_base_timezone is the PILOT'S home base (e.g. Asia/Qatar for DOH),
+        # NOT the departure airport's timezone.  For layover departures (e.g. QR730 departing
+        # DFW) the departure airport timezone is America/Chicago — using that here would cause
+        # _build_ulr_data() to compute IR block day/hour values in Chicago time instead of DOH
+        # time, placing the bars on the wrong chronogram row.
         duty = Duty(
             duty_id=f"D{duty_date.strftime('%Y%m%d')}",
             date=duty_date,
             report_time_utc=report_time.astimezone(pytz.utc),
             release_time_utc=release_time,
             segments=segments,
-            home_base_timezone=segments[0].departure_airport.timezone
+            home_base_timezone=self.home_timezone
         )
         
         return duty
