@@ -449,6 +449,14 @@ class SleepStrategyMixin:
         night2_start = report_local.replace(hour=23, minute=0, second=0) - timedelta(days=1)
         night2_end = report_local.replace(hour=7, minute=0, second=0)
 
+        # Cap night2_end at report_time - MIN_WAKE_BEFORE_REPORT (2h).
+        # For early-morning departures (e.g. report 06:30 DOH) the hard-coded
+        # 07:00 wake would put the sleep bar 30 min past duty start.
+        latest_wake_utc = duty.report_time_utc - timedelta(hours=self.MIN_WAKE_BEFORE_REPORT)
+        latest_wake_local = latest_wake_utc.astimezone(sleep_tz)
+        if night2_end > latest_wake_local:
+            night2_end = latest_wake_local
+
         night2_quality = self.calculate_sleep_quality(
             sleep_start=night2_start,
             sleep_end=night2_end,
