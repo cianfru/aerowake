@@ -69,21 +69,29 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
     # ------------------------------------------------------------------
     # PRE-PASS: build the set of layover stations from IR-marked duties.
     #
-    # An IR duty *departs from* the layover airport (e.g. QR774 departs GRU).
-    # The outbound duty that *arrives at* that airport (QR773 arrives GRU) is
-    # the paired operating leg and must also be AUGMENTED_4.
+    # An IR duty either departs from OR arrives at a layover airport:
+    #   • Crew B on return leg (e.g. QR774 GRU→DOH): departs from GRU
+    #   • Crew B on outbound leg (e.g. QR729 DOH→DFW): arrives at DFW
+    #
+    # We collect BOTH departure and arrival airports of IR-marked duties
+    # (excluding home base) so the paired operating leg is always found:
+    #   • QR773 DOH→GRU (arrives GRU) → tagged via Rule 2
+    #   • QR730 DFW→DOH (departs DFW) → tagged via Rule 3
     #
     # Exclude the pilot's home base: in the normal outbound-then-return pattern
     # the home base is never a layover station for IR purposes.  Including it
     # would incorrectly tag every homebound flight as AUGMENTED_4.
     # ------------------------------------------------------------------
     home_base = roster.pilot_base or 'DOH'
-    ir_layover_stations: set = set()   # non-home airports where IR return duties depart FROM
+    ir_layover_stations: set = set()   # non-home airports linked to IR duties
     for duty in roster.duties:
         if duty.segments and duty.has_inflight_rest_segments:
             dep = duty.segments[0].departure_airport.code
+            arr = duty.segments[-1].arrival_airport.code
             if dep != home_base:
                 ir_layover_stations.add(dep)
+            if arr != home_base:
+                ir_layover_stations.add(arr)
 
     # ------------------------------------------------------------------
     # MAIN PASS
