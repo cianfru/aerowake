@@ -25,7 +25,7 @@ from models.data_models import (
     Duty, Roster, FlightSegment, SleepBlock, CircadianState,
     PerformancePoint, PinchEvent, DutyTimeline, MonthlyAnalysis, FlightPhase,
     CrewComposition, RestFacilityClass, ULRCrewSet,
-    InFlightRestPeriod, InFlightRestPlan, ULRComplianceResult
+    InFlightRestPeriod, InFlightRestPlan, ULRComplianceResult, DutyType
 )
 from core.parameters import ModelConfig
 from core.sleep_calculator import UnifiedSleepCalculator, SleepStrategy
@@ -365,67 +365,23 @@ class BorbelyFatigueModel:
 
         tz = pytz.timezone(duty.home_base_timezone)
 
+        # Pre-compute whether this is a training duty (no flight phases)
+        is_training_duty = duty.duty_type != DutyType.FLIGHT if hasattr(duty, 'duty_type') else False
+        if is_training_duty:
+            training_workload = self.workload_model.get_training_multiplier(duty.duty_type.value)
+
         while current_time <= duty.release_time_utc:
-            current_sector = get_current_sector(current_time)
-            phase = self.get_flight_phase(duty.segments, current_time)
             step_duration_hours = resolution_minutes / 60.0
             hours_on_duty = (current_time - duty.report_time_utc).total_seconds() / 3600
 
-            # Check if pilot is in an in-flight rest period
-            active_rest = self._is_in_rest_period(current_time, rest_plan)
-
-            if active_rest:
-                # === PILOT IS IN CREW REST FACILITY ===
-                if not in_rest:
-                    # Transition: entering rest
-                    in_rest = True
-                    rest_entry_s = s_current
-
-                # Process S DECAYS during sleep (recovery equation)
-                # Reduced efficiency in bunk: effective tau_d = tau_d / rest_quality
-                # Signal et al. (2013) Sleep 36(1):109-118: ~70% efficiency in bunk
-                effective_tau_d = self.params.tau_d / rest_quality
-                s_current = self.params.S_min + (rest_entry_s - self.params.S_min) * \
-                    math.exp(-step_duration_hours / effective_tau_d)
-                # Update rest_entry_s for next step (progressive decay)
-                rest_entry_s = s_current
-                s_current = max(self.params.S_min, min(self.params.S_max, s_current))
-
-                c = self.compute_process_c(current_time, duty.home_base_timezone, circadian_phase_shift)
-
-                # Pilot not on deck — record rest status in timeline
-                point = PerformancePoint(
-                    timestamp_utc=current_time,
-                    timestamp_local=current_time.astimezone(tz),
-                    circadian_component=c,
-                    homeostatic_component=s_current,
-                    sleep_inertia_component=0.0,
-                    raw_performance=100.0,  # Not on deck — no performance relevance
-                    hours_on_duty=hours_on_duty,
-                    time_on_task_penalty=0.0,
-                    current_flight_phase=FlightPhase.CRUISE,
-                    is_critical_phase=False,
-                    is_in_rest=True
-                )
-            else:
-                # === PILOT IS ON FLIGHT DECK ===
-                if in_rest:
-                    # Transition: waking from in-flight rest
-                    in_rest = False
-                    last_rest_end = current_time
-                    # Reset effective wake hours after rest
-                    s_at_wake = s_current
-                    effective_wake_hours = 0.0
-                    wake_time = current_time
-
-                # Check if pilot is on a deadhead segment (passenger, no cockpit tasks).
-                # DH counts toward time awake but at reduced workload — no monitoring,
-                # no decision-making, just passive travel fatigue.
-                is_on_deadhead = self._is_on_deadhead_segment(duty.segments, current_time)
-                if is_on_deadhead:
-                    workload_multiplier = 0.3  # Passive travel fatigue only
-                else:
-                    workload_multiplier = self.workload_model.get_combined_multiplier(phase, current_sector)
+            if is_training_duty:
+                # === TRAINING DUTY (SIM or GROUND) ===
+                # Same S/C/W model as flight (BAM-aligned), but:
+                # - Flat workload multiplier (no flight phases)
+                # - No in-flight rest periods
+                # - No deadhead detection
+                # - No critical phase pinch events
+                workload_multiplier = training_workload
                 effective_step_duration = step_duration_hours * workload_multiplier
                 effective_wake_hours += effective_step_duration
 
@@ -435,19 +391,12 @@ class BorbelyFatigueModel:
 
                 c = self.compute_process_c(current_time, duty.home_base_timezone, circadian_phase_shift)
 
-                # Sleep inertia: from last rest wake or from pre-duty wake
-                if last_rest_end:
-                    time_since_wake = current_time - last_rest_end
-                else:
-                    time_since_wake = current_time - wake_time
+                # Sleep inertia from pre-duty wake
+                time_since_wake = current_time - wake_time
                 w = self.compute_sleep_inertia(time_since_wake)
 
                 tot_penalty = self.params.time_on_task_rate * max(0.0, hours_on_duty)
                 performance = self.integrate_performance(c, s_current, w, hours_on_duty)
-
-                # Track return-to-deck performance (first point after rest)
-                if last_rest_end and return_to_deck_perf is None:
-                    return_to_deck_perf = performance
 
                 point = PerformancePoint(
                     timestamp_utc=current_time,
@@ -458,9 +407,104 @@ class BorbelyFatigueModel:
                     raw_performance=performance,
                     hours_on_duty=hours_on_duty,
                     time_on_task_penalty=tot_penalty,
-                    current_flight_phase=phase,
-                    is_critical_phase=(phase in [FlightPhase.TAKEOFF, FlightPhase.LANDING, FlightPhase.APPROACH])
+                    current_flight_phase=FlightPhase.CRUISE,  # Placeholder — no flight phases
+                    is_critical_phase=False
                 )
+            else:
+                # === FLIGHT DUTY ===
+                current_sector = get_current_sector(current_time)
+                phase = self.get_flight_phase(duty.segments, current_time)
+
+                # Check if pilot is in an in-flight rest period
+                active_rest = self._is_in_rest_period(current_time, rest_plan)
+
+                if active_rest:
+                    # === PILOT IS IN CREW REST FACILITY ===
+                    if not in_rest:
+                        # Transition: entering rest
+                        in_rest = True
+                        rest_entry_s = s_current
+
+                    # Process S DECAYS during sleep (recovery equation)
+                    # Reduced efficiency in bunk: effective tau_d = tau_d / rest_quality
+                    # Signal et al. (2013) Sleep 36(1):109-118: ~70% efficiency in bunk
+                    effective_tau_d = self.params.tau_d / rest_quality
+                    s_current = self.params.S_min + (rest_entry_s - self.params.S_min) * \
+                        math.exp(-step_duration_hours / effective_tau_d)
+                    # Update rest_entry_s for next step (progressive decay)
+                    rest_entry_s = s_current
+                    s_current = max(self.params.S_min, min(self.params.S_max, s_current))
+
+                    c = self.compute_process_c(current_time, duty.home_base_timezone, circadian_phase_shift)
+
+                    # Pilot not on deck — record rest status in timeline
+                    point = PerformancePoint(
+                        timestamp_utc=current_time,
+                        timestamp_local=current_time.astimezone(tz),
+                        circadian_component=c,
+                        homeostatic_component=s_current,
+                        sleep_inertia_component=0.0,
+                        raw_performance=100.0,  # Not on deck — no performance relevance
+                        hours_on_duty=hours_on_duty,
+                        time_on_task_penalty=0.0,
+                        current_flight_phase=FlightPhase.CRUISE,
+                        is_critical_phase=False,
+                        is_in_rest=True
+                    )
+                else:
+                    # === PILOT IS ON FLIGHT DECK ===
+                    if in_rest:
+                        # Transition: waking from in-flight rest
+                        in_rest = False
+                        last_rest_end = current_time
+                        # Reset effective wake hours after rest
+                        s_at_wake = s_current
+                        effective_wake_hours = 0.0
+                        wake_time = current_time
+
+                    # Check if pilot is on a deadhead segment (passenger, no cockpit tasks).
+                    # DH counts toward time awake but at reduced workload — no monitoring,
+                    # no decision-making, just passive travel fatigue.
+                    is_on_deadhead = self._is_on_deadhead_segment(duty.segments, current_time)
+                    if is_on_deadhead:
+                        workload_multiplier = 0.3  # Passive travel fatigue only
+                    else:
+                        workload_multiplier = self.workload_model.get_combined_multiplier(phase, current_sector)
+                    effective_step_duration = step_duration_hours * workload_multiplier
+                    effective_wake_hours += effective_step_duration
+
+                    s_current = self.params.S_max - (self.params.S_max - s_at_wake) * \
+                                math.exp(-effective_wake_hours / self.params.tau_i)
+                    s_current = max(self.params.S_min, min(self.params.S_max, s_current))
+
+                    c = self.compute_process_c(current_time, duty.home_base_timezone, circadian_phase_shift)
+
+                    # Sleep inertia: from last rest wake or from pre-duty wake
+                    if last_rest_end:
+                        time_since_wake = current_time - last_rest_end
+                    else:
+                        time_since_wake = current_time - wake_time
+                    w = self.compute_sleep_inertia(time_since_wake)
+
+                    tot_penalty = self.params.time_on_task_rate * max(0.0, hours_on_duty)
+                    performance = self.integrate_performance(c, s_current, w, hours_on_duty)
+
+                    # Track return-to-deck performance (first point after rest)
+                    if last_rest_end and return_to_deck_perf is None:
+                        return_to_deck_perf = performance
+
+                    point = PerformancePoint(
+                        timestamp_utc=current_time,
+                        timestamp_local=current_time.astimezone(tz),
+                        circadian_component=c,
+                        homeostatic_component=s_current,
+                        sleep_inertia_component=w,
+                        raw_performance=performance,
+                        hours_on_duty=hours_on_duty,
+                        time_on_task_penalty=tot_penalty,
+                        current_flight_phase=phase,
+                        is_critical_phase=(phase in [FlightPhase.TAKEOFF, FlightPhase.LANDING, FlightPhase.APPROACH])
+                    )
 
             timeline.append(point)
             current_time += timedelta(minutes=resolution_minutes)
@@ -693,7 +737,11 @@ class BorbelyFatigueModel:
         
         # Track circadian adaptation across duties
         for duty in roster.duties:
-            departure_tz = duty.segments[0].departure_airport.timezone
+            if duty.segments:
+                departure_tz = duty.segments[0].departure_airport.timezone
+            else:
+                # Training duties: no airport — pilot stays at home base
+                departure_tz = roster.home_base_timezone
             body_clock = self.calculate_adaptation(
                 duty.report_time_utc, body_clock, departure_tz, roster.home_base_timezone
             )
@@ -729,17 +777,23 @@ class BorbelyFatigueModel:
             previous_timeline = timeline_obj
             
             # Calculate EASA FDP limits (augmented-crew-aware)
-            fdp_limits = self.validator.calculate_fdp_limits(
-                duty,
-                augmented_params=self.config.augmented_fdp_params if hasattr(self.config, 'augmented_fdp_params') else None,
-                ulr_params=self.config.ulr_params if hasattr(self.config, 'ulr_params') else None,
-            )
-            duty.max_fdp_hours = fdp_limits['max_fdp']
-            duty.extended_fdp_hours = fdp_limits['extended_fdp']
-            duty.used_discretion = fdp_limits['used_discretion']
+            # Training duties are "other duty" per EASA — not FDP, no FDP limits.
+            if duty.duty_type == DutyType.FLIGHT:
+                fdp_limits = self.validator.calculate_fdp_limits(
+                    duty,
+                    augmented_params=self.config.augmented_fdp_params if hasattr(self.config, 'augmented_fdp_params') else None,
+                    ulr_params=self.config.ulr_params if hasattr(self.config, 'ulr_params') else None,
+                )
+                duty.max_fdp_hours = fdp_limits['max_fdp']
+                duty.extended_fdp_hours = fdp_limits['extended_fdp']
+                duty.used_discretion = fdp_limits['used_discretion']
+            else:
+                duty.max_fdp_hours = None
+                duty.extended_fdp_hours = None
+                duty.used_discretion = False
 
-            # ULR compliance validation
-            if getattr(duty, 'is_ulr', False) or getattr(duty, 'is_ulr_operation', False):
+            # Qatar FTL 7.18 compliance validation for AUGMENTED_4 duties
+            if duty.crew_composition == CrewComposition.AUGMENTED_4:
                 ulr_params = self.config.ulr_params if hasattr(self.config, 'ulr_params') else None
                 ulr_validator = ULRComplianceValidator(ulr_params)
                 ulr_result = ulr_validator.validate_ulr_duty(duty, roster, i)
@@ -850,34 +904,19 @@ class BorbelyFatigueModel:
             previous_duty = roster.duties[i - 1] if i > 0 else None
             next_duty = roster.duties[i + 1] if i < len(roster.duties) - 1 else None
 
-            # Generate in-flight rest plan for augmented crew / ULR duties
-            if getattr(duty, 'is_ulr_operation', False) or getattr(duty, 'is_ulr', False):
-                # Only upgrade if crew composition is STANDARD (not already set)
-                if duty.crew_composition == CrewComposition.STANDARD:
-                    duty.crew_composition = CrewComposition.AUGMENTED_4
-                    logger.info(f"Upgraded duty {duty.duty_id} to AUGMENTED_4 for ULR")
-                elif duty.crew_composition == CrewComposition.AUGMENTED_3:
-                    # 3-pilot crew with ULR flag - likely extended operation, NOT true ULR
-                    logger.warning(
-                        f"Duty {duty.duty_id} has ULR flags but crew_composition=AUGMENTED_3. "
-                        f"Treating as augmented 3-pilot, NOT ULR."
-                    )
-                    duty.is_ulr = False  # Clear ULR flag to prevent ULR sleep strategies
-
-                # Only use ULR rest planner for 4-pilot crews
-                if duty.crew_composition == CrewComposition.AUGMENTED_4:
-                    duty.is_ulr = True
-                    if not duty.rest_facility_class:
-                        duty.rest_facility_class = RestFacilityClass.CLASS_1
-                    ulr_params = self.config.ulr_params if hasattr(self.config, 'ulr_params') else None
-                    ulr_planner = ULRRestPlanner(ulr_params)
-                    crew_set = getattr(duty, 'ulr_crew_set', None) or ULRCrewSet.CREW_B
-                    duty.inflight_rest_plan = ulr_planner.generate_rest_plan(
-                        duty=duty,
-                        crew_set=crew_set,
-                        home_timezone=roster.home_base_timezone,
-                    )
-            elif getattr(duty, 'is_augmented_crew', False):
+            # Generate in-flight rest plan for augmented crew duties
+            if duty.crew_composition == CrewComposition.AUGMENTED_4:
+                if not duty.rest_facility_class:
+                    duty.rest_facility_class = RestFacilityClass.CLASS_1
+                ulr_params = self.config.ulr_params if hasattr(self.config, 'ulr_params') else None
+                ulr_planner = ULRRestPlanner(ulr_params)
+                crew_set = getattr(duty, 'ulr_crew_set', None) or ULRCrewSet.CREW_B
+                duty.inflight_rest_plan = ulr_planner.generate_rest_plan(
+                    duty=duty,
+                    crew_set=crew_set,
+                    home_timezone=roster.home_base_timezone,
+                )
+            elif duty.crew_composition == CrewComposition.AUGMENTED_3:
                 if not duty.rest_facility_class:
                     duty.rest_facility_class = RestFacilityClass.CLASS_1
                 aug_params = self.config.augmented_fdp_params if hasattr(self.config, 'augmented_fdp_params') else None
@@ -898,10 +937,10 @@ class BorbelyFatigueModel:
                 )
                 strategy_key = duty.duty_id
             elif duty.is_augmented_crew:
-                # Augmented/ULR duties need crew-specific pre-duty sleep strategies
+                # Augmented duties need crew-specific pre-duty sleep strategies
                 # (NOT generic inter_duty_recovery which ignores crew composition).
-                # estimate_sleep_for_duty() checks crew_composition to dispatch:
-                #   AUGMENTED_4 → _ulr_sleep_strategy()
+                # estimate_sleep_for_duty() dispatches on crew_composition:
+                #   AUGMENTED_4 → _augmented_4_sleep_strategy()
                 #   AUGMENTED_3 → _augmented_3_pilot_strategy()
                 strategy = self.sleep_calculator.estimate_sleep_for_duty(
                     duty=duty,

@@ -18,12 +18,31 @@ from typing import List, Dict, Optional
 import pytz
 import airportsdata
 
-from models.data_models import Airport, FlightSegment, Duty
+from models.data_models import Airport, FlightSegment, Duty, DutyType
 
 
 # Load global IATA airport database (~7,800 airports with timezones and coordinates)
 # This replaces the old hardcoded KNOWN_AIRPORTS dict
 _IATA_DB = airportsdata.load('IATA')
+
+
+# ============================================================================
+# TRAINING DUTY CODE CLASSIFICATION
+# ============================================================================
+# Simulator codes: Full Flight Simulator (FFS), OPC training (OPTR), etc.
+# These are high-cognitive-load sessions in a motion simulator.
+_SIMULATOR_CODES = {'OPTR', 'FFS', 'FS1', 'AFTD', '77LP', 'AW8'}
+
+# Ground training codes: Classroom, meetings, assessments.
+# Lower cognitive intensity than simulator, but still constrain sleep.
+_GROUND_TRAINING_CODES = {'EBTGR', 'TMTG', 'INAS', '6ESEC', '6EVS', 'EVNT'}
+
+# Combined set for quick membership testing
+_ALL_TRAINING_CODES = _SIMULATOR_CODES | _GROUND_TRAINING_CODES
+
+# Line training annotations that appear on actual flight segments.
+# These are metadata — the flight is still a normal flight duty.
+_LINE_TRAINING_CODES = {'X', 'U', 'UL', 'L', 'E', 'ZFT'}
 
 
 def _lookup_airport(iata_code: str) -> Optional[Airport]:
@@ -482,25 +501,34 @@ class CrewLinkRosterParser:
         if not lines:
             return None
         
-        # Check if non-flying day (OFF, standby, leave, sick, rest, training)
+        # Check if non-flying day (OFF, standby, leave, sick, rest)
         # These activity codes mean the pilot has no operating duty on this date.
+        # NOTE: Training codes (6ESEC, EBTGR, etc.) are no longer skipped here —
+        # they are now parsed as training duties below.
         first_item = lines[0].upper()
         _NON_FLYING_CODES = {
             'OFF', 'GOFF', 'DOFF',          # Days off
             'SBY', 'PSBY', 'STANDBY',       # Standby (home or phone)
+            'PISY',                          # Instructor standby (kept as non-duty)
             'LVE', 'LEAVE',                  # Annual/other leave
             'SICK', 'REST', 'SR',            # Sick, rest, special rest
-            '6ESEC', '6EVS', 'EVNT',         # Training/events
+            'ROFF', 'POFF',                  # Requested/privileged off
         }
         if any(code in first_item for code in _NON_FLYING_CODES):
             return None  # Non-flying day, no duty
-        
+
+        # Check if this is a training duty (SIM session, ground class, meeting)
+        # Training columns have: RPT:HH:MM, training code, DOH, start_time, end_time, annotations
+        training_code = self._detect_training_code(lines)
+        if training_code:
+            return self._parse_training_duty(lines, date, training_code)
+
         # Extract report time (RPT) and flight segments first
         # We need to know the departure airport to properly localize report time
         report_time = None
         report_hour = None
         report_minute = None
-        
+
         for line in lines:
             # Tolerate OCR artifacts that insert spaces inside "RPT"
             # (e.g., "R PT:05:55" or "RP T:05:55" from pdfplumber)
@@ -509,10 +537,10 @@ class CrewLinkRosterParser:
                 report_hour = int(rpt_match.group(1))
                 report_minute = int(rpt_match.group(2))
                 break
-        
+
         # Extract flight segments first to determine departure airport
         segments = self._extract_segments_from_lines(lines, date)
-        
+
         if not segments:
             return None
         
@@ -600,7 +628,186 @@ class CrewLinkRosterParser:
         )
         
         return duty
-    
+
+    # ========================================================================
+    # TRAINING DUTY PARSING
+    # ========================================================================
+
+    def _detect_training_code(self, lines: List[str]) -> Optional[str]:
+        """
+        Check if this column represents a training duty.
+
+        Training columns in Qatar CrewLink PDF have the pattern:
+            RPT:HH:MM
+            <TRAINING_CODE>    (e.g. OPTR, FFS, EBTGR, AFTD)
+            DOH                (always at home base)
+            HH:MM              (start time)
+            HH:MM or HH:MM(+1)(end time)
+            PA,annotations     (trailing codes)
+
+        Returns the matched training code, or None if not a training duty.
+        """
+        for line in lines:
+            token = line.strip().upper()
+            # Direct match against known training codes
+            if token in _ALL_TRAINING_CODES:
+                return token
+            # Some codes may appear with prefix/suffix in PDF
+            # (e.g. "6ESEC" could be embedded in a longer string)
+            for code in _ALL_TRAINING_CODES:
+                if code in token and len(token) <= len(code) + 2:
+                    return code
+        return None
+
+    def _parse_training_duty(
+        self,
+        lines: List[str],
+        date: datetime,
+        training_code: str
+    ) -> Optional[Duty]:
+        """
+        Parse a training duty column into a Duty object.
+
+        Training duties have no flight segments. They constrain sleep windows
+        and contribute to homeostatic pressure in the fatigue model (BAM-aligned:
+        same S/C/W equations, different workload multiplier).
+
+        Column pattern:
+            RPT:HH:MM           → report time
+            <CODE>               → training code (e.g. OPTR, EBTGR)
+            DOH                  → location (always home base)
+            HH:MM                → activity start time
+            HH:MM or HH:MM(+1)  → activity end time
+            PA,annotations       → trailing codes (ea, FS, op, aw, lpc, etc.)
+        """
+        # 1. Extract report time
+        report_hour = None
+        report_minute = None
+        for line in lines:
+            rpt_match = re.match(r'R\s*P\s*T\s*:\s*(\d{2})\s*:\s*(\d{2})', line)
+            if rpt_match:
+                report_hour = int(rpt_match.group(1))
+                report_minute = int(rpt_match.group(2))
+                break
+
+        # 2. Extract start and end times from the column
+        # After the training code and location (DOH), there are two time entries
+        times_found = []
+        code_seen = False
+        for line in lines:
+            token = line.strip().upper()
+            if token == training_code or training_code in token:
+                code_seen = True
+                continue
+            if code_seen and re.search(r'\d{2}:\d{2}', line):
+                parsed_time = self._parse_time(line.strip(), date)
+                if parsed_time:
+                    times_found.append((parsed_time, line.strip()))
+                if len(times_found) >= 2:
+                    break
+
+        if len(times_found) < 2:
+            # Couldn't find start/end times — try fallback from RPT
+            if report_hour is not None:
+                print(f"  ⚠️  Training {training_code} on {date.strftime('%d%b')}: "
+                      f"could not find start/end times, using RPT + 8h fallback")
+                start_naive = datetime(date.year, date.month, date.day,
+                                       report_hour, report_minute)
+                end_naive = start_naive + timedelta(hours=8)
+                times_found = [(start_naive, f"{report_hour:02d}:{report_minute:02d}"),
+                               (end_naive, "")]
+            else:
+                print(f"  ⚠️  Skipping training {training_code} on {date.strftime('%d%b')}: "
+                      f"no RPT or times found")
+                return None
+
+        start_time_naive, _ = times_found[0]
+        end_time_naive, _ = times_found[1]
+
+        # 3. Localize times to UTC (training always at home base)
+        home_tz = pytz.timezone(self.home_timezone)
+        try:
+            if self.timezone_format == 'local' or self.timezone_format == 'homebase':
+                # Training at home base — local == home base timezone
+                report_naive = datetime(date.year, date.month, date.day,
+                                        report_hour, report_minute) if report_hour is not None else start_time_naive
+                report_time = home_tz.localize(report_naive)
+                start_time_utc = home_tz.localize(start_time_naive).astimezone(pytz.utc)
+                end_time_utc = home_tz.localize(end_time_naive).astimezone(pytz.utc)
+                report_time_utc = report_time.astimezone(pytz.utc)
+            else:  # zulu
+                report_naive = datetime(date.year, date.month, date.day,
+                                        report_hour, report_minute) if report_hour is not None else start_time_naive
+                report_time_utc = pytz.utc.localize(report_naive)
+                start_time_utc = pytz.utc.localize(start_time_naive)
+                end_time_utc = pytz.utc.localize(end_time_naive)
+        except Exception as e:
+            print(f"  ⚠️  Error localizing training {training_code} on {date.strftime('%d%b')}: {e}")
+            return None
+
+        # Handle overnight: if end is before start, it crosses midnight
+        if end_time_utc <= start_time_utc:
+            end_time_utc += timedelta(days=1)
+
+        # Handle report time before midnight for next-day activity
+        if report_time_utc > start_time_utc:
+            report_time_utc -= timedelta(days=1)
+
+        # Release time = end of activity + 30 min commute/debrief buffer
+        release_time_utc = end_time_utc + timedelta(minutes=30)
+
+        # 4. Extract trailing annotations (lowercase and uppercase codes after times)
+        # e.g. "PA,ea" → ["PA", "ea"], "PA,FS" → ["PA", "FS"],
+        # "PA,aw,lpc,rh" → ["PA", "aw", "lpc", "rh"]
+        annotations = []
+        past_times = 0
+        for line in lines:
+            if re.search(r'\d{2}:\d{2}', line):
+                past_times += 1
+                continue
+            if past_times >= 2:
+                # Everything after the second time is annotations
+                # Split by comma and clean
+                for part in line.strip().split(','):
+                    part = part.strip()
+                    if part and part.upper() not in {'DOH', training_code}:
+                        annotations.append(part)
+
+        # 5. Determine duty type
+        if training_code in _SIMULATOR_CODES:
+            duty_type = DutyType.SIMULATOR
+        else:
+            duty_type = DutyType.GROUND_TRAINING
+
+        # 6. Derive duty date from report time in home base timezone
+        report_in_home_tz = report_time_utc.astimezone(home_tz)
+        duty_date = datetime(
+            report_in_home_tz.year,
+            report_in_home_tz.month,
+            report_in_home_tz.day
+        )
+
+        duty = Duty(
+            duty_id=f"D{duty_date.strftime('%Y%m%d')}",
+            date=duty_date,
+            report_time_utc=report_time_utc,
+            release_time_utc=release_time_utc,
+            segments=[],
+            home_base_timezone=self.home_timezone,
+            duty_type=duty_type,
+            training_code=training_code,
+            training_annotations=annotations if annotations else None,
+        )
+
+        print(f"  ✓ Training duty: {training_code} ({duty_type.value}) on "
+              f"{duty_date.strftime('%d%b')} — "
+              f"RPT {report_in_home_tz.strftime('%H:%M')}, "
+              f"duty {start_time_utc.astimezone(home_tz).strftime('%H:%M')}-"
+              f"{end_time_utc.astimezone(home_tz).strftime('%H:%M')} "
+              f"({duty.duty_hours:.1f}h)")
+
+        return duty
+
     def _extract_segments_from_lines(
         self, 
         lines: List[str], 
@@ -727,38 +934,62 @@ class CrewLinkRosterParser:
                 # Skip past the 5 standard elements
                 i += 5
 
-                # Scan trailing lines for activity codes (IR, DH) and aircraft type.
+                # Scan trailing lines for activity codes (IR, DH), line training
+                # annotations, and aircraft type.
                 # These appear AFTER the arrival time in Qatar CrewLink PDF columns.
                 # Known activity codes with operational meaning:
                 #   IR = Inflight Rest (pilot is relief crew, always 4-pilot augmented)
                 #   DH = Deadhead (pilot as passenger, not operating)
+                # Line training codes (metadata only, stored on segment):
+                #   X = Line Training (TRE-TRI REQD), U/UL = Final Line Check
+                #   L = Line Training, E = ETOPS Training, ZFT = Zero Flight Time
                 # Ignored codes (no fatigue relevance):
                 #   REQ = Requested duty (bidding metadata)
                 #   PIC, SR, CB, SIM, GND = other annotations
                 _ACTIVITY_CODES = {'IR', 'DH'}
-                _IGNORED_CODES = {'REQ', 'PIC', 'SR', 'CB', 'SIM', 'GND', 'DOFF'}
+                _IGNORED_CODES = {'REQ', 'PIC', 'SR', 'CB', 'SIM', 'GND', 'DOFF', 'PA'}
 
                 scan_limit = min(i + 3, len(lines))
                 while i < scan_limit:
-                    token = lines[i].strip().upper()
-                    clean = token.strip('()')  # "(359)" -> "359"
+                    token = lines[i].strip()
+                    token_upper = token.upper()
+                    clean = token_upper.strip('()')  # "(359)" -> "359"
 
-                    if token in _ACTIVITY_CODES:
-                        segment.activity_code = token
+                    # Check for comma-separated annotation strings first
+                    # e.g. "PA,PIC,ZFT" or "PA,E,L,PIC,REQ" or "PIC,REQ,X"
+                    if ',' in token:
+                        parts = [p.strip() for p in token.split(',')]
+                        for part in parts:
+                            part_upper = part.upper()
+                            if part_upper in _ACTIVITY_CODES:
+                                segment.activity_code = part_upper
+                            elif part_upper in _LINE_TRAINING_CODES:
+                                if segment.line_training_codes is None:
+                                    segment.line_training_codes = []
+                                segment.line_training_codes.append(part_upper)
+                            # else: ignored (PA, PIC, REQ, etc.)
                         i += 1
-                    elif token in _IGNORED_CODES:
+                    elif token_upper in _ACTIVITY_CODES:
+                        segment.activity_code = token_upper
+                        i += 1
+                    elif token_upper in _LINE_TRAINING_CODES:
+                        if segment.line_training_codes is None:
+                            segment.line_training_codes = []
+                        segment.line_training_codes.append(token_upper)
+                        i += 1
+                    elif token_upper in _IGNORED_CODES:
                         i += 1  # Skip irrelevant codes
-                    elif re.match(r'^\(\w{2,3}\)$', token):
+                    elif re.match(r'^\(\w{2,3}\)$', token_upper):
                         # Parenthesized aircraft type e.g. (359), (351), (77W)
                         i += 1
-                    elif re.match(r'^[A-Z0-9]{2,3}$', clean) and not re.match(r'^[A-Z]{3}$', token):
+                    elif re.match(r'^[A-Z0-9]{2,3}$', clean) and not re.match(r'^[A-Z]{3}$', token_upper):
                         # Bare aircraft type code e.g. 359, 77W (not an airport).
                         # IMPORTANT: do NOT consume if the token looks like a flight number
                         # followed by airport + time (i.e. it is the START of the next segment).
                         # Flight number pattern: 3-4 pure digits OR 2-letter prefix + digits.
                         looks_like_flight_num = bool(
-                            re.match(r'^\d{3,4}$', token)
-                            or re.match(r'^[A-Z0-9]{2}[A-Z]?\d{1,5}$', token)
+                            re.match(r'^\d{3,4}$', token_upper)
+                            or re.match(r'^[A-Z0-9]{2}[A-Z]?\d{1,5}$', token_upper)
                         )
                         next_is_airport = (
                             i + 1 < len(lines)

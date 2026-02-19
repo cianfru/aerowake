@@ -105,9 +105,9 @@ class AugmentedFDPParameters:
 
 
 @dataclass
-class ULRParameters:
+class QatarFTL718Parameters:
     """
-    ULR regulatory parameters per Qatar Airways FTL Chapter 7.18.
+    Regulatory parameters per Qatar Airways FTL Chapter 7.18 (ULR operations).
     """
     # FDP limits
     ulr_fdp_threshold_hours: float = 18.0     # FDP > 18h = ULR
@@ -354,8 +354,8 @@ class ULRRestPlanner:
         Signal et al. (2014) Aviat Space Environ Med 85:1199-1208
     """
 
-    def __init__(self, ulr_params: ULRParameters = None):
-        self.params = ulr_params or ULRParameters()
+    def __init__(self, ulr_params: 'QatarFTL718Parameters' = None):
+        self.params = ulr_params or QatarFTL718Parameters()
 
     def generate_rest_plan(
         self,
@@ -540,16 +540,16 @@ class ULRRestPlanner:
 
 
 # ============================================================================
-# ULR COMPLIANCE VALIDATOR
+# QATAR FTL 7.18 COMPLIANCE VALIDATOR
 # ============================================================================
 
-class ULRComplianceValidator:
+class QatarFTL718Validator:
     """
-    Validates ULR-specific requirements per Qatar FTL 7.18.
+    Validates AUGMENTED_4 / ULR compliance requirements per Qatar FTL 7.18.
     """
 
-    def __init__(self, ulr_params: ULRParameters = None):
-        self.params = ulr_params or ULRParameters()
+    def __init__(self, ulr_params: 'QatarFTL718Parameters' = None):
+        self.params = ulr_params or QatarFTL718Parameters()
 
     def validate_ulr_duty(
         self,
@@ -667,3 +667,8 @@ class ULRComplianceValidator:
             violations=violations,
             warnings=warnings,
         )
+
+
+# Backward-compatibility aliases
+ULRParameters = QatarFTL718Parameters
+ULRComplianceValidator = QatarFTL718Validator

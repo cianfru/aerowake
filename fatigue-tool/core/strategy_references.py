@@ -254,6 +254,7 @@ _STRATEGY_REFS: Dict[str, List[Dict[str, str]]] = {
             'full': 'Roach GD et al. Layover start timing predicts layover sleep. PMC11879054',
         },
     ],
+    # AUGMENTED_4 pre-duty sleep strategy (key preserved for API compat)
     'ulr_pre_duty': [
         {
             'key': 'signal_2014',

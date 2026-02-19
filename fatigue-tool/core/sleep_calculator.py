@@ -139,6 +139,10 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         if not previous_duty or not previous_duty.segments:
             return False, None, 'home'
 
+        # Training duties (empty segments) are always at home base
+        if not duty.segments:
+            return False, None, 'home'
+
         # Where did previous duty end?
         prev_arrival = previous_duty.segments[-1].arrival_airport
 
@@ -231,21 +235,15 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         # Decision tree: match pilot behavior patterns
         # Priority order: most constrained/specific scenarios first.
 
-        # 0. ULR detection — takes priority (48h pre-rest protocol)
-        # IMPORTANT: Only use ULR sleep strategy for TRUE 4-pilot ULR operations
+        # 0. AUGMENTED_4 — 4-pilot pre-duty sleep (48h two-night protocol).
+        # Dispatch is crew_composition-first; is_ulr is kept as an API/display
+        # flag only (set by roster_parser.py).
         crew_comp = getattr(duty, 'crew_composition', CrewComposition.STANDARD)
-        is_ulr_flagged = getattr(duty, 'is_ulr_operation', False) or getattr(duty, 'is_ulr', False)
 
-        if is_ulr_flagged and crew_comp == CrewComposition.AUGMENTED_4:
-            return self._ulr_sleep_strategy(duty, previous_duty)
-        elif is_ulr_flagged and crew_comp != CrewComposition.AUGMENTED_4:
-            logger.warning(
-                f"Duty {duty.duty_id} has ULR flags but crew_composition={crew_comp.value}, "
-                f"not AUGMENTED_4. Using standard sleep strategies."
-            )
-            # Fall through to other strategies
+        if crew_comp == CrewComposition.AUGMENTED_4:
+            return self._augmented_4_sleep_strategy(duty, previous_duty)
 
-        # 0.5. 3-pilot augmented crew — different from ULR (single enhanced night + optional nap)
+        # 0.5. 3-pilot augmented crew — single enhanced night + optional nap
         if crew_comp == CrewComposition.AUGMENTED_3:
             return self._augmented_3_pilot_strategy(duty, previous_duty)
 

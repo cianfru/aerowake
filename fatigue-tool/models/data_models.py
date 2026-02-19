@@ -66,6 +66,25 @@ class FlightPhase(Enum):
     GROUND_TURNAROUND = "ground_turnaround"
 
 
+class DutyType(Enum):
+    """
+    Duty classification for fatigue modeling.
+
+    BAM (Boeing Alertness Model) treats all duty types identically in its
+    core Three-Process alertness prediction (Akerstedt et al. 2014, PLOS ONE).
+    Differentiation is via workload multipliers only — the S/C/W equations
+    remain the same regardless of duty type.
+
+    References:
+        Akerstedt et al. (2014) "Predicting sleepiness in airline operations"
+        Fuentes-Garcia et al. (2021) - Simulator ~32% lower HR vs real flight
+        Hamann & Carstengerdes (2023) - Linear fatigue buildup during sim sessions
+    """
+    FLIGHT = "flight"
+    SIMULATOR = "simulator"              # FFS, OPTR, AFTD, 77LP, FS1, AW8
+    GROUND_TRAINING = "ground_training"  # EBTGR, TMTG, INAS, 6ESEC, 6EVS, EVNT
+
+
 # ============================================================================
 # ROSTER & DUTY STRUCTURES
 # ============================================================================
@@ -133,6 +152,7 @@ class FlightSegment:
     scheduled_departure_utc: datetime
     scheduled_arrival_utc: datetime
     activity_code: Optional[str] = None  # "IR", "DH", etc. from roster PDF
+    line_training_codes: Optional[List[str]] = None  # X, U, UL, L, E, ZFT annotations
 
     @property
     def is_deadhead(self) -> bool:
@@ -151,14 +171,19 @@ class FlightSegment:
 
 @dataclass
 class Duty:
-    """Complete duty period"""
+    """Complete duty period — flight, simulator, or ground training."""
     duty_id: str
     date: datetime
     report_time_utc: datetime
     release_time_utc: datetime
-    segments: List[FlightSegment]
-    home_base_timezone: str
-    
+    segments: List[FlightSegment] = field(default_factory=list)
+    home_base_timezone: str = ""
+
+    # Duty type classification (BAM-aligned: same S/C/W model for all types)
+    duty_type: DutyType = DutyType.FLIGHT
+    training_code: Optional[str] = None          # Raw activity code: "OPTR", "EBTGR", etc.
+    training_annotations: Optional[List[str]] = None  # Trailing codes: ["ea"], ["aw","lpc","rh"]
+
     # EASA FTL limits
     max_fdp_hours: Optional[float] = None  # Base FDP limit from EASA table
     extended_fdp_hours: Optional[float] = None  # With captain discretion (+2h or +3h augmented)
@@ -208,13 +233,24 @@ class Duty:
     
     @property
     def report_time_local(self) -> datetime:
-        tz = pytz.timezone(self.segments[0].departure_airport.timezone)
+        if self.segments:
+            tz = pytz.timezone(self.segments[0].departure_airport.timezone)
+        else:
+            tz = pytz.timezone(self.home_base_timezone)
         return self.report_time_utc.astimezone(tz)
-    
+
     @property
     def release_time_local(self) -> datetime:
-        tz = pytz.timezone(self.segments[-1].arrival_airport.timezone)
+        if self.segments:
+            tz = pytz.timezone(self.segments[-1].arrival_airport.timezone)
+        else:
+            tz = pytz.timezone(self.home_base_timezone)
         return self.release_time_utc.astimezone(tz)
+
+    @property
+    def is_training(self) -> bool:
+        """True if this is a simulator or ground training duty (not a flight)."""
+        return self.duty_type in (DutyType.SIMULATOR, DutyType.GROUND_TRAINING)
 
     @property
     def is_ulr_operation(self) -> bool:

@@ -401,18 +401,24 @@ class SleepStrategyMixin:
             quality_analysis=[sleep_quality]
         )
 
-    def _ulr_sleep_strategy(
+    def _augmented_4_sleep_strategy(
         self,
         duty: Duty,
         previous_duty: Optional[Duty]
     ) -> 'SleepStrategy':
-        """ULR pre-duty sleep strategy per Qatar FTL 7.18.4.3.
+        """AUGMENTED_4 pre-duty sleep strategy per Qatar FTL 7.18.4.3.
 
-        Layover-aware: for return ULR legs (e.g. MIA→DOH), sleep blocks
+        Generates two nights of sleep before the duty plus an optional
+        pre-departure nap for evening departures, reflecting the 48h
+        duty-free pre-rest protocol.
+
+        Layover-aware: for return legs (e.g. MIA→DOH), sleep blocks
         are anchored to the LOCAL timezone where the pilot physically
         sleeps (hotel at layover station), not the home base timezone.
         The biological_timezone parameter captures circadian misalignment
         for sleep quality calculations.
+
+        Returns strategy_type='ulr_pre_duty' for API compatibility.
         """
         from core.sleep_calculator import SleepStrategy
 
@@ -578,7 +584,7 @@ class SleepStrategyMixin:
             sleep_blocks=blocks,
             confidence=0.85 if not self.is_layover else 0.75,
             explanation=(
-                f"ULR pre-duty: 2 nights {location_desc} sleep + "
+                f"AUGMENTED_4 pre-duty: 2 nights {location_desc} sleep + "
                 f"{'pre-departure nap' if len(blocks) > 2 else 'no nap'} "
                 f"({total_effective:.1f}h effective). "
                 f"48h duty-free per Qatar FTL 7.18.4.3"

@@ -201,7 +201,7 @@ class ModelConfig:
     adaptation_rates: AdaptationRates
     sleep_quality_params: SleepQualityParameters
     augmented_fdp_params: 'Any' = None  # AugmentedFDPParameters (from core.extended_operations)
-    ulr_params: 'Any' = None            # ULRParameters (from core.extended_operations)
+    ulr_params: 'Any' = None            # QatarFTL718Parameters (Qatar FTL 7.18)
 
     def __post_init__(self):
         # Lazy import to avoid circular dependency

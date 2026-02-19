@@ -112,6 +112,8 @@ class DutySegmentResponse(BaseModel):
     # Activity code from roster PDF (IR = inflight rest, DH = deadhead)
     activity_code: Optional[str] = None
     is_deadhead: bool = False
+    # Line training annotations (X, U, UL, L, E, ZFT) — metadata only
+    line_training_codes: Optional[List[str]] = None
 
 
 class QualityFactorsResponse(BaseModel):
@@ -266,6 +268,11 @@ class DutyResponse(BaseModel):
     duty_hours: float
     sectors: int
     segments: List[DutySegmentResponse]
+
+    # Duty type classification
+    duty_type: str = "flight"  # "flight", "simulator", "ground_training"
+    training_code: Optional[str] = None  # Raw activity code: "OPTR", "FFS", "EBTGR", etc.
+    training_annotations: Optional[List[str]] = None  # Trailing codes: ["ea"], ["aw","lpc","rh"]
     
     # Performance metrics
     min_performance: float
@@ -453,6 +460,7 @@ def _build_segments(duty, home_tz) -> list:
             block_hours=seg.block_time_hours,
             activity_code=getattr(seg, 'activity_code', None),
             is_deadhead=getattr(seg, 'is_deadhead', False),
+            line_training_codes=getattr(seg, 'line_training_codes', None),
         ))
     return segments
 
@@ -616,7 +624,12 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
     """Shared serialization for a single duty — used by both POST and GET endpoints."""
     import pytz
 
-    risk = classify_risk(duty_timeline.landing_performance)
+    # For flight duties, risk is based on landing performance (the critical moment).
+    # For training duties (no landing), risk is based on minimum performance.
+    risk_score = duty_timeline.landing_performance
+    if risk_score is None:
+        risk_score = duty_timeline.min_performance
+    risk = classify_risk(risk_score)
     home_tz = pytz.timezone(duty.home_base_timezone)
 
     segments = _build_segments(duty, home_tz)
@@ -663,6 +676,10 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
         circadian_phase_shift=round(duty_timeline.circadian_phase_shift, 2),
         time_validation_warnings=time_warnings,
         sleep_quality=sleep_quality,
+        # Training duty metadata
+        duty_type=duty.duty_type.value if hasattr(duty, 'duty_type') else 'flight',
+        training_code=getattr(duty, 'training_code', None),
+        training_annotations=getattr(duty, 'training_annotations', None),
         # Augmented crew / ULR
         crew_composition=duty.crew_composition.value if hasattr(duty.crew_composition, 'value') else str(getattr(duty, 'crew_composition', 'standard')),
         rest_facility_class=duty.rest_facility_class.value if getattr(duty, 'rest_facility_class', None) else None,
