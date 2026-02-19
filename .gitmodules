@@ -1,0 +1,3 @@
+[submodule "fatigue-insight-hub"]
+	path = fatigue-insight-hub
+	url = https://github.com/cianfru/fatigue-insight-hub
