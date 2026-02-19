@@ -1083,7 +1083,7 @@ class BorbelyFatigueModel:
                             'sleep_end_time': sleep_end_home.strftime('%H:%M'),
                             'sleep_start_iso': sleep_start_home.isoformat(),
                             'sleep_end_iso': sleep_end_home.isoformat(),
-                            # UTC — always unambiguous, for future timezone-toggle rendering
+                            # UTC — canonical, unambiguous reference
                             'sleep_start_utc': sleep_start.astimezone(pytz.utc).isoformat(),
                             'sleep_end_utc': sleep_end.astimezone(pytz.utc).isoformat(),
                             'sleep_start_day': sleep_start_home.day,
@@ -1099,6 +1099,13 @@ class BorbelyFatigueModel:
                             'sleep_start_hour_home_tz': sleep_start_home.hour + sleep_start_home.minute / 60.0,
                             'sleep_end_day_home_tz': sleep_end_home.day,
                             'sleep_end_hour_home_tz': sleep_end_home.hour + sleep_end_home.minute / 60.0,
+                            # UTC precomputed day/hour for UTC chronogram rendering
+                            'sleep_start_day_utc': sleep_start.astimezone(pytz.utc).day,
+                            'sleep_start_hour_utc': sleep_start.astimezone(pytz.utc).hour + sleep_start.astimezone(pytz.utc).minute / 60.0,
+                            'sleep_end_day_utc': sleep_end.astimezone(pytz.utc).day,
+                            'sleep_end_hour_utc': sleep_end.astimezone(pytz.utc).hour + sleep_end.astimezone(pytz.utc).minute / 60.0,
+                            'sleep_start_time_utc': sleep_start.astimezone(pytz.utc).strftime('%H:%M'),
+                            'sleep_end_time_utc': sleep_end.astimezone(pytz.utc).strftime('%H:%M'),
                             # Location timezone (actual local time where pilot sleeps)
                             'sleep_start_time_location_tz': sleep_start_local.strftime('%H:%M'),
                             'sleep_end_time_location_tz': sleep_end_local.strftime('%H:%M'),
@@ -1223,6 +1230,9 @@ class BorbelyFatigueModel:
                         'insufficient_penalty': qa.insufficient_penalty,
                     }
 
+                sleep_start_utc_dt = block.start_utc.astimezone(pytz.utc)
+                sleep_end_utc_dt = block.end_utc.astimezone(pytz.utc)
+
                 sleep_blocks_response.append({
                     # Primary fields: HOME BASE timezone for chronogram positioning.
                     # All sleep times use the same reference TZ as duty times,
@@ -1232,9 +1242,9 @@ class BorbelyFatigueModel:
                     'sleep_end_time': sleep_end_home.strftime('%H:%M'),
                     'sleep_start_iso': sleep_start_home.isoformat(),
                     'sleep_end_iso': sleep_end_home.isoformat(),
-                    # UTC — always unambiguous, for future timezone-toggle rendering
-                    'sleep_start_utc': block.start_utc.astimezone(pytz.utc).isoformat(),
-                    'sleep_end_utc': block.end_utc.astimezone(pytz.utc).isoformat(),
+                    # UTC — canonical, unambiguous reference
+                    'sleep_start_utc': sleep_start_utc_dt.isoformat(),
+                    'sleep_end_utc': sleep_end_utc_dt.isoformat(),
                     'sleep_start_day': sleep_start_home.day,
                     'sleep_start_hour': sleep_start_home.hour + sleep_start_home.minute / 60.0,
                     'sleep_end_day': sleep_end_home.day,
@@ -1248,6 +1258,13 @@ class BorbelyFatigueModel:
                     'sleep_start_hour_home_tz': sleep_start_home.hour + sleep_start_home.minute / 60.0,
                     'sleep_end_day_home_tz': sleep_end_home.day,
                     'sleep_end_hour_home_tz': sleep_end_home.hour + sleep_end_home.minute / 60.0,
+                    # UTC precomputed day/hour for UTC chronogram rendering
+                    'sleep_start_day_utc': sleep_start_utc_dt.day,
+                    'sleep_start_hour_utc': sleep_start_utc_dt.hour + sleep_start_utc_dt.minute / 60.0,
+                    'sleep_end_day_utc': sleep_end_utc_dt.day,
+                    'sleep_end_hour_utc': sleep_end_utc_dt.hour + sleep_end_utc_dt.minute / 60.0,
+                    'sleep_start_time_utc': sleep_start_utc_dt.strftime('%H:%M'),
+                    'sleep_end_time_utc': sleep_end_utc_dt.strftime('%H:%M'),
                     # Location timezone (actual local time where pilot sleeps)
                     'sleep_start_time_location_tz': sleep_start_local.strftime('%H:%M'),
                     'sleep_end_time_location_tz': sleep_end_local.strftime('%H:%M'),

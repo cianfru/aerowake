@@ -93,6 +93,13 @@ class DutySegmentResponse(BaseModel):
     # Canonical home-base timezone times
     departure_time_home_tz: str = ""  # HH:mm in home base timezone
     arrival_time_home_tz: str = ""    # HH:mm in home base timezone
+    # UTC precomputed day/hour for UTC chronogram rendering
+    departure_time_utc: str = ""      # HH:mm in UTC
+    arrival_time_utc: str = ""        # HH:mm in UTC
+    departure_day_utc: Optional[int] = None   # day of month in UTC
+    departure_hour_utc: Optional[float] = None  # decimal hour in UTC (0-24)
+    arrival_day_utc: Optional[int] = None     # day of month in UTC
+    arrival_hour_utc: Optional[float] = None    # decimal hour in UTC (0-24)
     # Airport-local times (in the actual departure/arrival airport timezone)
     departure_time_airport_local: str = ""  # HH:mm in departure airport local TZ
     arrival_time_airport_local: str = ""    # HH:mm in arrival airport local TZ
@@ -165,6 +172,14 @@ class SleepBlockResponse(BaseModel):
     sleep_start_utc: Optional[str] = None  # e.g. "2026-02-01T22:00:00+00:00"
     sleep_end_utc: Optional[str] = None    # e.g. "2026-02-02T06:30:00+00:00"
 
+    # UTC precomputed day/hour for UTC chronogram rendering
+    sleep_start_day_utc: Optional[int] = None     # day of month in UTC
+    sleep_start_hour_utc: Optional[float] = None   # decimal hour in UTC (0-24)
+    sleep_end_day_utc: Optional[int] = None        # day of month in UTC
+    sleep_end_hour_utc: Optional[float] = None      # decimal hour in UTC (0-24)
+    sleep_start_time_utc: Optional[str] = None     # HH:mm in UTC
+    sleep_end_time_utc: Optional[str] = None       # HH:mm in UTC
+
     # Per-block quality factor breakdown (populated for all sleep types)
     quality_factors: Optional[QualityFactorsResponse] = None
 
@@ -201,6 +216,14 @@ class SleepQualityResponse(BaseModel):
     sleep_start_utc: Optional[str] = None   # e.g. "2026-02-01T22:00:00+00:00"
     sleep_end_utc: Optional[str] = None     # e.g. "2026-02-02T06:30:00+00:00"
 
+    # UTC precomputed day/hour for UTC chronogram rendering (full sleep window span)
+    sleep_start_day_utc: Optional[int] = None     # day of month in UTC
+    sleep_start_hour_utc: Optional[float] = None   # decimal hour in UTC (0-24)
+    sleep_end_day_utc: Optional[int] = None        # day of month in UTC
+    sleep_end_hour_utc: Optional[float] = None      # decimal hour in UTC (0-24)
+    sleep_start_time_utc: Optional[str] = None     # HH:mm in UTC
+    sleep_end_time_utc: Optional[str] = None       # HH:mm in UTC
+
     # DEPRECATED: use _home_tz fields below instead (identical values).
     sleep_start_day: Optional[int] = None       # Day of month (1-31) — home-base TZ
     sleep_start_hour: Optional[float] = None    # Decimal hour (0-24) — home-base TZ
@@ -233,6 +256,13 @@ class DutyResponse(BaseModel):
     # Explicit home-base timezone times (identical to _local, unambiguous naming)
     report_time_home_tz: Optional[str] = None  # HH:MM in home base timezone
     release_time_home_tz: Optional[str] = None # HH:MM in home base timezone
+    # UTC precomputed day/hour for UTC chronogram rendering
+    report_time_hhmm_utc: Optional[str] = None   # HH:MM in UTC
+    release_time_hhmm_utc: Optional[str] = None   # HH:MM in UTC
+    report_day_utc: Optional[int] = None           # day of month in UTC
+    report_hour_utc: Optional[float] = None        # decimal hour in UTC (0-24)
+    release_day_utc: Optional[int] = None          # day of month in UTC
+    release_hour_utc: Optional[float] = None       # decimal hour in UTC (0-24)
     duty_hours: float
     sectors: int
     segments: List[DutySegmentResponse]
@@ -394,6 +424,9 @@ def _build_segments(duty, home_tz) -> list:
         dep_utc_offset = dep_airport_local.utcoffset().total_seconds() / 3600
         arr_utc_offset = arr_airport_local.utcoffset().total_seconds() / 3600
 
+        dep_utc_z = dep_utc.astimezone(pytz.utc)
+        arr_utc_z = arr_utc.astimezone(pytz.utc)
+
         segments.append(DutySegmentResponse(
             flight_number=seg.flight_number,
             departure=seg.departure_airport.code,
@@ -404,6 +437,13 @@ def _build_segments(duty, home_tz) -> list:
             arrival_time_local=arr_home.strftime("%H:%M"),
             departure_time_home_tz=dep_home.strftime("%H:%M"),
             arrival_time_home_tz=arr_home.strftime("%H:%M"),
+            # UTC precomputed day/hour for UTC chronogram rendering
+            departure_time_utc=dep_utc_z.strftime("%H:%M"),
+            arrival_time_utc=arr_utc_z.strftime("%H:%M"),
+            departure_day_utc=dep_utc_z.day,
+            departure_hour_utc=dep_utc_z.hour + dep_utc_z.minute / 60.0,
+            arrival_day_utc=arr_utc_z.day,
+            arrival_hour_utc=arr_utc_z.hour + arr_utc_z.minute / 60.0,
             departure_time_airport_local=dep_airport_local.strftime("%H:%M"),
             arrival_time_airport_local=arr_airport_local.strftime("%H:%M"),
             departure_timezone=seg.departure_airport.timezone,
@@ -484,6 +524,13 @@ def _build_sleep_quality(duty_timeline) -> Optional[SleepQualityResponse]:
         sleep_end_hour_home_tz=latest.get('sleep_end_hour_home_tz'),
         sleep_start_time_home_tz=earliest.get('sleep_start_time_home_tz'),
         sleep_end_time_home_tz=latest.get('sleep_end_time_home_tz'),
+        # UTC precomputed day/hour for UTC chronogram rendering
+        sleep_start_day_utc=earliest.get('sleep_start_day_utc'),
+        sleep_start_hour_utc=earliest.get('sleep_start_hour_utc'),
+        sleep_end_day_utc=latest.get('sleep_end_day_utc'),
+        sleep_end_hour_utc=latest.get('sleep_end_hour_utc'),
+        sleep_start_time_utc=earliest.get('sleep_start_time_utc'),
+        sleep_end_time_utc=latest.get('sleep_end_time_utc'),
     )
 
 
@@ -532,7 +579,7 @@ def _build_ulr_data(duty_timeline, duty) -> tuple:
         end_home = end_utc.astimezone(home_tz) if end_utc else None
 
         inflight_blocks.append({
-            # Raw UTC — always unambiguous
+            # Raw UTC — canonical, unambiguous reference
             'start_utc': start_utc.isoformat() if start_utc else None,
             'end_utc': end_utc.isoformat() if end_utc else None,
             # Home-base TZ positioning — mirrors SleepBlockResponse fields.
@@ -545,6 +592,13 @@ def _build_ulr_data(duty_timeline, duty) -> tuple:
             'end_hour_home_tz': (end_home.hour + end_home.minute / 60.0) if end_home else None,
             'start_iso_home_tz': start_home.isoformat() if start_home else None,
             'end_iso_home_tz': end_home.isoformat() if end_home else None,
+            # UTC precomputed day/hour for UTC chronogram rendering
+            'start_day_utc': start_utc.day if start_utc else None,
+            'start_hour_utc': (start_utc.hour + start_utc.minute / 60.0) if start_utc else None,
+            'end_day_utc': end_utc.day if end_utc else None,
+            'end_hour_utc': (end_utc.hour + end_utc.minute / 60.0) if end_utc else None,
+            'start_time_utc': start_utc.strftime('%H:%M') if start_utc else None,
+            'end_time_utc': end_utc.strftime('%H:%M') if end_utc else None,
             # Quality metrics
             'duration_hours': block.duration_hours,
             'effective_sleep_hours': block.effective_sleep_hours,
@@ -572,6 +626,8 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
 
     report_local = duty.report_time_utc.astimezone(home_tz)
     release_local = duty.release_time_utc.astimezone(home_tz)
+    report_utc_z = duty.report_time_utc.astimezone(pytz.utc)
+    release_utc_z = duty.release_time_utc.astimezone(pytz.utc)
 
     return DutyResponse(
         duty_id=duty_timeline.duty_id,
@@ -582,6 +638,12 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
         release_time_local=release_local.strftime("%H:%M"),
         report_time_home_tz=report_local.strftime("%H:%M"),
         release_time_home_tz=release_local.strftime("%H:%M"),
+        report_time_hhmm_utc=report_utc_z.strftime("%H:%M"),
+        release_time_hhmm_utc=release_utc_z.strftime("%H:%M"),
+        report_day_utc=report_utc_z.day,
+        report_hour_utc=report_utc_z.hour + report_utc_z.minute / 60.0,
+        release_day_utc=release_utc_z.day,
+        release_hour_utc=release_utc_z.hour + release_utc_z.minute / 60.0,
         duty_hours=duty.duty_hours,
         sectors=len(duty.segments),
         segments=segments,

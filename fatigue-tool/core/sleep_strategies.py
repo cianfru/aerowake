@@ -406,10 +406,30 @@ class SleepStrategyMixin:
         duty: Duty,
         previous_duty: Optional[Duty]
     ) -> 'SleepStrategy':
-        """ULR pre-duty sleep strategy per Qatar FTL 7.18.4.3."""
+        """ULR pre-duty sleep strategy per Qatar FTL 7.18.4.3.
+
+        Layover-aware: for return ULR legs (e.g. MIA→DOH), sleep blocks
+        are anchored to the LOCAL timezone where the pilot physically
+        sleeps (hotel at layover station), not the home base timezone.
+        The biological_timezone parameter captures circadian misalignment
+        for sleep quality calculations.
+        """
         from core.sleep_calculator import SleepStrategy
 
-        sleep_tz = self.home_tz
+        # Determine where the pilot actually sleeps before this ULR duty.
+        # Outbound (at home base): home_tz, 'home' environment.
+        # Return (at layover station): layover_tz, 'hotel' environment.
+        if self.is_layover and self.layover_timezone:
+            sleep_tz = pytz.timezone(self.layover_timezone)
+            sleep_location = self.sleep_environment  # 'hotel'
+        else:
+            sleep_tz = self.home_tz
+            sleep_location = 'home'
+
+        # Biological timezone: if on layover <48h, body clock is still
+        # on home base time (EASA AMC1 ORO.FTL.105 acclimatisation).
+        bio_tz = self.home_tz.zone if (self.is_layover and self.layover_duration_hours <= 48) else None
+
         report_local = duty.report_time_utc.astimezone(sleep_tz)
 
         blocks = []
@@ -422,7 +442,7 @@ class SleepStrategyMixin:
             else None
         )
 
-        # Night 1: 2 nights before duty
+        # Night 1: 2 nights before duty (in local sleep timezone)
         night1_start = report_local.replace(hour=23, minute=0, second=0) - timedelta(days=2)
         night1_end = report_local.replace(hour=7, minute=0, second=0) - timedelta(days=1)
 
@@ -436,10 +456,11 @@ class SleepStrategyMixin:
             night1_quality = self.calculate_sleep_quality(
                 sleep_start=night1_start,
                 sleep_end=night1_end,
-                location='home',
+                location=sleep_location,
                 previous_duty_end=previous_duty.release_time_utc if previous_duty else None,
                 next_event=night1_end + timedelta(hours=12),
-                location_timezone=sleep_tz.zone
+                location_timezone=sleep_tz.zone,
+                biological_timezone=bio_tz
             )
             quality_analyses.append(night1_quality)
 
@@ -452,19 +473,19 @@ class SleepStrategyMixin:
                 duration_hours=night1_quality.actual_sleep_hours,
                 quality_factor=night1_quality.sleep_efficiency,
                 effective_sleep_hours=night1_quality.effective_sleep_hours,
-                environment='home',
+                environment=sleep_location,
                 sleep_start_day=n1s_day,
                 sleep_start_hour=n1s_hour,
                 sleep_end_day=n1e_day,
                 sleep_end_hour=n1e_hour,
             ))
 
-        # Night 2: night before duty
+        # Night 2: night before duty (in local sleep timezone)
         night2_start = report_local.replace(hour=23, minute=0, second=0) - timedelta(days=1)
         night2_end = report_local.replace(hour=7, minute=0, second=0)
 
         # Cap night2_end at report_time - MIN_WAKE_BEFORE_REPORT (2h).
-        # For early-morning departures (e.g. report 06:30 DOH) the hard-coded
+        # For early-morning departures (e.g. report 06:30) the hard-coded
         # 07:00 wake would put the sleep bar 30 min past duty start.
         latest_wake_utc = duty.report_time_utc - timedelta(hours=self.MIN_WAKE_BEFORE_REPORT)
         latest_wake_local = latest_wake_utc.astimezone(sleep_tz)
@@ -482,10 +503,11 @@ class SleepStrategyMixin:
             night2_quality = self.calculate_sleep_quality(
                 sleep_start=night2_start,
                 sleep_end=night2_end,
-                location='home',
+                location=sleep_location,
                 previous_duty_end=previous_duty.release_time_utc if previous_duty else None,
                 next_event=report_local,
-                location_timezone=sleep_tz.zone
+                location_timezone=sleep_tz.zone,
+                biological_timezone=bio_tz
             )
             quality_analyses.append(night2_quality)
 
@@ -498,7 +520,7 @@ class SleepStrategyMixin:
                 duration_hours=night2_quality.actual_sleep_hours,
                 quality_factor=night2_quality.sleep_efficiency,
                 effective_sleep_hours=night2_quality.effective_sleep_hours,
-                environment='home',
+                environment=sleep_location,
                 sleep_start_day=n2s_day,
                 sleep_start_hour=n2s_hour,
                 sleep_end_day=n2e_day,
@@ -522,11 +544,12 @@ class SleepStrategyMixin:
                 nap_quality = self.calculate_sleep_quality(
                     sleep_start=nap_start,
                     sleep_end=nap_end,
-                    location='home',
+                    location=sleep_location,
                     previous_duty_end=previous_duty.release_time_utc if previous_duty else None,
                     next_event=report_local,
                     is_nap=True,
-                    location_timezone=sleep_tz.zone
+                    location_timezone=sleep_tz.zone,
+                    biological_timezone=bio_tz
                 )
                 quality_analyses.append(nap_quality)
 
@@ -540,7 +563,7 @@ class SleepStrategyMixin:
                     quality_factor=nap_quality.sleep_efficiency,
                     effective_sleep_hours=nap_quality.effective_sleep_hours,
                     is_anchor_sleep=False,
-                    environment='home',
+                    environment=sleep_location,
                     sleep_start_day=nps_day,
                     sleep_start_hour=nps_hour,
                     sleep_end_day=npe_day,
@@ -548,13 +571,14 @@ class SleepStrategyMixin:
                 ))
 
         total_effective = sum(q.effective_sleep_hours for q in quality_analyses)
+        location_desc = f"{sleep_location} ({sleep_tz.zone})" if self.is_layover else "home"
 
         return SleepStrategy(
             strategy_type='ulr_pre_duty',
             sleep_blocks=blocks,
-            confidence=0.85,
+            confidence=0.85 if not self.is_layover else 0.75,
             explanation=(
-                f"ULR pre-duty: 2 nights home sleep + "
+                f"ULR pre-duty: 2 nights {location_desc} sleep + "
                 f"{'pre-departure nap' if len(blocks) > 2 else 'no nap'} "
                 f"({total_effective:.1f}h effective). "
                 f"48h duty-free per Qatar FTL 7.18.4.3"
@@ -570,6 +594,10 @@ class SleepStrategyMixin:
         """
         Sleep strategy for 3-pilot augmented crews (AUGMENTED_3).
 
+        Layover-aware: for return legs departing from a layover station,
+        sleep is anchored to the local timezone where the pilot
+        physically sleeps (hotel), not the home base timezone.
+
         Different from ULR (4-pilot) strategy:
         - Single night of enhanced sleep (not 48h protocol)
         - May include pre-duty nap for night departures
@@ -580,7 +608,17 @@ class SleepStrategyMixin:
         """
         from core.sleep_calculator import SleepStrategy
 
-        sleep_tz = self.home_tz
+        # Determine where the pilot actually sleeps before this duty.
+        if self.is_layover and self.layover_timezone:
+            sleep_tz = pytz.timezone(self.layover_timezone)
+            sleep_location = self.sleep_environment  # 'hotel'
+        else:
+            sleep_tz = self.home_tz
+            sleep_location = 'home'
+
+        # Biological timezone for circadian quality calculation.
+        bio_tz = self.home_tz.zone if (self.is_layover and self.layover_duration_hours <= 48) else None
+
         report_local = duty.report_time_utc.astimezone(sleep_tz)
 
         blocks = []
@@ -603,10 +641,11 @@ class SleepStrategyMixin:
         night_quality = self.calculate_sleep_quality(
             sleep_start=night_start,
             sleep_end=night_end,
-            location='home',
+            location=sleep_location,
             previous_duty_end=previous_duty.release_time_utc if previous_duty else None,
             next_event=report_local,
-            location_timezone=sleep_tz.zone
+            location_timezone=sleep_tz.zone,
+            biological_timezone=bio_tz
         )
         quality_analyses.append(night_quality)
 
@@ -619,7 +658,7 @@ class SleepStrategyMixin:
             duration_hours=night_quality.actual_sleep_hours,
             quality_factor=night_quality.sleep_efficiency,
             effective_sleep_hours=night_quality.effective_sleep_hours,
-            environment='home',
+            environment=sleep_location,
             sleep_start_day=n_day,
             sleep_start_hour=n_hour,
             sleep_end_day=ne_day,
@@ -644,11 +683,12 @@ class SleepStrategyMixin:
             nap_quality = self.calculate_sleep_quality(
                 sleep_start=nap_start,
                 sleep_end=nap_end,
-                location='home',
+                location=sleep_location,
                 previous_duty_end=None,
                 next_event=report_local,
                 is_nap=True,
-                location_timezone=sleep_tz.zone
+                location_timezone=sleep_tz.zone,
+                biological_timezone=bio_tz
             )
             quality_analyses.append(nap_quality)
 
@@ -662,7 +702,7 @@ class SleepStrategyMixin:
                 quality_factor=nap_quality.sleep_efficiency,
                 effective_sleep_hours=nap_quality.effective_sleep_hours,
                 is_anchor_sleep=False,
-                environment='home',
+                environment=sleep_location,
                 sleep_start_day=nps_day,
                 sleep_start_hour=nps_hour,
                 sleep_end_day=npe_day,
@@ -670,13 +710,14 @@ class SleepStrategyMixin:
             ))
 
         total_effective = sum(q.effective_sleep_hours for q in quality_analyses)
+        location_desc = f"{sleep_location} ({sleep_tz.zone})" if self.is_layover else "home"
 
         return SleepStrategy(
             strategy_type='augmented_3_pilot',
             sleep_blocks=blocks,
-            confidence=0.80,
+            confidence=0.80 if not self.is_layover else 0.70,
             explanation=(
-                f"3-pilot augmented crew: Enhanced night sleep + "
+                f"3-pilot augmented crew: Enhanced night sleep at {location_desc} + "
                 f"{'pre-duty nap' if len(blocks) > 1 else 'no nap'} "
                 f"({total_effective:.1f}h effective). "
                 f"EASA CS-FTL.1.205 augmented crew operation"
