@@ -316,6 +316,17 @@ class PDFRosterParser:
         final_base = header_info.get('base') or pilot_info.get('base') or self.home_base
         final_aircraft = header_info.get('aircraft') or pilot_info.get('aircraft')
 
+        # Auto-derive roster month from PDF period (e.g. "Mar" + 2026 → "2026-03").
+        # The API default month param is a placeholder; the PDF is authoritative.
+        pdf_month_abbr = pilot_info.get('month')  # e.g. "Mar"
+        pdf_year = pilot_info.get('year')          # e.g. 2026
+        if pdf_month_abbr and pdf_year:
+            try:
+                pdf_month_num = datetime.strptime(pdf_month_abbr, '%b').month
+                month = f"{pdf_year}-{pdf_month_num:02d}"
+            except ValueError:
+                pass  # Keep API-supplied month if parsing fails
+
         print(f"   Found Pilot: {final_pilot_name} (ID: {final_pilot_id})")
         print(f"   Base: {final_base} | Aircraft: {final_aircraft}")
 
