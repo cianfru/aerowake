@@ -912,7 +912,7 @@ class BorbelyFatigueModel:
                 fill_date = _date(year_m, mon_m, 1)
                 first_duty_date = roster.duties[0].date.date() if hasattr(roster.duties[0].date, 'date') else roster.duties[0].date
                 night_number = 1
-                while fill_date < first_duty_date:
+                while fill_date < first_duty_date - timedelta(days=1):
                     sleep_start = home_tz.localize(
                         datetime.combine(fill_date, time(23, 0))
                     )
