@@ -900,6 +900,117 @@ class BorbelyFatigueModel:
         sleep_strategies = {}
         home_tz = pytz.timezone(roster.home_base_timezone)
 
+        # --- Pre-roster ROFF/off-day recovery fill ---
+        # Days off (ROFF/LVE/OFF) before the first duty are skipped by the
+        # parser and produce no Duty objects. Fill in a standard 23:00-07:00
+        # home recovery block for each calendar night between the roster
+        # start (day 1 of roster.month) and the night before the first duty.
+        if roster.duties and roster.month:
+            try:
+                year_m, mon_m = int(roster.month[:4]), int(roster.month[5:7])
+                from datetime import date as _date
+                fill_date = _date(year_m, mon_m, 1)
+                first_duty_date = roster.duties[0].date.date() if hasattr(roster.duties[0].date, 'date') else roster.duties[0].date
+                night_number = 1
+                while fill_date < first_duty_date:
+                    sleep_start = home_tz.localize(
+                        datetime.combine(fill_date, time(23, 0))
+                    )
+                    sleep_end = home_tz.localize(
+                        datetime.combine(fill_date + timedelta(days=1), time(7, 0))
+                    )
+                    rest_day_key = f"rest_{fill_date.isoformat()}"
+                    rest_quality = self.sleep_calculator.calculate_sleep_quality(
+                        sleep_start=sleep_start,
+                        sleep_end=sleep_end,
+                        location='home',
+                        previous_duty_end=None,
+                        next_event=sleep_end + timedelta(hours=12),
+                        location_timezone=home_tz.zone
+                    )
+                    recovery_block = SleepBlock(
+                        start_utc=sleep_start.astimezone(pytz.utc),
+                        end_utc=sleep_end.astimezone(pytz.utc),
+                        location_timezone=home_tz.zone,
+                        duration_hours=rest_quality.actual_sleep_hours,
+                        quality_factor=rest_quality.sleep_efficiency,
+                        effective_sleep_hours=rest_quality.effective_sleep_hours,
+                        environment='home'
+                    )
+                    sleep_blocks.append(recovery_block)
+
+                    ss_home = sleep_start.astimezone(home_tz)
+                    se_home = sleep_end.astimezone(home_tz)
+                    ss_utc = sleep_start.astimezone(pytz.utc)
+                    se_utc = sleep_end.astimezone(pytz.utc)
+                    recovery_fraction = 1.0 - math.exp(-night_number / 2.5)
+                    qf = {
+                        'base_efficiency': rest_quality.base_efficiency,
+                        'wocl_boost': rest_quality.wocl_penalty,
+                        'late_onset_penalty': rest_quality.late_onset_penalty,
+                        'recovery_boost': rest_quality.recovery_boost,
+                        'time_pressure_factor': rest_quality.time_pressure_factor,
+                        'insufficient_penalty': rest_quality.insufficient_penalty,
+                    }
+                    logger.info(f"[ROFF-FILL] key={rest_day_key} sleep={ss_utc.isoformat()[:16]}→{se_utc.isoformat()[:16]}")
+                    sleep_strategies[rest_day_key] = {
+                        'strategy_type': 'recovery',
+                        'confidence': 0.95,
+                        'recovery_night_number': night_number,
+                        'cumulative_recovery_fraction': round(recovery_fraction, 2),
+                        'total_sleep_hours': rest_quality.total_sleep_hours,
+                        'effective_sleep_hours': rest_quality.effective_sleep_hours,
+                        'sleep_efficiency': rest_quality.sleep_efficiency,
+                        'wocl_overlap_hours': rest_quality.wocl_overlap_hours,
+                        'warnings': [w['message'] for w in rest_quality.warnings],
+                        'sleep_start_time': ss_home.strftime('%H:%M'),
+                        'sleep_end_time': se_home.strftime('%H:%M'),
+                        'sleep_blocks': [{
+                            'sleep_start_time': ss_home.strftime('%H:%M'),
+                            'sleep_end_time': se_home.strftime('%H:%M'),
+                            'sleep_start_iso': ss_home.isoformat(),
+                            'sleep_end_iso': se_home.isoformat(),
+                            'sleep_start_utc': ss_utc.isoformat(),
+                            'sleep_end_utc': se_utc.isoformat(),
+                            'sleep_start_day': ss_home.day,
+                            'sleep_start_hour': ss_home.hour + ss_home.minute / 60.0,
+                            'sleep_end_day': se_home.day,
+                            'sleep_end_hour': se_home.hour + se_home.minute / 60.0,
+                            'location_timezone': home_tz.zone,
+                            'environment': 'home',
+                            'sleep_start_time_home_tz': ss_home.strftime('%H:%M'),
+                            'sleep_end_time_home_tz': se_home.strftime('%H:%M'),
+                            'sleep_start_day_home_tz': ss_home.day,
+                            'sleep_start_hour_home_tz': ss_home.hour + ss_home.minute / 60.0,
+                            'sleep_end_day_home_tz': se_home.day,
+                            'sleep_end_hour_home_tz': se_home.hour + se_home.minute / 60.0,
+                            'sleep_start_day_utc': ss_utc.day,
+                            'sleep_start_hour_utc': ss_utc.hour + ss_utc.minute / 60.0,
+                            'sleep_end_day_utc': se_utc.day,
+                            'sleep_end_hour_utc': se_utc.hour + se_utc.minute / 60.0,
+                            'sleep_start_time_utc': ss_utc.strftime('%H:%M'),
+                            'sleep_end_time_utc': se_utc.strftime('%H:%M'),
+                            'sleep_start_time_location_tz': sleep_start.strftime('%H:%M'),
+                            'sleep_end_time_location_tz': sleep_end.strftime('%H:%M'),
+                            'sleep_type': 'main',
+                            'duration_hours': rest_quality.actual_sleep_hours,
+                            'effective_hours': rest_quality.effective_sleep_hours,
+                            'quality_factor': rest_quality.sleep_efficiency,
+                            'quality_factors': qf,
+                        }],
+                        'explanation': (
+                            f'Day off (ROFF): standard home recovery sleep '
+                            f'(23:00-07:00, {rest_quality.sleep_efficiency:.0%} efficiency).'
+                        ),
+                        'confidence_basis': 'High confidence — home environment, no duty constraints.',
+                        'quality_factors': qf,
+                        'references': get_strategy_references('recovery'),
+                    }
+                    night_number += 1
+                    fill_date += timedelta(days=1)
+            except (ValueError, IndexError, AttributeError):
+                pass  # Malformed month string — skip silently
+
         for i, duty in enumerate(roster.duties):
             previous_duty = roster.duties[i - 1] if i > 0 else None
             next_duty = roster.duties[i + 1] if i < len(roster.duties) - 1 else None
