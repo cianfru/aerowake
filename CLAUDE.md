@@ -95,6 +95,10 @@ python tests/test_performance_improvements.py
 # Navigate to frontend
 cd fatigue-insight-hub
 
+# IMPORTANT: fatigue-insight-hub is a git submodule
+# Remote: github.com/cianfru/fatigue-insight-hub
+# Must run npm install inside the submodule before building
+
 # Install dependencies (uses bun.lockb, so bun is recommended)
 npm install
 # or
@@ -160,7 +164,6 @@ npm run preview
 4. **Visualization**
    - Recharts for fatigue timeline graphs
    - Mapbox for flight route visualization
-   - Three.js for 3D aircraft visualizations
 
 ## Code Conventions
 
@@ -273,7 +276,14 @@ When implementing features, reference these regulations:
 ### Frontend
 | File | Purpose |
 |------|---------|
-| `fatigue-insight-hub/src/` | Main source directory |
+| `fatigue-insight-hub/src/components/fatigue/Chronogram.tsx` | Main chronogram (4 tabs: Home-Base, UTC, Elapsed, SAFTE View) |
+| `fatigue-insight-hub/src/components/fatigue/ContinuousPerformanceTimeline.tsx` | SAFTE View: continuous Recharts performance + reservoir chart |
+| `fatigue-insight-hub/src/components/fatigue/DashboardContent.tsx` | Main dashboard layout, wires props to Chronogram |
+| `fatigue-insight-hub/src/hooks/useContinuousTimelineData.ts` | Transforms duties into continuous time-series for SAFTE View |
+| `fatigue-insight-hub/src/hooks/useFetchAllDutyTimelines.ts` | Lazy batch-fetches 5-min resolution timeline from backend |
+| `fatigue-insight-hub/src/types/fatigue.ts` | All TypeScript interfaces (DutyAnalysis, TimelinePoint, etc.) |
+| `fatigue-insight-hub/src/lib/api-client.ts` | API client (analyzeRoster, getDutyDetail, healthCheck) |
+| `fatigue-insight-hub/src/lib/fatigue-utils.ts` | Shared utilities (getPerformanceColor, getRecoveryScore, etc.) |
 | `fatigue-insight-hub/package.json` | Dependencies and scripts |
 | `fatigue-insight-hub/vite.config.ts` | Vite build configuration |
 | `fatigue-insight-hub/tailwind.config.ts` | Tailwind CSS configuration |
@@ -307,6 +317,14 @@ When implementing features, reference these regulations:
 2. Start frontend dev server (usually port 5173)
 3. Configure frontend to point to `http://localhost:8000`
 4. Test full user workflow with real roster data
+
+## Multi-Repo / Lovable Sync
+
+- `fatigue-insight-hub/` is a **git submodule** pointing to `github.com/cianfru/fatigue-insight-hub`
+- Lovable uses a separate repo: `github.com/cianfru/fatigue-insight-hub-007583c3`
+- After making changes, sync to Lovable: `cd fatigue-insight-hub && git push lovable origin/main:main --force`
+- The `lovable` remote is already configured in the submodule
+- PRs for frontend changes go to `cianfru/aerowake` (parent repo), not the submodule repo
 
 ## Notes for AI Assistants
 
