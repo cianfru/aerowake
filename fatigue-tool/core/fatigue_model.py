@@ -979,6 +979,151 @@ class BorbelyFatigueModel:
             # IMPORTANT: This covers the gap BEFORE duty[i] (same gap as
             # the inter-duty sleep above), using previous_duty's arrival
             # airport as the sleep location.
+
+            # --- Pre-first-duty gap fill ---
+            # When the roster starts with days off (ROFF/LVE/OFF), the first
+            # duty has no previous_duty, so the inter-duty gap-fill loop below
+            # never runs for i==0.  We fill in 23:00-07:00 home rest blocks
+            # for every uncovered night between roster start and the pre-duty
+            # sleep block that estimate_sleep_for_duty() just placed.
+            if i == 0:
+                # Determine the earliest pre-duty sleep block start already placed
+                first_sleep_start_utc = (
+                    min(b.start_utc for b in strategy.sleep_blocks)
+                    if strategy.sleep_blocks else duty.report_time_utc
+                )
+
+                # Derive the roster start date from roster.month ("YYYY-MM").
+                # Fall back to 7 days before the first sleep block if month
+                # is not set (defensive: should always be set by the parser).
+                if roster.month:
+                    try:
+                        year, month_num = int(roster.month[:4]), int(roster.month[5:7])
+                        from datetime import date as date_cls
+                        fill_date = date_cls(year, month_num, 1)
+                    except (ValueError, IndexError):
+                        fill_date = (first_sleep_start_utc.astimezone(home_tz) - timedelta(days=7)).date()
+                else:
+                    fill_date = (first_sleep_start_utc.astimezone(home_tz) - timedelta(days=7)).date()
+                fill_candidate = home_tz.localize(
+                    datetime.combine(fill_date, time(23, 0))
+                )
+                # If roster.start_date is the same calendar day as the first
+                # sleep block, there is nothing to fill.
+                fill_night_number = 1
+                while fill_candidate.astimezone(pytz.utc) < first_sleep_start_utc:
+                    fill_end = home_tz.localize(
+                        datetime.combine(fill_date + timedelta(days=1), time(7, 0))
+                    )
+                    # Don't overlap with the already-placed pre-duty sleep
+                    if fill_end.astimezone(pytz.utc) > first_sleep_start_utc:
+                        fill_end = first_sleep_start_utc.astimezone(home_tz)
+
+                    block_hours = (fill_end - fill_candidate).total_seconds() / 3600
+                    if block_hours >= 3.0:
+                        fill_quality = self.sleep_calculator.calculate_sleep_quality(
+                            sleep_start=fill_candidate,
+                            sleep_end=fill_end,
+                            location='home',
+                            previous_duty_end=None,
+                            next_event=fill_end + timedelta(hours=12),
+                            location_timezone=home_tz.zone
+                        )
+                        fill_block = SleepBlock(
+                            start_utc=fill_candidate.astimezone(pytz.utc),
+                            end_utc=fill_end.astimezone(pytz.utc),
+                            location_timezone=home_tz.zone,
+                            duration_hours=fill_quality.actual_sleep_hours,
+                            quality_factor=fill_quality.sleep_efficiency,
+                            effective_sleep_hours=fill_quality.effective_sleep_hours,
+                            environment='home'
+                        )
+                        sleep_blocks.append(fill_block)
+
+                        fill_start_home = fill_candidate.astimezone(home_tz)
+                        fill_end_home = fill_end.astimezone(home_tz)
+                        fill_start_utc = fill_candidate.astimezone(pytz.utc)
+                        fill_end_utc = fill_end.astimezone(pytz.utc)
+                        fill_date_key = fill_start_home.date().isoformat()
+                        rest_day_key = f"rest_{fill_date_key}"
+                        recovery_fraction = 1.0 - math.exp(-fill_night_number / 2.5)
+                        fill_qf = {
+                            'base_efficiency': fill_quality.base_efficiency,
+                            'wocl_boost': fill_quality.wocl_penalty,
+                            'late_onset_penalty': fill_quality.late_onset_penalty,
+                            'recovery_boost': fill_quality.recovery_boost,
+                            'time_pressure_factor': fill_quality.time_pressure_factor,
+                            'insufficient_penalty': fill_quality.insufficient_penalty,
+                        }
+                        logger.info(
+                            f"[PRE-DUTY-FILL] key={rest_day_key} "
+                            f"sleep={fill_start_utc.isoformat()[:16]}→{fill_end_utc.isoformat()[:16]}"
+                        )
+                        sleep_strategies[rest_day_key] = {
+                            'strategy_type': 'recovery',
+                            'confidence': 0.95,
+                            'recovery_night_number': fill_night_number,
+                            'cumulative_recovery_fraction': round(recovery_fraction, 2),
+                            'total_sleep_hours': fill_quality.total_sleep_hours,
+                            'effective_sleep_hours': fill_quality.effective_sleep_hours,
+                            'sleep_efficiency': fill_quality.sleep_efficiency,
+                            'wocl_overlap_hours': fill_quality.wocl_overlap_hours,
+                            'warnings': [w['message'] for w in fill_quality.warnings],
+                            'sleep_start_time': fill_start_home.strftime('%H:%M'),
+                            'sleep_end_time': fill_end_home.strftime('%H:%M'),
+                            'sleep_blocks': [{
+                                'sleep_start_time': fill_start_home.strftime('%H:%M'),
+                                'sleep_end_time': fill_end_home.strftime('%H:%M'),
+                                'sleep_start_iso': fill_start_home.isoformat(),
+                                'sleep_end_iso': fill_end_home.isoformat(),
+                                'sleep_start_utc': fill_start_utc.isoformat(),
+                                'sleep_end_utc': fill_end_utc.isoformat(),
+                                'sleep_start_day': fill_start_home.day,
+                                'sleep_start_hour': fill_start_home.hour + fill_start_home.minute / 60.0,
+                                'sleep_end_day': fill_end_home.day,
+                                'sleep_end_hour': fill_end_home.hour + fill_end_home.minute / 60.0,
+                                'location_timezone': home_tz.zone,
+                                'environment': 'home',
+                                'sleep_start_time_home_tz': fill_start_home.strftime('%H:%M'),
+                                'sleep_end_time_home_tz': fill_end_home.strftime('%H:%M'),
+                                'sleep_start_day_home_tz': fill_start_home.day,
+                                'sleep_start_hour_home_tz': fill_start_home.hour + fill_start_home.minute / 60.0,
+                                'sleep_end_day_home_tz': fill_end_home.day,
+                                'sleep_end_hour_home_tz': fill_end_home.hour + fill_end_home.minute / 60.0,
+                                'sleep_start_day_utc': fill_start_utc.day,
+                                'sleep_start_hour_utc': fill_start_utc.hour + fill_start_utc.minute / 60.0,
+                                'sleep_end_day_utc': fill_end_utc.day,
+                                'sleep_end_hour_utc': fill_end_utc.hour + fill_end_utc.minute / 60.0,
+                                'sleep_start_time_utc': fill_start_utc.strftime('%H:%M'),
+                                'sleep_end_time_utc': fill_end_utc.strftime('%H:%M'),
+                                'sleep_start_time_location_tz': fill_candidate.strftime('%H:%M'),
+                                'sleep_end_time_location_tz': fill_end.strftime('%H:%M'),
+                                'sleep_type': 'main',
+                                'duration_hours': fill_quality.actual_sleep_hours,
+                                'effective_hours': fill_quality.effective_sleep_hours,
+                                'quality_factor': fill_quality.sleep_efficiency,
+                                'quality_factors': fill_qf,
+                            }],
+                            'explanation': (
+                                f'Pre-roster rest night {fill_night_number}: home sleep '
+                                f'({fill_candidate.strftime("%H:%M")}-{fill_end.strftime("%H:%M")} local, '
+                                f'{fill_quality.sleep_efficiency:.0%} efficiency). '
+                                f'Roster starts with days off before first duty.'
+                            ),
+                            'confidence_basis': (
+                                f'High confidence — home environment, no duty constraints. '
+                                f'Pre-roster rest night {fill_night_number}.'
+                            ),
+                            'quality_factors': fill_qf,
+                            'references': get_strategy_references('recovery'),
+                        }
+                        fill_night_number += 1
+
+                    fill_date += timedelta(days=1)
+                    fill_candidate = home_tz.localize(
+                        datetime.combine(fill_date, time(23, 0))
+                    )
+
             if i > 0 and previous_duty:
                 # Determine where the pilot sleeps (previous duty arrival)
                 prev_arrival = previous_duty.segments[-1].arrival_airport if previous_duty.segments else None
