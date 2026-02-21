@@ -910,9 +910,18 @@ class BorbelyFatigueModel:
                 year_m, mon_m = int(roster.month[:4]), int(roster.month[5:7])
                 from datetime import date as _date
                 fill_date = _date(year_m, mon_m, 1)
-                first_duty_date = roster.duties[0].date.date() if hasattr(roster.duties[0].date, 'date') else roster.duties[0].date
+                # Use report time (not duty date) as the fill boundary so the
+                # cutoff is robust to any report hour (e.g. 02:00 early report).
+                # A 23:00→07:00 ROFF block on fill_date ends at 07:00 on
+                # fill_date+1. Only generate it when fill_date+1 is strictly
+                # before the report date in home-base TZ, i.e.:
+                #   fill_date < roff_fill_cutoff - 1 day
+                # This guarantees the ROFF block never crosses into the night
+                # already owned by estimate_sleep_for_duty.
+                first_duty_report_home = roster.duties[0].report_time_utc.astimezone(home_tz)
+                roff_fill_cutoff = first_duty_report_home.date()
                 night_number = 1
-                while fill_date < first_duty_date - timedelta(days=1):
+                while fill_date < roff_fill_cutoff - timedelta(days=1):
                     sleep_start = home_tz.localize(
                         datetime.combine(fill_date, time(23, 0))
                     )
@@ -953,59 +962,60 @@ class BorbelyFatigueModel:
                         'insufficient_penalty': rest_quality.insufficient_penalty,
                     }
                     logger.info(f"[ROFF-FILL] key={rest_day_key} sleep={ss_utc.isoformat()[:16]}→{se_utc.isoformat()[:16]}")
-                    sleep_strategies[rest_day_key] = {
-                        'strategy_type': 'recovery',
-                        'confidence': 0.95,
-                        'recovery_night_number': night_number,
-                        'cumulative_recovery_fraction': round(recovery_fraction, 2),
-                        'total_sleep_hours': rest_quality.total_sleep_hours,
-                        'effective_sleep_hours': rest_quality.effective_sleep_hours,
-                        'sleep_efficiency': rest_quality.sleep_efficiency,
-                        'wocl_overlap_hours': rest_quality.wocl_overlap_hours,
-                        'warnings': [w['message'] for w in rest_quality.warnings],
-                        'sleep_start_time': ss_home.strftime('%H:%M'),
-                        'sleep_end_time': se_home.strftime('%H:%M'),
-                        'sleep_blocks': [{
+                    if rest_day_key not in sleep_strategies:
+                        sleep_strategies[rest_day_key] = {
+                            'strategy_type': 'recovery',
+                            'confidence': 0.95,
+                            'recovery_night_number': night_number,
+                            'cumulative_recovery_fraction': round(recovery_fraction, 2),
+                            'total_sleep_hours': rest_quality.total_sleep_hours,
+                            'effective_sleep_hours': rest_quality.effective_sleep_hours,
+                            'sleep_efficiency': rest_quality.sleep_efficiency,
+                            'wocl_overlap_hours': rest_quality.wocl_overlap_hours,
+                            'warnings': [w['message'] for w in rest_quality.warnings],
                             'sleep_start_time': ss_home.strftime('%H:%M'),
                             'sleep_end_time': se_home.strftime('%H:%M'),
-                            'sleep_start_iso': ss_home.isoformat(),
-                            'sleep_end_iso': se_home.isoformat(),
-                            'sleep_start_utc': ss_utc.isoformat(),
-                            'sleep_end_utc': se_utc.isoformat(),
-                            'sleep_start_day': ss_home.day,
-                            'sleep_start_hour': ss_home.hour + ss_home.minute / 60.0,
-                            'sleep_end_day': se_home.day,
-                            'sleep_end_hour': se_home.hour + se_home.minute / 60.0,
-                            'location_timezone': home_tz.zone,
-                            'environment': 'home',
-                            'sleep_start_time_home_tz': ss_home.strftime('%H:%M'),
-                            'sleep_end_time_home_tz': se_home.strftime('%H:%M'),
-                            'sleep_start_day_home_tz': ss_home.day,
-                            'sleep_start_hour_home_tz': ss_home.hour + ss_home.minute / 60.0,
-                            'sleep_end_day_home_tz': se_home.day,
-                            'sleep_end_hour_home_tz': se_home.hour + se_home.minute / 60.0,
-                            'sleep_start_day_utc': ss_utc.day,
-                            'sleep_start_hour_utc': ss_utc.hour + ss_utc.minute / 60.0,
-                            'sleep_end_day_utc': se_utc.day,
-                            'sleep_end_hour_utc': se_utc.hour + se_utc.minute / 60.0,
-                            'sleep_start_time_utc': ss_utc.strftime('%H:%M'),
-                            'sleep_end_time_utc': se_utc.strftime('%H:%M'),
-                            'sleep_start_time_location_tz': sleep_start.strftime('%H:%M'),
-                            'sleep_end_time_location_tz': sleep_end.strftime('%H:%M'),
-                            'sleep_type': 'main',
-                            'duration_hours': rest_quality.actual_sleep_hours,
-                            'effective_hours': rest_quality.effective_sleep_hours,
-                            'quality_factor': rest_quality.sleep_efficiency,
+                            'sleep_blocks': [{
+                                'sleep_start_time': ss_home.strftime('%H:%M'),
+                                'sleep_end_time': se_home.strftime('%H:%M'),
+                                'sleep_start_iso': ss_home.isoformat(),
+                                'sleep_end_iso': se_home.isoformat(),
+                                'sleep_start_utc': ss_utc.isoformat(),
+                                'sleep_end_utc': se_utc.isoformat(),
+                                'sleep_start_day': ss_home.day,
+                                'sleep_start_hour': ss_home.hour + ss_home.minute / 60.0,
+                                'sleep_end_day': se_home.day,
+                                'sleep_end_hour': se_home.hour + se_home.minute / 60.0,
+                                'location_timezone': home_tz.zone,
+                                'environment': 'home',
+                                'sleep_start_time_home_tz': ss_home.strftime('%H:%M'),
+                                'sleep_end_time_home_tz': se_home.strftime('%H:%M'),
+                                'sleep_start_day_home_tz': ss_home.day,
+                                'sleep_start_hour_home_tz': ss_home.hour + ss_home.minute / 60.0,
+                                'sleep_end_day_home_tz': se_home.day,
+                                'sleep_end_hour_home_tz': se_home.hour + se_home.minute / 60.0,
+                                'sleep_start_day_utc': ss_utc.day,
+                                'sleep_start_hour_utc': ss_utc.hour + ss_utc.minute / 60.0,
+                                'sleep_end_day_utc': se_utc.day,
+                                'sleep_end_hour_utc': se_utc.hour + se_utc.minute / 60.0,
+                                'sleep_start_time_utc': ss_utc.strftime('%H:%M'),
+                                'sleep_end_time_utc': se_utc.strftime('%H:%M'),
+                                'sleep_start_time_location_tz': sleep_start.strftime('%H:%M'),
+                                'sleep_end_time_location_tz': sleep_end.strftime('%H:%M'),
+                                'sleep_type': 'main',
+                                'duration_hours': rest_quality.actual_sleep_hours,
+                                'effective_hours': rest_quality.effective_sleep_hours,
+                                'quality_factor': rest_quality.sleep_efficiency,
+                                'quality_factors': qf,
+                            }],
+                            'explanation': (
+                                f'Day off (ROFF): standard home recovery sleep '
+                                f'(23:00-07:00, {rest_quality.sleep_efficiency:.0%} efficiency).'
+                            ),
+                            'confidence_basis': 'High confidence — home environment, no duty constraints.',
                             'quality_factors': qf,
-                        }],
-                        'explanation': (
-                            f'Day off (ROFF): standard home recovery sleep '
-                            f'(23:00-07:00, {rest_quality.sleep_efficiency:.0%} efficiency).'
-                        ),
-                        'confidence_basis': 'High confidence — home environment, no duty constraints.',
-                        'quality_factors': qf,
-                        'references': get_strategy_references('recovery'),
-                    }
+                            'references': get_strategy_references('recovery'),
+                        }
                     night_number += 1
                     fill_date += timedelta(days=1)
             except (ValueError, IndexError, AttributeError):
@@ -1200,65 +1210,66 @@ class BorbelyFatigueModel:
                             f"[GAP-FILL] truncated post-arrival key={rest_day_key} "
                             f"sleep={trunc_start_utc.isoformat()[:16]}→{trunc_end_utc.isoformat()[:16]}"
                         )
-                        sleep_strategies[rest_day_key] = {
-                            'strategy_type': 'recovery',
-                            'confidence': 0.90 if is_at_home else 0.80,
-                            'recovery_night_number': recovery_night_number,
-                            'cumulative_recovery_fraction': round(recovery_fraction, 2),
-                            'total_sleep_hours': trunc_quality.total_sleep_hours,
-                            'effective_sleep_hours': trunc_quality.effective_sleep_hours,
-                            'sleep_efficiency': trunc_quality.sleep_efficiency,
-                            'wocl_overlap_hours': trunc_quality.wocl_overlap_hours,
-                            'warnings': [w['message'] for w in trunc_quality.warnings],
-                            'sleep_start_time': trunc_start_home.strftime('%H:%M'),
-                            'sleep_end_time': trunc_end_home.strftime('%H:%M'),
-                            'sleep_blocks': [{
+                        if rest_day_key not in sleep_strategies:
+                            sleep_strategies[rest_day_key] = {
+                                'strategy_type': 'recovery',
+                                'confidence': 0.90 if is_at_home else 0.80,
+                                'recovery_night_number': recovery_night_number,
+                                'cumulative_recovery_fraction': round(recovery_fraction, 2),
+                                'total_sleep_hours': trunc_quality.total_sleep_hours,
+                                'effective_sleep_hours': trunc_quality.effective_sleep_hours,
+                                'sleep_efficiency': trunc_quality.sleep_efficiency,
+                                'wocl_overlap_hours': trunc_quality.wocl_overlap_hours,
+                                'warnings': [w['message'] for w in trunc_quality.warnings],
                                 'sleep_start_time': trunc_start_home.strftime('%H:%M'),
                                 'sleep_end_time': trunc_end_home.strftime('%H:%M'),
-                                'sleep_start_iso': trunc_start_home.isoformat(),
-                                'sleep_end_iso': trunc_end_home.isoformat(),
-                                'sleep_start_utc': trunc_start_utc.isoformat(),
-                                'sleep_end_utc': trunc_end_utc.isoformat(),
-                                'sleep_start_day': trunc_start_home.day,
-                                'sleep_start_hour': trunc_start_home.hour + trunc_start_home.minute / 60.0,
-                                'sleep_end_day': trunc_end_home.day,
-                                'sleep_end_hour': trunc_end_home.hour + trunc_end_home.minute / 60.0,
-                                'location_timezone': rest_tz.zone,
-                                'environment': rest_env,
-                                'sleep_start_time_home_tz': trunc_start_home.strftime('%H:%M'),
-                                'sleep_end_time_home_tz': trunc_end_home.strftime('%H:%M'),
-                                'sleep_start_day_home_tz': trunc_start_home.day,
-                                'sleep_start_hour_home_tz': trunc_start_home.hour + trunc_start_home.minute / 60.0,
-                                'sleep_end_day_home_tz': trunc_end_home.day,
-                                'sleep_end_hour_home_tz': trunc_end_home.hour + trunc_end_home.minute / 60.0,
-                                'sleep_start_day_utc': trunc_start_utc.day,
-                                'sleep_start_hour_utc': trunc_start_utc.hour + trunc_start_utc.minute / 60.0,
-                                'sleep_end_day_utc': trunc_end_utc.day,
-                                'sleep_end_hour_utc': trunc_end_utc.hour + trunc_end_utc.minute / 60.0,
-                                'sleep_start_time_utc': trunc_start_utc.strftime('%H:%M'),
-                                'sleep_end_time_utc': trunc_end_utc.strftime('%H:%M'),
-                                'sleep_start_time_location_tz': trunc_start.strftime('%H:%M'),
-                                'sleep_end_time_location_tz': trunc_end.strftime('%H:%M'),
-                                'sleep_type': 'main',
-                                'duration_hours': trunc_quality.actual_sleep_hours,
-                                'effective_hours': trunc_quality.effective_sleep_hours,
-                                'quality_factor': trunc_quality.sleep_efficiency,
+                                'sleep_blocks': [{
+                                    'sleep_start_time': trunc_start_home.strftime('%H:%M'),
+                                    'sleep_end_time': trunc_end_home.strftime('%H:%M'),
+                                    'sleep_start_iso': trunc_start_home.isoformat(),
+                                    'sleep_end_iso': trunc_end_home.isoformat(),
+                                    'sleep_start_utc': trunc_start_utc.isoformat(),
+                                    'sleep_end_utc': trunc_end_utc.isoformat(),
+                                    'sleep_start_day': trunc_start_home.day,
+                                    'sleep_start_hour': trunc_start_home.hour + trunc_start_home.minute / 60.0,
+                                    'sleep_end_day': trunc_end_home.day,
+                                    'sleep_end_hour': trunc_end_home.hour + trunc_end_home.minute / 60.0,
+                                    'location_timezone': rest_tz.zone,
+                                    'environment': rest_env,
+                                    'sleep_start_time_home_tz': trunc_start_home.strftime('%H:%M'),
+                                    'sleep_end_time_home_tz': trunc_end_home.strftime('%H:%M'),
+                                    'sleep_start_day_home_tz': trunc_start_home.day,
+                                    'sleep_start_hour_home_tz': trunc_start_home.hour + trunc_start_home.minute / 60.0,
+                                    'sleep_end_day_home_tz': trunc_end_home.day,
+                                    'sleep_end_hour_home_tz': trunc_end_home.hour + trunc_end_home.minute / 60.0,
+                                    'sleep_start_day_utc': trunc_start_utc.day,
+                                    'sleep_start_hour_utc': trunc_start_utc.hour + trunc_start_utc.minute / 60.0,
+                                    'sleep_end_day_utc': trunc_end_utc.day,
+                                    'sleep_end_hour_utc': trunc_end_utc.hour + trunc_end_utc.minute / 60.0,
+                                    'sleep_start_time_utc': trunc_start_utc.strftime('%H:%M'),
+                                    'sleep_end_time_utc': trunc_end_utc.strftime('%H:%M'),
+                                    'sleep_start_time_location_tz': trunc_start.strftime('%H:%M'),
+                                    'sleep_end_time_location_tz': trunc_end.strftime('%H:%M'),
+                                    'sleep_type': 'main',
+                                    'duration_hours': trunc_quality.actual_sleep_hours,
+                                    'effective_hours': trunc_quality.effective_sleep_hours,
+                                    'quality_factor': trunc_quality.sleep_efficiency,
+                                    'quality_factors': trunc_qf,
+                                }],
+                                'explanation': (
+                                    f'Post-arrival recovery: truncated {rest_env} sleep '
+                                    f'({trunc_start.strftime("%H:%M")}-{trunc_end.strftime("%H:%M")} local, '
+                                    f'{trunc_quality.sleep_efficiency:.0%} efficiency). '
+                                    f'Late arrival after 23:00 — shortened first recovery night.'
+                                ),
+                                'confidence_basis': (
+                                    f'{"Good" if is_at_home else "Moderate"} confidence — '
+                                    f'{rest_env} environment, truncated by late arrival. '
+                                    f'Recovery night {recovery_night_number}'
+                                ),
                                 'quality_factors': trunc_qf,
-                            }],
-                            'explanation': (
-                                f'Post-arrival recovery: truncated {rest_env} sleep '
-                                f'({trunc_start.strftime("%H:%M")}-{trunc_end.strftime("%H:%M")} local, '
-                                f'{trunc_quality.sleep_efficiency:.0%} efficiency). '
-                                f'Late arrival after 23:00 — shortened first recovery night.'
-                            ),
-                            'confidence_basis': (
-                                f'{"Good" if is_at_home else "Moderate"} confidence — '
-                                f'{rest_env} environment, truncated by late arrival. '
-                                f'Recovery night {recovery_night_number}'
-                            ),
-                            'quality_factors': trunc_qf,
-                            'references': get_strategy_references('recovery'),
-                        }
+                                'references': get_strategy_references('recovery'),
+                            }
                         recovery_night_number += 1
 
                     # Advance to next full night for the main loop
@@ -1334,72 +1345,73 @@ class BorbelyFatigueModel:
                     sleep_end_local = sleep_end
 
                     logger.info(f"[GAP-FILL] generated key={rest_day_key} sleep={sleep_start.astimezone(pytz.utc).isoformat()[:16]}→{sleep_end.astimezone(pytz.utc).isoformat()[:16]}")
-                    sleep_strategies[rest_day_key] = {
-                        'strategy_type': 'recovery',
-                        'confidence': 0.95 if is_at_home else 0.85,
-                        'recovery_night_number': recovery_night_number,
-                        'cumulative_recovery_fraction': round(recovery_fraction, 2),
-                        'total_sleep_hours': rest_quality.total_sleep_hours,
-                        'effective_sleep_hours': rest_quality.effective_sleep_hours,
-                        'sleep_efficiency': rest_quality.sleep_efficiency,
-                        'wocl_overlap_hours': rest_quality.wocl_overlap_hours,
-                        'warnings': [w['message'] for w in rest_quality.warnings],
-                        'sleep_start_time': sleep_start_home.strftime('%H:%M'),
-                        'sleep_end_time': sleep_end_home.strftime('%H:%M'),
-                        'sleep_blocks': [{
-                            # Primary fields: HOME BASE timezone for chronogram positioning
+                    if rest_day_key not in sleep_strategies:
+                        sleep_strategies[rest_day_key] = {
+                            'strategy_type': 'recovery',
+                            'confidence': 0.95 if is_at_home else 0.85,
+                            'recovery_night_number': recovery_night_number,
+                            'cumulative_recovery_fraction': round(recovery_fraction, 2),
+                            'total_sleep_hours': rest_quality.total_sleep_hours,
+                            'effective_sleep_hours': rest_quality.effective_sleep_hours,
+                            'sleep_efficiency': rest_quality.sleep_efficiency,
+                            'wocl_overlap_hours': rest_quality.wocl_overlap_hours,
+                            'warnings': [w['message'] for w in rest_quality.warnings],
                             'sleep_start_time': sleep_start_home.strftime('%H:%M'),
                             'sleep_end_time': sleep_end_home.strftime('%H:%M'),
-                            'sleep_start_iso': sleep_start_home.isoformat(),
-                            'sleep_end_iso': sleep_end_home.isoformat(),
-                            # UTC — canonical, unambiguous reference
-                            'sleep_start_utc': sleep_start.astimezone(pytz.utc).isoformat(),
-                            'sleep_end_utc': sleep_end.astimezone(pytz.utc).isoformat(),
-                            'sleep_start_day': sleep_start_home.day,
-                            'sleep_start_hour': sleep_start_home.hour + sleep_start_home.minute / 60.0,
-                            'sleep_end_day': sleep_end_home.day,
-                            'sleep_end_hour': sleep_end_home.hour + sleep_end_home.minute / 60.0,
-                            'location_timezone': rest_tz.zone,
-                            'environment': rest_env,
-                            # Explicit home base timezone (backward compat, same as primary)
-                            'sleep_start_time_home_tz': sleep_start_home.strftime('%H:%M'),
-                            'sleep_end_time_home_tz': sleep_end_home.strftime('%H:%M'),
-                            'sleep_start_day_home_tz': sleep_start_home.day,
-                            'sleep_start_hour_home_tz': sleep_start_home.hour + sleep_start_home.minute / 60.0,
-                            'sleep_end_day_home_tz': sleep_end_home.day,
-                            'sleep_end_hour_home_tz': sleep_end_home.hour + sleep_end_home.minute / 60.0,
-                            # UTC precomputed day/hour for UTC chronogram rendering
-                            'sleep_start_day_utc': sleep_start.astimezone(pytz.utc).day,
-                            'sleep_start_hour_utc': sleep_start.astimezone(pytz.utc).hour + sleep_start.astimezone(pytz.utc).minute / 60.0,
-                            'sleep_end_day_utc': sleep_end.astimezone(pytz.utc).day,
-                            'sleep_end_hour_utc': sleep_end.astimezone(pytz.utc).hour + sleep_end.astimezone(pytz.utc).minute / 60.0,
-                            'sleep_start_time_utc': sleep_start.astimezone(pytz.utc).strftime('%H:%M'),
-                            'sleep_end_time_utc': sleep_end.astimezone(pytz.utc).strftime('%H:%M'),
-                            # Location timezone (actual local time where pilot sleeps)
-                            'sleep_start_time_location_tz': sleep_start_local.strftime('%H:%M'),
-                            'sleep_end_time_location_tz': sleep_end_local.strftime('%H:%M'),
-                            'sleep_type': 'main',
-                            'duration_hours': rest_quality.actual_sleep_hours,
-                            'effective_hours': rest_quality.effective_sleep_hours,
-                            'quality_factor': rest_quality.sleep_efficiency,
+                            'sleep_blocks': [{
+                                # Primary fields: HOME BASE timezone for chronogram positioning
+                                'sleep_start_time': sleep_start_home.strftime('%H:%M'),
+                                'sleep_end_time': sleep_end_home.strftime('%H:%M'),
+                                'sleep_start_iso': sleep_start_home.isoformat(),
+                                'sleep_end_iso': sleep_end_home.isoformat(),
+                                # UTC — canonical, unambiguous reference
+                                'sleep_start_utc': sleep_start.astimezone(pytz.utc).isoformat(),
+                                'sleep_end_utc': sleep_end.astimezone(pytz.utc).isoformat(),
+                                'sleep_start_day': sleep_start_home.day,
+                                'sleep_start_hour': sleep_start_home.hour + sleep_start_home.minute / 60.0,
+                                'sleep_end_day': sleep_end_home.day,
+                                'sleep_end_hour': sleep_end_home.hour + sleep_end_home.minute / 60.0,
+                                'location_timezone': rest_tz.zone,
+                                'environment': rest_env,
+                                # Explicit home base timezone (backward compat, same as primary)
+                                'sleep_start_time_home_tz': sleep_start_home.strftime('%H:%M'),
+                                'sleep_end_time_home_tz': sleep_end_home.strftime('%H:%M'),
+                                'sleep_start_day_home_tz': sleep_start_home.day,
+                                'sleep_start_hour_home_tz': sleep_start_home.hour + sleep_start_home.minute / 60.0,
+                                'sleep_end_day_home_tz': sleep_end_home.day,
+                                'sleep_end_hour_home_tz': sleep_end_home.hour + sleep_end_home.minute / 60.0,
+                                # UTC precomputed day/hour for UTC chronogram rendering
+                                'sleep_start_day_utc': sleep_start.astimezone(pytz.utc).day,
+                                'sleep_start_hour_utc': sleep_start.astimezone(pytz.utc).hour + sleep_start.astimezone(pytz.utc).minute / 60.0,
+                                'sleep_end_day_utc': sleep_end.astimezone(pytz.utc).day,
+                                'sleep_end_hour_utc': sleep_end.astimezone(pytz.utc).hour + sleep_end.astimezone(pytz.utc).minute / 60.0,
+                                'sleep_start_time_utc': sleep_start.astimezone(pytz.utc).strftime('%H:%M'),
+                                'sleep_end_time_utc': sleep_end.astimezone(pytz.utc).strftime('%H:%M'),
+                                # Location timezone (actual local time where pilot sleeps)
+                                'sleep_start_time_location_tz': sleep_start_local.strftime('%H:%M'),
+                                'sleep_end_time_location_tz': sleep_end_local.strftime('%H:%M'),
+                                'sleep_type': 'main',
+                                'duration_hours': rest_quality.actual_sleep_hours,
+                                'effective_hours': rest_quality.effective_sleep_hours,
+                                'quality_factor': rest_quality.sleep_efficiency,
+                                'quality_factors': rest_qf,
+                            }],
+                            'explanation': (
+                                f'Recovery night {recovery_night_number}: {rest_env} sleep '
+                                f'({sleep_start_local.strftime("%H:%M")}-{sleep_end_local.strftime("%H:%M")}, '
+                                f'{rest_quality.sleep_efficiency:.0%} efficiency). '
+                                f'Cumulative recovery ~{recovery_fraction:.0%} of prior debt '
+                                f'(Banks et al. 2010: exponential multi-night recovery)'
+                            ),
+                            'confidence_basis': (
+                                f'{"High" if is_at_home else "Moderate"} confidence — '
+                                f'{rest_env} environment, no duty constraints. '
+                                f'Recovery night {recovery_night_number} '
+                                f'(~{recovery_fraction:.0%} cumulative debt recovery)'
+                            ),
                             'quality_factors': rest_qf,
-                        }],
-                        'explanation': (
-                            f'Recovery night {recovery_night_number}: {rest_env} sleep '
-                            f'({sleep_start_local.strftime("%H:%M")}-{sleep_end_local.strftime("%H:%M")}, '
-                            f'{rest_quality.sleep_efficiency:.0%} efficiency). '
-                            f'Cumulative recovery ~{recovery_fraction:.0%} of prior debt '
-                            f'(Banks et al. 2010: exponential multi-night recovery)'
-                        ),
-                        'confidence_basis': (
-                            f'{"High" if is_at_home else "Moderate"} confidence — '
-                            f'{rest_env} environment, no duty constraints. '
-                            f'Recovery night {recovery_night_number} '
-                            f'(~{recovery_fraction:.0%} cumulative debt recovery)'
-                        ),
-                        'quality_factors': rest_qf,
-                        'references': get_strategy_references('recovery'),
-                    }
+                            'references': get_strategy_references('recovery'),
+                        }
 
                     recovery_night_number += 1
                     candidate_date += timedelta(days=1)
