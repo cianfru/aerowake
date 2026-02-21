@@ -326,6 +326,14 @@ class PDFRosterParser:
                 month = f"{pdf_year}-{pdf_month_num:02d}"
             except ValueError:
                 pass  # Keep API-supplied month if parsing fails
+        # Final fallback: derive from first parsed duty date (covers line-parser
+        # fallback path and any PDF missing a Period: header).
+        if month == "2026-02" and duties:
+            try:
+                first_date = duties[0].date
+                month = f"{first_date.year}-{first_date.month:02d}"
+            except (AttributeError, IndexError):
+                pass
 
         print(f"   Found Pilot: {final_pilot_name} (ID: {final_pilot_id})")
         print(f"   Base: {final_base} | Aircraft: {final_aircraft}")
@@ -664,7 +672,15 @@ class CSVRosterParser:
             duties = self._parse_simple_csv(df)
         else:
             raise NotImplementedError("Multi-sector CSV parser not yet implemented")
-        
+
+        # Derive month from first duty date — CSV has no header metadata.
+        if duties:
+            try:
+                first_date = duties[0].date
+                month = f"{first_date.year}-{first_date.month:02d}"
+            except (AttributeError, IndexError):
+                pass
+
         roster = Roster(
             roster_id=f"R_{pilot_id}_{month}",
             pilot_id=pilot_id,
