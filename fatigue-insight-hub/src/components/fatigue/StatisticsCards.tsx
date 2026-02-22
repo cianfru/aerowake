@@ -1,8 +1,15 @@
 import { useMemo } from 'react';
-import { Plane, Timer, Zap, TrendingDown, AlertTriangle, AlertCircle, Clock, Globe, Users, Moon } from 'lucide-react';
+import { Plane, Timer, Zap, TrendingDown, AlertTriangle, AlertCircle, Clock, Globe, Users, Moon, Eye } from 'lucide-react';
 import { DutyStatistics, DutyAnalysis } from '@/types/fatigue';
 import { InfoTooltip, FATIGUE_INFO, type InfoTooltipEntry } from '@/components/ui/InfoTooltip';
 import { SparklineChart } from '@/components/ui/SparklineChart';
+import {
+  calculateRosterFHA,
+  getFHASeverity,
+  calculateRosterWorstKSS,
+  getKSSLabel,
+  computePerDutyFHA,
+} from '@/lib/fatigue-calculations';
 import { cn } from '@/lib/utils';
 
 interface StatisticsCardsProps {
@@ -27,8 +34,15 @@ export function StatisticsCards({ statistics, duties }: StatisticsCardsProps) {
       performance: sorted.map(d => d.minPerformance ?? 0),
       sleepDebt: sorted.map(d => d.sleepDebt ?? 0),
       priorSleep: sorted.map(d => d.priorSleep ?? 0),
+      fha: computePerDutyFHA(sorted),
     };
   }, [duties]);
+
+  // Roster-level FHA and KSS
+  const rosterFHA = useMemo(() => (duties ? calculateRosterFHA(duties) : 0), [duties]);
+  const rosterWorstKSS = useMemo(() => (duties ? calculateRosterWorstKSS(duties) : 1), [duties]);
+  const fhaSeverity = getFHASeverity(rosterFHA);
+  const kssInfo = getKSSLabel(rosterWorstKSS);
 
   return (
     <div className="space-y-2">
@@ -102,6 +116,30 @@ export function StatisticsCards({ statistics, duties }: StatisticsCardsProps) {
             />
           )}
         />
+        {duties && duties.length > 0 && (
+          <RibbonStat
+            label="Total FHA"
+            value={rosterFHA.toLocaleString()}
+            icon={<AlertTriangle className="h-3.5 w-3.5" />}
+            variant={fhaSeverity.variant}
+            info={FATIGUE_INFO.fha}
+            sparkline={sparklineData && (
+              <SparklineChart
+                data={sparklineData.fha}
+                color={fhaSeverity.variant === 'success' ? 'hsl(var(--success))' : fhaSeverity.variant === 'warning' ? 'hsl(var(--warning))' : 'hsl(var(--critical))'}
+              />
+            )}
+          />
+        )}
+        {duties && duties.length > 0 && (
+          <RibbonStat
+            label="Worst KSS"
+            value={`${rosterWorstKSS.toFixed(1)}`}
+            icon={<Eye className="h-3.5 w-3.5" />}
+            variant={kssInfo.variant}
+            info={FATIGUE_INFO.kss}
+          />
+        )}
       </div>
 
       {/* ULR/Augmented Stats Ribbon - only when relevant */}

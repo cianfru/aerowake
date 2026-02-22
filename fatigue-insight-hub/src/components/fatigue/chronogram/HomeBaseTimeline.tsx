@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils';
 import { useChronogramZoom } from '@/hooks/useChronogramZoom';
 import { TimelineLegend } from '../TimelineLegend';
 import { getRecoveryScore, getRecoveryClasses, getStrategyIcon, parseTimeToHours, decimalToHHmm, isoToZulu, getPerformanceColor, isTrainingDuty, getTrainingDutyColor, getTrainingDutyLabel } from '@/lib/fatigue-utils';
+import { decomposePerformance, calculateFHA, getFHASeverity, performanceToKSS, getKSSLabel } from '@/lib/fatigue-calculations';
+import { SleepQualityBadge } from '../SleepQualityBadge';
 
 // Default check-in time before first sector (EASA typically 60 min)
 // Used as fallback when report_time_local is not available from the parser
@@ -1427,6 +1429,10 @@ export function HomeBaseTimeline({ duties, statistics, month, pilotId, pilotName
                                       <span>{Math.round(bar.recoveryScore)}%</span>
                                     </div>
                                   )}
+                                  {/* Sleep quality badge — only shows for notable quality deviations */}
+                                  {barWidth > 4 && (
+                                    <SleepQualityBadge qualityFactors={bar.qualityFactors} />
+                                  )}
                                 </button>
                               </PopoverTrigger>
                               <PopoverContent align="start" side="top" className="max-w-sm p-3">
@@ -1888,6 +1894,61 @@ export function HomeBaseTimeline({ duties, statistics, month, pilotId, pilotName
                                         bar.duty.overallRisk === 'CRITICAL' && "text-critical"
                                       )}>{bar.duty.overallRisk}</span>
                                     </div>
+
+                                    {/* Performance "Why?" breakdown + KSS/FHA badges */}
+                                    {(() => {
+                                      const tp = bar.duty.timelinePoints;
+                                      if (!tp || tp.length === 0) return null;
+                                      const worst = tp.reduce((min, pt) =>
+                                        (pt.performance ?? 100) < (min.performance ?? 100) ? pt : min, tp[0]);
+                                      if (worst.performance == null) return null;
+                                      const decomp = decomposePerformance({
+                                        performance: worst.performance,
+                                        sleep_pressure: worst.sleep_pressure,
+                                        circadian: worst.circadian,
+                                        sleep_inertia: worst.sleep_inertia,
+                                        time_on_task_penalty: worst.time_on_task_penalty,
+                                        hours_on_duty: worst.hours_on_duty,
+                                      });
+                                      const kss = performanceToKSS(worst.performance);
+                                      const kssLabel = getKSSLabel(kss);
+                                      const validPts = tp.filter(pt => pt.performance != null);
+                                      const fha = calculateFHA(validPts.map(pt => ({ performance: pt.performance ?? 0 })));
+                                      const fhaSev = getFHASeverity(fha);
+                                      return (
+                                        <div className="border-t border-border pt-2 mt-1 space-y-1.5">
+                                          <span className="text-muted-foreground font-medium">Why {Math.round(worst.performance)}%?</span>
+                                          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                                            <span className="text-muted-foreground">Sleep Pressure (S):</span>
+                                            <span className={decomp.sContribution > 10 ? "text-critical" : decomp.sContribution > 5 ? "text-warning" : ""}>
+                                              -{decomp.sContribution.toFixed(1)}%
+                                            </span>
+                                            <span className="text-muted-foreground">Circadian (C):</span>
+                                            <span className={decomp.cContribution > 10 ? "text-critical" : decomp.cContribution > 5 ? "text-warning" : ""}>
+                                              -{decomp.cContribution.toFixed(1)}%
+                                            </span>
+                                            <span className="text-muted-foreground">Time on Duty (ToT):</span>
+                                            <span>-{decomp.totContribution.toFixed(1)}%</span>
+                                            {decomp.sleepInertia > 0.01 && (
+                                              <>
+                                                <span className="text-muted-foreground">Sleep Inertia (W):</span>
+                                                <span className="text-warning">-{decomp.wContribution.toFixed(1)}%</span>
+                                              </>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center gap-2 flex-wrap mt-1">
+                                            <Badge variant={kssLabel.variant} className="text-[10px]">
+                                              KSS {kss.toFixed(1)}
+                                            </Badge>
+                                            {fha > 0 && (
+                                              <Badge variant={fhaSev.variant} className="text-[10px]">
+                                                FHA {fha}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
 
                                     {/* Sleep Recovery Section */}
                                     {bar.duty.sleepEstimate && (
