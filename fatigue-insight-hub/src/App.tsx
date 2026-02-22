@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -12,11 +13,24 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+/** Ensures the saved theme class is applied on every route (including /login, /register). */
+function ThemeSync() {
+  useEffect(() => {
+    const stored = localStorage.getItem('fatigue-theme') as 'dark' | 'light' | null;
+    const theme = stored || 'dark';
+    const root = document.documentElement;
+    root.classList.remove('dark', 'light');
+    root.classList.add(theme);
+  }, []);
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <AnalysisProvider>
         <TooltipProvider>
+          <ThemeSync />
           <Toaster />
           <Sonner />
           <BrowserRouter>
