@@ -346,6 +346,17 @@ export function transformAnalysisResult(
         dutyType: duty.duty_type || 'flight',
         trainingCode: duty.training_code || undefined,
         trainingAnnotations: duty.training_annotations || undefined,
+        // Seed timelinePoints from worst_point so PerformanceSummaryCard renders immediately
+        timelinePoints: duty.worst_point ? [{
+          hours_on_duty: duty.worst_point.hours_on_duty ?? 0,
+          time_on_task_penalty: duty.worst_point.time_on_task_penalty ?? 0,
+          sleep_inertia: duty.worst_point.sleep_inertia ?? 0,
+          sleep_pressure: duty.worst_point.sleep_pressure ?? 0,
+          circadian: duty.worst_point.circadian ?? 0,
+          performance: duty.worst_point.performance,
+          timestamp: duty.worst_point.timestamp,
+          timestamp_local: duty.worst_point.timestamp_local,
+        }] : undefined,
         flightSegments: (duty.segments ?? []).map((seg, idx) => ({
           flightNumber: seg.flight_number,
           departure: seg.departure,
