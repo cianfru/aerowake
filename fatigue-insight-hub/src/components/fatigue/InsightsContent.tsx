@@ -43,7 +43,7 @@ export function InsightsContent() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <StatisticsCards statistics={analysisResults.statistics} />
+            <StatisticsCards statistics={analysisResults.statistics} duties={analysisResults.duties} />
             {analysisResults.statistics.criticalRiskDuties > 0 && (
               <div className="mt-4 flex items-start gap-2 md:gap-3 rounded-lg border border-critical/50 bg-critical/10 p-3 md:p-4">
                 <AlertTriangle className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0 text-critical" />

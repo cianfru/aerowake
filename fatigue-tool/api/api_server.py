@@ -294,6 +294,7 @@ class DutyResponse(BaseModel):
     max_fdp_hours: Optional[float]  # Base FDP limit
     extended_fdp_hours: Optional[float]  # With captain discretion
     used_discretion: bool  # True if exceeded base limit
+    actual_fdp_hours: Optional[float] = None  # Actual FDP (report to last landing + 30min)
     
     # Circadian adaptation state at duty report time
     circadian_phase_shift: Optional[float] = None  # Hours offset from home base body clock
@@ -673,6 +674,7 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
         max_fdp_hours=duty.max_fdp_hours,
         extended_fdp_hours=duty.extended_fdp_hours,
         used_discretion=duty.used_discretion,
+        actual_fdp_hours=round(duty.fdp_hours, 2) if duty.segments else None,
         circadian_phase_shift=round(duty_timeline.circadian_phase_shift, 2),
         time_validation_warnings=time_warnings,
         sleep_quality=sleep_quality,

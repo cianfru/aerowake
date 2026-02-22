@@ -23,7 +23,7 @@ const DEFAULT_SETTINGS: PilotSettings = {
   analysisType: 'single',
   selectedMonth: new Date(2026, 1, 1),
   theme: 'dark',
-  configPreset: 'easa-default',
+  configPreset: 'default',
   crewSet: 'crew_b',
 };
 
