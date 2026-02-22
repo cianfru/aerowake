@@ -39,11 +39,11 @@ export function PerformanceSummaryCard({ duty }: PerformanceSummaryCardProps) {
     );
   }, [duty.timelinePoints]);
 
-  // Calculate FHA
+  // Calculate FHA — only meaningful with a full timeline (>1 point)
   const fha = useMemo(() => {
-    if (!duty.timelinePoints || duty.timelinePoints.length === 0) return null;
+    if (!duty.timelinePoints || duty.timelinePoints.length <= 1) return null;
     const validPoints = duty.timelinePoints.filter(pt => pt.performance != null);
-    if (validPoints.length === 0) return null;
+    if (validPoints.length <= 1) return null;
     return calculateFHA(validPoints.map(pt => ({ performance: pt.performance ?? 0 })));
   }, [duty.timelinePoints]);
 
