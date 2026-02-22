@@ -290,3 +290,53 @@ export function decomposePerformance(point: {
     totContribution: Math.round(totContrib * 10) / 10,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Roster-Level Aggregation
+// ---------------------------------------------------------------------------
+
+import type { DutyAnalysis } from '@/types/fatigue';
+
+/**
+ * Sum per-duty FHA values across all duties in a roster.
+ *
+ * Each duty's FHA is computed from its own timeline points.
+ * Total FHA gives a single monthly cumulative fatigue exposure metric.
+ */
+export function calculateRosterFHA(duties: DutyAnalysis[]): number {
+  let total = 0;
+  for (const duty of duties) {
+    if (!duty.timelinePoints || duty.timelinePoints.length === 0) continue;
+    const validPoints = duty.timelinePoints.filter(pt => pt.performance != null);
+    if (validPoints.length === 0) continue;
+    total += calculateFHA(validPoints.map(pt => ({ performance: pt.performance ?? 0 })));
+  }
+  return total;
+}
+
+/**
+ * Find the worst (highest) KSS across all duties in a roster.
+ *
+ * Returns the KSS value at the worst performance point of any duty.
+ */
+export function calculateRosterWorstKSS(duties: DutyAnalysis[]): number {
+  let worstPerf = 100;
+  for (const duty of duties) {
+    const minPerf = duty.minPerformance ?? 100;
+    if (minPerf < worstPerf) worstPerf = minPerf;
+  }
+  return performanceToKSS(worstPerf);
+}
+
+/**
+ * Compute per-duty FHA values for sparkline display.
+ * Returns array sorted chronologically (same order as input duties).
+ */
+export function computePerDutyFHA(duties: DutyAnalysis[]): number[] {
+  return duties.map(duty => {
+    if (!duty.timelinePoints || duty.timelinePoints.length === 0) return 0;
+    const validPoints = duty.timelinePoints.filter(pt => pt.performance != null);
+    if (validPoints.length === 0) return 0;
+    return calculateFHA(validPoints.map(pt => ({ performance: pt.performance ?? 0 })));
+  });
+}

@@ -11,6 +11,10 @@ export interface InfoTooltipEntry {
   regulation?: string;
   /** Optional formula or equation string. */
   formula?: string;
+  /** Safety threshold description, e.g. ">77% adequate, <55% impaired". */
+  threshold?: string;
+  /** Practical action tip for the pilot. */
+  actionTip?: string;
 }
 
 interface InfoTooltipProps {
@@ -68,9 +72,23 @@ export function InfoTooltip({
       >
         <p className="text-foreground leading-relaxed">{entry.description}</p>
 
+        {entry.threshold && (
+          <div className="flex items-start gap-1.5 text-[11px]">
+            <span className="text-muted-foreground font-medium shrink-0">Threshold:</span>
+            <span className="text-foreground/80">{entry.threshold}</span>
+          </div>
+        )}
+
         {entry.formula && (
           <div className="rounded bg-secondary/50 px-2.5 py-1.5 font-mono text-xs text-muted-foreground">
             {entry.formula}
+          </div>
+        )}
+
+        {entry.actionTip && (
+          <div className="flex items-start gap-1.5 text-[11px] border-t border-border/50 pt-1.5">
+            <span className="text-primary font-medium shrink-0">Tip:</span>
+            <span className="text-muted-foreground">{entry.actionTip}</span>
           </div>
         )}
 
@@ -103,80 +121,106 @@ export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
       'Integrated alertness score (20-100%) combining three biological processes: homeostatic sleep drive, circadian rhythm, and sleep inertia, minus time-on-task degradation.',
     reference: 'Hursh et al., 2004 (SAFTE)',
     formula: 'P = 20 + 80 \u00d7 [S\u00b7C \u00d7 (1\u2212W) \u2212 ToT]',
+    threshold: '\u226577% adequate, 55-77% reduced, <55% impaired',
+    actionTip: 'Check the contributing factors breakdown to understand what drove the score down.',
   },
   sleepPressure: {
     description:
       'Process S — the homeostatic sleep drive that accumulates exponentially during wakefulness and dissipates during sleep. Higher values indicate greater sleep need.',
     reference: 'Borb\u00e9ly, 1982',
     formula: 'S(t) = S\u2080 \u00d7 e^(-t/\u03c4_d) during sleep',
+    actionTip: 'Prioritize 7-8h sleep before duty. Even a 20-min nap reduces sleep pressure significantly.',
   },
   circadian: {
     description:
       'Process C — the endogenous ~24h biological clock that modulates alertness independently of sleep history. Lowest between 02:00-05:59 (WOCL).',
     reference: 'Dijk & Czeisler, 1995',
     regulation: 'AMC1 ORO.FTL.105(10)',
+    threshold: 'Body clock low: 02:00-05:59 home base time',
+    actionTip: 'Use strategic light exposure and meal timing to support circadian alignment on layovers.',
   },
   sleepInertia: {
     description:
       'Process W — the transient grogginess after awakening that impairs cognitive performance. Dissipates within 15-30 minutes but can be severe during WOCL.',
     reference: 'Tassi & Muzet, 2000',
+    actionTip: 'Allow 15-30 min after waking before critical tasks. Bright light and caffeine help.',
   },
   timeOnTask: {
     description:
       'Linear degradation of alertness with increasing time on duty, approximately 0.8% per hour. Compounds with other fatigue factors during long duties.',
     reference: 'Folkard & \u00c5kerstedt, 1999',
+    actionTip: 'Take micro-breaks during cruise. Verbal crosschecks help maintain vigilance.',
   },
   sleepDebt: {
     description:
       'Cumulative deficit between actual sleep obtained and the 8h baseline need. Debt above 4h significantly impairs cognitive performance and reaction time.',
     reference: 'Van Dongen et al., 2003',
+    threshold: '\u22642h low risk, 2-4h moderate, >4h high risk',
+    actionTip: 'Recovery requires 2-3 nights of extended sleep. One long sleep cannot fully repay large debt.',
   },
   wocl: {
     description:
       'Window of Circadian Low — the period of lowest alertness between 02:00-05:59 in home base time. Duties during WOCL carry elevated fatigue risk.',
     regulation: 'AMC1 ORO.FTL.105(10)',
+    threshold: '02:00-05:59 home base time',
+    actionTip: 'Request controlled rest if operating during WOCL with augmented crew.',
   },
   priorSleep: {
     description:
       'Total sleep obtained in the 48 hours before duty report. Less than 12h of prior sleep indicates elevated risk of in-duty fatigue.',
     reference: 'Belenky et al., 2003',
     regulation: 'ORO.FTL.120',
+    threshold: '\u226512h adequate, <12h elevated risk',
+    actionTip: 'Plan sleep strategically in the 48h before early-morning or long-haul duties.',
   },
   avgSleep: {
     description:
       'Average nightly sleep across the roster period. Adults need 7-9h for full cognitive recovery. Below 6h indicates chronic sleep restriction.',
     reference: 'Banks & Dinges, 2007',
+    threshold: '\u22657h good, 6-7h marginal, <6h chronic restriction',
+    actionTip: 'Maintain consistent sleep schedule on days off to build reserves for demanding periods.',
   },
   pinchEvent: {
     description:
       'A moment during a critical flight phase (takeoff, approach, landing) where performance drops below the safety threshold. Each event requires mitigation.',
     reference: 'Hursh et al., 2004',
+    threshold: 'Any occurrence during takeoff, approach, or landing',
+    actionTip: 'Consider enhanced crew monitoring and verbal callouts during critical phases.',
   },
   fha: {
     description:
       'Fatigue Hazard Area — cumulative area (in %-minutes) where performance falls below the 77% moderate-risk threshold. Higher FHA indicates greater total fatigue exposure.',
     reference: 'Dawson & McCulloch, 2005',
     formula: 'FHA = \u222b max(0, 77 \u2212 P(t)) dt',
+    threshold: '\u2264100 low, 100-500 moderate, >500 high',
+    actionTip: 'High FHA duties may warrant fatigue report filing under EASA ORO.FTL.120.',
   },
   kss: {
     description:
       'Karolinska Sleepiness Scale — a validated subjective sleepiness measure from 1 (extremely alert) to 9 (extremely sleepy). Mapped from model performance.',
     reference: '\u00c5kerstedt & Gillberg, 1990',
+    threshold: '1-3 alert, 4-6 normal, 7-9 impaired',
+    actionTip: 'KSS 7+ correlates with increased risk of involuntary microsleeps.',
   },
   samnPerelli: {
     description:
       'Samn-Perelli Fatigue Scale — a 7-point scale developed for aviation (1 = fully alert, 7 = completely exhausted). Widely used in military and civil fatigue studies.',
     reference: 'Samn & Perelli, 1982',
+    threshold: '1-2 alert, 3-4 normal, 5-7 fatigued',
   },
   reactionTime: {
     description:
       'Psychomotor Vigilance Task (PVT) mean reaction time estimate. Derived from the performance model. Values above 350ms indicate significant impairment.',
     reference: 'Basner & Dinges, 2011',
+    threshold: '\u2264280ms normal, 280-350ms mild, >350ms impaired',
+    actionTip: 'Reaction time above 350ms is comparable to 0.05% BAC impairment.',
   },
   fdpUtilization: {
     description:
       'How much of the maximum Flight Duty Period limit is consumed by this duty. Exceeding 100% requires Commander Discretion reporting.',
     regulation: 'ORO.FTL.205',
+    threshold: '\u226475% normal, 75-100% high utilization, >100% exceedance',
+    actionTip: 'Monitor for delays that could push FDP beyond limits. Report any Commander Discretion use.',
   },
   workloadPhase: {
     description:
@@ -187,5 +231,7 @@ export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
     description:
       'A normalized measure of available sleep reserves (50-100%). Derived from cumulative sleep debt — lower values indicate greater fatigue vulnerability.',
     reference: 'Hursh et al., 2004 (SAFTE)',
+    threshold: '>80% good, 65-80% moderate, <65% depleted',
+    actionTip: 'Sleep reservoir replenishes slowly. Multiple nights of good sleep are needed to rebuild.',
   },
 };

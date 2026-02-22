@@ -11,13 +11,10 @@ import { toast } from 'sonner';
 import { PriorSleepIndicator } from './PriorSleepIndicator';
 import { SleepRecoveryIndicator } from './SleepRecoveryIndicator';
 import { FlightPhasePerformance } from './FlightPhasePerformance';
-import { PerformanceDegradation } from './PerformanceDegradation';
-import { PerformanceExplainerPanel } from './PerformanceExplainerPanel';
+import { PerformanceSummaryCard } from './PerformanceSummaryCard';
 import { ProcessBreakdownChart } from './ProcessBreakdownChart';
 import { WorkloadPhaseIndicator } from './WorkloadPhaseIndicator';
-import { FatigueScalesConverter } from './FatigueScalesConverter';
 import { isTrainingDuty, getTrainingDutyColor, getTrainingDutyLabel } from '@/lib/fatigue-utils';
-import { calculateFHA, getFHASeverity } from '@/lib/fatigue-calculations';
 import { FDPUtilizationBar } from './FDPUtilizationBar';
 import { CrewRestTimeline } from './CrewRestTimeline';
 
@@ -61,22 +58,6 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
     };
   }, [duty]);
 
-  // Find the minimum-performance timeline point for the Explainer Panel
-  const minPerfPoint = useMemo(() => {
-    if (!duty.timelinePoints || duty.timelinePoints.length === 0) return null;
-    return duty.timelinePoints.reduce((min, pt) =>
-      (pt.performance ?? 100) < (min.performance ?? 100) ? pt : min,
-      duty.timelinePoints[0],
-    );
-  }, [duty.timelinePoints]);
-
-  // Calculate FHA from timeline points
-  const fha = useMemo(() => {
-    if (!duty.timelinePoints || duty.timelinePoints.length === 0) return null;
-    const validPoints = duty.timelinePoints.filter(pt => pt.performance != null);
-    if (validPoints.length === 0) return null;
-    return calculateFHA(validPoints.map(pt => ({ performance: pt.performance ?? 0 })));
-  }, [duty.timelinePoints]);
 
   // Determine effective crew set: override takes priority, else global, else default
   const effectiveCrewSet = dutyCrewOverride || globalCrewSet || 'crew_b';
@@ -187,6 +168,14 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
           </div>
         </CardContent>
       </Card>
+
+      {/* Section 2: Performance Summary — key insights at the top */}
+      <PerformanceSummaryCard duty={duty} />
+
+      {/* Phase 2: Three-Process Breakdown Chart */}
+      {dutyTimeline && dutyTimeline.timeline.length > 2 && (
+        <ProcessBreakdownChart timeline={dutyTimeline} duty={duty} />
+      )}
 
       {/* FDP Utilization Bar — for all flight duties with FDP limits */}
       {!isTrainingDuty(duty) && duty.maxFdpHours != null && duty.maxFdpHours > 0 && (
@@ -510,68 +499,9 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
       {/* Section 3: Flight Phase Performance */}
       <FlightPhasePerformance duty={duty} />
 
-      {/* Section 4: Performance Degradation (if timeline points available) */}
-      {duty.timelinePoints && duty.timelinePoints.length > 0 && (
-        <PerformanceDegradation
-          timelinePoint={duty.timelinePoints[duty.timelinePoints.length - 1]}
-          variant="detailed"
-        />
-      )}
-
-      {/* Phase 2: Performance Explainer — shows S/C/W decomposition at worst point */}
-      {minPerfPoint && minPerfPoint.performance != null && (
-        <PerformanceExplainerPanel
-          point={{
-            performance: minPerfPoint.performance ?? 0,
-            sleep_pressure: minPerfPoint.sleep_pressure,
-            circadian: minPerfPoint.circadian,
-            sleep_inertia: minPerfPoint.sleep_inertia,
-            time_on_task_penalty: minPerfPoint.time_on_task_penalty,
-            hours_on_duty: minPerfPoint.hours_on_duty,
-            flight_phase: minPerfPoint.flight_phase,
-            is_critical: minPerfPoint.is_critical,
-            is_in_rest: minPerfPoint.is_in_rest,
-          }}
-          timestamp={minPerfPoint.timestamp_local
-            ? new Date(minPerfPoint.timestamp_local).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            : `${minPerfPoint.hours_on_duty.toFixed(1)}h on duty`}
-        />
-      )}
-
-      {/* Phase 2: Three-Process Breakdown Chart */}
-      {dutyTimeline && dutyTimeline.timeline.length > 2 && (
-        <ProcessBreakdownChart timeline={dutyTimeline} duty={duty} />
-      )}
-
       {/* Phase 2: Workload Phase Indicators */}
       {dutyTimeline && dutyTimeline.timeline.some(pt => pt.flight_phase) && (
         <WorkloadPhaseIndicator timeline={dutyTimeline} />
-      )}
-
-      {/* Phase 2: Fatigue Scales (KSS, Samn-Perelli, PVT RT) */}
-      <FatigueScalesConverter
-        performance={duty.minPerformance ?? 0}
-        label={`Worst Point (${(duty.minPerformance ?? 0).toFixed(0)}%)`}
-      />
-
-      {/* Phase 2: FHA metric — shown inline when timeline data available */}
-      {fha != null && fha > 0 && (
-        <Card variant="glass">
-          <CardContent className="py-3 px-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Zap className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs font-medium">Fatigue Hazard Area (FHA)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-sm font-semibold">{fha.toLocaleString()} %-min</span>
-                <Badge variant={getFHASeverity(fha).variant} className="text-[10px]">
-                  {getFHASeverity(fha).label}
-                </Badge>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       )}
 
       {/* Section 5: Prior Sleep */}
