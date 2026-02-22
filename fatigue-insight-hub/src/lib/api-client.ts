@@ -1,5 +1,7 @@
 // src/lib/api-client.ts
 
+import { getAuthHeaders } from '@/contexts/AuthContext';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://aerowake-production.up.railway.app';
 
 // ============================================================================
@@ -345,6 +347,7 @@ export async function analyzeRoster(
 
   const response = await fetch(`${API_BASE_URL}/api/analyze`, {
     method: 'POST',
+    headers: { ...getAuthHeaders() },
     body: formData,
   });
   
@@ -362,7 +365,8 @@ export async function getDutyDetail(
 ) {
   
   const response = await fetch(
-    `${API_BASE_URL}/api/duty/${analysisId}/${dutyId}`
+    `${API_BASE_URL}/api/duty/${analysisId}/${dutyId}`,
+    { headers: { ...getAuthHeaders() } },
   );
   
   if (!response.ok) {
@@ -393,7 +397,85 @@ export async function getAirportsBatch(codes: string[]): Promise<Array<{
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ codes }),
   });
-  
+
   if (!response.ok) throw new Error('Failed to fetch airport data');
+  return response.json();
+}
+
+
+// ============================================================================
+// ROSTER MANAGEMENT (authenticated)
+// ============================================================================
+
+export interface RosterSummary {
+  id: string;
+  filename: string;
+  month: string;
+  pilot_id: string | null;
+  home_base: string | null;
+  config_preset: string | null;
+  total_duties: number | null;
+  total_sectors: number | null;
+  total_duty_hours: number | null;
+  total_block_hours: number | null;
+  analysis_id: string | null;
+  created_at: string;
+}
+
+export interface RosterDetail extends RosterSummary {
+  analysis: AnalysisResult | null;
+}
+
+export async function getRosters(): Promise<RosterSummary[]> {
+  const response = await fetch(`${API_BASE_URL}/api/rosters`, {
+    headers: { ...getAuthHeaders() },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('Not authenticated');
+    throw new Error('Failed to fetch rosters');
+  }
+
+  return response.json();
+}
+
+export async function getRoster(rosterId: string): Promise<RosterDetail> {
+  const response = await fetch(`${API_BASE_URL}/api/rosters/${rosterId}`, {
+    headers: { ...getAuthHeaders() },
+  });
+
+  if (!response.ok) throw new Error('Failed to fetch roster');
+  return response.json();
+}
+
+export async function deleteRoster(rosterId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/rosters/${rosterId}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  });
+
+  if (!response.ok) throw new Error('Failed to delete roster');
+}
+
+export async function reanalyzeRoster(
+  rosterId: string,
+  configPreset: string = 'default',
+  crewSet: string = 'crew_b',
+): Promise<AnalysisResult> {
+  const formData = new FormData();
+  formData.append('config_preset', configPreset);
+  formData.append('crew_set', crewSet);
+
+  const response = await fetch(`${API_BASE_URL}/api/rosters/${rosterId}/reanalyze`, {
+    method: 'POST',
+    headers: { ...getAuthHeaders() },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Re-analysis failed' }));
+    throw new Error(error.detail || 'Re-analysis failed');
+  }
+
   return response.json();
 }

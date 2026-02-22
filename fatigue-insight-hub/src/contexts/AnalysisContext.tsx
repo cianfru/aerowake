@@ -57,6 +57,7 @@ type AnalysisAction =
   | { type: 'SET_CREW_OVERRIDE'; payload: { dutyId: string; crewSet: 'crew_a' | 'crew_b' } }
   | { type: 'REMOVE_FILE' }
   | { type: 'SET_SHOW_LANDING'; payload: boolean }
+  | { type: 'LOAD_ANALYSIS'; payload: AnalysisResults }
   | { type: 'RESET' };
 
 // ── Reducer ──────────────────────────────────────────────────
@@ -116,6 +117,16 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
     case 'SET_SHOW_LANDING':
       return { ...state, showLanding: action.payload };
 
+    case 'LOAD_ANALYSIS':
+      return {
+        ...state,
+        analysisResults: action.payload,
+        selectedDuty: null,
+        drawerOpen: false,
+        activeTab: 'analysis',
+        showLanding: false,
+      };
+
     case 'RESET':
       return { ...buildInitialState(), settings: state.settings };
 
@@ -141,6 +152,7 @@ interface AnalysisContextValue {
   setCrewOverride: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
   removeFile: () => void;
   setShowLanding: (show: boolean) => void;
+  loadAnalysis: (r: AnalysisResults) => void;
 }
 
 const AnalysisContext = createContext<AnalysisContextValue | null>(null);
@@ -168,6 +180,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_CREW_OVERRIDE', payload: { dutyId, crewSet } }),
     removeFile: () => dispatch({ type: 'REMOVE_FILE' }),
     setShowLanding: (show) => dispatch({ type: 'SET_SHOW_LANDING', payload: show }),
+    loadAnalysis: (r) => dispatch({ type: 'LOAD_ANALYSIS', payload: r }),
   };
 
   return <AnalysisContext.Provider value={value}>{children}</AnalysisContext.Provider>;

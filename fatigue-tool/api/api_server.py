@@ -8,18 +8,24 @@ Endpoints:
 - POST /api/analyze - Upload roster, get analysis
 - GET /api/analysis/{id} - Get stored analysis
 - GET /api/duty/{analysis_id}/{duty_id} - Detailed duty timeline
+- POST /api/auth/* - Authentication (register, login, refresh, profile)
+- GET /api/rosters - List user's saved rosters
+- DELETE /api/rosters/{id} - Delete a saved roster
 
 Usage:
     uvicorn api_server:app --reload --host 0.0.0.0 --port 8000
 """
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Query
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 from typing import Optional, List
 import tempfile
 import os
+import json
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -31,15 +37,32 @@ from core import BorbelyFatigueModel, ModelConfig
 from parsers.roster_parser import PDFRosterParser, CSVRosterParser, AirportDatabase
 from models.data_models import MonthlyAnalysis, DutyTimeline
 
+# Database & Auth imports
+from db.session import init_db, get_db, is_db_available
+from db.models import User, Roster, Analysis
+from auth.routes import auth_router
+from auth.dependencies import get_optional_user
+
+
 # ============================================================================
 # FASTAPI APP INITIALIZATION
 # ============================================================================
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database tables on startup."""
+    await init_db()
+    yield
+
 app = FastAPI(
     title="Fatigue Analysis API",
     description="EASA-compliant biomathematical fatigue analysis with sleep quality modeling",
-    version="4.2.0"
+    version="5.0.0",
+    lifespan=lifespan,
 )
+
+# Include auth routes
+app.include_router(auth_router)
 
 # CORS - Allow Aerowake frontend origins
 # Production origins loaded from CORS_ORIGINS env var (comma-separated)
@@ -881,12 +904,15 @@ async def analyze_roster(
     config_preset: str = Form("default"),
     timezone_format: str = Form("auto"),
     crew_set: str = Form("crew_b"),
-    duty_crew_overrides: str = Form("{}")
+    duty_crew_overrides: str = Form("{}"),
+    user: User | None = Depends(get_optional_user),
+    db=Depends(get_db),
 ):
     """
-    Upload roster file and get fatigue analysis
-    
-    Returns complete analysis with duty-by-duty breakdown
+    Upload roster file and get fatigue analysis.
+
+    When authenticated: persists roster + analysis to database.
+    When anonymous: stores in-memory only (lost on restart).
     """
     
     try:
@@ -936,7 +962,6 @@ async def analyze_roster(
             raise HTTPException(status_code=400, detail="No duties found in roster")
 
         # Set crew set for ULR duties (Crew A or Crew B) with per-duty override support
-        import json
         from models.data_models import ULRCrewSet
 
         # Parse per-duty crew overrides
@@ -974,7 +999,39 @@ async def analyze_roster(
         
         # Store for later retrieval (include sleep_strategies for GET endpoint)
         analysis_store[analysis_id] = (monthly_analysis, roster, model.sleep_strategies)
-        
+
+        # Persist to database when user is authenticated
+        if user is not None and db is not None:
+            try:
+                # Store roster with original PDF bytes
+                db_roster = Roster(
+                    user_id=user.id,
+                    filename=file.filename or "roster.pdf",
+                    month=month,
+                    pilot_id=pilot_id,
+                    home_base=home_base,
+                    config_preset=config_preset,
+                    total_duties=roster.total_duties,
+                    total_sectors=roster.total_sectors,
+                    total_duty_hours=roster.total_duty_hours,
+                    total_block_hours=roster.total_block_hours,
+                    original_file_bytes=content,  # PDF bytes captured earlier
+                )
+                db.add(db_roster)
+                await db.flush()  # Get db_roster.id
+
+                # Build response JSON for storage (we'll serialize AnalysisResponse)
+                # Done after building duties_response below
+                _pending_db_roster = db_roster
+                _pending_analysis_id = analysis_id
+            except Exception as e:
+                logger.warning(f"Failed to persist roster to DB: {e}")
+                _pending_db_roster = None
+                _pending_analysis_id = None
+        else:
+            _pending_db_roster = None
+            _pending_analysis_id = None
+
         # Build response using shared helper
         duties_response = []
         for duty_timeline in monthly_analysis.duty_timelines:
@@ -990,7 +1047,7 @@ async def analyze_roster(
         # Get effective timezone format (what the parser actually used)
         effective_tz_format = getattr(parser, 'effective_timezone_format', timezone_format)
 
-        return AnalysisResponse(
+        response = AnalysisResponse(
             analysis_id=analysis_id,
             roster_id=roster.roster_id,
             pilot_id=roster.pilot_id,
@@ -1022,6 +1079,23 @@ async def analyze_roster(
             ulr_violations=getattr(monthly_analysis, 'ulr_violations', []),
         )
 
+        # Persist analysis JSON to database if roster was stored
+        if _pending_db_roster is not None and db is not None:
+            try:
+                db_analysis = Analysis(
+                    id=analysis_id,
+                    roster_id=_pending_db_roster.id,
+                    analysis_json=response.model_dump(mode="json"),
+                )
+                db.add(db_analysis)
+                await db.commit()
+                logger.info(f"Analysis {analysis_id} persisted to database for user {user.id}")
+            except Exception as e:
+                logger.warning(f"Failed to persist analysis to DB: {e}")
+                await db.rollback()
+
+        return response
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1029,68 +1103,135 @@ async def analyze_roster(
 
 
 @app.get("/api/analysis/{analysis_id}")
-async def get_analysis(analysis_id: str):
-    """Retrieve stored analysis by ID"""
+async def get_analysis(analysis_id: str, db=Depends(get_db)):
+    """Retrieve stored analysis by ID.
 
-    if analysis_id not in analysis_store:
-        raise HTTPException(status_code=404, detail="Analysis not found")
+    Tries in-memory store first, then falls back to database.
+    """
 
-    monthly_analysis, roster, sleep_strategies = analysis_store[analysis_id]
+    # 1. Try in-memory store (current session)
+    if analysis_id in analysis_store:
+        monthly_analysis, roster, sleep_strategies = analysis_store[analysis_id]
 
-    # Build duties response using shared helper
-    duties_response = []
-    for duty_timeline in monthly_analysis.duty_timelines:
-        duty_idx = roster.get_duty_index(duty_timeline.duty_id)
-        if duty_idx is None:
-            continue
-        duties_response.append(
-            _build_duty_response(duty_timeline, roster.duties[duty_idx], roster)
+        # Build duties response using shared helper
+        duties_response = []
+        for duty_timeline in monthly_analysis.duty_timelines:
+            duty_idx = roster.get_duty_index(duty_timeline.duty_id)
+            if duty_idx is None:
+                continue
+            duties_response.append(
+                _build_duty_response(duty_timeline, roster.duties[duty_idx], roster)
+            )
+
+        rest_days_sleep = _build_rest_days_sleep(sleep_strategies)
+
+        return AnalysisResponse(
+            analysis_id=analysis_id,
+            roster_id=roster.roster_id,
+            pilot_id=roster.pilot_id,
+            pilot_name=roster.pilot_name,
+            pilot_base=roster.pilot_base,
+            pilot_aircraft=roster.pilot_aircraft,
+            home_base_timezone=roster.home_base_timezone,
+            month=roster.month,
+            total_duties=roster.total_duties,
+            total_sectors=roster.total_sectors,
+            total_duty_hours=roster.total_duty_hours,
+            total_block_hours=roster.total_block_hours,
+            high_risk_duties=monthly_analysis.high_risk_duties,
+            critical_risk_duties=monthly_analysis.critical_risk_duties,
+            total_pinch_events=monthly_analysis.total_pinch_events,
+            avg_sleep_per_night=monthly_analysis.average_sleep_per_night,
+            max_sleep_debt=monthly_analysis.max_sleep_debt,
+            worst_duty_id=monthly_analysis.lowest_performance_duty,
+            worst_performance=monthly_analysis.lowest_performance_value,
+            duties=duties_response,
+            rest_days_sleep=rest_days_sleep,
+            body_clock_timeline=[
+                {'timestamp_utc': ts, 'phase_shift_hours': ps, 'reference_timezone': tz}
+                for ts, ps, tz in monthly_analysis.body_clock_timeline
+            ],
+            total_ulr_duties=getattr(monthly_analysis, 'total_ulr_duties', 0),
+            total_augmented_duties=getattr(monthly_analysis, 'total_augmented_duties', 0),
+            ulr_violations=getattr(monthly_analysis, 'ulr_violations', []),
         )
 
-    rest_days_sleep = _build_rest_days_sleep(sleep_strategies)
+    # 2. Fallback to database
+    if db is not None:
+        from sqlalchemy import select
+        result = await db.execute(
+            select(Analysis).where(Analysis.id == analysis_id)
+        )
+        db_analysis = result.scalar_one_or_none()
+        if db_analysis is not None:
+            # Return the stored JSON directly (it's already AnalysisResponse format)
+            return JSONResponse(content=db_analysis.analysis_json)
 
-    return AnalysisResponse(
-        analysis_id=analysis_id,
-        roster_id=roster.roster_id,
-        pilot_id=roster.pilot_id,
-        pilot_name=roster.pilot_name,
-        pilot_base=roster.pilot_base,
-        pilot_aircraft=roster.pilot_aircraft,
-        home_base_timezone=roster.home_base_timezone,
-        month=roster.month,
-        total_duties=roster.total_duties,
-        total_sectors=roster.total_sectors,
-        total_duty_hours=roster.total_duty_hours,
-        total_block_hours=roster.total_block_hours,
-        high_risk_duties=monthly_analysis.high_risk_duties,
-        critical_risk_duties=monthly_analysis.critical_risk_duties,
-        total_pinch_events=monthly_analysis.total_pinch_events,
-        avg_sleep_per_night=monthly_analysis.average_sleep_per_night,
-        max_sleep_debt=monthly_analysis.max_sleep_debt,
-        worst_duty_id=monthly_analysis.lowest_performance_duty,
-        worst_performance=monthly_analysis.lowest_performance_value,
-        duties=duties_response,
-        rest_days_sleep=rest_days_sleep,
-        body_clock_timeline=[
-            {'timestamp_utc': ts, 'phase_shift_hours': ps, 'reference_timezone': tz}
-            for ts, ps, tz in monthly_analysis.body_clock_timeline
-        ],
-        total_ulr_duties=getattr(monthly_analysis, 'total_ulr_duties', 0),
-        total_augmented_duties=getattr(monthly_analysis, 'total_augmented_duties', 0),
-        ulr_violations=getattr(monthly_analysis, 'ulr_violations', []),
-    )
+    raise HTTPException(status_code=404, detail="Analysis not found")
 
 
 @app.get("/api/duty/{analysis_id}/{duty_id}")
-async def get_duty_detail(analysis_id: str, duty_id: str):
+async def get_duty_detail(analysis_id: str, duty_id: str, db=Depends(get_db)):
     """
-    Get detailed timeline data for a single duty
-    Returns all performance points for interactive charting
+    Get detailed timeline data for a single duty.
+    Returns all performance points for interactive charting.
+
+    Falls back to re-analyzing from stored PDF if not in memory.
     """
-    
+
     if analysis_id not in analysis_store:
-        raise HTTPException(status_code=404, detail="Analysis not found")
-    
+        # Try to re-analyze from database
+        if db is not None:
+            from sqlalchemy import select
+            from sqlalchemy.orm import selectinload
+
+            result = await db.execute(
+                select(Analysis).where(Analysis.id == analysis_id).options(
+                    selectinload(Analysis.roster)
+                )
+            )
+            db_analysis = result.scalar_one_or_none()
+
+            if db_analysis is not None and db_analysis.roster and db_analysis.roster.original_file_bytes:
+                try:
+                    # Re-parse and re-analyze from stored PDF
+                    db_roster_model = db_analysis.roster
+                    pdf_bytes = db_roster_model.original_file_bytes
+                    preset = db_roster_model.config_preset or "default"
+                    pilot = db_roster_model.pilot_id or "P12345"
+                    base = db_roster_model.home_base or "DOH"
+                    month_str = db_roster_model.month or "2026-02"
+
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                        tmp.write(pdf_bytes)
+                        tmp_path = tmp.name
+
+                    try:
+                        parser = PDFRosterParser(home_base=base, home_timezone="Asia/Qatar")
+                        roster_obj = parser.parse_pdf(tmp_path, pilot, month_str)
+                    finally:
+                        os.unlink(tmp_path)
+
+                    config_map = {
+                        "default": ModelConfig.default_easa_config,
+                        "conservative": ModelConfig.conservative_config,
+                        "liberal": ModelConfig.liberal_config,
+                        "research": ModelConfig.research_config,
+                    }
+                    config = config_map.get(preset, ModelConfig.default_easa_config)()
+                    model = BorbelyFatigueModel(config)
+                    monthly_analysis_obj = model.simulate_roster(roster_obj)
+
+                    # Cache for subsequent requests
+                    analysis_store[analysis_id] = (monthly_analysis_obj, roster_obj, model.sleep_strategies)
+                except Exception as e:
+                    logger.warning(f"Failed to re-analyze from stored PDF: {e}")
+                    raise HTTPException(status_code=404, detail="Analysis not found (re-analysis failed)")
+            else:
+                raise HTTPException(status_code=404, detail="Analysis not found")
+        else:
+            raise HTTPException(status_code=404, detail="Analysis not found")
+
     monthly_analysis, roster, _sleep_strategies = analysis_store[analysis_id]
 
     # Find duty
@@ -1185,6 +1326,273 @@ async def get_statistics(analysis_id: str):
             "max_sleep_debt": monthly_analysis.max_sleep_debt,
         }
     }
+
+
+# ============================================================================
+# ROSTER MANAGEMENT ENDPOINTS (authenticated)
+# ============================================================================
+
+from auth.dependencies import get_current_user as _get_current_user
+
+
+class RosterSummaryResponse(BaseModel):
+    id: str
+    filename: str
+    month: str
+    pilot_id: Optional[str] = None
+    home_base: Optional[str] = None
+    config_preset: Optional[str] = None
+    total_duties: Optional[int] = None
+    total_sectors: Optional[int] = None
+    total_duty_hours: Optional[float] = None
+    total_block_hours: Optional[float] = None
+    analysis_id: Optional[str] = None
+    created_at: str
+
+
+@app.get("/api/rosters", response_model=List[RosterSummaryResponse])
+async def list_rosters(
+    user: User = Depends(_get_current_user),
+    db=Depends(get_db),
+):
+    """List all rosters for the authenticated user, newest first."""
+    if db is None:
+        raise HTTPException(503, "Database not available")
+
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    result = await db.execute(
+        select(Roster)
+        .where(Roster.user_id == user.id)
+        .options(selectinload(Roster.analyses))
+        .order_by(Roster.created_at.desc())
+    )
+    rosters = result.scalars().all()
+
+    return [
+        RosterSummaryResponse(
+            id=str(r.id),
+            filename=r.filename,
+            month=r.month,
+            pilot_id=r.pilot_id,
+            home_base=r.home_base,
+            config_preset=r.config_preset,
+            total_duties=r.total_duties,
+            total_sectors=r.total_sectors,
+            total_duty_hours=r.total_duty_hours,
+            total_block_hours=r.total_block_hours,
+            analysis_id=r.analyses[0].id if r.analyses else None,
+            created_at=r.created_at.isoformat() if r.created_at else "",
+        )
+        for r in rosters
+    ]
+
+
+@app.get("/api/rosters/{roster_id}")
+async def get_roster(
+    roster_id: str,
+    user: User = Depends(_get_current_user),
+    db=Depends(get_db),
+):
+    """Get a single roster with its analysis JSON."""
+    if db is None:
+        raise HTTPException(503, "Database not available")
+
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    result = await db.execute(
+        select(Roster)
+        .where(Roster.id == roster_id, Roster.user_id == user.id)
+        .options(selectinload(Roster.analyses))
+    )
+    roster = result.scalar_one_or_none()
+
+    if roster is None:
+        raise HTTPException(404, "Roster not found")
+
+    analysis_json = None
+    analysis_id = None
+    if roster.analyses:
+        analysis_json = roster.analyses[0].analysis_json
+        analysis_id = roster.analyses[0].id
+
+    return {
+        "id": str(roster.id),
+        "filename": roster.filename,
+        "month": roster.month,
+        "pilot_id": roster.pilot_id,
+        "home_base": roster.home_base,
+        "config_preset": roster.config_preset,
+        "total_duties": roster.total_duties,
+        "total_sectors": roster.total_sectors,
+        "total_duty_hours": roster.total_duty_hours,
+        "total_block_hours": roster.total_block_hours,
+        "analysis_id": analysis_id,
+        "analysis": analysis_json,
+        "created_at": roster.created_at.isoformat() if roster.created_at else "",
+    }
+
+
+@app.delete("/api/rosters/{roster_id}", status_code=204)
+async def delete_roster(
+    roster_id: str,
+    user: User = Depends(_get_current_user),
+    db=Depends(get_db),
+):
+    """Delete a roster and its associated analysis."""
+    if db is None:
+        raise HTTPException(503, "Database not available")
+
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(Roster).where(Roster.id == roster_id, Roster.user_id == user.id)
+    )
+    roster = result.scalar_one_or_none()
+
+    if roster is None:
+        raise HTTPException(404, "Roster not found")
+
+    await db.delete(roster)  # CASCADE deletes analyses
+    await db.commit()
+
+
+@app.post("/api/rosters/{roster_id}/reanalyze")
+async def reanalyze_roster(
+    roster_id: str,
+    config_preset: str = Form("default"),
+    crew_set: str = Form("crew_b"),
+    user: User = Depends(_get_current_user),
+    db=Depends(get_db),
+):
+    """Re-run analysis on a stored roster with different settings."""
+    if db is None:
+        raise HTTPException(503, "Database not available")
+
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(Roster).where(Roster.id == roster_id, Roster.user_id == user.id)
+    )
+    db_roster = result.scalar_one_or_none()
+
+    if db_roster is None:
+        raise HTTPException(404, "Roster not found")
+
+    if not db_roster.original_file_bytes:
+        raise HTTPException(400, "No stored PDF for this roster")
+
+    # Re-parse from stored bytes
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp.write(db_roster.original_file_bytes)
+        tmp_path = tmp.name
+
+    try:
+        parser = PDFRosterParser(
+            home_base=db_roster.home_base or "DOH",
+            home_timezone="Asia/Qatar",
+        )
+        roster_obj = parser.parse_pdf(
+            tmp_path,
+            db_roster.pilot_id or "P12345",
+            db_roster.month or "2026-02",
+        )
+    finally:
+        os.unlink(tmp_path)
+
+    # Apply crew set
+    from models.data_models import ULRCrewSet
+    valid_crew = {"crew_a": ULRCrewSet.CREW_A, "crew_b": ULRCrewSet.CREW_B}
+    for d in roster_obj.duties:
+        if hasattr(d, "ulr_crew_set"):
+            d.ulr_crew_set = valid_crew.get(crew_set.lower(), ULRCrewSet.CREW_B)
+
+    # Run analysis
+    config_map = {
+        "default": ModelConfig.default_easa_config,
+        "conservative": ModelConfig.conservative_config,
+        "liberal": ModelConfig.liberal_config,
+        "research": ModelConfig.research_config,
+    }
+    config = config_map.get(config_preset, ModelConfig.default_easa_config)()
+    model = BorbelyFatigueModel(config)
+    monthly_analysis = model.simulate_roster(roster_obj)
+
+    analysis_id = f"{db_roster.pilot_id}_{db_roster.month}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+    # Store in memory
+    analysis_store[analysis_id] = (monthly_analysis, roster_obj, model.sleep_strategies)
+
+    # Build response
+    duties_response = []
+    for dt in monthly_analysis.duty_timelines:
+        duty_idx = roster_obj.get_duty_index(dt.duty_id)
+        if duty_idx is None:
+            continue
+        duties_response.append(
+            _build_duty_response(dt, roster_obj.duties[duty_idx], roster_obj)
+        )
+
+    rest_days_sleep = _build_rest_days_sleep(model.sleep_strategies)
+    effective_tz = getattr(parser, "effective_timezone_format", "auto")
+
+    response = AnalysisResponse(
+        analysis_id=analysis_id,
+        roster_id=roster_obj.roster_id,
+        pilot_id=roster_obj.pilot_id,
+        pilot_name=roster_obj.pilot_name,
+        pilot_base=roster_obj.pilot_base,
+        pilot_aircraft=roster_obj.pilot_aircraft,
+        home_base_timezone=roster_obj.home_base_timezone,
+        timezone_format=effective_tz,
+        month=roster_obj.month,
+        total_duties=roster_obj.total_duties,
+        total_sectors=roster_obj.total_sectors,
+        total_duty_hours=roster_obj.total_duty_hours,
+        total_block_hours=roster_obj.total_block_hours,
+        high_risk_duties=monthly_analysis.high_risk_duties,
+        critical_risk_duties=monthly_analysis.critical_risk_duties,
+        total_pinch_events=monthly_analysis.total_pinch_events,
+        avg_sleep_per_night=monthly_analysis.average_sleep_per_night,
+        max_sleep_debt=monthly_analysis.max_sleep_debt,
+        worst_duty_id=monthly_analysis.lowest_performance_duty,
+        worst_performance=monthly_analysis.lowest_performance_value,
+        duties=duties_response,
+        rest_days_sleep=rest_days_sleep,
+        body_clock_timeline=[
+            {"timestamp_utc": ts, "phase_shift_hours": ps, "reference_timezone": tz}
+            for ts, ps, tz in monthly_analysis.body_clock_timeline
+        ],
+        total_ulr_duties=getattr(monthly_analysis, "total_ulr_duties", 0),
+        total_augmented_duties=getattr(monthly_analysis, "total_augmented_duties", 0),
+        ulr_violations=getattr(monthly_analysis, "ulr_violations", []),
+    )
+
+    # Update analysis in DB
+    try:
+        # Delete old analysis for this roster
+        from sqlalchemy import delete as sa_delete
+        await db.execute(
+            sa_delete(Analysis).where(Analysis.roster_id == db_roster.id)
+        )
+
+        db_analysis = Analysis(
+            id=analysis_id,
+            roster_id=db_roster.id,
+            analysis_json=response.model_dump(mode="json"),
+        )
+        db.add(db_analysis)
+
+        # Update roster config
+        db_roster.config_preset = config_preset
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to persist re-analysis: {e}")
+        await db.rollback()
+
+    return response
 
 
 # ============================================================================
