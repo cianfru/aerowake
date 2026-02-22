@@ -2,7 +2,6 @@ import { useRef } from 'react';
 import { ChevronDown, BookOpen } from 'lucide-react';
 import { LandingGlobe } from './LandingGlobe';
 import { useScrollProgress } from './useScrollProgress';
-import logoDark from '@/assets/logo-dark.png';
 
 interface HeroSectionProps {
   onScrollToContent: () => void;
@@ -35,19 +34,6 @@ export function HeroSection({ onScrollToContent }: HeroSectionProps) {
           background: 'linear-gradient(to bottom, rgba(0,4,8,0.3) 0%, transparent 15%, transparent 75%, #000408 100%)',
         }}
       />
-
-      {/* Nav */}
-      <nav className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-6 py-4 md:px-10">
-        <div className="flex items-center gap-3">
-          <img src={logoDark} alt="Aerowake" className="h-7 md:h-8" />
-          <span className="hidden sm:inline text-[10px] font-mono text-white/30 tracking-wider uppercase">
-            v2.1.2
-          </span>
-        </div>
-        <div className="text-[10px] font-mono text-white/25 tracking-wider uppercase">
-          EASA ORO.FTL
-        </div>
-      </nav>
 
       {/* Hero Content — centered, in front of globe */}
       <div
