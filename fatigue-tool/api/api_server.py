@@ -83,6 +83,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Global exception handler — catch unhandled errors and return JSON, not plain text
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request, exc):
+    logger.exception(f"Unhandled error on {request.method} {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {type(exc).__name__}"},
+    )
+
+
 # ============================================================================
 # REQUEST/RESPONSE MODELS
 # ============================================================================
