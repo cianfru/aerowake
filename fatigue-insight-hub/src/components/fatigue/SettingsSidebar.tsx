@@ -1,4 +1,4 @@
-import { Info, BookOpen, ChevronDown, User, MapPin, Plane, Users } from 'lucide-react';
+import { Info, BookOpen, ChevronDown, User, MapPin, Plane, Users, Settings2, Save } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +9,8 @@ import { PilotSettings, UploadedFile } from '@/types/fatigue';
 import { useState } from 'react';
 import { SidebarUpload } from './SidebarUpload';
 import { ConnectionStatus } from './ConnectionStatus';
+import { AdvancedParametersDialog } from './AdvancedParametersDialog';
+import { SettingsProfileManager } from './SettingsProfileManager';
 
 interface PilotInfo {
   name?: string;
@@ -31,9 +33,10 @@ interface SettingsSidebarProps {
 
 
 const configPresets = [
-  { value: 'easa-default', label: 'Default (EASA)' },
-  { value: 'faa-standard', label: 'FAA Standard' },
-  { value: 'custom', label: 'Custom Configuration' },
+  { value: 'default', label: 'EASA Default', description: 'Balanced Borbely two-process model, EASA-compliant thresholds' },
+  { value: 'conservative', label: 'Conservative', description: 'Faster fatigue buildup, stricter thresholds, 8.5h sleep need' },
+  { value: 'liberal', label: 'Liberal', description: 'Relaxed thresholds for experienced crew, 7.5h sleep need' },
+  { value: 'research', label: 'Research', description: 'Textbook Borbely (Jewett & Kronauer 1999), 50/50 S/C weighting' },
 ];
 
 export function SettingsSidebar({ 
@@ -47,8 +50,9 @@ export function SettingsSidebar({
   hasResults,
   pilotInfo,
 }: SettingsSidebarProps) {
-  const [configOpen, setConfigOpen] = useState(false);
+  const [paramsOpen, setParamsOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
+  const activePreset = configPresets.find(p => p.value === settings.configPreset);
 
   return (
     <div className="w-full md:w-80 flex-shrink-0 space-y-3 md:space-y-4 overflow-y-auto p-3 md:p-4 pt-10 md:pt-4">
@@ -220,24 +224,35 @@ export function SettingsSidebar({
             </Select>
           </div>
 
-          <Collapsible open={configOpen} onOpenChange={setConfigOpen}>
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm" className="w-full justify-between text-xs text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Info className="h-3 w-3" />
-                  Configuration Details
-                </span>
-                <ChevronDown className={`h-3 w-3 transition-transform ${configOpen ? 'rotate-180' : ''}`} />
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-2">
-              <div className="rounded-md bg-secondary/30 p-3 text-xs text-muted-foreground">
-                <p>EASA ORO.FTL compliant configuration using Borbély two-process model parameters.</p>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+          {activePreset && (
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              {activePreset.description}
+            </p>
+          )}
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-xs text-muted-foreground gap-1.5"
+            onClick={() => setParamsOpen(true)}
+          >
+            <Settings2 className="h-3 w-3" />
+            View Model Parameters
+          </Button>
+
+          <AdvancedParametersDialog
+            preset={settings.configPreset}
+            open={paramsOpen}
+            onOpenChange={setParamsOpen}
+          />
         </CardContent>
       </Card>
+
+      {/* Settings Profiles */}
+      <SettingsProfileManager
+        settings={settings}
+        onSettingsChange={onSettingsChange}
+      />
 
       {/* How to Use Card */}
       <Collapsible open={howToOpen} onOpenChange={setHowToOpen}>

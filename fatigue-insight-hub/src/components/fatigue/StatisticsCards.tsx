@@ -1,19 +1,34 @@
+import { useMemo } from 'react';
 import { Plane, Timer, Zap, TrendingDown, AlertTriangle, AlertCircle, Clock, Globe, Users, Moon } from 'lucide-react';
-import { DutyStatistics } from '@/types/fatigue';
+import { DutyStatistics, DutyAnalysis } from '@/types/fatigue';
 import { InfoTooltip, FATIGUE_INFO, type InfoTooltipEntry } from '@/components/ui/InfoTooltip';
+import { SparklineChart } from '@/components/ui/SparklineChart';
 import { cn } from '@/lib/utils';
 
 interface StatisticsCardsProps {
   statistics: DutyStatistics;
+  /** Optional duties array — enables sparkline mini-charts when provided */
+  duties?: DutyAnalysis[];
 }
 
-export function StatisticsCards({ statistics }: StatisticsCardsProps) {
+export function StatisticsCards({ statistics, duties }: StatisticsCardsProps) {
   const formatHoursMinutes = (hours: number): string => {
     if (!Number.isFinite(hours) || hours < 0) return '0:00';
     const h = Math.floor(hours);
     const m = Math.round((hours - h) * 60);
     return `${h}:${String(m).padStart(2, '0')}`;
   };
+
+  // Compute per-duty sparkline data (sorted chronologically)
+  const sparklineData = useMemo(() => {
+    if (!duties || duties.length < 3) return null;
+    const sorted = [...duties].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return {
+      performance: sorted.map(d => d.minPerformance ?? 0),
+      sleepDebt: sorted.map(d => d.sleepDebt ?? 0),
+      priorSleep: sorted.map(d => d.priorSleep ?? 0),
+    };
+  }, [duties]);
 
   return (
     <div className="space-y-2">
@@ -40,6 +55,13 @@ export function StatisticsCards({ statistics }: StatisticsCardsProps) {
           icon={<TrendingDown className="h-3.5 w-3.5" />}
           variant={statistics.worstPerformance >= 70 ? 'success' : statistics.worstPerformance >= 60 ? 'warning' : 'critical'}
           info={FATIGUE_INFO.performance}
+          sparkline={sparklineData && (
+            <SparklineChart
+              data={sparklineData.performance}
+              color={statistics.worstPerformance >= 70 ? 'hsl(var(--success))' : 'hsl(var(--warning))'}
+              referenceLine={77}
+            />
+          )}
         />
         <RibbonStat
           label="High Risk"
@@ -59,6 +81,13 @@ export function StatisticsCards({ statistics }: StatisticsCardsProps) {
           icon={<Moon className="h-3.5 w-3.5" />}
           variant={statistics.avgSleepPerNight >= 7 ? 'success' : statistics.avgSleepPerNight >= 6 ? 'warning' : 'critical'}
           info={FATIGUE_INFO.avgSleep}
+          sparkline={sparklineData && (
+            <SparklineChart
+              data={sparklineData.priorSleep}
+              color={statistics.avgSleepPerNight >= 7 ? 'hsl(var(--success))' : 'hsl(var(--warning))'}
+              referenceLine={12}
+            />
+          )}
         />
         <RibbonStat
           label="Sleep Debt"
@@ -66,6 +95,12 @@ export function StatisticsCards({ statistics }: StatisticsCardsProps) {
           icon={<Clock className="h-3.5 w-3.5" />}
           variant={statistics.maxSleepDebt <= 2 ? 'success' : statistics.maxSleepDebt <= 4 ? 'warning' : 'critical'}
           info={FATIGUE_INFO.sleepDebt}
+          sparkline={sparklineData && (
+            <SparklineChart
+              data={sparklineData.sleepDebt}
+              color={statistics.maxSleepDebt <= 4 ? 'hsl(var(--warning))' : 'hsl(var(--critical))'}
+            />
+          )}
         />
       </div>
 
@@ -103,9 +138,11 @@ interface RibbonStatProps {
   variant?: 'neutral' | 'success' | 'warning' | 'critical';
   /** Optional info tooltip entry — shows (i) icon on hover/click. */
   info?: InfoTooltipEntry;
+  /** Optional sparkline mini-chart rendered below the value */
+  sparkline?: React.ReactNode;
 }
 
-function RibbonStat({ label, value, icon, variant = 'neutral', info }: RibbonStatProps) {
+function RibbonStat({ label, value, icon, variant = 'neutral', info, sparkline }: RibbonStatProps) {
   const variantStyles = {
     neutral: { value: 'text-foreground', icon: 'text-muted-foreground' },
     success: { value: 'text-success', icon: 'text-success' },
@@ -117,12 +154,17 @@ function RibbonStat({ label, value, icon, variant = 'neutral', info }: RibbonSta
   return (
     <div className="flex-1 flex items-center gap-2 px-3 py-2.5 bg-card/60 min-w-0">
       <span className={cn("flex-shrink-0", styles.icon)}>{icon}</span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className={cn("text-base font-semibold tabular-nums leading-tight", styles.value)}>{value}</div>
         <div className="flex items-center gap-1 text-[11px] text-muted-foreground truncate">
           <span className="truncate">{label}</span>
           {info && <InfoTooltip entry={info} size="sm" />}
         </div>
+        {sparkline && (
+          <div className="mt-1 h-6 w-full hidden md:block">
+            {sparkline}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -82,6 +82,7 @@ export interface DutyAnalysis {
   dateString?: string; // Raw YYYY-MM-DD from backend for timezone-safe day extraction
   dayOfWeek: string;
   reportTimeUtc?: string; // Raw report_time_utc from backend (ISO or HH:mm)
+  releaseTimeUtc?: string; // Raw release_time_utc from backend (ISO or HH:mm)
   reportTimeLocal?: string; // Report time in home base timezone (HH:mm)
   releaseTimeLocal?: string; // Release time in home base timezone (HH:mm)
   dutyHours: number;

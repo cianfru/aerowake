@@ -25,7 +25,15 @@ export function loadPersistedSettings(): Partial<PilotSettings> {
     const result: Partial<PilotSettings> = {};
     if (parsed.pilotId) result.pilotId = parsed.pilotId;
     if (parsed.homeBase) result.homeBase = parsed.homeBase;
-    if (parsed.configPreset) result.configPreset = parsed.configPreset;
+    if (parsed.configPreset) {
+      // Migrate legacy preset values from before Phase 3
+      const LEGACY_PRESET_MAP: Record<string, string> = {
+        'easa-default': 'default',
+        'faa-standard': 'default',
+        'custom': 'default',
+      };
+      result.configPreset = LEGACY_PRESET_MAP[parsed.configPreset] ?? parsed.configPreset;
+    }
     if (parsed.crewSet) result.crewSet = parsed.crewSet;
     if (parsed.analysisType) result.analysisType = parsed.analysisType;
     if (parsed.selectedMonth) {

@@ -18,6 +18,8 @@ import { WorkloadPhaseIndicator } from './WorkloadPhaseIndicator';
 import { FatigueScalesConverter } from './FatigueScalesConverter';
 import { isTrainingDuty, getTrainingDutyColor, getTrainingDutyLabel } from '@/lib/fatigue-utils';
 import { calculateFHA, getFHASeverity } from '@/lib/fatigue-calculations';
+import { FDPUtilizationBar } from './FDPUtilizationBar';
+import { CrewRestTimeline } from './CrewRestTimeline';
 
 interface DutyDetailsProps {
   duty: DutyAnalysis;
@@ -185,6 +187,16 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
           </div>
         </CardContent>
       </Card>
+
+      {/* FDP Utilization Bar — for all flight duties with FDP limits */}
+      {!isTrainingDuty(duty) && duty.maxFdpHours != null && duty.maxFdpHours > 0 && (
+        <FDPUtilizationBar
+          actualFdpHours={duty.actualFdpHours ?? duty.dutyHours ?? 0}
+          maxFdpHours={duty.maxFdpHours}
+          extendedFdpHours={duty.extendedFdpHours}
+          usedDiscretion={duty.usedDiscretion}
+        />
+      )}
 
       {/* Section 2: Flight Segments / Training Session */}
       {isTrainingDuty(duty) ? (
@@ -451,6 +463,11 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Crew Rest Timeline — visual Gantt-like view for ULR/augmented duties */}
+      {duty.inflightRestBlocks && duty.inflightRestBlocks.length > 0 && (
+        <CrewRestTimeline duty={duty} />
       )}
 
       {/* In-Flight Rest Blocks - only for augmented crew duties */}
