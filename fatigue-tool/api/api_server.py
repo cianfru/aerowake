@@ -328,6 +328,9 @@ class DutyResponse(BaseModel):
     # Validation warnings (NEW - BUG FIX #5)
     time_validation_warnings: List[str] = []
 
+    # Worst-point S/C/W decomposition (for immediate PerformanceSummaryCard rendering)
+    worst_point: Optional[dict] = None  # {performance, sleep_pressure, circadian, sleep_inertia, time_on_task_penalty, hours_on_duty}
+
     # Augmented crew / ULR data
     crew_composition: str = "standard"
     rest_facility_class: Optional[str] = None
@@ -661,6 +664,21 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
     sleep_quality = _build_sleep_quality(duty_timeline)
     ulr_compliance_dict, inflight_blocks = _build_ulr_data(duty_timeline, duty)
 
+    # Extract worst-point S/C/W decomposition for immediate frontend rendering
+    worst_point_dict = None
+    if duty_timeline.timeline:
+        worst_pt = min(duty_timeline.timeline, key=lambda p: p.raw_performance)
+        worst_point_dict = {
+            "performance": worst_pt.raw_performance,
+            "sleep_pressure": worst_pt.homeostatic_component,
+            "circadian": worst_pt.circadian_component,
+            "sleep_inertia": 1.0 - worst_pt.sleep_inertia_component,
+            "time_on_task_penalty": 1.0 - worst_pt.time_on_task_penalty,
+            "hours_on_duty": worst_pt.hours_on_duty,
+            "timestamp": worst_pt.timestamp_utc.isoformat(),
+            "timestamp_local": worst_pt.timestamp_local.isoformat(),
+        }
+
     report_local = duty.report_time_utc.astimezone(home_tz)
     release_local = duty.release_time_utc.astimezone(home_tz)
     report_utc_z = duty.report_time_utc.astimezone(pytz.utc)
@@ -701,6 +719,7 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
         circadian_phase_shift=round(duty_timeline.circadian_phase_shift, 2),
         time_validation_warnings=time_warnings,
         sleep_quality=sleep_quality,
+        worst_point=worst_point_dict,
         # Training duty metadata
         duty_type=duty.duty_type.value if hasattr(duty, 'duty_type') else 'flight',
         training_code=getattr(duty, 'training_code', None),
