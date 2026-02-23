@@ -313,11 +313,3 @@ export interface BodyClockTimelineEntry {
   referenceTimezone: string;  // IANA tz the pilot is physically in
 }
 
-export interface DutyModification {
-  dutyId: string;
-  reportShiftMinutes: number;     // -120 to +120 in 30-min steps
-  releaseShiftMinutes: number;    // -120 to +120 in 30-min steps
-  crewComposition?: 'standard' | 'augmented_4';
-  crewSet?: 'crew_a' | 'crew_b';
-  excluded: boolean;
-}

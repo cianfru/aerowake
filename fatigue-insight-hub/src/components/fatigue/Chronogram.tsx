@@ -3,11 +3,9 @@ import { Brain, Battery } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DutyAnalysis, DutyStatistics, RestDaySleep } from '@/types/fatigue';
-import { addDays, getDaysInMonth, startOfMonth } from 'date-fns';
-import { HumanPerformanceTimeline } from './HumanPerformanceTimeline';
-import { UtcTimeline } from './UtcTimeline';
 import { ContinuousPerformanceTimeline } from './ContinuousPerformanceTimeline';
-import { HomeBaseTimeline } from './chronogram/HomeBaseTimeline';
+import { TimelineRenderer } from './chronogram/TimelineRenderer';
+import { homeBaseTransform, utcTransform, elapsedTransform } from '@/lib/timeline-transforms';
 
 interface ChronogramProps {
   duties: DutyAnalysis[];
@@ -26,26 +24,27 @@ interface ChronogramProps {
 export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilotBase, pilotAircraft, onDutySelect, selectedDuty, restDaysSleep, analysisId }: ChronogramProps) {
   const [activeTab, setActiveTab] = useState<'homebase' | 'utc' | 'elapsed' | 'continuous'>('homebase');
 
-  // Days that have actual duties (used by UTC tab)
-  const daysInMonth = getDaysInMonth(month);
-  const monthStart = startOfMonth(month);
-  const dutyDays = useMemo(() => {
-    const dutyDayIndices = new Set<number>();
-    duties.forEach((duty) => {
-      dutyDayIndices.add(duty.date.getDate());
-      // Also include next day for overnight duties
-      if (duty.flightSegments.length > 0) {
-        const lastSegment = duty.flightSegments[duty.flightSegments.length - 1];
-        const firstSegment = duty.flightSegments[0];
-        const [startH] = firstSegment.departureTime.split(':').map(Number);
-        const [endH] = lastSegment.arrivalTime.split(':').map(Number);
-        if (endH < startH && duty.date.getDate() < daysInMonth) {
-          dutyDayIndices.add(duty.date.getDate() + 1);
-        }
-      }
-    });
-    return Array.from(dutyDayIndices).sort((a, b) => a - b).map(dayNum => addDays(monthStart, dayNum - 1));
-  }, [duties, daysInMonth, monthStart]);
+  // Pre-compute timeline data for each grid-based view
+  const homeBaseData = useMemo(
+    () => homeBaseTransform(duties, statistics, month, restDaysSleep),
+    [duties, statistics, month, restDaysSleep],
+  );
+
+  const utcData = useMemo(
+    () => utcTransform(duties, statistics, month, restDaysSleep),
+    [duties, statistics, month, restDaysSleep],
+  );
+
+  const elapsedData = useMemo(
+    () => elapsedTransform(duties, month, restDaysSleep),
+    [duties, month, restDaysSleep],
+  );
+
+  const statsSubset = useMemo(() => ({
+    totalDuties: statistics.totalDuties,
+    highRiskDuties: statistics.highRiskDuties,
+    criticalRiskDuties: statistics.criticalRiskDuties,
+  }), [statistics]);
 
   return (
     <Card variant="glass">
@@ -80,49 +79,46 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
 
           {/* Home-Base Timeline Tab */}
           <TabsContent value="homebase" className="mt-4 space-y-4">
-            <HomeBaseTimeline
+            <TimelineRenderer
+              data={homeBaseData}
               duties={duties}
-              statistics={statistics}
+              statistics={statsSubset}
               month={month}
-              pilotId={pilotId}
               pilotName={pilotName}
               pilotBase={pilotBase}
               pilotAircraft={pilotAircraft}
               onDutySelect={onDutySelect}
               selectedDuty={selectedDuty}
-              restDaysSleep={restDaysSleep}
             />
           </TabsContent>
 
           {/* UTC (Zulu) Timeline Tab */}
           <TabsContent value="utc" className="mt-4">
-            <UtcTimeline
+            <TimelineRenderer
+              data={utcData}
               duties={duties}
-              statistics={{
-                totalDuties: statistics.totalDuties,
-                highRiskDuties: statistics.highRiskDuties,
-                criticalRiskDuties: statistics.criticalRiskDuties,
-              }}
+              statistics={statsSubset}
               month={month}
               pilotName={pilotName}
               pilotBase={pilotBase}
               pilotAircraft={pilotAircraft}
               onDutySelect={onDutySelect}
               selectedDuty={selectedDuty}
-              restDaysSleep={restDaysSleep}
             />
           </TabsContent>
 
           {/* Human Performance (Elapsed Time) Tab */}
           <TabsContent value="elapsed" className="mt-4">
-            <HumanPerformanceTimeline
+            <TimelineRenderer
+              data={elapsedData}
               duties={duties}
+              statistics={statsSubset}
               month={month}
               pilotName={pilotName}
               pilotBase={pilotBase}
+              pilotAircraft={pilotAircraft}
               onDutySelect={onDutySelect}
               selectedDuty={selectedDuty}
-              restDaysSleep={restDaysSleep}
             />
           </TabsContent>
 
