@@ -42,6 +42,7 @@ from db.session import init_db, get_db, is_db_available
 from db.models import User, Roster, Analysis
 from auth.routes import auth_router
 from auth.dependencies import get_optional_user
+from admin.routes import admin_router
 
 
 # ============================================================================
@@ -61,8 +62,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Include auth routes
+# Include auth + admin routes
 app.include_router(auth_router)
+app.include_router(admin_router)
 
 # CORS - Allow Aerowake frontend origins
 # Production origins loaded from CORS_ORIGINS env var (comma-separated)

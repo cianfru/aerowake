@@ -3,8 +3,10 @@ FastAPI dependencies for authentication.
 
 get_current_user: requires valid JWT → returns User
 get_optional_user: returns User or None (for endpoints that work with/without auth)
+get_admin_user: requires valid JWT + is_admin flag or ADMIN_EMAILS env var
 """
 
+import os
 import logging
 
 from fastapi import Depends, HTTPException, status
@@ -89,3 +91,29 @@ async def get_optional_user(
         return None
 
     return user
+
+
+async def get_admin_user(
+    user: User = Depends(get_current_user),
+) -> User:
+    """
+    Require authenticated admin user.
+
+    Checks the DB is_admin flag first.
+    Falls back to ADMIN_EMAILS environment variable for bootstrapping
+    (so the first admin can access the dashboard before manually setting the flag).
+    Raises HTTP 403 if neither condition is met.
+    """
+    if getattr(user, "is_admin", False):
+        return user
+
+    # Fallback: check env var for bootstrapping
+    admin_emails_raw = os.environ.get("ADMIN_EMAILS", "")
+    admin_emails = [e.strip().lower() for e in admin_emails_raw.split(",") if e.strip()]
+    if user.email and user.email.lower() in admin_emails:
+        return user
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Admin access required",
+    )
