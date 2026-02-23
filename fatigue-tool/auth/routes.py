@@ -10,6 +10,7 @@ Endpoints:
   POST /api/auth/logout    — invalidate refresh token
 """
 
+import os
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -92,6 +93,15 @@ async def _store_refresh_token(db: AsyncSession, user_id, raw_token: str):
     await db.commit()
 
 
+def _is_admin(user: User) -> bool:
+    """Check if user is admin via DB flag or ADMIN_EMAILS env var."""
+    if getattr(user, "is_admin", False):
+        return True
+    admin_emails_raw = os.environ.get("ADMIN_EMAILS", "")
+    admin_emails = [e.strip().lower() for e in admin_emails_raw.split(",") if e.strip()]
+    return bool(user.email and user.email.lower() in admin_emails)
+
+
 def _user_to_response(user: User) -> UserResponse:
     """Convert DB model to Pydantic response."""
     return UserResponse(
@@ -101,7 +111,7 @@ def _user_to_response(user: User) -> UserResponse:
         pilot_id=user.pilot_id,
         home_base=user.home_base,
         auth_provider=user.auth_provider,
-        is_admin=getattr(user, "is_admin", False),
+        is_admin=_is_admin(user),
         created_at=user.created_at.isoformat() if user.created_at else "",
     )
 
