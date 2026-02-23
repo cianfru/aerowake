@@ -68,6 +68,7 @@ class UserResponse(BaseModel):
     pilot_id: str | None
     home_base: str | None
     auth_provider: str
+    is_admin: bool = False
     created_at: str
 
 
@@ -100,6 +101,7 @@ def _user_to_response(user: User) -> UserResponse:
         pilot_id=user.pilot_id,
         home_base=user.home_base,
         auth_provider=user.auth_provider,
+        is_admin=getattr(user, "is_admin", False),
         created_at=user.created_at.isoformat() if user.created_at else "",
     )
 

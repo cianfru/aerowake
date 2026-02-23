@@ -1,4 +1,4 @@
-import { Moon, Sun, Menu, LogIn, LogOut, FolderOpen } from 'lucide-react';
+import { Moon, Sun, Menu, LogIn, LogOut, FolderOpen, Shield } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -100,6 +100,15 @@ export function Header({ theme, onThemeChange, onMenuToggle, showMenuButton, act
               <span className="hidden md:inline text-xs text-muted-foreground truncate max-w-[100px]">
                 {user?.display_name || user?.email?.split('@')[0] || 'User'}
               </span>
+              {user?.is_admin && (
+                <a
+                  href="/admin"
+                  className="flex items-center justify-center h-7 w-7 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors"
+                  title="Admin Dashboard"
+                >
+                  <Shield className="h-3.5 w-3.5 text-primary" />
+                </a>
+              )}
               <button
                 onClick={handleSignOut}
                 className="flex items-center justify-center h-7 w-7 rounded-full bg-secondary/40 hover:bg-secondary/70 transition-colors"

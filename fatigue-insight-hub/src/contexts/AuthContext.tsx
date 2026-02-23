@@ -11,6 +11,7 @@ export interface UserProfile {
   pilot_id: string | null;
   home_base: string | null;
   auth_provider: string;
+  is_admin: boolean;
   created_at: string;
 }
 

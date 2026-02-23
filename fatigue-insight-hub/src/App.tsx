@@ -8,7 +8,9 @@ import { AnalysisProvider } from "@/contexts/AnalysisContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { RegisterPage } from "@/components/auth/RegisterPage";
+import { AdminRoute } from "@/components/auth/AdminRoute";
 import Index from "./pages/Index";
+import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +40,7 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
