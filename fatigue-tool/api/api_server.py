@@ -1628,6 +1628,224 @@ async def reanalyze_roster(
 
 
 # ============================================================================
+# WHAT-IF SCENARIO ANALYSIS
+# ============================================================================
+
+
+class DutyModification(BaseModel):
+    """A single duty modification for what-if analysis."""
+    duty_id: str
+    report_shift_minutes: int = 0      # ±120 in 30-min steps
+    release_shift_minutes: int = 0     # ±120 in 30-min steps
+    crew_composition: Optional[str] = None   # "standard" | "augmented_4"
+    crew_set: Optional[str] = None           # "crew_a" | "crew_b"
+    excluded: bool = False                   # simulate day off
+
+
+class WhatIfRequest(BaseModel):
+    """Request body for what-if scenario analysis."""
+    analysis_id: str
+    modifications: List[DutyModification]
+    config_preset: str = "default"
+
+
+@app.post("/api/what-if")
+async def run_what_if(request: WhatIfRequest, db=Depends(get_db)):
+    """
+    Run a what-if scenario: deep-copy the original roster, apply duty
+    modifications (time shifts, crew changes, exclusions), re-run the
+    fatigue model, and return the modified analysis. Ephemeral — not persisted.
+    """
+    import copy
+    from datetime import timedelta
+    from models.data_models import CrewComposition, ULRCrewSet
+
+    analysis_id = request.analysis_id
+
+    # 1. Load original roster from memory or DB fallback
+    if analysis_id not in analysis_store:
+        # DB fallback — same pattern as get_duty_detail
+        if db is not None:
+            from sqlalchemy import select
+            from sqlalchemy.orm import selectinload
+
+            result = await db.execute(
+                select(Analysis).where(Analysis.id == analysis_id).options(
+                    selectinload(Analysis.roster)
+                )
+            )
+            db_analysis = result.scalar_one_or_none()
+
+            if db_analysis and db_analysis.roster and db_analysis.roster.original_file_bytes:
+                try:
+                    db_roster_model = db_analysis.roster
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                        tmp.write(db_roster_model.original_file_bytes)
+                        tmp_path = tmp.name
+                    try:
+                        parser = PDFRosterParser(
+                            home_base=db_roster_model.home_base or "DOH",
+                            home_timezone="Asia/Qatar",
+                        )
+                        roster_obj = parser.parse_pdf(
+                            tmp_path,
+                            db_roster_model.pilot_id or "P12345",
+                            db_roster_model.month or "2026-02",
+                        )
+                    finally:
+                        os.unlink(tmp_path)
+
+                    preset = db_roster_model.config_preset or "default"
+                    config_map = {
+                        "default": ModelConfig.default_easa_config,
+                        "conservative": ModelConfig.conservative_config,
+                        "liberal": ModelConfig.liberal_config,
+                        "research": ModelConfig.research_config,
+                    }
+                    config = config_map.get(preset, ModelConfig.default_easa_config)()
+                    model = BorbelyFatigueModel(config)
+                    monthly_analysis_obj = model.simulate_roster(roster_obj)
+                    analysis_store[analysis_id] = (monthly_analysis_obj, roster_obj, model.sleep_strategies)
+                except Exception as e:
+                    logger.warning(f"What-if: failed to re-analyze from stored PDF: {e}")
+                    raise HTTPException(404, "Analysis not found (re-analysis failed)")
+            else:
+                raise HTTPException(404, "Analysis not found")
+        else:
+            raise HTTPException(404, "Analysis not found")
+
+    _monthly_analysis, original_roster, _sleep_strategies = analysis_store[analysis_id]
+
+    # 2. Deep-copy the roster
+    modified_roster = copy.deepcopy(original_roster)
+
+    # 3. Build modification lookup
+    mod_map = {m.duty_id: m for m in request.modifications}
+
+    # 4. Validate shift limits
+    for mod in request.modifications:
+        if abs(mod.report_shift_minutes) > 240:
+            raise HTTPException(400, f"Report shift for duty {mod.duty_id} exceeds ±4h limit")
+        if abs(mod.release_shift_minutes) > 240:
+            raise HTTPException(400, f"Release shift for duty {mod.duty_id} exceeds ±4h limit")
+
+    # 5. Apply modifications
+    excluded_ids = set()
+    for mod in request.modifications:
+        if mod.excluded:
+            excluded_ids.add(mod.duty_id)
+            continue
+
+        duty = modified_roster.get_duty_by_id(mod.duty_id)
+        if duty is None:
+            raise HTTPException(400, f"Duty {mod.duty_id} not found in roster")
+
+        # Time shifts — shift duty AND all segments by the same delta
+        if mod.report_shift_minutes != 0:
+            delta = timedelta(minutes=mod.report_shift_minutes)
+            duty.report_time_utc += delta
+            for seg in duty.segments:
+                seg.scheduled_departure_utc += delta
+
+        if mod.release_shift_minutes != 0:
+            delta = timedelta(minutes=mod.release_shift_minutes)
+            duty.release_time_utc += delta
+            for seg in duty.segments:
+                seg.scheduled_arrival_utc += delta
+
+        # Crew composition change
+        if mod.crew_composition is not None:
+            crew_map = {
+                "standard": CrewComposition.STANDARD,
+                "augmented_3": CrewComposition.AUGMENTED_3,
+                "augmented_4": CrewComposition.AUGMENTED_4,
+            }
+            new_comp = crew_map.get(mod.crew_composition)
+            if new_comp:
+                duty.crew_composition = new_comp
+
+        # Crew set change
+        if mod.crew_set is not None:
+            crew_set_map = {"crew_a": ULRCrewSet.CREW_A, "crew_b": ULRCrewSet.CREW_B}
+            new_set = crew_set_map.get(mod.crew_set)
+            if new_set:
+                duty.ulr_crew_set = new_set
+
+    # 6. Remove excluded duties
+    if excluded_ids:
+        modified_roster.duties = [
+            d for d in modified_roster.duties if d.duty_id not in excluded_ids
+        ]
+
+    if not modified_roster.duties:
+        raise HTTPException(400, "Cannot run analysis with all duties excluded")
+
+    # 7. Re-sort by report time (in case shifts changed ordering)
+    modified_roster.duties.sort(key=lambda d: d.report_time_utc)
+
+    # 8. Run fatigue model on modified roster
+    config_map = {
+        "default": ModelConfig.default_easa_config,
+        "conservative": ModelConfig.conservative_config,
+        "liberal": ModelConfig.liberal_config,
+        "research": ModelConfig.research_config,
+    }
+    config = config_map.get(request.config_preset, ModelConfig.default_easa_config)()
+    model = BorbelyFatigueModel(config)
+    monthly_analysis = model.simulate_roster(modified_roster)
+
+    # 9. Build response (same shape as /api/analyze)
+    whatif_id = f"whatif_{analysis_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+    duties_response = []
+    for dt in monthly_analysis.duty_timelines:
+        duty_idx = modified_roster.get_duty_index(dt.duty_id)
+        if duty_idx is None:
+            continue
+        duties_response.append(
+            _build_duty_response(dt, modified_roster.duties[duty_idx], modified_roster)
+        )
+
+    rest_days_sleep = _build_rest_days_sleep(model.sleep_strategies)
+
+    return AnalysisResponse(
+        analysis_id=whatif_id,
+        roster_id=modified_roster.roster_id,
+        pilot_id=modified_roster.pilot_id,
+        pilot_name=modified_roster.pilot_name,
+        pilot_base=modified_roster.pilot_base,
+        pilot_aircraft=modified_roster.pilot_aircraft,
+        home_base_timezone=modified_roster.home_base_timezone,
+        month=modified_roster.month,
+        total_duties=len(modified_roster.duties),
+        total_sectors=sum(len(d.segments) for d in modified_roster.duties),
+        total_duty_hours=round(sum(d.duty_hours for d in modified_roster.duties), 1),
+        total_block_hours=round(
+            sum(
+                sum(s.block_hours for s in d.segments if hasattr(s, 'block_hours'))
+                for d in modified_roster.duties
+            ), 1
+        ),
+        high_risk_duties=monthly_analysis.high_risk_duties,
+        critical_risk_duties=monthly_analysis.critical_risk_duties,
+        total_pinch_events=monthly_analysis.total_pinch_events,
+        avg_sleep_per_night=monthly_analysis.average_sleep_per_night,
+        max_sleep_debt=monthly_analysis.max_sleep_debt,
+        worst_duty_id=monthly_analysis.lowest_performance_duty,
+        worst_performance=monthly_analysis.lowest_performance_value,
+        duties=duties_response,
+        rest_days_sleep=rest_days_sleep,
+        body_clock_timeline=[
+            {"timestamp_utc": ts, "phase_shift_hours": ps, "reference_timezone": tz}
+            for ts, ps, tz in monthly_analysis.body_clock_timeline
+        ],
+        total_ulr_duties=getattr(monthly_analysis, "total_ulr_duties", 0),
+        total_augmented_duties=getattr(monthly_analysis, "total_augmented_duties", 0),
+        ulr_violations=getattr(monthly_analysis, "ulr_violations", []),
+    )
+
+
+# ============================================================================
 # 12-MONTH ROLLING DASHBOARD
 # ============================================================================
 
