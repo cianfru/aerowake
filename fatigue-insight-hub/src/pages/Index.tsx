@@ -6,6 +6,7 @@ import { LearnPage } from '@/components/fatigue/LearnPage';
 import { AboutPage } from '@/components/fatigue/AboutPage';
 import { MyRostersPage } from '@/components/fatigue/MyRostersPage';
 import { YearlyDashboardPage } from '@/components/fatigue/YearlyDashboardPage';
+import { WhatIfPage } from '@/components/fatigue/WhatIfPage';
 import { LandingPage } from '@/components/landing/LandingPage';
 import { AuroraBackground } from '@/components/ui/aurora-background';
 import { useTheme } from '@/hooks/useTheme';
@@ -57,6 +58,12 @@ const Index = () => {
         {state.activeTab === 'insights' && (
           <div className="flex-1">
             <InsightsContent />
+          </div>
+        )}
+
+        {state.activeTab === 'whatif' && (
+          <div className="flex-1">
+            <WhatIfPage />
           </div>
         )}
 
