@@ -479,3 +479,68 @@ export async function reanalyzeRoster(
 
   return response.json();
 }
+
+
+// ============================================================================
+// YEARLY DASHBOARD
+// ============================================================================
+
+export interface MonthlyMetrics {
+  month: string;
+  roster_id: string;
+  filename: string;
+  created_at: string;
+  total_duties: number;
+  total_sectors: number;
+  total_duty_hours: number;
+  total_block_hours: number;
+  avg_performance: number;
+  worst_performance: number;
+  low_risk_count: number;
+  moderate_risk_count: number;
+  high_risk_count: number;
+  critical_risk_count: number;
+  avg_sleep_per_night: number;
+  max_sleep_debt: number;
+  total_wocl_hours: number;
+  total_pinch_events: number;
+  high_risk_duties: number;
+  critical_risk_duties: number;
+  flight_duties: number;
+  simulator_duties: number;
+  ground_training_duties: number;
+}
+
+export interface YearlySummary {
+  total_months: number;
+  total_duties: number;
+  total_sectors: number;
+  total_duty_hours: number;
+  total_block_hours: number;
+  avg_performance: number;
+  worst_performance: number;
+  avg_sleep_per_night: number;
+  max_sleep_debt: number;
+  total_wocl_hours: number;
+  total_pinch_events: number;
+  total_high_risk_duties: number;
+  total_critical_risk_duties: number;
+}
+
+export interface YearlyDashboardData {
+  months: MonthlyMetrics[];
+  summary: YearlySummary;
+}
+
+export async function getYearlyDashboard(): Promise<YearlyDashboardData> {
+  const response = await fetch(`${API_BASE_URL}/api/dashboard/yearly`, {
+    headers: { ...getAuthHeaders() },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('Not authenticated');
+    throw new Error('Failed to fetch yearly dashboard');
+  }
+
+  return response.json();
+}

@@ -1628,6 +1628,211 @@ async def reanalyze_roster(
 
 
 # ============================================================================
+# 12-MONTH ROLLING DASHBOARD
+# ============================================================================
+
+
+class MonthlyMetrics(BaseModel):
+    """Aggregated metrics for a single month's roster analysis."""
+    month: str                                # "2026-02"
+    roster_id: str
+    filename: str
+    created_at: str
+
+    # Activity
+    total_duties: int = 0
+    total_sectors: int = 0
+    total_duty_hours: float = 0.0
+    total_block_hours: float = 0.0
+
+    # Performance
+    avg_performance: float = 0.0              # mean of avg_performance across duties
+    worst_performance: float = 0.0            # min of min_performance across duties
+
+    # Risk distribution
+    low_risk_count: int = 0
+    moderate_risk_count: int = 0
+    high_risk_count: int = 0
+    critical_risk_count: int = 0
+
+    # Sleep
+    avg_sleep_per_night: float = 0.0
+    max_sleep_debt: float = 0.0
+
+    # WOCL
+    total_wocl_hours: float = 0.0
+
+    # Safety
+    total_pinch_events: int = 0
+    high_risk_duties: int = 0
+    critical_risk_duties: int = 0
+
+    # Duty type breakdown
+    flight_duties: int = 0
+    simulator_duties: int = 0
+    ground_training_duties: int = 0
+
+
+class YearlySummary(BaseModel):
+    """Rolling 12-month aggregate totals/averages."""
+    total_months: int = 0
+    total_duties: int = 0
+    total_sectors: int = 0
+    total_duty_hours: float = 0.0
+    total_block_hours: float = 0.0
+    avg_performance: float = 0.0
+    worst_performance: float = 0.0
+    avg_sleep_per_night: float = 0.0
+    max_sleep_debt: float = 0.0
+    total_wocl_hours: float = 0.0
+    total_pinch_events: int = 0
+    total_high_risk_duties: int = 0
+    total_critical_risk_duties: int = 0
+
+
+class YearlyDashboardResponse(BaseModel):
+    """GET /api/dashboard/yearly response."""
+    months: list[MonthlyMetrics]
+    summary: YearlySummary
+
+
+def _compute_yearly_summary(months: list[MonthlyMetrics]) -> YearlySummary:
+    """Compute duty-weighted averages and totals across all months."""
+    if not months:
+        return YearlySummary()
+
+    total_duties = sum(m.total_duties for m in months)
+    total_sectors = sum(m.total_sectors for m in months)
+    total_duty_h = sum(m.total_duty_hours for m in months)
+    total_block_h = sum(m.total_block_hours for m in months)
+
+    # Weighted average performance (by duties per month)
+    weighted_perf = sum(m.avg_performance * m.total_duties for m in months)
+    avg_perf = round(weighted_perf / total_duties, 1) if total_duties else 0
+
+    # Weighted average sleep
+    weighted_sleep = sum(m.avg_sleep_per_night * m.total_duties for m in months)
+    avg_sleep = round(weighted_sleep / total_duties, 1) if total_duties else 0
+
+    return YearlySummary(
+        total_months=len(months),
+        total_duties=total_duties,
+        total_sectors=total_sectors,
+        total_duty_hours=round(total_duty_h, 1),
+        total_block_hours=round(total_block_h, 1),
+        avg_performance=avg_perf,
+        worst_performance=min(m.worst_performance for m in months) if months else 0,
+        avg_sleep_per_night=avg_sleep,
+        max_sleep_debt=max(m.max_sleep_debt for m in months) if months else 0,
+        total_wocl_hours=round(sum(m.total_wocl_hours for m in months), 1),
+        total_pinch_events=sum(m.total_pinch_events for m in months),
+        total_high_risk_duties=sum(m.high_risk_duties for m in months),
+        total_critical_risk_duties=sum(m.critical_risk_duties for m in months),
+    )
+
+
+@app.get("/api/dashboard/yearly", response_model=YearlyDashboardResponse)
+async def get_yearly_dashboard(
+    user: User = Depends(_get_current_user),
+    db=Depends(get_db),
+):
+    """12-month rolling dashboard metrics for the authenticated user."""
+    if db is None:
+        raise HTTPException(503, "Database not available")
+
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    # Get all rosters for this user with their analyses
+    result = await db.execute(
+        select(Roster)
+        .where(Roster.user_id == user.id)
+        .options(selectinload(Roster.analyses))
+        .order_by(Roster.month.asc())
+    )
+    all_rosters = result.scalars().all()
+
+    # Deduplicate by month — keep newest roster per month
+    month_map: dict[str, tuple] = {}
+    for r in all_rosters:
+        if r.analyses:
+            latest_analysis = r.analyses[0]
+            if r.month not in month_map or r.created_at > month_map[r.month][0].created_at:
+                month_map[r.month] = (r, latest_analysis)
+
+    # Sort by month, take last 12
+    sorted_months = sorted(month_map.keys())[-12:]
+
+    months_data: list[MonthlyMetrics] = []
+    for month_key in sorted_months:
+        roster, analysis = month_map[month_key]
+        aj = analysis.analysis_json or {}
+
+        # Extract per-duty metrics from stored JSONB
+        duties = aj.get("duties", [])
+
+        risk_counts = {"low": 0, "moderate": 0, "high": 0, "critical": 0}
+        total_wocl = 0.0
+        all_avg_perf = []
+        all_min_perf = []
+        flight_count = sim_count = ground_count = 0
+
+        for d in duties:
+            rl = d.get("risk_level", "low")
+            if rl in risk_counts:
+                risk_counts[rl] += 1
+            elif rl == "extreme":
+                risk_counts["critical"] += 1
+
+            total_wocl += d.get("wocl_hours", 0) or 0
+
+            avg_p = d.get("avg_performance")
+            if avg_p is not None:
+                all_avg_perf.append(avg_p)
+
+            min_p = d.get("min_performance")
+            if min_p is not None:
+                all_min_perf.append(min_p)
+
+            dt = d.get("duty_type", "flight")
+            if dt == "simulator":
+                sim_count += 1
+            elif dt == "ground_training":
+                ground_count += 1
+            else:
+                flight_count += 1
+
+        months_data.append(MonthlyMetrics(
+            month=month_key,
+            roster_id=str(roster.id),
+            filename=roster.filename,
+            created_at=roster.created_at.isoformat() if roster.created_at else "",
+            total_duties=roster.total_duties or aj.get("total_duties", 0),
+            total_sectors=roster.total_sectors or aj.get("total_sectors", 0),
+            total_duty_hours=round(roster.total_duty_hours or aj.get("total_duty_hours", 0), 1),
+            total_block_hours=round(roster.total_block_hours or aj.get("total_block_hours", 0), 1),
+            avg_performance=round(sum(all_avg_perf) / len(all_avg_perf), 1) if all_avg_perf else 0,
+            worst_performance=round(min(all_min_perf), 1) if all_min_perf else 0,
+            low_risk_count=risk_counts["low"],
+            moderate_risk_count=risk_counts["moderate"],
+            high_risk_count=risk_counts["high"],
+            critical_risk_count=risk_counts["critical"],
+            avg_sleep_per_night=round(aj.get("avg_sleep_per_night", 0) or 0, 1),
+            max_sleep_debt=round(aj.get("max_sleep_debt", 0) or 0, 1),
+            total_wocl_hours=round(total_wocl, 1),
+            total_pinch_events=aj.get("total_pinch_events", 0) or 0,
+            high_risk_duties=aj.get("high_risk_duties", 0) or 0,
+            critical_risk_duties=aj.get("critical_risk_duties", 0) or 0,
+            flight_duties=flight_count,
+            simulator_duties=sim_count,
+            ground_training_duties=ground_count,
+        ))
+
+    summary = _compute_yearly_summary(months_data)
+    return YearlyDashboardResponse(months=months_data, summary=summary)
+
+
+# ============================================================================
 # AIRPORT DATABASE ENDPOINTS
 # ============================================================================
 
