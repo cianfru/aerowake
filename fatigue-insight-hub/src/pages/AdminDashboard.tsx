@@ -22,8 +22,9 @@ export default function AdminDashboard() {
   const { stats, users, rosters, activity, isLoading, refetchAll } = useAdminData();
 
   return (
-    <AuroraBackground>
-      <div className="min-h-screen w-full">
+    <>
+      <AuroraBackground />
+      <div className="relative z-10 min-h-screen w-full">
         {/* Header */}
         <header className="sticky top-0 z-40 w-full border-b border-border/30 bg-background/80 backdrop-blur-xl">
           <div className="mx-auto max-w-7xl flex items-center justify-between px-4 h-14">
@@ -88,6 +89,6 @@ export default function AdminDashboard() {
           </Tabs>
         </main>
       </div>
-    </AuroraBackground>
+    </>
   );
 }
