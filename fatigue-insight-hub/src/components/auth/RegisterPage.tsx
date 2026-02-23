@@ -24,7 +24,7 @@ export function RegisterPage() {
 
   // If already authenticated, redirect
   if (isAuthenticated) {
-    navigate('/app/analysis', { replace: true });
+    navigate('/', { replace: true });
     return null;
   }
 
@@ -46,7 +46,7 @@ export function RegisterPage() {
 
     try {
       await register(email, password, displayName || undefined, pilotId || undefined, homeBase || undefined);
-      navigate('/app/analysis');
+      navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {

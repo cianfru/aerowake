@@ -17,7 +17,7 @@ export function LoginPage() {
 
   // If already authenticated, redirect
   if (isAuthenticated) {
-    navigate('/app/analysis', { replace: true });
+    navigate('/', { replace: true });
     return null;
   }
 
@@ -28,7 +28,7 @@ export function LoginPage() {
 
     try {
       await login(email, password);
-      navigate('/app/analysis');
+      navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
