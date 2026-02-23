@@ -1,4 +1,4 @@
-import { Moon, Sun, Menu, LogIn, LogOut, FolderOpen, CalendarRange, GitCompareArrows, Shield } from 'lucide-react';
+import { Moon, Sun, Menu, LogIn, LogOut, FolderOpen, CalendarRange, Shield } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,7 +23,6 @@ interface NavItem {
 const navItems: NavItem[] = [
   { value: 'analysis', label: 'Analysis' },
   { value: 'insights', label: 'Insights' },
-  { value: 'whatif', label: 'What-If', requiresAuth: true },
   { value: 'yearly', label: '12-Month', requiresAuth: true },
   { value: 'rosters', label: 'Rosters', requiresAuth: true },
   { value: 'learn', label: 'Learn' },
@@ -82,7 +81,6 @@ export function Header({ theme, onThemeChange, onMenuToggle, showMenuButton, act
                   }
                 `}
               >
-                {item.value === 'whatif' && <GitCompareArrows className="h-3.5 w-3.5 inline-block mr-1 -mt-0.5" />}
                 {item.value === 'yearly' && <CalendarRange className="h-3.5 w-3.5 inline-block mr-1 -mt-0.5" />}
                 {item.value === 'rosters' && <FolderOpen className="h-3.5 w-3.5 inline-block mr-1 -mt-0.5" />}
                 {item.label}
