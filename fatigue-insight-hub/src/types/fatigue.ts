@@ -168,6 +168,11 @@ export interface DutyAnalysis {
       sleepType?: string;
       durationHours?: number;
       effectiveHours?: number;
+      // Per-block home-TZ positioning (for multi-block rendering)
+      sleepStartDayHomeTz?: number;
+      sleepStartHourHomeTz?: number;
+      sleepEndDayHomeTz?: number;
+      sleepEndHourHomeTz?: number;
     }>;
   };
 

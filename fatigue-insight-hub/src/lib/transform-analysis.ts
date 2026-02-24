@@ -141,12 +141,17 @@ function transformSleepEstimate(sleep: SleepEstimate) {
   }
 
   // Surface sleep blocks with UTC timestamps for what-if editing
+  // and per-block home-TZ positioning for multi-block rendering
   const sleepBlocks = sleep.sleep_blocks?.map((b) => ({
     sleepStartUtc: b.sleep_start_utc ?? undefined,
     sleepEndUtc: b.sleep_end_utc ?? undefined,
     sleepType: b.sleep_type,
     durationHours: b.duration_hours,
     effectiveHours: b.effective_hours,
+    sleepStartDayHomeTz: b.sleep_start_day_home_tz ?? undefined,
+    sleepStartHourHomeTz: b.sleep_start_hour_home_tz ?? undefined,
+    sleepEndDayHomeTz: b.sleep_end_day_home_tz ?? undefined,
+    sleepEndHourHomeTz: b.sleep_end_hour_home_tz ?? undefined,
   }));
 
   return {

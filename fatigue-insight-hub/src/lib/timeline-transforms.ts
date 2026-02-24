@@ -369,64 +369,119 @@ export function homeBaseTransform(
     if (est) {
       if (est.sleepStrategy === 'ulr_pre_duty') {
         // Skip ULR pre-duty sleep
-      } else if (
-        est.sleepStartDayHomeTz != null &&
-        est.sleepStartHourHomeTz != null &&
-        est.sleepEndDayHomeTz != null &&
-        est.sleepEndHourHomeTz != null
-      ) {
-        const startDay = est.sleepStartDayHomeTz;
-        const startHour = est.sleepStartHourHomeTz;
-        const endDay = est.sleepEndDayHomeTz;
-        const endHour = est.sleepEndHourHomeTz;
+      } else {
+        const base = baseSleepFields(est, duty);
 
-        // Clamp to visible month range
-        if (startDay <= daysInMonth && endDay >= 1) {
-          const base = baseSleepFields(est, duty);
+        // Multi-block rendering: if >1 sleep block has per-block home-TZ
+        // positioning, render each block individually (e.g. nap + night sleep)
+        // instead of one giant aggregated bar.
+        const blocksWithPos = (est.sleepBlocks ?? []).filter(
+          (b) =>
+            b.sleepStartDayHomeTz != null &&
+            b.sleepStartHourHomeTz != null &&
+            b.sleepEndDayHomeTz != null &&
+            b.sleepEndHourHomeTz != null,
+        );
 
-          if (startDay === endDay) {
-            // Same-day sleep
-            if (endHour <= startHour) {
-              // Wraps midnight on same day number -> treat as overnight
-              const slices = splitOvernightBar(startDay, startHour, endHour, daysInMonth);
-              for (const s of slices) {
-                sleepBars.push({ ...base, ...s });
+        if (blocksWithPos.length >= 2) {
+          // Render each block as a separate bar
+          for (const block of blocksWithPos) {
+            const bStartDay = block.sleepStartDayHomeTz!;
+            const bStartHour = block.sleepStartHourHomeTz!;
+            const bEndDay = block.sleepEndDayHomeTz!;
+            const bEndHour = block.sleepEndHourHomeTz!;
+
+            if (bStartDay > daysInMonth || bEndDay < 1) continue;
+
+            if (bStartDay === bEndDay) {
+              if (bEndHour <= bStartHour) {
+                const slices = splitOvernightBar(bStartDay, bStartHour, bEndHour, daysInMonth);
+                for (const s of slices) {
+                  sleepBars.push({ ...base, ...s });
+                }
+              } else {
+                sleepBars.push({
+                  ...base,
+                  rowIndex: bStartDay,
+                  startHour: bStartHour,
+                  endHour: bEndHour,
+                });
               }
             } else {
-              sleepBars.push({
-                ...base,
-                rowIndex: startDay,
-                startHour,
-                endHour,
-              });
-            }
-          } else {
-            // Overnight or multi-day: split at midnight
-            if (startDay >= 1 && startDay <= daysInMonth) {
-              sleepBars.push({
-                ...base,
-                rowIndex: startDay,
-                startHour,
-                endHour: 24,
-                isOvernightStart: true,
-              });
-            }
-            if (endDay >= 1 && endDay <= daysInMonth) {
-              sleepBars.push({
-                ...base,
-                rowIndex: endDay,
-                startHour: 0,
-                endHour,
-                isOvernightContinuation: true,
-              });
+              if (bStartDay >= 1 && bStartDay <= daysInMonth) {
+                sleepBars.push({
+                  ...base,
+                  rowIndex: bStartDay,
+                  startHour: bStartHour,
+                  endHour: 24,
+                  isOvernightStart: true,
+                });
+              }
+              if (bEndDay >= 1 && bEndDay <= daysInMonth) {
+                sleepBars.push({
+                  ...base,
+                  rowIndex: bEndDay,
+                  startHour: 0,
+                  endHour: bEndHour,
+                  isOvernightContinuation: true,
+                });
+              }
             }
           }
+        } else if (
+          est.sleepStartDayHomeTz != null &&
+          est.sleepStartHourHomeTz != null &&
+          est.sleepEndDayHomeTz != null &&
+          est.sleepEndHourHomeTz != null
+        ) {
+          // Single-block fallback: use top-level aggregated fields
+          const startDay = est.sleepStartDayHomeTz;
+          const startHour = est.sleepStartHourHomeTz;
+          const endDay = est.sleepEndDayHomeTz;
+          const endHour = est.sleepEndHourHomeTz;
+
+          if (startDay <= daysInMonth && endDay >= 1) {
+            if (startDay === endDay) {
+              if (endHour <= startHour) {
+                const slices = splitOvernightBar(startDay, startHour, endHour, daysInMonth);
+                for (const s of slices) {
+                  sleepBars.push({ ...base, ...s });
+                }
+              } else {
+                sleepBars.push({
+                  ...base,
+                  rowIndex: startDay,
+                  startHour,
+                  endHour,
+                });
+              }
+            } else {
+              if (startDay >= 1 && startDay <= daysInMonth) {
+                sleepBars.push({
+                  ...base,
+                  rowIndex: startDay,
+                  startHour,
+                  endHour: 24,
+                  isOvernightStart: true,
+                });
+              }
+              if (endDay >= 1 && endDay <= daysInMonth) {
+                sleepBars.push({
+                  ...base,
+                  rowIndex: endDay,
+                  startHour: 0,
+                  endHour,
+                  isOvernightContinuation: true,
+                });
+              }
+            }
+          }
+        } else {
+          console.warn(
+            `[homeBaseTransform] Skipping sleep bar for duty ${duty.dateString ?? duty.date.toISOString()}: ` +
+            'missing sleepStartDayHomeTz/sleepStartHourHomeTz/sleepEndDayHomeTz/sleepEndHourHomeTz',
+          );
         }
-      } else {
-        console.warn(
-          `[homeBaseTransform] Skipping sleep bar for duty ${duty.dateString ?? duty.date.toISOString()}: ` +
-          'missing sleepStartDayHomeTz/sleepStartHourHomeTz/sleepEndDayHomeTz/sleepEndHourHomeTz',
-        );
       }
     }
 
@@ -790,31 +845,45 @@ export function utcTransform(
     const est = duty.sleepEstimate;
     if (est && est.sleepStrategy !== 'ulr_pre_duty') {
       const base = baseSleepFields(est, duty);
-      let startDay: number | undefined;
-      let startHour: number | undefined;
-      let endDay: number | undefined;
-      let endHour: number | undefined;
 
-      // Primary: ISO timestamps -> UTC
-      if (est.sleepStartIso && est.sleepEndIso) {
-        const startUtc = utcDayHour(est.sleepStartIso);
-        const endUtc = utcDayHour(est.sleepEndIso);
-        startDay = startUtc.day;
-        startHour = startUtc.hour;
-        endDay = endUtc.day;
-        endHour = endUtc.hour;
-      }
+      // Multi-block rendering: if >1 sleep block has UTC timestamps,
+      // render each individually (e.g. nap + night sleep)
+      const blocksWithUtc = (est.sleepBlocks ?? []).filter(
+        (b) => b.sleepStartUtc && b.sleepEndUtc,
+      );
 
-      // Fallback: location-TZ precomputed
-      if (startDay == null && est.sleepStartDay != null && est.sleepEndDay != null) {
-        startDay = est.sleepStartDay;
-        startHour = est.sleepStartHour ?? 0;
-        endDay = est.sleepEndDay;
-        endHour = est.sleepEndHour ?? 0;
-      }
+      if (blocksWithUtc.length >= 2) {
+        for (const block of blocksWithUtc) {
+          const sUtc = utcDayHour(block.sleepStartUtc!);
+          const eUtc = utcDayHour(block.sleepEndUtc!);
+          addUtcSleepBar(sleepBars, sUtc.day, sUtc.hour, eUtc.day, eUtc.hour, base, daysInMonth);
+        }
+      } else {
+        // Single-block fallback
+        let startDay: number | undefined;
+        let startHour: number | undefined;
+        let endDay: number | undefined;
+        let endHour: number | undefined;
 
-      if (startDay != null && startHour != null && endDay != null && endHour != null) {
-        addUtcSleepBar(sleepBars, startDay, startHour, endDay, endHour, base, daysInMonth);
+        if (est.sleepStartIso && est.sleepEndIso) {
+          const startUtc = utcDayHour(est.sleepStartIso);
+          const endUtc = utcDayHour(est.sleepEndIso);
+          startDay = startUtc.day;
+          startHour = startUtc.hour;
+          endDay = endUtc.day;
+          endHour = endUtc.hour;
+        }
+
+        if (startDay == null && est.sleepStartDay != null && est.sleepEndDay != null) {
+          startDay = est.sleepStartDay;
+          startHour = est.sleepStartHour ?? 0;
+          endDay = est.sleepEndDay;
+          endHour = est.sleepEndHour ?? 0;
+        }
+
+        if (startDay != null && startHour != null && endDay != null && endHour != null) {
+          addUtcSleepBar(sleepBars, startDay, startHour, endDay, endHour, base, daysInMonth);
+        }
       }
     }
 
@@ -1172,48 +1241,64 @@ export function elapsedTransform(
     if (est && est.sleepStrategy !== 'ulr_pre_duty') {
       const base = baseSleepFields(est, duty);
 
-      let startElapsed: number | undefined;
-      let endElapsed: number | undefined;
+      // Multi-block rendering: if >1 sleep block has home-TZ positioning,
+      // render each individually (e.g. nap + night sleep)
+      const blocksWithPos = (est.sleepBlocks ?? []).filter(
+        (b) =>
+          b.sleepStartDayHomeTz != null &&
+          b.sleepStartHourHomeTz != null &&
+          b.sleepEndDayHomeTz != null &&
+          b.sleepEndHourHomeTz != null,
+      );
 
-      // Path 1: home-TZ precomputed
-      if (
-        est.sleepStartDayHomeTz != null &&
-        est.sleepStartHourHomeTz != null &&
-        est.sleepEndDayHomeTz != null &&
-        est.sleepEndHourHomeTz != null
-      ) {
-        startElapsed = dayHourToElapsed(est.sleepStartDayHomeTz, est.sleepStartHourHomeTz);
-        endElapsed = dayHourToElapsed(est.sleepEndDayHomeTz, est.sleepEndHourHomeTz);
-      }
-
-      // Fallback: ISO direct parse
-      if (startElapsed == null && est.sleepStartIso && est.sleepEndIso) {
-        const sp = parseIsoDirectly(est.sleepStartIso);
-        const ep = parseIsoDirectly(est.sleepEndIso);
-        if (sp && ep) {
-          startElapsed = dayHourToElapsed(sp.dayOfMonth, sp.hour);
-          endElapsed = dayHourToElapsed(ep.dayOfMonth, ep.hour);
+      if (blocksWithPos.length >= 2) {
+        for (const block of blocksWithPos) {
+          let se = dayHourToElapsed(block.sleepStartDayHomeTz!, block.sleepStartHourHomeTz!);
+          let ee = dayHourToElapsed(block.sleepEndDayHomeTz!, block.sleepEndHourHomeTz!);
+          if (ee <= se) ee += 24;
+          maxElapsedHour = Math.max(maxElapsedHour, ee);
+          const slices = splitElapsedAcrossRows(se, ee);
+          for (const s of slices) sleepBars.push({ ...base, ...s });
         }
-      }
+      } else {
+        // Single-block fallback
+        let startElapsed: number | undefined;
+        let endElapsed: number | undefined;
 
-      // Fallback: HH:mm
-      if (startElapsed == null && est.sleepStartTime && est.sleepEndTime) {
-        const sH = parseTimeToHours(est.sleepStartTime);
-        const eH = parseTimeToHours(est.sleepEndTime);
-        const dom = dutyDayOfMonth(duty);
-        if (sH !== undefined && eH !== undefined) {
-          startElapsed = dayHourToElapsed(dom, sH);
-          endElapsed = dayHourToElapsed(dom, eH);
+        if (
+          est.sleepStartDayHomeTz != null &&
+          est.sleepStartHourHomeTz != null &&
+          est.sleepEndDayHomeTz != null &&
+          est.sleepEndHourHomeTz != null
+        ) {
+          startElapsed = dayHourToElapsed(est.sleepStartDayHomeTz, est.sleepStartHourHomeTz);
+          endElapsed = dayHourToElapsed(est.sleepEndDayHomeTz, est.sleepEndHourHomeTz);
         }
-      }
 
-      if (startElapsed != null && endElapsed != null) {
-        if (endElapsed <= startElapsed) endElapsed += 24; // overnight
-        maxElapsedHour = Math.max(maxElapsedHour, endElapsed);
+        if (startElapsed == null && est.sleepStartIso && est.sleepEndIso) {
+          const sp = parseIsoDirectly(est.sleepStartIso);
+          const ep = parseIsoDirectly(est.sleepEndIso);
+          if (sp && ep) {
+            startElapsed = dayHourToElapsed(sp.dayOfMonth, sp.hour);
+            endElapsed = dayHourToElapsed(ep.dayOfMonth, ep.hour);
+          }
+        }
 
-        const slices = splitElapsedAcrossRows(startElapsed, endElapsed);
-        for (const s of slices) {
-          sleepBars.push({ ...base, ...s });
+        if (startElapsed == null && est.sleepStartTime && est.sleepEndTime) {
+          const sH = parseTimeToHours(est.sleepStartTime);
+          const eH = parseTimeToHours(est.sleepEndTime);
+          const dom = dutyDayOfMonth(duty);
+          if (sH !== undefined && eH !== undefined) {
+            startElapsed = dayHourToElapsed(dom, sH);
+            endElapsed = dayHourToElapsed(dom, eH);
+          }
+        }
+
+        if (startElapsed != null && endElapsed != null) {
+          if (endElapsed <= startElapsed) endElapsed += 24;
+          maxElapsedHour = Math.max(maxElapsedHour, endElapsed);
+          const slices = splitElapsedAcrossRows(startElapsed, endElapsed);
+          for (const s of slices) sleepBars.push({ ...base, ...s });
         }
       }
     }
