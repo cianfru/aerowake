@@ -79,6 +79,12 @@ export interface TimelineSleepBar {
   confidence?: number;
   references?: SleepReference[];
   woclOverlapHours?: number;
+  /** Duty ID of the related duty — used for sleep edit tracking */
+  sleepId?: string;
+  /** ISO start timestamp in UTC — for what-if sleep modifications */
+  sleepStartIso?: string;
+  /** ISO end timestamp in UTC — for what-if sleep modifications */
+  sleepEndIso?: string;
 }
 
 // ---------------------------------------------------------------------------

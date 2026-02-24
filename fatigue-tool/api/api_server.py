@@ -1642,10 +1642,25 @@ class DutyModification(BaseModel):
     excluded: bool = False                   # simulate day off
 
 
+class SleepModification(BaseModel):
+    """A single sleep override for what-if analysis.
+
+    Overrides the auto-generated sleep block for a given duty with
+    user-specified bed/wake times. The fatigue model re-runs the full
+    Borbely simulation with the modified sleep, updating all downstream
+    performance predictions.
+    """
+    duty_id: str                                 # Which duty's pre-sleep to override
+    sleep_start_utc: str                         # ISO 8601 datetime
+    sleep_end_utc: str                           # ISO 8601 datetime
+    environment: Optional[str] = None            # "home" | "hotel" (optional override)
+
+
 class WhatIfRequest(BaseModel):
     """Request body for what-if scenario analysis."""
     analysis_id: str
-    modifications: List[DutyModification]
+    modifications: List[DutyModification] = []           # existing (backward compatible)
+    sleep_modifications: List[SleepModification] = []    # NEW: sleep overrides
     config_preset: str = "default"
 
 
@@ -1783,7 +1798,41 @@ async def run_what_if(request: WhatIfRequest, db=Depends(get_db)):
     # 7. Re-sort by report time (in case shifts changed ordering)
     modified_roster.duties.sort(key=lambda d: d.report_time_utc)
 
-    # 8. Run fatigue model on modified roster
+    # 8. Parse sleep modifications into override dict
+    sleep_overrides = None
+    if request.sleep_modifications:
+        sleep_overrides = {}
+        for sm in request.sleep_modifications:
+            try:
+                s_start = datetime.fromisoformat(sm.sleep_start_utc.replace("Z", "+00:00"))
+                s_end = datetime.fromisoformat(sm.sleep_end_utc.replace("Z", "+00:00"))
+            except (ValueError, TypeError) as e:
+                raise HTTPException(400, f"Invalid ISO timestamp for sleep mod duty {sm.duty_id}: {e}")
+
+            # Ensure UTC-aware
+            if s_start.tzinfo is None:
+                s_start = s_start.replace(tzinfo=pytz.utc)
+            if s_end.tzinfo is None:
+                s_end = s_end.replace(tzinfo=pytz.utc)
+
+            duration_hours = (s_end - s_start).total_seconds() / 3600.0
+            if duration_hours < 0.5:
+                raise HTTPException(400, f"Sleep duration for duty {sm.duty_id} too short ({duration_hours:.1f}h, min 0.5h)")
+            if duration_hours > 14.0:
+                raise HTTPException(400, f"Sleep duration for duty {sm.duty_id} too long ({duration_hours:.1f}h, max 14h)")
+
+            # Verify duty exists in roster
+            duty_obj = modified_roster.get_duty_by_id(sm.duty_id)
+            if duty_obj is None:
+                raise HTTPException(400, f"Duty {sm.duty_id} not found in roster (sleep override)")
+
+            sleep_overrides[sm.duty_id] = {
+                "start_utc": s_start,
+                "end_utc": s_end,
+                "environment": sm.environment,  # None = keep auto-detected
+            }
+
+    # 9. Run fatigue model on modified roster
     config_map = {
         "default": ModelConfig.default_easa_config,
         "conservative": ModelConfig.conservative_config,
@@ -1792,9 +1841,9 @@ async def run_what_if(request: WhatIfRequest, db=Depends(get_db)):
     }
     config = config_map.get(request.config_preset, ModelConfig.default_easa_config)()
     model = BorbelyFatigueModel(config)
-    monthly_analysis = model.simulate_roster(modified_roster)
+    monthly_analysis = model.simulate_roster(modified_roster, sleep_overrides=sleep_overrides)
 
-    # 9. Build response (same shape as /api/analyze)
+    # 10. Build response (same shape as /api/analyze)
     whatif_id = f"whatif_{analysis_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
     duties_response = []

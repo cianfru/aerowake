@@ -2,10 +2,12 @@ import { useState, useMemo } from 'react';
 import { Brain, Battery } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { DutyAnalysis, DutyStatistics, RestDaySleep } from '@/types/fatigue';
 import { ContinuousPerformanceTimeline } from './ContinuousPerformanceTimeline';
 import { TimelineRenderer } from './chronogram/TimelineRenderer';
 import { homeBaseTransform, utcTransform, elapsedTransform } from '@/lib/timeline-transforms';
+import { useSleepEdits } from '@/hooks/useSleepEdits';
 
 interface ChronogramProps {
   duties: DutyAnalysis[];
@@ -23,6 +25,9 @@ interface ChronogramProps {
 
 export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilotBase, pilotAircraft, onDutySelect, selectedDuty, restDaysSleep, analysisId }: ChronogramProps) {
   const [activeTab, setActiveTab] = useState<'homebase' | 'utc' | 'elapsed' | 'continuous'>('homebase');
+
+  // Sleep editing state
+  const sleepEdits = useSleepEdits(analysisId);
 
   // Pre-compute timeline data for each grid-based view
   const homeBaseData = useMemo(
@@ -77,7 +82,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             </TabsTrigger>
           </TabsList>
 
-          {/* Home-Base Timeline Tab */}
+          {/* Home-Base Timeline Tab — editable sleep */}
           <TabsContent value="homebase" className="mt-4 space-y-4">
             <TimelineRenderer
               data={homeBaseData}
@@ -89,6 +94,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               pilotAircraft={pilotAircraft}
               onDutySelect={onDutySelect}
               selectedDuty={selectedDuty}
+              pendingEdits={sleepEdits.pendingEdits}
+              onSleepEdit={sleepEdits.addEdit}
+              onRemoveEdit={sleepEdits.removeEdit}
             />
           </TabsContent>
 
@@ -135,6 +143,33 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             />
           </TabsContent>
         </Tabs>
+
+        {/* Floating Apply bar — shows when sleep edits are pending */}
+        {sleepEdits.hasEdits && (
+          <div className="sticky bottom-0 z-10 bg-background/95 backdrop-blur-sm border border-border/30 px-4 py-3 flex items-center justify-between rounded-xl shadow-lg">
+            <span className="text-sm text-muted-foreground">
+              ✎ {sleepEdits.editCount} sleep edit{sleepEdits.editCount > 1 ? 's' : ''} pending
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={sleepEdits.clearEdits}
+                disabled={sleepEdits.isApplying}
+              >
+                Reset All
+              </Button>
+              <Button
+                variant="glow"
+                size="sm"
+                onClick={sleepEdits.applyEdits}
+                disabled={sleepEdits.isApplying}
+              >
+                {sleepEdits.isApplying ? 'Recalculating…' : 'Apply & Recalculate'}
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

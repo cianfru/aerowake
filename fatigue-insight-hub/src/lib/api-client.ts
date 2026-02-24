@@ -90,6 +90,9 @@ export interface SleepBlockResponse {
   sleep_start_hour?: number | null;
   sleep_end_day?: number | null;
   sleep_end_hour?: number | null;
+  // UTC ISO timestamps (canonical, unambiguous — used for what-if sleep editing)
+  sleep_start_utc?: string | null;
+  sleep_end_utc?: string | null;
 }
 
 // Strategic sleep estimator output (SleepQualityResponse from backend)
@@ -546,3 +549,47 @@ export async function getYearlyDashboard(): Promise<YearlyDashboardData> {
 }
 
 
+// ============================================================================
+// WHAT-IF SCENARIO ANALYSIS (sleep editing)
+// ============================================================================
+
+export interface DutyModification {
+  duty_id: string;
+  report_shift_minutes?: number;
+  release_shift_minutes?: number;
+  crew_composition?: string;
+  crew_set?: string;
+  excluded?: boolean;
+}
+
+export interface SleepModification {
+  duty_id: string;
+  sleep_start_utc: string;   // ISO 8601 datetime in UTC
+  sleep_end_utc: string;     // ISO 8601 datetime in UTC
+  environment?: string;      // "home" | "hotel" (optional override)
+}
+
+export interface WhatIfRequest {
+  analysis_id: string;
+  modifications?: DutyModification[];
+  sleep_modifications?: SleepModification[];
+  config_preset?: string;
+}
+
+export async function runWhatIf(request: WhatIfRequest): Promise<AnalysisResult> {
+  const response = await fetch(`${API_BASE_URL}/api/what-if`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'What-if analysis failed' }));
+    throw new Error(error.detail || 'What-if analysis failed');
+  }
+
+  return response.json();
+}

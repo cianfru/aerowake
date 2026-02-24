@@ -161,6 +161,14 @@ export interface DutyAnalysis {
     confidenceBasis?: string;
     qualityFactors?: SleepQualityFactors;
     references?: SleepReference[];
+    // Sleep blocks with UTC timestamps (for what-if sleep editing)
+    sleepBlocks?: Array<{
+      sleepStartUtc?: string;
+      sleepEndUtc?: string;
+      sleepType?: string;
+      durationHours?: number;
+      effectiveHours?: number;
+    }>;
   };
 
   // ULR / Augmented crew fields

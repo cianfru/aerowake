@@ -717,24 +717,33 @@ class BorbelyFatigueModel:
     # ROSTER SIMULATION
     # ========================================================================
 
-    def simulate_roster(self, roster: Roster) -> MonthlyAnalysis:
-        """Process entire roster with cumulative tracking"""
+    def simulate_roster(self, roster: Roster, sleep_overrides=None) -> MonthlyAnalysis:
+        """Process entire roster with cumulative tracking.
+
+        Args:
+            roster: The Roster to simulate.
+            sleep_overrides: Optional dict keyed by duty_id. Each value has
+                ``start_utc`` (datetime), ``end_utc`` (datetime), and optional
+                ``environment`` (str). When provided, the auto-generated sleep
+                blocks for that duty are replaced with a single block using the
+                specified times, and quality is recalculated.
+        """
         if not roster.duties or len(roster.duties) == 0:
             raise ValueError("Cannot simulate roster: No duties found.")
-        
+
         duty_timelines = []
         current_s = roster.initial_sleep_pressure
         cumulative_sleep_debt = roster.initial_sleep_debt
-        
+
         # Initialize circadian tracking
         body_clock = CircadianState(
             current_phase_shift_hours=0.0,
             last_update_utc=roster.duties[0].report_time_utc - timedelta(days=1),
             reference_timezone=roster.home_base_timezone
         )
-        
+
         body_clock_timeline = [(body_clock.last_update_utc, body_clock)]
-        
+
         # Track circadian adaptation across duties
         for duty in roster.duties:
             if duty.segments:
@@ -746,9 +755,16 @@ class BorbelyFatigueModel:
                 duty.report_time_utc, body_clock, departure_tz, roster.home_base_timezone
             )
             body_clock_timeline.append((duty.report_time_utc, body_clock))
-        
+
         # Extract all sleep opportunities
         all_sleep, sleep_strategies = self._extract_sleep_from_roster(roster, body_clock_timeline)
+
+        # Apply user sleep overrides (what-if sleep editing)
+        if sleep_overrides:
+            all_sleep, sleep_strategies = self._apply_sleep_overrides(
+                all_sleep, sleep_strategies, sleep_overrides, roster
+            )
+
         self.sleep_strategies = sleep_strategies
         
         previous_duty = None
@@ -1470,6 +1486,203 @@ class BorbelyFatigueModel:
         sleep_blocks = resolved_blocks
 
         return sleep_blocks, sleep_strategies
+
+    # ------------------------------------------------------------------
+    # SLEEP OVERRIDES (What-If sleep editing)
+    # ------------------------------------------------------------------
+
+    def _apply_sleep_overrides(
+        self,
+        all_sleep: List[SleepBlock],
+        sleep_strategies: Dict[str, Any],
+        sleep_overrides: Dict[str, Any],
+        roster: 'Roster',
+    ) -> Tuple[List[SleepBlock], Dict[str, Any]]:
+        """Replace auto-generated sleep blocks with user-specified overrides.
+
+        For each duty_id in *sleep_overrides*, all SleepBlock entries that
+        belong to that duty's strategy are removed and replaced by a single
+        block with the user-specified start/end times. Sleep quality is
+        recalculated from scratch so the Borbely model receives scientifically
+        valid quality factors.
+
+        Returns the modified (all_sleep, sleep_strategies) tuple.
+        """
+        from core.strategy_references import get_strategy_references
+
+        home_tz = pytz.timezone(roster.home_base_timezone)
+
+        for duty_id, override in sleep_overrides.items():
+            s_start = override["start_utc"]
+            s_end = override["end_utc"]
+            env_override = override.get("environment")  # None = keep original
+
+            # Find the existing strategy for this duty
+            existing_strat = sleep_strategies.get(duty_id)
+            if existing_strat is None:
+                logger.warning(f"[SLEEP-OVERRIDE] No existing strategy for {duty_id}, skipping")
+                continue
+
+            # Determine environment — prefer user override, fall back to original
+            original_env = 'home'
+            if existing_strat.get('sleep_blocks') and len(existing_strat['sleep_blocks']) > 0:
+                original_env = existing_strat['sleep_blocks'][0].get('environment', 'home')
+            env = env_override or original_env
+
+            # Remove old sleep blocks belonging to this duty from all_sleep
+            # Strategy blocks correspond to the time window of the strategy.
+            # Match by UTC time range overlap with original strategy blocks.
+            original_block_utcs = set()
+            if existing_strat.get('sleep_blocks'):
+                for ob in existing_strat['sleep_blocks']:
+                    if 'sleep_start_utc' in ob:
+                        original_block_utcs.add(ob['sleep_start_utc'])
+
+            new_all_sleep = []
+            for block in all_sleep:
+                block_utc_iso = block.start_utc.astimezone(pytz.utc).isoformat()
+                if block_utc_iso in original_block_utcs:
+                    continue  # Remove old block
+                new_all_sleep.append(block)
+            all_sleep = new_all_sleep
+
+            # Compute duration
+            duration_hours = (s_end - s_start).total_seconds() / 3600.0
+
+            # Find the duty object for context
+            duty_obj = roster.get_duty_by_id(duty_id)
+            prev_duty_end = None
+            next_event = s_end + timedelta(hours=12)  # fallback
+            if duty_obj:
+                next_event = duty_obj.report_time_utc
+                # Find previous duty
+                duty_idx = roster.get_duty_index(duty_id)
+                if duty_idx is not None and duty_idx > 0:
+                    prev_duty = roster.duties[duty_idx - 1]
+                    prev_duty_end = prev_duty.release_time_utc
+
+            # Recalculate sleep quality with user-specified times
+            location_timezone = home_tz.zone  # default
+            if env == 'hotel' and duty_obj and duty_obj.segments:
+                # Use previous arrival airport timezone for hotel sleep
+                duty_idx = roster.get_duty_index(duty_id)
+                if duty_idx is not None and duty_idx > 0:
+                    prev_segments = roster.duties[duty_idx - 1].segments
+                    if prev_segments:
+                        location_timezone = prev_segments[-1].arrival_airport.timezone
+
+            quality = self.sleep_calculator.calculate_sleep_quality(
+                sleep_start=s_start,
+                sleep_end=s_end,
+                location=env,
+                previous_duty_end=prev_duty_end,
+                next_event=next_event,
+                is_nap=False,
+                location_timezone=location_timezone,
+            )
+
+            # Pre-compute home-base day/hour for chronogram positioning
+            ss_home = s_start.astimezone(home_tz)
+            se_home = s_end.astimezone(home_tz)
+            ss_utc = s_start.astimezone(pytz.utc)
+            se_utc = s_end.astimezone(pytz.utc)
+
+            # Create replacement SleepBlock
+            replacement = SleepBlock(
+                start_utc=ss_utc,
+                end_utc=se_utc,
+                location_timezone=location_timezone,
+                duration_hours=quality.actual_sleep_hours,
+                quality_factor=quality.sleep_efficiency,
+                effective_sleep_hours=quality.effective_sleep_hours,
+                environment=env,
+                sleep_start_day=ss_home.day,
+                sleep_start_hour=ss_home.hour + ss_home.minute / 60.0,
+                sleep_end_day=se_home.day,
+                sleep_end_hour=se_home.hour + se_home.minute / 60.0,
+            )
+            all_sleep.append(replacement)
+
+            # Re-sort by start_utc (maintain ordering)
+            all_sleep.sort(key=lambda b: b.start_utc)
+
+            # Build replacement strategy response
+            location_tz_obj = pytz.timezone(location_timezone)
+            ss_local = s_start.astimezone(location_tz_obj)
+            se_local = s_end.astimezone(location_tz_obj)
+
+            qf = {
+                'base_efficiency': quality.base_efficiency,
+                'wocl_boost': quality.wocl_penalty,
+                'late_onset_penalty': quality.late_onset_penalty,
+                'recovery_boost': quality.recovery_boost,
+                'time_pressure_factor': quality.time_pressure_factor,
+                'insufficient_penalty': quality.insufficient_penalty,
+            }
+
+            sleep_strategies[duty_id] = {
+                'strategy_type': existing_strat.get('strategy_type', 'user_override'),
+                'confidence': 1.0,  # User-specified = max confidence
+                'total_sleep_hours': quality.total_sleep_hours,
+                'effective_sleep_hours': quality.effective_sleep_hours,
+                'sleep_efficiency': quality.sleep_efficiency,
+                'wocl_overlap_hours': quality.wocl_overlap_hours,
+                'warnings': [w['message'] for w in quality.warnings],
+                'sleep_start_time': ss_home.strftime('%H:%M'),
+                'sleep_end_time': se_home.strftime('%H:%M'),
+                'sleep_blocks': [{
+                    'sleep_start_time': ss_home.strftime('%H:%M'),
+                    'sleep_end_time': se_home.strftime('%H:%M'),
+                    'sleep_start_iso': ss_home.isoformat(),
+                    'sleep_end_iso': se_home.isoformat(),
+                    'sleep_start_utc': ss_utc.isoformat(),
+                    'sleep_end_utc': se_utc.isoformat(),
+                    'sleep_start_day': ss_home.day,
+                    'sleep_start_hour': ss_home.hour + ss_home.minute / 60.0,
+                    'sleep_end_day': se_home.day,
+                    'sleep_end_hour': se_home.hour + se_home.minute / 60.0,
+                    'location_timezone': location_timezone,
+                    'environment': env,
+                    'sleep_start_time_home_tz': ss_home.strftime('%H:%M'),
+                    'sleep_end_time_home_tz': se_home.strftime('%H:%M'),
+                    'sleep_start_day_home_tz': ss_home.day,
+                    'sleep_start_hour_home_tz': ss_home.hour + ss_home.minute / 60.0,
+                    'sleep_end_day_home_tz': se_home.day,
+                    'sleep_end_hour_home_tz': se_home.hour + se_home.minute / 60.0,
+                    'sleep_start_day_utc': ss_utc.day,
+                    'sleep_start_hour_utc': ss_utc.hour + ss_utc.minute / 60.0,
+                    'sleep_end_day_utc': se_utc.day,
+                    'sleep_end_hour_utc': se_utc.hour + se_utc.minute / 60.0,
+                    'sleep_start_time_utc': ss_utc.strftime('%H:%M'),
+                    'sleep_end_time_utc': se_utc.strftime('%H:%M'),
+                    'sleep_start_time_location_tz': ss_local.strftime('%H:%M'),
+                    'sleep_end_time_location_tz': se_local.strftime('%H:%M'),
+                    'sleep_type': 'main',
+                    'duration_hours': quality.actual_sleep_hours,
+                    'effective_hours': quality.effective_sleep_hours,
+                    'quality_factor': quality.sleep_efficiency,
+                    'quality_factors': qf,
+                }],
+                'explanation': (
+                    f'User-specified sleep override: {ss_home.strftime("%H:%M")}-'
+                    f'{se_home.strftime("%H:%M")} ({duration_hours:.1f}h, '
+                    f'{quality.sleep_efficiency:.0%} efficiency).'
+                ),
+                'confidence_basis': 'User-specified sleep times — highest confidence.',
+                'quality_factors': qf,
+                'references': get_strategy_references(
+                    existing_strat.get('strategy_type', 'normal')
+                ),
+                'is_user_override': True,
+            }
+
+            logger.info(
+                f"[SLEEP-OVERRIDE] duty={duty_id} "
+                f"sleep={ss_utc.isoformat()[:16]}→{se_utc.isoformat()[:16]} "
+                f"env={env} eff={quality.effective_sleep_hours:.1f}h"
+            )
+
+        return all_sleep, sleep_strategies
 
     def _store_strategy_response(
         self,

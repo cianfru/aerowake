@@ -121,6 +121,11 @@ function baseSleepFields(
   est: NonNullable<DutyAnalysis['sleepEstimate']>,
   duty: DutyAnalysis,
 ): Omit<TimelineSleepBar, 'rowIndex' | 'startHour' | 'endHour' | 'isOvernightStart' | 'isOvernightContinuation'> {
+  // Extract UTC ISO timestamps from sleep blocks for what-if editing
+  const firstBlock = est.sleepBlocks?.[0];
+  const sleepStartUtcIso = firstBlock?.sleepStartUtc ?? undefined;
+  const sleepEndUtcIso = firstBlock?.sleepEndUtc ?? undefined;
+
   return {
     recoveryScore: getRecoveryScore(est),
     effectiveSleep: est.effectiveSleepHours,
@@ -138,6 +143,9 @@ function baseSleepFields(
     confidence: est.confidence,
     references: est.references,
     woclOverlapHours: est.woclOverlapHours,
+    sleepId: duty.dutyId,
+    sleepStartIso: sleepStartUtcIso,
+    sleepEndIso: sleepEndUtcIso,
   };
 }
 

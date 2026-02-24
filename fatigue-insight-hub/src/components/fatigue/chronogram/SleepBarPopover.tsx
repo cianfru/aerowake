@@ -2,7 +2,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { getRecoveryClasses, getStrategyIcon, decimalToHHmm, QUALITY_FACTOR_LABELS } from '@/lib/fatigue-utils';
 import { SleepQualityBadge } from '../SleepQualityBadge';
+import { TimeSlider } from '@/components/ui/time-slider';
 import type { TimelineSleepBar } from '@/lib/timeline-types';
+import type { SleepEdit } from '@/hooks/useSleepEdits';
 import { format } from 'date-fns';
 
 interface SleepBarPopoverProps {
@@ -12,46 +14,110 @@ interface SleepBarPopoverProps {
   /** Left offset as % of the row (0-100) */
   leftPercent: number;
   variant: 'homebase' | 'utc' | 'elapsed';
+  /** Whether sleep editing is enabled (homebase only) */
+  isEditable?: boolean;
+  /** Current pending edit for this sleep bar (if any) */
+  pendingEdit?: SleepEdit | null;
+  /** Called when user adjusts a sleep slider */
+  onSleepEdit?: (edit: SleepEdit) => void;
+  /** Called when user resets a single edit */
+  onRemoveEdit?: (dutyId: string) => void;
 }
 
-export function SleepBarPopover({ bar, widthPercent, leftPercent, variant }: SleepBarPopoverProps) {
+export function SleepBarPopover({
+  bar,
+  widthPercent,
+  leftPercent,
+  variant,
+  isEditable,
+  pendingEdit,
+  onSleepEdit,
+  onRemoveEdit,
+}: SleepBarPopoverProps) {
   const classes = getRecoveryClasses(bar.recoveryScore);
+  const hasEdit = pendingEdit != null;
 
   // Determine border radius based on overnight status
-  // Start bars: rounded left, flat right; Continuation bars: flat left, rounded right
   const borderRadius = bar.isOvernightStart
     ? '2px 0 0 2px'
     : bar.isOvernightContinuation
       ? '0 2px 2px 0'
       : '2px';
 
+  // Current display times (use edited values if available)
+  const displayStartHour = hasEdit ? pendingEdit!.newStartHour : (bar.originalStartHour ?? bar.startHour);
+  const displayEndHour = hasEdit ? pendingEdit!.newEndHour : (bar.originalEndHour ?? bar.endHour);
+
+  // Can edit: must be homebase, have a sleepId, and have UTC ISOs for conversion
+  const canEdit = isEditable && bar.sleepId && bar.sleepStartIso && bar.sleepEndIso;
+
+  // Slider range for bedtime: typically 16:00 → 28:00 (4pm → 4am+1d)
+  // Slider range for wake-up: typically 2:00 → 16:00
+  const originalStart = bar.originalStartHour ?? bar.startHour;
+  const originalEnd = bar.originalEndHour ?? bar.endHour;
+
+  // Handle slider change
+  const handleStartChange = (newStart: number) => {
+    if (!canEdit || !onSleepEdit) return;
+    onSleepEdit({
+      dutyId: bar.sleepId!,
+      originalStartHour: originalStart,
+      originalEndHour: originalEnd,
+      newStartHour: newStart,
+      newEndHour: hasEdit ? pendingEdit!.newEndHour : originalEnd,
+      originalStartIso: bar.sleepStartIso!,
+      originalEndIso: bar.sleepEndIso!,
+    });
+  };
+
+  const handleEndChange = (newEnd: number) => {
+    if (!canEdit || !onSleepEdit) return;
+    onSleepEdit({
+      dutyId: bar.sleepId!,
+      originalStartHour: originalStart,
+      originalEndHour: originalEnd,
+      newStartHour: hasEdit ? pendingEdit!.newStartHour : originalStart,
+      newEndHour: newEnd,
+      originalStartIso: bar.sleepStartIso!,
+      originalEndIso: bar.sleepEndIso!,
+    });
+  };
+
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="absolute z-[5] flex items-center justify-end px-1 border border-dashed cursor-pointer hover:brightness-110 transition-all border-primary/20 bg-primary/5"
+          className={cn(
+            "absolute z-[5] flex items-center justify-end px-1 border cursor-pointer hover:brightness-110 transition-all",
+            hasEdit
+              ? "border-warning/60 bg-warning/10 border-solid"
+              : "border-dashed border-primary/20 bg-primary/5"
+          )}
           style={{
             top: 0,
             height: '100%',
             left: `${leftPercent}%`,
             width: `${Math.max(widthPercent, 1)}%`,
             borderRadius,
-            // Remove border on connected edges for visual continuity
             borderRight: bar.isOvernightStart ? 'none' : undefined,
             borderLeft: bar.isOvernightContinuation ? 'none' : undefined,
           }}
         >
           {/* Show recovery info if bar is wide enough */}
           {widthPercent > 6 && (
-            <div className={cn("flex items-center gap-0.5 text-[8px] font-medium", classes.text)}>
+            <div className={cn("flex items-center gap-0.5 text-[8px] font-medium", hasEdit ? "text-warning" : classes.text)}>
               <span>{getStrategyIcon(bar.sleepStrategy)}</span>
               <span>{Math.round(bar.recoveryScore)}%</span>
             </div>
           )}
-          {/* Sleep quality badge -- only shows for notable quality deviations */}
-          {widthPercent > 4 && (
+          {/* Sleep quality badge */}
+          {widthPercent > 4 && !hasEdit && (
             <SleepQualityBadge qualityFactors={bar.qualityFactors} />
+          )}
+          {/* Modified indicator */}
+          {hasEdit && widthPercent > 3 && (
+            <span className="text-[7px] text-warning font-medium ml-0.5">✎</span>
           )}
         </button>
       </PopoverTrigger>
@@ -62,13 +128,18 @@ export function SleepBarPopover({ bar, widthPercent, leftPercent, variant }: Sle
             <div className="font-semibold flex items-center gap-1.5">
               <span className="text-base">{bar.isPreDuty ? '\u{1F6CF}\uFE0F' : '\u{1F50B}'}</span>
               <span>{bar.isPreDuty ? 'Pre-Duty Sleep' : 'Recovery Sleep'}</span>
+              {hasEdit && (
+                <span className="text-[9px] font-medium text-warning bg-warning/10 px-1.5 py-0.5 rounded">
+                  Modified
+                </span>
+              )}
             </div>
-            <div className={cn("text-lg font-bold", classes.text)}>
+            <div className={cn("text-lg font-bold", hasEdit ? "text-warning" : classes.text)}>
               {Math.round(bar.recoveryScore)}%
             </div>
           </div>
 
-          {/* Explanation from backend (if available) */}
+          {/* Explanation from backend */}
           {bar.explanation && (
             <div className="bg-primary/5 border border-primary/20 rounded-md p-2 text-[11px] text-muted-foreground leading-relaxed">
               <span className="text-primary font-medium">{'\u{1F4A1}'} </span>
@@ -76,16 +147,56 @@ export function SleepBarPopover({ bar, widthPercent, leftPercent, variant }: Sle
             </div>
           )}
 
-          {/* Sleep Timing - show full window for overnight sleep */}
+          {/* Sleep Window display */}
           <div className="flex items-center justify-between text-muted-foreground">
             <span>Sleep Window</span>
-            <span className="font-mono font-medium text-foreground">
-              {decimalToHHmm(bar.originalStartHour ?? bar.startHour)} {'\u2192'} {decimalToHHmm(bar.originalEndHour ?? bar.endHour)}
-              {/* Show +1d only when sleep truly crosses midnight */}
+            <span className={cn("font-mono font-medium", hasEdit ? "text-warning" : "text-foreground")}>
+              {decimalToHHmm(displayStartHour)} {'\u2192'} {decimalToHHmm(displayEndHour)}
               {(bar.isOvernightStart || bar.isOvernightContinuation) &&
-               (bar.originalStartHour ?? bar.startHour) > (bar.originalEndHour ?? bar.endHour) && ' (+1d)'}
+               displayStartHour > displayEndHour && ' (+1d)'}
             </span>
           </div>
+
+          {/* === SLEEP EDITING SLIDERS (homebase only) === */}
+          {canEdit && (
+            <div className="bg-secondary/20 rounded-lg p-2.5 space-y-3 border border-border/30">
+              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                <span>✎</span> Adjust Sleep Times
+              </div>
+
+              <TimeSlider
+                label="Bedtime"
+                value={hasEdit ? pendingEdit!.newStartHour : originalStart}
+                min={Math.max(originalStart - 4, 14)}
+                max={Math.min(originalStart + 4, 30)}
+                step={0.25}
+                originalValue={originalStart}
+                onChange={handleStartChange}
+              />
+
+              <TimeSlider
+                label="Wake-up"
+                value={hasEdit ? pendingEdit!.newEndHour : originalEnd}
+                min={Math.max(originalEnd - 4, 2)}
+                max={Math.min(originalEnd + 4, 18)}
+                step={0.25}
+                originalValue={originalEnd}
+                onChange={handleEndChange}
+              />
+
+              {hasEdit && (
+                <button
+                  type="button"
+                  onClick={() => bar.sleepId && onRemoveEdit?.(bar.sleepId)}
+                  className="text-[10px] text-muted-foreground hover:text-foreground transition-colors underline"
+                >
+                  Reset to original
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Zulu times */}
           {bar.sleepStartZulu && bar.sleepEndZulu && (
             <div className="flex items-center justify-between text-muted-foreground">
               <span>Zulu</span>
@@ -101,7 +212,6 @@ export function SleepBarPopover({ bar, widthPercent, leftPercent, variant }: Sle
               Recovery Score Breakdown
             </div>
 
-            {/* Base Score from Sleep */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <span className="text-muted-foreground">{'\u23F1\uFE0F'}</span>
@@ -119,7 +229,6 @@ export function SleepBarPopover({ bar, widthPercent, leftPercent, variant }: Sle
               </div>
             </div>
 
-            {/* Efficiency Bonus */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <span className="text-muted-foreground">{'\u2728'}</span>
@@ -137,7 +246,6 @@ export function SleepBarPopover({ bar, widthPercent, leftPercent, variant }: Sle
               </div>
             </div>
 
-            {/* WOCL Penalty */}
             {(bar.woclOverlapHours ?? 0) > 0 && (
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
@@ -153,7 +261,6 @@ export function SleepBarPopover({ bar, widthPercent, leftPercent, variant }: Sle
               </div>
             )}
 
-            {/* Divider & Total */}
             <div className="border-t border-border/50 pt-1.5 flex items-center justify-between font-medium">
               <span>Total Score</span>
               <span className={cn("font-mono", classes.text)}>
@@ -162,7 +269,7 @@ export function SleepBarPopover({ bar, widthPercent, leftPercent, variant }: Sle
             </div>
           </div>
 
-          {/* Quality Factors from backend (if available) */}
+          {/* Quality Factors */}
           {bar.qualityFactors && (
             <div className="bg-secondary/20 rounded-lg p-2 space-y-1.5">
               <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
@@ -190,7 +297,7 @@ export function SleepBarPopover({ bar, widthPercent, leftPercent, variant }: Sle
             </div>
           )}
 
-          {/* Confidence & Basis (if available) */}
+          {/* Confidence */}
           {bar.confidence != null && (
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-muted-foreground">Model Confidence</span>
@@ -209,7 +316,7 @@ export function SleepBarPopover({ bar, widthPercent, leftPercent, variant }: Sle
             </div>
           )}
 
-          {/* References (if available) */}
+          {/* References */}
           {bar.references && bar.references.length > 0 && (
             <div className="border-t border-border/30 pt-2 space-y-1">
               <div className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">

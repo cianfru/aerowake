@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Badge } from '@/components/ui/badge';
 import type { TimelineData } from '@/lib/timeline-types';
 import type { DutyAnalysis } from '@/types/fatigue';
+import type { SleepEdit } from '@/hooks/useSleepEdits';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -25,6 +26,12 @@ interface TimelineGridProps {
   showFlightPhases: boolean;
   selectedDuty: DutyAnalysis | null;
   onDutySelect: (duty: DutyAnalysis) => void;
+  /** Pending sleep edits (Map<dutyId, SleepEdit>) — homebase only */
+  pendingEdits?: Map<string, SleepEdit>;
+  /** Callback when user adjusts a sleep slider */
+  onSleepEdit?: (edit: SleepEdit) => void;
+  /** Callback when user resets a single sleep edit */
+  onRemoveEdit?: (dutyId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -44,6 +51,9 @@ export function TimelineGrid({
   showFlightPhases,
   selectedDuty,
   onDutySelect,
+  pendingEdits,
+  onSleepEdit,
+  onRemoveEdit,
 }: TimelineGridProps) {
   return (
     <div className="flex">
@@ -148,6 +158,10 @@ export function TimelineGrid({
                     widthPercent={((bar.endHour - bar.startHour) / 24) * 100}
                     leftPercent={(bar.startHour / 24) * 100}
                     variant={data.variant}
+                    isEditable={data.variant === 'homebase'}
+                    pendingEdit={bar.sleepId ? pendingEdits?.get(bar.sleepId) ?? null : null}
+                    onSleepEdit={onSleepEdit}
+                    onRemoveEdit={onRemoveEdit}
                   />
                 ))}
 
