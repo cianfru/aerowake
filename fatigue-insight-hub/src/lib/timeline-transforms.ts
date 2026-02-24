@@ -55,47 +55,80 @@ function dutyDayOfMonth(duty: DutyAnalysis): number {
   return duty.date.getDate();
 }
 
-/** Build TimelineSegments for flight-based duties using local HH:mm times. */
+/** Build TimelineSegments for flight-based duties using local HH:mm times.
+ *  Includes ground/turnaround segments between flights and a post-flight
+ *  segment from last arrival to duty release. */
 function buildLocalSegments(
   duty: DutyAnalysis,
   checkInHour: number,
+  dutyEndHour: number,
 ): TimelineSegment[] {
   const segments: TimelineSegment[] = [];
+  let lastEndHour: number | undefined;
 
   // Check-in segment
   if (duty.flightSegments.length > 0) {
     const firstDep = parseTimeToHours(duty.flightSegments[0].departureTime);
-    if (firstDep !== undefined) {
+    if (firstDep !== undefined && firstDep > checkInHour) {
       segments.push({
         type: 'checkin',
         startHour: checkInHour,
         endHour: firstDep,
         performance: duty.avgPerformance,
       });
+      lastEndHour = firstDep;
+    } else {
+      lastEndHour = checkInHour;
     }
   }
 
-  // Flight segments
+  // Flight segments (with ground gaps between them)
   for (const seg of duty.flightSegments) {
     const depH = parseTimeToHours(seg.departureTime);
     const arrH = parseTimeToHours(seg.arrivalTime);
     if (depH === undefined || arrH === undefined) continue;
 
+    const adjustedDep = depH < (lastEndHour ?? checkInHour) ? depH + 24 : depH;
     const adjustedArr = arrH < depH ? arrH + 24 : arrH;
     const perf = seg.performance ?? duty.avgPerformance;
+
+    // Insert ground segment for turnaround gap between previous arrival and this departure
+    if (lastEndHour !== undefined && adjustedDep > lastEndHour + 0.01) {
+      segments.push({
+        type: 'ground',
+        startHour: lastEndHour,
+        endHour: adjustedDep,
+        performance: duty.avgPerformance,
+      });
+    }
 
     segments.push({
       type: seg.isDeadhead ? 'ground' : 'flight',
       flightNumber: seg.flightNumber,
       departure: seg.departure,
       arrival: seg.arrival,
-      startHour: depH,
+      startHour: adjustedDep,
       endHour: adjustedArr,
       performance: perf,
       activityCode: seg.activityCode,
       isDeadhead: seg.isDeadhead,
       phases: seg.isDeadhead ? undefined : buildFlightPhases(perf, duty.landingPerformance),
     });
+
+    lastEndHour = adjustedArr;
+  }
+
+  // Post-flight ground segment (last arrival → duty release)
+  if (lastEndHour !== undefined) {
+    const adjustedEnd = dutyEndHour < lastEndHour ? dutyEndHour + 24 : dutyEndHour;
+    if (adjustedEnd > lastEndHour + 0.01) {
+      segments.push({
+        type: 'ground',
+        startHour: lastEndHour,
+        endHour: adjustedEnd,
+        performance: duty.avgPerformance,
+      });
+    }
   }
 
   return segments;
@@ -244,7 +277,7 @@ export function homeBaseTransform(
         // Special case: check-in on previous day
         const checkInOnPrevDay = checkInHour > endHour && checkInHour >= 16;
 
-        const segments = buildLocalSegments(duty, checkInHour);
+        const segments = buildLocalSegments(duty, checkInHour, endHour);
 
         if (checkInOnPrevDay) {
           // Bar 1: previous day, check-in to 24:00
@@ -479,22 +512,29 @@ export function homeBaseTransform(
 // 2. UTC TRANSFORM
 // ===========================================================================
 
-/** Build TimelineSegments using UTC times from flight segments. */
+/** Build TimelineSegments using UTC times from flight segments.
+ *  Includes ground/turnaround segments between flights and a post-flight
+ *  segment from last arrival to duty end. */
 function buildUtcSegments(
   duty: DutyAnalysis,
   checkInHour: number,
+  dutyEndHour: number,
 ): TimelineSegment[] {
   const segments: TimelineSegment[] = [];
+  let lastEndHour: number | undefined;
 
   if (duty.flightSegments.length > 0) {
     const firstDepUtc = parseUtcTimeStr(duty.flightSegments[0].departureTimeUtc);
-    if (firstDepUtc !== null) {
+    if (firstDepUtc !== null && firstDepUtc > checkInHour) {
       segments.push({
         type: 'checkin',
         startHour: checkInHour,
         endHour: firstDepUtc,
         performance: duty.avgPerformance,
       });
+      lastEndHour = firstDepUtc;
+    } else {
+      lastEndHour = checkInHour;
     }
   }
 
@@ -503,21 +543,47 @@ function buildUtcSegments(
     const arrH = parseUtcTimeStr(seg.arrivalTimeUtc);
     if (depH === null || arrH === null) continue;
 
+    const adjustedDep = depH < (lastEndHour ?? checkInHour) ? depH + 24 : depH;
     const adjustedArr = arrH < depH ? arrH + 24 : arrH;
     const perf = seg.performance ?? duty.avgPerformance;
+
+    // Insert ground segment for turnaround gap
+    if (lastEndHour !== undefined && adjustedDep > lastEndHour + 0.01) {
+      segments.push({
+        type: 'ground',
+        startHour: lastEndHour,
+        endHour: adjustedDep,
+        performance: duty.avgPerformance,
+      });
+    }
 
     segments.push({
       type: seg.isDeadhead ? 'ground' : 'flight',
       flightNumber: seg.flightNumber,
       departure: seg.departure,
       arrival: seg.arrival,
-      startHour: depH,
+      startHour: adjustedDep,
       endHour: adjustedArr,
       performance: perf,
       activityCode: seg.activityCode,
       isDeadhead: seg.isDeadhead,
       phases: seg.isDeadhead ? undefined : buildFlightPhases(perf, duty.landingPerformance),
     });
+
+    lastEndHour = adjustedArr;
+  }
+
+  // Post-flight ground segment (last arrival → duty end)
+  if (lastEndHour !== undefined) {
+    const adjustedEnd = dutyEndHour < lastEndHour ? dutyEndHour + 24 : dutyEndHour;
+    if (adjustedEnd > lastEndHour + 0.01) {
+      segments.push({
+        type: 'ground',
+        startHour: lastEndHour,
+        endHour: adjustedEnd,
+        performance: duty.avgPerformance,
+      });
+    }
   }
 
   return segments;
@@ -647,7 +713,7 @@ export function utcTransform(
       if (checkInHour !== undefined && lastArrUtc !== null) {
         const endHour = lastArrUtc;
         const isOvernight = endHour < checkInHour;
-        const segments = buildUtcSegments(duty, checkInHour);
+        const segments = buildUtcSegments(duty, checkInHour, endHour);
 
         if (isOvernight) {
           const slices = splitOvernightBar(checkInDay, checkInHour, endHour, daysInMonth);
@@ -957,20 +1023,23 @@ export function elapsedTransform(
       const firstDep = parseTimeToHours(duty.flightSegments[0].departureTime);
       const lastArr = parseTimeToHours(duty.flightSegments[duty.flightSegments.length - 1].arrivalTime);
       const reportH = parseTimeToHours(duty.reportTimeLocal);
+      const releaseH = parseTimeToHours(duty.releaseTimeLocal);
 
       const checkInHour = reportH ?? (firstDep !== undefined ? firstDep - DEFAULT_CHECK_IN_MINUTES / 60 : undefined);
+      const dutyEnd = releaseH ?? lastArr;
 
-      if (checkInHour !== undefined && lastArr !== undefined) {
+      if (checkInHour !== undefined && dutyEnd !== undefined) {
         const startElapsed = dayHourToElapsed(dayOfMonth, checkInHour);
-        let adjustedLastArr = lastArr;
-        if (adjustedLastArr < checkInHour) adjustedLastArr += 24;
-        const endElapsed = dayHourToElapsed(dayOfMonth, adjustedLastArr);
+        let adjustedDutyEnd = dutyEnd;
+        if (adjustedDutyEnd < checkInHour) adjustedDutyEnd += 24;
+        const endElapsed = dayHourToElapsed(dayOfMonth, adjustedDutyEnd);
         maxElapsedHour = Math.max(maxElapsedHour, endElapsed);
 
         const totalDuration = endElapsed - startElapsed;
 
-        // Build segments with widthPercent
+        // Build segments with widthPercent (including ground gaps)
         const segments: TimelineSegment[] = [];
+        let lastSegEnd: number | undefined;
 
         // Check-in
         if (firstDep !== undefined) {
@@ -983,6 +1052,9 @@ export function elapsedTransform(
               widthPercent: totalDuration > 0 ? (ciDur / totalDuration) * 100 : 0,
               performance: duty.avgPerformance,
             });
+            lastSegEnd = firstDep;
+          } else {
+            lastSegEnd = checkInHour;
           }
         }
 
@@ -991,22 +1063,49 @@ export function elapsedTransform(
           const arrH = parseTimeToHours(seg.arrivalTime);
           if (depH === undefined || arrH === undefined) continue;
 
+          const adjustedDep = depH < (lastSegEnd ?? checkInHour) ? depH + 24 : depH;
           const adjustedArr = arrH < depH ? arrH + 24 : arrH;
-          const segDur = adjustedArr - depH;
           const perf = seg.performance ?? duty.avgPerformance;
 
+          // Insert ground segment for turnaround gap
+          if (lastSegEnd !== undefined && adjustedDep > lastSegEnd + 0.01) {
+            const gapDur = adjustedDep - lastSegEnd;
+            segments.push({
+              type: 'ground',
+              startHour: lastSegEnd,
+              endHour: adjustedDep,
+              widthPercent: totalDuration > 0 ? (gapDur / totalDuration) * 100 : 0,
+              performance: duty.avgPerformance,
+            });
+          }
+
+          const segDur = adjustedArr - adjustedDep;
           segments.push({
             type: seg.isDeadhead ? 'ground' : 'flight',
             flightNumber: seg.flightNumber,
             departure: seg.departure,
             arrival: seg.arrival,
-            startHour: depH,
+            startHour: adjustedDep,
             endHour: adjustedArr,
             widthPercent: totalDuration > 0 ? (segDur / totalDuration) * 100 : 0,
             performance: perf,
             activityCode: seg.activityCode,
             isDeadhead: seg.isDeadhead,
             phases: seg.isDeadhead ? undefined : buildFlightPhases(perf, duty.landingPerformance),
+          });
+
+          lastSegEnd = adjustedArr;
+        }
+
+        // Post-flight ground segment (last arrival → duty release)
+        if (lastSegEnd !== undefined && adjustedDutyEnd > lastSegEnd + 0.01) {
+          const gapDur = adjustedDutyEnd - lastSegEnd;
+          segments.push({
+            type: 'ground',
+            startHour: lastSegEnd,
+            endHour: adjustedDutyEnd,
+            widthPercent: totalDuration > 0 ? (gapDur / totalDuration) * 100 : 0,
+            performance: duty.avgPerformance,
           });
         }
 
