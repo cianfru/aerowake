@@ -937,7 +937,7 @@ async def analyze_roster(
     timezone_format: str = Form("auto"),
     crew_set: str = Form("crew_b"),
     duty_crew_overrides: str = Form("{}"),
-    user: User | None = Depends(get_optional_user),
+    user: Optional[User] = Depends(get_optional_user),
     db=Depends(get_db),
 ):
     """

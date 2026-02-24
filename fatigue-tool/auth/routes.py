@@ -13,6 +13,7 @@ Endpoints:
 import os
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
@@ -42,9 +43,9 @@ auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
-    display_name: str | None = Field(None, max_length=100)
-    pilot_id: str | None = Field(None, max_length=50)
-    home_base: str | None = Field(None, max_length=10)
+    display_name: Optional[str] = Field(None, max_length=100)
+    pilot_id: Optional[str] = Field(None, max_length=50)
+    home_base: Optional[str] = Field(None, max_length=10)
 
 
 class LoginRequest(BaseModel):
@@ -64,19 +65,19 @@ class TokenResponse(BaseModel):
 
 class UserResponse(BaseModel):
     id: str
-    email: str | None
-    display_name: str | None
-    pilot_id: str | None
-    home_base: str | None
+    email: Optional[str]
+    display_name: Optional[str]
+    pilot_id: Optional[str]
+    home_base: Optional[str]
     auth_provider: str
     is_admin: bool = False
     created_at: str
 
 
 class UpdateProfileRequest(BaseModel):
-    display_name: str | None = Field(None, max_length=100)
-    pilot_id: str | None = Field(None, max_length=50)
-    home_base: str | None = Field(None, max_length=10)
+    display_name: Optional[str] = Field(None, max_length=100)
+    pilot_id: Optional[str] = Field(None, max_length=50)
+    home_base: Optional[str] = Field(None, max_length=10)
 
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
