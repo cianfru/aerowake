@@ -13,6 +13,7 @@ Endpoints:
 
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -33,8 +34,8 @@ admin_router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
 class MostActiveUser(BaseModel):
-    email: str | None
-    display_name: str | None
+    email: Optional[str]
+    display_name: Optional[str]
     roster_count: int
 
 
@@ -45,46 +46,46 @@ class PlatformStatsResponse(BaseModel):
     users_last_7_days: int
     rosters_last_7_days: int
     avg_rosters_per_user: float
-    most_active_users: list[MostActiveUser]
+    most_active_users: List[MostActiveUser]
 
 
 class AdminUserResponse(BaseModel):
     id: str
-    email: str | None
-    display_name: str | None
-    pilot_id: str | None
-    home_base: str | None
+    email: Optional[str]
+    display_name: Optional[str]
+    pilot_id: Optional[str]
+    home_base: Optional[str]
     is_active: bool
     is_admin: bool
     created_at: str
     updated_at: str
     roster_count: int
-    last_upload: str | None
+    last_upload: Optional[str]
 
 
 class AdminRosterResponse(BaseModel):
     id: str
     filename: str
     month: str
-    pilot_id: str | None
-    home_base: str | None
-    config_preset: str | None
-    total_duties: int | None
-    total_sectors: int | None
-    total_duty_hours: float | None
-    total_block_hours: float | None
+    pilot_id: Optional[str]
+    home_base: Optional[str]
+    config_preset: Optional[str]
+    total_duties: Optional[int]
+    total_sectors: Optional[int]
+    total_duty_hours: Optional[float]
+    total_block_hours: Optional[float]
     created_at: str
     has_analysis: bool
     user_id: str
-    user_email: str | None
-    user_display_name: str | None
+    user_email: Optional[str]
+    user_display_name: Optional[str]
 
 
 class ActivityEvent(BaseModel):
     event_type: str  # "roster_upload" | "user_signup"
     timestamp: str
-    user_email: str | None
-    user_display_name: str | None
+    user_email: Optional[str]
+    user_display_name: Optional[str]
     details: dict
 
 
@@ -161,7 +162,7 @@ async def get_platform_stats(
     )
 
 
-@admin_router.get("/users", response_model=list[AdminUserResponse])
+@admin_router.get("/users", response_model=List[AdminUserResponse])
 async def list_all_users(
     _admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
@@ -211,7 +212,7 @@ async def list_all_users(
     return users
 
 
-@admin_router.get("/rosters", response_model=list[AdminRosterResponse])
+@admin_router.get("/rosters", response_model=List[AdminRosterResponse])
 async def list_all_rosters(
     _admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
@@ -259,7 +260,7 @@ async def list_all_rosters(
     return rosters
 
 
-@admin_router.get("/activity", response_model=list[ActivityEvent])
+@admin_router.get("/activity", response_model=List[ActivityEvent])
 async def get_recent_activity(
     _admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
@@ -269,7 +270,7 @@ async def get_recent_activity(
     if db is None:
         raise HTTPException(503, "Database not available")
 
-    events: list[ActivityEvent] = []
+    events: List[ActivityEvent] = []
 
     # Recent signups
     signups_q = (

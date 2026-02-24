@@ -8,6 +8,7 @@ Refresh tokens (30 days) for silent re-authentication.
 import os
 import hashlib
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from jose import jwt, JWTError
 
@@ -19,7 +20,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 
-def create_access_token(user_id: str, expires_delta: timedelta | None = None) -> str:
+def create_access_token(user_id: str, expires_delta: Optional[timedelta] = None) -> str:
     """Create a short-lived JWT access token."""
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -32,7 +33,7 @@ def create_access_token(user_id: str, expires_delta: timedelta | None = None) ->
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def create_refresh_token(user_id: str, expires_delta: timedelta | None = None) -> str:
+def create_refresh_token(user_id: str, expires_delta: Optional[timedelta] = None) -> str:
     """Create a long-lived JWT refresh token."""
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)

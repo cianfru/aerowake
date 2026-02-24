@@ -8,6 +8,7 @@ get_admin_user: requires valid JWT + is_admin flag or ADMIN_EMAILS env var
 
 import os
 import logging
+from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -26,8 +27,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=Fals
 
 
 async def get_current_user(
-    token: str | None = Depends(oauth2_scheme),
-    db: AsyncSession | None = Depends(get_db),
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Optional[AsyncSession] = Depends(get_db),
 ) -> User:
     """
     Require authenticated user.
@@ -63,9 +64,9 @@ async def get_current_user(
 
 
 async def get_optional_user(
-    token: str | None = Depends(oauth2_scheme),
-    db: AsyncSession | None = Depends(get_db),
-) -> User | None:
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Optional[AsyncSession] = Depends(get_db),
+) -> Optional[User]:
     """
     Optional authentication — returns User if valid token, None otherwise.
 
