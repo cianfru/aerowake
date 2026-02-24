@@ -126,19 +126,6 @@ function buildLocalSegments(
     lastEndHour = adjustedArr;
   }
 
-  // Post-flight ground segment (last arrival → duty release)
-  if (lastEndHour !== undefined) {
-    const adjustedEnd = dutyEndHour < lastEndHour ? dutyEndHour + 24 : dutyEndHour;
-    if (adjustedEnd > lastEndHour + 0.01) {
-      segments.push({
-        type: 'ground',
-        startHour: lastEndHour,
-        endHour: adjustedEnd,
-        performance: duty.avgPerformance,
-      });
-    }
-  }
-
   return segments;
 }
 
@@ -611,19 +598,6 @@ function buildUtcSegments(
     });
 
     lastEndHour = adjustedArr;
-  }
-
-  // Post-flight ground segment (last arrival → duty end)
-  if (lastEndHour !== undefined) {
-    const adjustedEnd = dutyEndHour < lastEndHour ? dutyEndHour + 24 : dutyEndHour;
-    if (adjustedEnd > lastEndHour + 0.01) {
-      segments.push({
-        type: 'ground',
-        startHour: lastEndHour,
-        endHour: adjustedEnd,
-        performance: duty.avgPerformance,
-      });
-    }
   }
 
   return segments;
@@ -1137,18 +1111,6 @@ export function elapsedTransform(
           });
 
           lastSegEnd = adjustedArr;
-        }
-
-        // Post-flight ground segment (last arrival → duty release)
-        if (lastSegEnd !== undefined && adjustedDutyEnd > lastSegEnd + 0.01) {
-          const gapDur = adjustedDutyEnd - lastSegEnd;
-          segments.push({
-            type: 'ground',
-            startHour: lastSegEnd,
-            endHour: adjustedDutyEnd,
-            widthPercent: totalDuration > 0 ? (gapDur / totalDuration) * 100 : 0,
-            performance: duty.avgPerformance,
-          });
         }
 
         const slices = splitElapsedAcrossRows(startElapsed, endElapsed);
