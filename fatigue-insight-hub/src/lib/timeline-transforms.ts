@@ -66,17 +66,22 @@ function buildLocalSegments(
   const segments: TimelineSegment[] = [];
   let lastEndHour: number | undefined;
 
-  // Check-in segment
+  // Check-in segment (use continuous hours for overnight: firstDep may need +24)
   if (duty.flightSegments.length > 0) {
-    const firstDep = parseTimeToHours(duty.flightSegments[0].departureTime);
-    if (firstDep !== undefined && firstDep > checkInHour) {
-      segments.push({
-        type: 'checkin',
-        startHour: checkInHour,
-        endHour: firstDep,
-        performance: duty.avgPerformance,
-      });
-      lastEndHour = firstDep;
+    const firstDepRaw = parseTimeToHours(duty.flightSegments[0].departureTime);
+    if (firstDepRaw !== undefined) {
+      const firstDep = firstDepRaw < checkInHour ? firstDepRaw + 24 : firstDepRaw;
+      if (firstDep > checkInHour + 0.01) {
+        segments.push({
+          type: 'checkin',
+          startHour: checkInHour,
+          endHour: firstDep,
+          performance: duty.avgPerformance,
+        });
+        lastEndHour = firstDep;
+      } else {
+        lastEndHour = checkInHour;
+      }
     } else {
       lastEndHour = checkInHour;
     }
@@ -88,8 +93,11 @@ function buildLocalSegments(
     const arrH = parseTimeToHours(seg.arrivalTime);
     if (depH === undefined || arrH === undefined) continue;
 
+    // Use continuous hours (>24 for post-midnight) so overnight segments
+    // can later be clipped correctly per bar slice.
     const adjustedDep = depH < (lastEndHour ?? checkInHour) ? depH + 24 : depH;
-    const adjustedArr = arrH < depH ? arrH + 24 : arrH;
+    let adjustedArr = arrH < depH ? arrH + 24 : arrH;
+    if (adjustedArr < adjustedDep) adjustedArr += 24;
     const perf = seg.performance ?? duty.avgPerformance;
 
     // Insert ground segment for turnaround gap between previous arrival and this departure
@@ -132,6 +140,53 @@ function buildLocalSegments(
   }
 
   return segments;
+}
+
+/**
+ * Clip a full-duty segment array to a single overnight bar slice.
+ *
+ * For overnight duties the segments use continuous hours (e.g. check-in at
+ * 23.5, flight at 24.75 = 00:45 next day, arrival at 27.0 = 03:00 next day).
+ * Each bar slice covers either [sliceStart, 24] or [0, sliceEnd].
+ *
+ * This function filters and trims segments to the slice window, mapping
+ * hours > 24 back into the 0-24 range for the continuation slice.
+ */
+function clipSegmentsToSlice(
+  segments: TimelineSegment[],
+  sliceStart: number,
+  sliceEnd: number,
+  isContinuation: boolean,
+): TimelineSegment[] {
+  // For the start slice (e.g. 23.5→24): keep segments whose hours fall in [sliceStart, 24]
+  // For the continuation slice (e.g. 0→7.42): map hours > 24 to hours - 24
+  const clipped: TimelineSegment[] = [];
+
+  if (!isContinuation) {
+    // Start slice: sliceStart → 24
+    for (const seg of segments) {
+      if (seg.endHour <= sliceStart || seg.startHour >= 24) continue;
+      const s = Math.max(seg.startHour, sliceStart);
+      const e = Math.min(seg.endHour, 24);
+      if (e - s < 0.01) continue;
+      clipped.push({ ...seg, startHour: s, endHour: e });
+    }
+  } else {
+    // Continuation slice: 0 → sliceEnd
+    // Include any segment whose continuous-hour range extends past 24.
+    for (const seg of segments) {
+      if (seg.endHour <= 24) continue; // entirely before midnight
+      // Map continuous hours back to 0-24 for this day
+      const rawS = seg.startHour >= 24 ? seg.startHour - 24 : 0; // clamp start at midnight
+      const rawE = seg.endHour - 24;
+      const s = Math.max(rawS, 0);
+      const e = Math.min(rawE, sliceEnd);
+      if (e - s < 0.01) continue;
+      clipped.push({ ...seg, startHour: s, endHour: e });
+    }
+  }
+
+  return clipped;
 }
 
 /** Build a single training segment spanning the full duty window. */
@@ -271,39 +326,18 @@ export function homeBaseTransform(
       const endHour = releaseH ?? lastArr;
 
       if (checkInHour !== undefined && endHour !== undefined) {
-        // Detect overnight
+        // Detect overnight: end < start, or late start with early end
         const isOvernight = endHour < checkInHour || (checkInHour >= 16 && endHour < 10);
 
-        // Special case: check-in on previous day
-        const checkInOnPrevDay = checkInHour > endHour && checkInHour >= 16;
-
+        // buildLocalSegments uses continuous hours (e.g. 24.75 for 00:45
+        // next day) so overnight segments can be properly clipped per slice.
         const segments = buildLocalSegments(duty, checkInHour, endHour);
 
-        if (checkInOnPrevDay) {
-          // Bar 1: previous day, check-in to 24:00
-          if (dayOfMonth - 1 >= 1) {
-            dutyBars.push({
-              rowIndex: dayOfMonth - 1,
-              startHour: checkInHour,
-              endHour: 24,
-              duty,
-              isOvernightStart: true,
-              segments,
-            });
-          }
-          // Bar 2: current day, 00:00 to endHour
-          dutyBars.push({
-            rowIndex: dayOfMonth,
-            startHour: 0,
-            endHour,
-            duty,
-            isOvernightContinuation: true,
-            segments,
-          });
-        } else if (isOvernight) {
+        if (isOvernight) {
           const slices = splitOvernightBar(dayOfMonth, checkInHour, endHour, daysInMonth);
           for (const s of slices) {
-            dutyBars.push({ ...s, duty, segments });
+            const clipped = clipSegmentsToSlice(segments, s.startHour, s.endHour, !!s.isOvernightContinuation);
+            dutyBars.push({ ...s, duty, segments: clipped });
           }
         } else {
           dutyBars.push({
@@ -524,15 +558,20 @@ function buildUtcSegments(
   let lastEndHour: number | undefined;
 
   if (duty.flightSegments.length > 0) {
-    const firstDepUtc = parseUtcTimeStr(duty.flightSegments[0].departureTimeUtc);
-    if (firstDepUtc !== null && firstDepUtc > checkInHour) {
-      segments.push({
-        type: 'checkin',
-        startHour: checkInHour,
-        endHour: firstDepUtc,
-        performance: duty.avgPerformance,
-      });
-      lastEndHour = firstDepUtc;
+    const firstDepRaw = parseUtcTimeStr(duty.flightSegments[0].departureTimeUtc);
+    if (firstDepRaw !== null) {
+      const firstDepUtc = firstDepRaw < checkInHour ? firstDepRaw + 24 : firstDepRaw;
+      if (firstDepUtc > checkInHour + 0.01) {
+        segments.push({
+          type: 'checkin',
+          startHour: checkInHour,
+          endHour: firstDepUtc,
+          performance: duty.avgPerformance,
+        });
+        lastEndHour = firstDepUtc;
+      } else {
+        lastEndHour = checkInHour;
+      }
     } else {
       lastEndHour = checkInHour;
     }
@@ -544,7 +583,8 @@ function buildUtcSegments(
     if (depH === null || arrH === null) continue;
 
     const adjustedDep = depH < (lastEndHour ?? checkInHour) ? depH + 24 : depH;
-    const adjustedArr = arrH < depH ? arrH + 24 : arrH;
+    let adjustedArr = arrH < depH ? arrH + 24 : arrH;
+    if (adjustedArr < adjustedDep) adjustedArr += 24;
     const perf = seg.performance ?? duty.avgPerformance;
 
     // Insert ground segment for turnaround gap
@@ -718,7 +758,8 @@ export function utcTransform(
         if (isOvernight) {
           const slices = splitOvernightBar(checkInDay, checkInHour, endHour, daysInMonth);
           for (const s of slices) {
-            dutyBars.push({ ...s, duty, segments });
+            const clipped = clipSegmentsToSlice(segments, s.startHour, s.endHour, !!s.isOvernightContinuation);
+            dutyBars.push({ ...s, duty, segments: clipped });
           }
         } else {
           dutyBars.push({
@@ -1064,7 +1105,8 @@ export function elapsedTransform(
           if (depH === undefined || arrH === undefined) continue;
 
           const adjustedDep = depH < (lastSegEnd ?? checkInHour) ? depH + 24 : depH;
-          const adjustedArr = arrH < depH ? arrH + 24 : arrH;
+          let adjustedArr = arrH < depH ? arrH + 24 : arrH;
+          if (adjustedArr < adjustedDep) adjustedArr += 24;
           const perf = seg.performance ?? duty.avgPerformance;
 
           // Insert ground segment for turnaround gap
