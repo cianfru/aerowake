@@ -640,20 +640,26 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         sleep_tz: Any,
     ) -> datetime:
         """
-        Compute wake time using circadian morning as a FLOOR, not a ceiling.
+        Compute wake time considering circadian phase and sleep duration.
 
-        The circadian gate only applies when sleep starts in the biological
-        evening/night window (19:00-06:00 bio time).  For daytime sleep
-        (e.g. after a morning arrival), the pilot sleeps against circadian
-        opposition and wakes after the base duration — the gate does NOT
-        push wake to the next morning.
+        For evening onset (18:00-23:59 bio), sleep ends at whichever is
+        later: sleep_start + base_duration OR biological morning (07:00),
+        but never exceeds base_duration + 1h.  This prevents unrealistic
+        10h blocks when bedtime is early (e.g. 21:00 → 07:00 = 10h); a
+        pilot going to bed early may have delayed onset (wake maintenance
+        zone) and will wake naturally after ~8-8.5h of sleep.
 
-        For post-midnight sleep (high homeostatic pressure), duration
-        dominates and the pilot sleeps through the biological morning.
+        For post-midnight onset, duration dominates (high homeostatic
+        pressure) and the pilot sleeps through the biological morning,
+        capped at MAX_REALISTIC_SLEEP.
+
+        For daytime onset, duration dominates (circadian opposition
+        prevents extended sleep).
 
         References:
             Dijk & Czeisler (1995) J Neurosci 15:3526
             Borbély (1982) Human Neurobiol 1:195-204
+            Åkerstedt & Gillberg (1986) J Sleep Res — WMZ limits early bedtime
         """
         duration_wake = sleep_start + timedelta(hours=base_duration)
 
@@ -662,24 +668,33 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         bio_hour = sleep_start_bio.hour + sleep_start_bio.minute / 60.0
 
         # Classify onset into biological windows:
-        #   Evening/night onset (18:00-23:59): circadian gate applies (floor)
+        #   Evening/night onset (18:00-23:59): circadian gate applies (soft floor)
         #   Post-midnight onset (00:00-06:00): duration dominates (high pressure)
         #   Daytime onset (06:00-18:00): duration dominates (circadian opposition)
         is_evening_onset = 18.0 <= bio_hour <= 23.99
         is_post_midnight_onset = bio_hour < 6.0
 
         if is_evening_onset:
-            # Normal evening sleep: circadian morning (07:00) is a floor.
+            # Normal evening sleep: circadian morning (07:00) is a soft floor.
             # Pilot won't wake before biological morning even if duration
             # would suggest earlier wake (e.g. 23:00 + 7.5h = 06:30 →
             # gate extends to 07:00).
+            # However, cap the extension to avoid unrealistic durations —
+            # a pilot in bed at 21:00 bio doesn't sleep 10h.  The wake
+            # maintenance zone (19:00-22:00) delays actual sleep onset,
+            # so effective sleep is base_duration even though time-in-bed
+            # may be longer. Cap at base_duration + 1h (accounts for
+            # slight circadian extension without producing absurd blocks).
             bio_morning = sleep_start_bio.replace(
                 hour=self.NORMAL_WAKE_HOUR, minute=0, second=0, microsecond=0
             )
             # Morning is always the next calendar day for evening onset
             bio_morning += timedelta(days=1)
             bio_morning_in_sleep_tz = bio_morning.astimezone(sleep_tz)
-            return max(duration_wake, bio_morning_in_sleep_tz)
+            # Gate extends to bio morning, but never more than +1h beyond base
+            max_wake = sleep_start + timedelta(hours=base_duration + 1.0)
+            gated_wake = max(duration_wake, bio_morning_in_sleep_tz)
+            return min(gated_wake, max_wake)
 
         elif is_post_midnight_onset:
             # Late-onset sleep: homeostatic pressure is very high.
