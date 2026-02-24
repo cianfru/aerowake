@@ -16,7 +16,7 @@ import type { DutyAnalysis, FlightPhase, SleepQualityFactors, SleepReference } f
 // ---------------------------------------------------------------------------
 
 export interface TimelineSegment {
-  type: 'checkin' | 'flight' | 'ground' | 'training';
+  type: 'checkin' | 'flight' | 'ground' | 'postflight' | 'training';
   flightNumber?: string;
   departure?: string;
   arrival?: string;

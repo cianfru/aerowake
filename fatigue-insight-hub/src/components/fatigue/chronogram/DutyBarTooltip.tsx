@@ -176,14 +176,19 @@ export function DutyBarTooltip({
                   className={cn(
                     "h-full relative flex items-center justify-center",
                     segment.type === 'checkin' && "opacity-70",
-                    segment.type === 'ground' && "opacity-50"
+                    segment.type === 'ground' && "opacity-50",
+                    segment.type === 'postflight' && "opacity-30"
                   )}
                   style={{
                     width: `${segmentWidth}%`,
                     backgroundColor:
-                      segment.type === 'ground'
+                      segment.type === 'ground' || segment.type === 'postflight'
                         ? 'hsl(var(--muted))'
                         : getPerformanceColor(segment.performance),
+                    ...(segment.type === 'postflight' && {
+                      backgroundImage:
+                        'repeating-linear-gradient(90deg, transparent, transparent 2px, hsl(var(--muted-foreground) / 0.15) 2px, hsl(var(--muted-foreground) / 0.15) 4px)',
+                    }),
                   }}
                 >
                   {/* Segment separator line */}
