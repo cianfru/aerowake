@@ -273,7 +273,7 @@ export function PerformanceSummaryCard({ duty }: PerformanceSummaryCardProps) {
               detail={`${decomp.hoursOnDuty.toFixed(1)}h on duty`}
               infoKey="timeOnTask"
             />
-            {decomp.sleepInertia > 0.01 && (
+            {decomp.wContribution > 0.5 && (
               <FactorBar
                 icon={<Zap className="h-3.5 w-3.5 text-orange-400" />}
                 label="Sleep Inertia"

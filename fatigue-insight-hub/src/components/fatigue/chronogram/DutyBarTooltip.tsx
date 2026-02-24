@@ -440,7 +440,7 @@ export function DutyBarTooltip({
                     </span>
                     <span className="text-muted-foreground">Time on Duty (ToT):</span>
                     <span>-{decomp.totContribution.toFixed(1)}%</span>
-                    {decomp.sleepInertia > 0.01 && (
+                    {decomp.wContribution > 0.1 && (
                       <>
                         <span className="text-muted-foreground">Sleep Inertia (W):</span>
                         <span className="text-warning">

@@ -254,35 +254,39 @@ export function decomposePerformance(point: {
   time_on_task_penalty: number;
   hours_on_duty: number;
 }): PerformanceDecomposition {
-  const S = point.sleep_pressure;
-  const C = point.circadian;
-  const W = point.sleep_inertia;
-  const ToT = point.time_on_task_penalty;
+  // API value semantics (from backend api_server.py):
+  //   sleep_pressure (S): 0-1, higher = MORE pressure = WORSE (deficit form)
+  //   circadian (C):      0-1, higher = MORE alertness = BETTER (alertness form)
+  //   sleep_inertia (W):  0-1, 1.0 = no inertia, <1 = grogginess (alertness form)
+  //   time_on_task (ToT): 0-1, 1.0 = no penalty, <1 = fatigued (alertness form)
+  //
+  // Convert all to deficit form (higher = worse) before proportional attribution.
+  const S_deficit = point.sleep_pressure;            // already deficit form
+  const C_deficit = 1 - point.circadian;             // invert: low alertness → high deficit
+  const W_deficit = 1 - point.sleep_inertia;         // invert: 1.0 (no inertia) → 0 deficit
+  const ToT_deficit = 1 - point.time_on_task_penalty; // invert: 1.0 (no penalty) → 0 deficit
 
-  // Reconstruct contributions to the performance deficit (from 100%)
-  // Full alertness = performance 100 → deficit = 0
-  // deficit = 100 - P
+  // Total performance deficit from 100%
   const totalDeficit = Math.max(0, 100 - point.performance);
 
-  // Approximate individual factor contributions proportionally
-  // We use the raw factor values (0-1) to distribute the deficit
-  const rawTotal = S + C + W + ToT;
+  // Distribute deficit proportionally across factors
+  const rawTotal = S_deficit + C_deficit + W_deficit + ToT_deficit;
 
   let sContrib = 0, cContrib = 0, wContrib = 0, totContrib = 0;
 
   if (rawTotal > 0 && totalDeficit > 0) {
-    sContrib = (S / rawTotal) * totalDeficit;
-    cContrib = (C / rawTotal) * totalDeficit;
-    wContrib = (W / rawTotal) * totalDeficit;
-    totContrib = (ToT / rawTotal) * totalDeficit;
+    sContrib = (S_deficit / rawTotal) * totalDeficit;
+    cContrib = (C_deficit / rawTotal) * totalDeficit;
+    wContrib = (W_deficit / rawTotal) * totalDeficit;
+    totContrib = (ToT_deficit / rawTotal) * totalDeficit;
   }
 
   return {
     performance: point.performance,
-    sleepPressure: S,
-    circadian: C,
-    sleepInertia: W,
-    timeOnTaskPenalty: ToT,
+    sleepPressure: point.sleep_pressure,
+    circadian: point.circadian,
+    sleepInertia: point.sleep_inertia,
+    timeOnTaskPenalty: point.time_on_task_penalty,
     hoursOnDuty: point.hours_on_duty,
     sContribution: Math.round(sContrib * 10) / 10,
     cContribution: Math.round(cContrib * 10) / 10,
