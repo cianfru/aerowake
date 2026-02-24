@@ -140,6 +140,15 @@ function transformSleepEstimate(sleep: SleepEstimate) {
     if (parsed) { sleepEndDay = parsed.day; sleepEndHour = parsed.hour; }
   }
 
+  // Surface sleep blocks with UTC timestamps for what-if editing
+  const sleepBlocks = sleep.sleep_blocks?.map((b) => ({
+    sleepStartUtc: b.sleep_start_utc ?? undefined,
+    sleepEndUtc: b.sleep_end_utc ?? undefined,
+    sleepType: b.sleep_type,
+    durationHours: b.duration_hours,
+    effectiveHours: b.effective_hours,
+  }));
+
   return {
     totalSleepHours: sleep.total_sleep_hours,
     effectiveSleepHours: sleep.effective_sleep_hours,
@@ -168,6 +177,7 @@ function transformSleepEstimate(sleep: SleepEstimate) {
     confidenceBasis: sleep.confidence_basis,
     qualityFactors: sleep.quality_factors,
     references: sleep.references,
+    sleepBlocks,
   };
 }
 

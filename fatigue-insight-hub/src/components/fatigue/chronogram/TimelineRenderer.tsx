@@ -12,6 +12,7 @@ import { QuickDutySelector } from './QuickDutySelector';
 import { ROW_HEIGHT } from '@/lib/fatigue-utils';
 import type { TimelineData } from '@/lib/timeline-types';
 import type { DutyAnalysis } from '@/types/fatigue';
+import type { SleepEdit } from '@/hooks/useSleepEdits';
 import { format } from 'date-fns';
 
 interface TimelineRendererProps {
@@ -28,6 +29,12 @@ interface TimelineRendererProps {
   pilotAircraft?: string;
   onDutySelect: (duty: DutyAnalysis) => void;
   selectedDuty: DutyAnalysis | null;
+  /** Pending sleep edits (homebase view only) */
+  pendingEdits?: Map<string, SleepEdit>;
+  /** Callback when user adjusts a sleep slider */
+  onSleepEdit?: (edit: SleepEdit) => void;
+  /** Callback when user resets a single sleep edit */
+  onRemoveEdit?: (dutyId: string) => void;
 }
 
 export function TimelineRenderer({
@@ -40,6 +47,9 @@ export function TimelineRenderer({
   pilotAircraft,
   onDutySelect,
   selectedDuty,
+  pendingEdits,
+  onSleepEdit,
+  onRemoveEdit,
 }: TimelineRendererProps) {
   const [infoOpen, setInfoOpen] = useState(false);
 
@@ -196,6 +206,9 @@ export function TimelineRenderer({
             showFlightPhases={showFlightPhases}
             selectedDuty={selectedDuty}
             onDutySelect={onDutySelect}
+            pendingEdits={pendingEdits}
+            onSleepEdit={onSleepEdit}
+            onRemoveEdit={onRemoveEdit}
           />
 
           {/* X-axis label */}
