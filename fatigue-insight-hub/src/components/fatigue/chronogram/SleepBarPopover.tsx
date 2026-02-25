@@ -3,7 +3,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { cn } from '@/lib/utils';
 import { getRecoveryClasses, getStrategyIcon, decimalToHHmm, QUALITY_FACTOR_LABELS } from '@/lib/fatigue-utils';
 import { SleepQualityBadge } from '../SleepQualityBadge';
-import { InfoTooltip, type InfoTooltipEntry } from '@/components/ui/InfoTooltip';
 import { TimeSlider } from '@/components/ui/time-slider';
 import { ChevronDown } from 'lucide-react';
 import type { TimelineSleepBar } from '@/lib/timeline-types';
@@ -25,27 +24,6 @@ interface SleepBarPopoverProps {
   onSleepEdit?: (edit: SleepEdit) => void;
   /** Called when user resets a single edit */
   onRemoveEdit?: (dutyId: string) => void;
-}
-
-/** Build an InfoTooltipEntry from the bar's references + confidence data. */
-function buildReferencesEntry(bar: TimelineSleepBar): InfoTooltipEntry | null {
-  if (!bar.references?.length && !bar.confidenceBasis) return null;
-
-  const refText = bar.references?.map(r => r.full || r.short).join('; ') ?? '';
-  const confidenceText = bar.confidence != null
-    ? `Model confidence: ${Math.round(bar.confidence * 100)}%.`
-    : '';
-  const basisText = bar.confidenceBasis ?? '';
-
-  const parts = [confidenceText, basisText].filter(Boolean);
-  const description = parts.length > 0
-    ? parts.join(' ')
-    : 'Sleep estimate based on biomathematical fatigue model.';
-
-  return {
-    description,
-    reference: refText || undefined,
-  };
 }
 
 export function SleepBarPopover({
@@ -106,9 +84,6 @@ export function SleepBarPopover({
     });
   };
 
-  // Build InfoTooltip entry for references
-  const referencesEntry = buildReferencesEntry(bar);
-
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -161,10 +136,6 @@ export function SleepBarPopover({
               )}
             </div>
             <div className="flex items-center gap-1.5">
-              {/* References "i" icon */}
-              {referencesEntry && (
-                <InfoTooltip entry={referencesEntry} size="sm" side="left" />
-              )}
               {/* Confidence badge (inline) */}
               {bar.confidence != null && (
                 <span className={cn(
@@ -386,6 +357,41 @@ export function SleepBarPopover({
                       </div>
                     );
                   })}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {/* ── COLLAPSIBLE: References + Confidence ── */}
+          {(bar.references?.length || bar.confidenceBasis) && (
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors w-full group">
+                <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
+                <span>{'\u{1F4DA}'} References</span>
+                {bar.references?.length ? (
+                  <span className="text-[9px] text-muted-foreground/50 ml-auto">{bar.references.length}</span>
+                ) : null}
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="bg-secondary/20 rounded-lg p-2 space-y-2 mt-1.5">
+                  {bar.confidenceBasis && (
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">
+                      {bar.confidenceBasis}
+                    </p>
+                  )}
+                  {bar.references && bar.references.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {bar.references.map((ref, i) => (
+                        <span
+                          key={i}
+                          title={ref.full}
+                          className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary cursor-help"
+                        >
+                          {ref.short}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </CollapsibleContent>
             </Collapsible>
