@@ -7,6 +7,11 @@
  * follows the cursor during drag.
  *
  * Deactivated by clicking outside the bar or pressing Escape.
+ *
+ * COORDINATE SYSTEM:
+ * - bar.startHour / bar.endHour are ROW-RELATIVE (0-24), used for display & drag math
+ * - bar.originalStartHour / bar.originalEndHour are ABSOLUTE hours from the model
+ * - The SleepEdit output uses row-relative hours, which useSleepEdits converts to UTC
  */
 
 import { useRef, useState, useCallback, useEffect } from 'react';
@@ -51,8 +56,15 @@ export function EditableSleepBar({
   const hasEdit = pendingEdit != null;
   const barRef = useRef<HTMLDivElement>(null);
 
-  const originalStart = bar.originalStartHour ?? bar.startHour;
-  const originalEnd = bar.originalEndHour ?? bar.endHour;
+  // ROW-RELATIVE hours — these are always within 0-24 and match the bar's visual position
+  const rowStart = bar.startHour;
+  const rowEnd = bar.endHour;
+
+  // For overnight start bars, the right edge is 24 (end of day)
+  // For overnight continuation bars, the left edge is 0 (start of day)
+  // For standalone bars, both edges are within 0-24
+  const minHour = bar.isOvernightContinuation ? 0 : 0;
+  const maxHour = bar.isOvernightStart ? 24 : 24;
 
   // Live drag state — tracks the current dragged hours during interaction
   const [dragState, setDragState] = useState<{
@@ -60,16 +72,20 @@ export function EditableSleepBar({
     currentHour: number;
   } | null>(null);
 
-  // Compute display hours (pending edit > drag > original)
+  // Compute display hours (pending edit > drag > row-relative original)
+  // When there's a pending edit, use the edited values; otherwise use row-relative values
+  const currentStart = hasEdit ? pendingEdit!.newStartHour : rowStart;
+  const currentEnd = hasEdit ? pendingEdit!.newEndHour : rowEnd;
+
   const displayStart = dragState?.edge === 'left'
     ? dragState.currentHour
-    : hasEdit ? pendingEdit!.newStartHour : originalStart;
+    : currentStart;
 
   const displayEnd = dragState?.edge === 'right'
     ? dragState.currentHour
-    : hasEdit ? pendingEdit!.newEndHour : originalEnd;
+    : currentEnd;
 
-  // Live bar position during drag
+  // Live bar position during drag — always row-relative (0-24)
   const liveLeftPercent = (displayStart / 24) * 100;
   const liveWidthPercent = Math.max(((displayEnd - displayStart) / 24) * 100, (0.5 / 24) * 100);
 
@@ -90,27 +106,29 @@ export function EditableSleepBar({
     e.preventDefault();
     e.stopPropagation();
 
-    if (!getRowEl()) return;
+    const rowEl = getRowEl();
+    if (!rowEl) return;
 
-    const initialHour = mouseXToHour(e.clientX, getRowEl());
+    const initialHour = mouseXToHour(e.clientX, rowEl);
     setDragState({ edge, currentHour: initialHour });
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!getRowEl()) return;
-      const hour = mouseXToHour(moveEvent.clientX, getRowEl());
+      const el = getRowEl();
+      if (!el) return;
+      const hour = mouseXToHour(moveEvent.clientX, el);
 
       setDragState((prev) => {
         if (!prev) return null;
 
-        // Enforce minimum duration of 0.5h
+        // Enforce minimum duration of 0.5h and stay within row bounds (0-24)
         if (prev.edge === 'left') {
-          const currentEnd = hasEdit ? pendingEdit!.newEndHour : originalEnd;
-          const maxStart = currentEnd - 0.5;
-          return { ...prev, currentHour: Math.min(hour, maxStart) };
+          const end = hasEdit ? pendingEdit!.newEndHour : rowEnd;
+          const maxStart = end - 0.5;
+          return { ...prev, currentHour: clamp(hour, minHour, maxStart) };
         } else {
-          const currentStart = hasEdit ? pendingEdit!.newStartHour : originalStart;
-          const minEnd = currentStart + 0.5;
-          return { ...prev, currentHour: Math.max(hour, minEnd) };
+          const start = hasEdit ? pendingEdit!.newStartHour : rowStart;
+          const minEnd = start + 0.5;
+          return { ...prev, currentHour: clamp(hour, minEnd, maxHour) };
         }
       });
     };
@@ -121,12 +139,13 @@ export function EditableSleepBar({
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
 
-      if (!getRowEl() || !bar.sleepId || !bar.sleepStartIso || !bar.sleepEndIso) {
+      const el = getRowEl();
+      if (!el || !bar.sleepId || !bar.sleepStartIso || !bar.sleepEndIso) {
         setDragState(null);
         return;
       }
 
-      const finalHour = mouseXToHour(upEvent.clientX, getRowEl());
+      const finalHour = mouseXToHour(upEvent.clientX, el);
 
       setDragState((prev) => {
         if (!prev) return null;
@@ -135,19 +154,19 @@ export function EditableSleepBar({
         let newEnd: number;
 
         if (prev.edge === 'left') {
-          const currentEnd = hasEdit ? pendingEdit!.newEndHour : originalEnd;
-          newStart = Math.min(finalHour, currentEnd - 0.5);
-          newEnd = currentEnd;
+          const end = hasEdit ? pendingEdit!.newEndHour : rowEnd;
+          newStart = clamp(Math.min(finalHour, end - 0.5), minHour, end - 0.5);
+          newEnd = end;
         } else {
-          const currentStart = hasEdit ? pendingEdit!.newStartHour : originalStart;
-          newStart = currentStart;
-          newEnd = Math.max(finalHour, currentStart + 0.5);
+          const start = hasEdit ? pendingEdit!.newStartHour : rowStart;
+          newStart = start;
+          newEnd = clamp(Math.max(finalHour, start + 0.5), start + 0.5, maxHour);
         }
 
         onSleepEdit({
           dutyId: bar.sleepId!,
-          originalStartHour: originalStart,
-          originalEndHour: originalEnd,
+          originalStartHour: rowStart,
+          originalEndHour: rowEnd,
           newStartHour: newStart,
           newEndHour: newEnd,
           originalStartIso: bar.sleepStartIso!,
@@ -162,7 +181,7 @@ export function EditableSleepBar({
     document.body.style.userSelect = 'none';
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [getRowEl, bar, hasEdit, pendingEdit, originalStart, originalEnd, onSleepEdit]);
+  }, [getRowEl, bar, hasEdit, pendingEdit, rowStart, rowEnd, minHour, maxHour, onSleepEdit]);
 
   // ── Click-outside and Escape deactivation ──
 
@@ -183,7 +202,7 @@ export function EditableSleepBar({
     // Use setTimeout to avoid the double-click that activated this from immediately deactivating
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
-    }, 100);
+    }, 300);
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);

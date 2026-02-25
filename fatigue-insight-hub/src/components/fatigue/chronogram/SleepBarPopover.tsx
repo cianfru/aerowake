@@ -70,8 +70,9 @@ export function SleepBarPopover({
   const displayStartHour = hasEdit ? pendingEdit!.newStartHour : originalStart;
   const displayEndHour = hasEdit ? pendingEdit!.newEndHour : originalEnd;
 
-  // Can edit: must be homebase, have a sleepId, and have UTC ISOs for conversion
-  const canEdit = isEditable && bar.sleepId && bar.sleepStartIso && bar.sleepEndIso;
+  // Can edit: must be homebase, have a sleepId, have UTC ISOs, and NOT be an overnight continuation
+  // (only the primary half of an overnight sleep is editable — the continuation just follows)
+  const canEdit = isEditable && bar.sleepId && bar.sleepStartIso && bar.sleepEndIso && !bar.isOvernightContinuation;
 
   // ── Click / double-click discrimination ──
   // Single-click (after 250ms timeout) → open popover

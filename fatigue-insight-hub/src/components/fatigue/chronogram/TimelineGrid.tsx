@@ -76,14 +76,18 @@ export function TimelineGrid({
     }
   }, []);
 
-  // Stable closure factory: returns a getter function that retrieves the row
-  // element from the Map. The returned closure is stable (same identity per
-  // rowIndex across renders) because useCallback has no deps and the closure
-  // captures only the stable rowRefs ref and the rowIndex number.
-  const getRowEl = useCallback(
-    (rowIndex: number) => () => rowRefs.current.get(rowIndex) ?? null,
-    [],
-  );
+  // Stable closure cache: each rowIndex gets a SINGLE closure that persists
+  // across renders. Without caching, getRowEl(n) would create a new function
+  // identity every render, causing downstream re-renders and stale deps.
+  const rowElGetters = useRef(new Map<number, () => HTMLDivElement | null>());
+  const getRowEl = useCallback((rowIndex: number) => {
+    let getter = rowElGetters.current.get(rowIndex);
+    if (!getter) {
+      getter = () => rowRefs.current.get(rowIndex) ?? null;
+      rowElGetters.current.set(rowIndex, getter);
+    }
+    return getter;
+  }, []);
 
   return (
     <div className="flex">
