@@ -45,6 +45,12 @@ export interface UseSleepEditsReturn {
   isApplying: boolean;
   hasEdits: boolean;
   editCount: number;
+  /** ID of the sleep bar currently in drag-edit mode (null when none) */
+  activeBarId: string | null;
+  /** Enter drag-edit mode for a specific sleep bar */
+  activateEdit: (sleepId: string) => void;
+  /** Exit drag-edit mode */
+  deactivateEdit: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,8 +76,17 @@ export function useSleepEdits(
   analysisId: string | undefined,
 ): UseSleepEditsReturn {
   const [pendingEdits, setPendingEdits] = useState<Map<string, SleepEdit>>(new Map());
+  const [activeBarId, setActiveBarId] = useState<string | null>(null);
   const { state, setAnalysisResults } = useAnalysis();
   const { toast } = useToast();
+
+  const activateEdit = useCallback((sleepId: string) => {
+    setActiveBarId(sleepId);
+  }, []);
+
+  const deactivateEdit = useCallback(() => {
+    setActiveBarId(null);
+  }, []);
 
   const addEdit = useCallback((edit: SleepEdit) => {
     setPendingEdits((prev) => {
@@ -160,5 +175,8 @@ export function useSleepEdits(
     isApplying: mutation.isPending,
     hasEdits,
     editCount,
-  }), [pendingEdits, addEdit, removeEdit, clearEdits, applyEdits, mutation.isPending, hasEdits, editCount]);
+    activeBarId,
+    activateEdit,
+    deactivateEdit,
+  }), [pendingEdits, addEdit, removeEdit, clearEdits, applyEdits, mutation.isPending, hasEdits, editCount, activeBarId, activateEdit, deactivateEdit]);
 }

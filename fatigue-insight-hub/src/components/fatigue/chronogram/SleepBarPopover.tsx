@@ -3,7 +3,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { cn } from '@/lib/utils';
 import { getRecoveryClasses, getStrategyIcon, decimalToHHmm, QUALITY_FACTOR_LABELS } from '@/lib/fatigue-utils';
 import { SleepQualityBadge } from '../SleepQualityBadge';
-import { TimeSlider } from '@/components/ui/time-slider';
+import { EditableSleepBar } from './EditableSleepBar';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { ChevronDown } from 'lucide-react';
 import type { TimelineSleepBar } from '@/lib/timeline-types';
@@ -21,10 +21,18 @@ interface SleepBarPopoverProps {
   isEditable?: boolean;
   /** Current pending edit for this sleep bar (if any) */
   pendingEdit?: SleepEdit | null;
-  /** Called when user adjusts a sleep slider */
+  /** Called when user adjusts a sleep bar edge via drag */
   onSleepEdit?: (edit: SleepEdit) => void;
   /** Called when user resets a single edit */
   onRemoveEdit?: (dutyId: string) => void;
+  /** Whether this bar is currently in drag-edit mode */
+  isEditing?: boolean;
+  /** Called on double-click to enter edit mode */
+  onActivateEdit?: (sleepId: string) => void;
+  /** Called to exit edit mode */
+  onDeactivateEdit?: () => void;
+  /** Ref to the parent row element (for drag coordinate math) */
+  rowRef?: React.RefObject<HTMLDivElement>;
 }
 
 export function SleepBarPopover({
@@ -36,6 +44,10 @@ export function SleepBarPopover({
   pendingEdit,
   onSleepEdit,
   onRemoveEdit,
+  isEditing,
+  onActivateEdit,
+  onDeactivateEdit,
+  rowRef,
 }: SleepBarPopoverProps) {
   const classes = getRecoveryClasses(bar.recoveryScore);
   const hasEdit = pendingEdit != null;
@@ -48,43 +60,38 @@ export function SleepBarPopover({
       : '2px';
 
   // Current display times (use edited values if available)
-  const displayStartHour = hasEdit ? pendingEdit!.newStartHour : (bar.originalStartHour ?? bar.startHour);
-  const displayEndHour = hasEdit ? pendingEdit!.newEndHour : (bar.originalEndHour ?? bar.endHour);
+  const originalStart = bar.originalStartHour ?? bar.startHour;
+  const originalEnd = bar.originalEndHour ?? bar.endHour;
+  const displayStartHour = hasEdit ? pendingEdit!.newStartHour : originalStart;
+  const displayEndHour = hasEdit ? pendingEdit!.newEndHour : originalEnd;
 
   // Can edit: must be homebase, have a sleepId, and have UTC ISOs for conversion
   const canEdit = isEditable && bar.sleepId && bar.sleepStartIso && bar.sleepEndIso;
 
-  // Slider range for bedtime/wake-up
-  const originalStart = bar.originalStartHour ?? bar.startHour;
-  const originalEnd = bar.originalEndHour ?? bar.endHour;
-
-  // Handle slider changes
-  const handleStartChange = (newStart: number) => {
-    if (!canEdit || !onSleepEdit) return;
-    onSleepEdit({
-      dutyId: bar.sleepId!,
-      originalStartHour: originalStart,
-      originalEndHour: originalEnd,
-      newStartHour: newStart,
-      newEndHour: hasEdit ? pendingEdit!.newEndHour : originalEnd,
-      originalStartIso: bar.sleepStartIso!,
-      originalEndIso: bar.sleepEndIso!,
-    });
+  // Handle double-click to enter drag-edit mode
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (!canEdit || !onActivateEdit || !bar.sleepId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onActivateEdit(bar.sleepId);
   };
 
-  const handleEndChange = (newEnd: number) => {
-    if (!canEdit || !onSleepEdit) return;
-    onSleepEdit({
-      dutyId: bar.sleepId!,
-      originalStartHour: originalStart,
-      originalEndHour: originalEnd,
-      newStartHour: hasEdit ? pendingEdit!.newStartHour : originalStart,
-      newEndHour: newEnd,
-      originalStartIso: bar.sleepStartIso!,
-      originalEndIso: bar.sleepEndIso!,
-    });
-  };
+  // ── If in edit mode, render the draggable bar instead of popover ──
+  if (isEditing && canEdit && onSleepEdit && onDeactivateEdit && rowRef) {
+    return (
+      <EditableSleepBar
+        bar={bar}
+        widthPercent={widthPercent}
+        leftPercent={leftPercent}
+        pendingEdit={pendingEdit}
+        onSleepEdit={onSleepEdit}
+        onDeactivate={onDeactivateEdit}
+        rowRef={rowRef}
+      />
+    );
+  }
 
+  // ── Normal mode: popover with info (single-click opens, double-click enters edit) ──
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -105,6 +112,7 @@ export function SleepBarPopover({
             borderRight: bar.isOvernightStart ? 'none' : undefined,
             borderLeft: bar.isOvernightContinuation ? 'none' : undefined,
           }}
+          onDoubleClick={handleDoubleClick}
         >
           {/* Show recovery info if bar is wide enough */}
           {widthPercent > 6 && (
@@ -125,7 +133,7 @@ export function SleepBarPopover({
       </PopoverTrigger>
       <PopoverContent align="start" side="top" className="max-w-xs p-3">
         <div className="space-y-2 text-xs">
-          {/* ── HEADER: Type + Score + Confidence + References ── */}
+          {/* ── HEADER: Type + Score + Confidence ── */}
           <div className="flex items-center justify-between">
             <div className="font-semibold flex items-center gap-1.5">
               <span className="text-base">{bar.isPreDuty ? '\u{1F6CF}\uFE0F' : '\u{1F50B}'}</span>
@@ -215,6 +223,13 @@ export function SleepBarPopover({
             </div>
           </div>
 
+          {/* ── Edit hint (homebase only) ── */}
+          {canEdit && (
+            <div className="text-[10px] text-muted-foreground/60 italic">
+              Double-click to adjust sleep times
+            </div>
+          )}
+
           {/* ── COLLAPSIBLE: Score Breakdown ── */}
           <Collapsible>
             <CollapsibleTrigger className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors w-full group">
@@ -281,54 +296,6 @@ export function SleepBarPopover({
               </div>
             </CollapsibleContent>
           </Collapsible>
-
-          {/* ── COLLAPSIBLE: Adjust Sleep Times (homebase only) ── */}
-          {canEdit && (
-            <Collapsible defaultOpen={hasEdit}>
-              <CollapsibleTrigger className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors w-full group">
-                <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
-                <span>{'\u270E'} Adjust Sleep Times</span>
-                {hasEdit && (
-                  <span className="text-[9px] text-warning bg-warning/10 px-1 py-0.5 rounded ml-auto">
-                    edited
-                  </span>
-                )}
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="bg-secondary/20 rounded-lg p-2.5 space-y-3 border border-border/30 mt-1.5">
-                  <TimeSlider
-                    label="Bedtime"
-                    value={hasEdit ? pendingEdit!.newStartHour : originalStart}
-                    min={Math.max(originalStart - 4, 14)}
-                    max={Math.min(originalStart + 4, 30)}
-                    step={0.25}
-                    originalValue={originalStart}
-                    onChange={handleStartChange}
-                  />
-
-                  <TimeSlider
-                    label="Wake-up"
-                    value={hasEdit ? pendingEdit!.newEndHour : originalEnd}
-                    min={Math.max(originalEnd - 4, 2)}
-                    max={Math.min(originalEnd + 4, 18)}
-                    step={0.25}
-                    originalValue={originalEnd}
-                    onChange={handleEndChange}
-                  />
-
-                  {hasEdit && (
-                    <button
-                      type="button"
-                      onClick={() => bar.sleepId && onRemoveEdit?.(bar.sleepId)}
-                      className="text-[10px] text-muted-foreground hover:text-foreground transition-colors underline"
-                    >
-                      Reset to original
-                    </button>
-                  )}
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
 
           {/* ── COLLAPSIBLE: Model Calculation Factors ── */}
           {bar.qualityFactors && (

@@ -31,10 +31,16 @@ interface TimelineRendererProps {
   selectedDuty: DutyAnalysis | null;
   /** Pending sleep edits (homebase view only) */
   pendingEdits?: Map<string, SleepEdit>;
-  /** Callback when user adjusts a sleep slider */
+  /** Callback when user adjusts a sleep bar via drag */
   onSleepEdit?: (edit: SleepEdit) => void;
   /** Callback when user resets a single sleep edit */
   onRemoveEdit?: (dutyId: string) => void;
+  /** ID of the sleep bar currently in drag-edit mode */
+  activeEditBarId?: string | null;
+  /** Called on double-click to enter drag-edit mode */
+  onActivateEdit?: (sleepId: string) => void;
+  /** Called to exit drag-edit mode */
+  onDeactivateEdit?: () => void;
 }
 
 export function TimelineRenderer({
@@ -50,6 +56,9 @@ export function TimelineRenderer({
   pendingEdits,
   onSleepEdit,
   onRemoveEdit,
+  activeEditBarId,
+  onActivateEdit,
+  onDeactivateEdit,
 }: TimelineRendererProps) {
   const [infoOpen, setInfoOpen] = useState(false);
 
@@ -209,6 +218,9 @@ export function TimelineRenderer({
             pendingEdits={pendingEdits}
             onSleepEdit={onSleepEdit}
             onRemoveEdit={onRemoveEdit}
+            activeEditBarId={activeEditBarId}
+            onActivateEdit={onActivateEdit}
+            onDeactivateEdit={onDeactivateEdit}
           />
 
           {/* X-axis label */}

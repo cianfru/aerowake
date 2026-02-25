@@ -97,6 +97,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
               pendingEdits={sleepEdits.pendingEdits}
               onSleepEdit={sleepEdits.addEdit}
               onRemoveEdit={sleepEdits.removeEdit}
+              activeEditBarId={sleepEdits.activeBarId}
+              onActivateEdit={sleepEdits.activateEdit}
+              onDeactivateEdit={sleepEdits.deactivateEdit}
             />
           </TabsContent>
 

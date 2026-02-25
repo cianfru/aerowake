@@ -6,6 +6,7 @@
  * component. Used by all three grid-based chronogram views (homebase, utc, elapsed).
  */
 
+import { useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { SleepBarPopover } from './SleepBarPopover';
 import { DutyBarTooltip } from './DutyBarTooltip';
@@ -28,10 +29,16 @@ interface TimelineGridProps {
   onDutySelect: (duty: DutyAnalysis) => void;
   /** Pending sleep edits (Map<dutyId, SleepEdit>) — homebase only */
   pendingEdits?: Map<string, SleepEdit>;
-  /** Callback when user adjusts a sleep slider */
+  /** Callback when user adjusts a sleep bar via drag */
   onSleepEdit?: (edit: SleepEdit) => void;
   /** Callback when user resets a single sleep edit */
   onRemoveEdit?: (dutyId: string) => void;
+  /** ID of the sleep bar currently in drag-edit mode */
+  activeEditBarId?: string | null;
+  /** Called on double-click to enter drag-edit mode */
+  onActivateEdit?: (sleepId: string) => void;
+  /** Called to exit drag-edit mode */
+  onDeactivateEdit?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -54,7 +61,30 @@ export function TimelineGrid({
   pendingEdits,
   onSleepEdit,
   onRemoveEdit,
+  activeEditBarId,
+  onActivateEdit,
+  onDeactivateEdit,
 }: TimelineGridProps) {
+  // Store refs to each day row for coordinate math in EditableSleepBar
+  const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+
+  const setRowRef = useCallback((rowIndex: number) => (el: HTMLDivElement | null) => {
+    if (el) {
+      rowRefs.current.set(rowIndex, el);
+    } else {
+      rowRefs.current.delete(rowIndex);
+    }
+  }, []);
+
+  // Create a stable ref object for a given rowIndex
+  const getRowRef = useCallback((rowIndex: number): React.RefObject<HTMLDivElement> => {
+    return {
+      get current() {
+        return rowRefs.current.get(rowIndex) ?? null;
+      },
+    } as React.RefObject<HTMLDivElement>;
+  }, []);
+
   return (
     <div className="flex">
       {/* ----------------------------------------------------------------- */}
@@ -145,6 +175,7 @@ export function TimelineGrid({
           {data.rowLabels.map((label) => (
             <div
               key={label.rowIndex}
+              ref={setRowRef(label.rowIndex)}
               className="relative border-b border-border/20"
               style={{ height: `${rowHeight}px` }}
             >
@@ -162,6 +193,10 @@ export function TimelineGrid({
                     pendingEdit={bar.sleepId ? pendingEdits?.get(bar.sleepId) ?? null : null}
                     onSleepEdit={onSleepEdit}
                     onRemoveEdit={onRemoveEdit}
+                    isEditing={bar.sleepId === activeEditBarId}
+                    onActivateEdit={onActivateEdit}
+                    onDeactivateEdit={onDeactivateEdit}
+                    rowRef={getRowRef(label.rowIndex)}
                   />
                 ))}
 
