@@ -1,3 +1,4 @@
+import { useState, useRef, useCallback } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
@@ -31,8 +32,8 @@ interface SleepBarPopoverProps {
   onActivateEdit?: (sleepId: string) => void;
   /** Called to exit edit mode */
   onDeactivateEdit?: () => void;
-  /** Ref to the parent row element (for drag coordinate math) */
-  rowRef?: React.RefObject<HTMLDivElement>;
+  /** Stable getter for the parent row element (for drag coordinate math) */
+  getRowEl?: () => HTMLDivElement | null;
 }
 
 export function SleepBarPopover({
@@ -47,10 +48,14 @@ export function SleepBarPopover({
   isEditing,
   onActivateEdit,
   onDeactivateEdit,
-  rowRef,
+  getRowEl,
 }: SleepBarPopoverProps) {
   const classes = getRecoveryClasses(bar.recoveryScore);
   const hasEdit = pendingEdit != null;
+
+  // Controlled popover state — single-click opens, double-click enters edit mode
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Determine border radius based on overnight status
   const borderRadius = bar.isOvernightStart
@@ -68,16 +73,32 @@ export function SleepBarPopover({
   // Can edit: must be homebase, have a sleepId, and have UTC ISOs for conversion
   const canEdit = isEditable && bar.sleepId && bar.sleepStartIso && bar.sleepEndIso;
 
-  // Handle double-click to enter drag-edit mode
-  const handleDoubleClick = (e: React.MouseEvent) => {
-    if (!canEdit || !onActivateEdit || !bar.sleepId) return;
+  // ── Click / double-click discrimination ──
+  // Single-click (after 250ms timeout) → open popover
+  // Double-click (clears timer) → enter drag-edit mode
+  const handleClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    onActivateEdit(bar.sleepId);
-  };
+    if (clickTimer.current) clearTimeout(clickTimer.current);
+    clickTimer.current = setTimeout(() => {
+      setPopoverOpen(true);
+    }, 250);
+  }, []);
+
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (clickTimer.current) {
+      clearTimeout(clickTimer.current);
+      clickTimer.current = null;
+    }
+    if (canEdit && onActivateEdit && bar.sleepId) {
+      onActivateEdit(bar.sleepId);
+    }
+  }, [canEdit, onActivateEdit, bar.sleepId]);
 
   // ── If in edit mode, render the draggable bar instead of popover ──
-  if (isEditing && canEdit && onSleepEdit && onDeactivateEdit && rowRef) {
+  if (isEditing && canEdit && onSleepEdit && onDeactivateEdit && getRowEl) {
     return (
       <EditableSleepBar
         bar={bar}
@@ -86,51 +107,65 @@ export function SleepBarPopover({
         pendingEdit={pendingEdit}
         onSleepEdit={onSleepEdit}
         onDeactivate={onDeactivateEdit}
-        rowRef={rowRef}
+        getRowEl={getRowEl}
       />
     );
   }
 
-  // ── Normal mode: popover with info (single-click opens, double-click enters edit) ──
+  // ── Normal mode: controlled popover + click/double-click on the bar div ──
   return (
-    <Popover>
+    <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+      {/* Hidden anchor so Radix knows where to position the popover */}
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "absolute z-[5] flex items-center justify-end px-1 border cursor-pointer hover:brightness-110 transition-all",
-            hasEdit
-              ? "border-warning/60 bg-warning/10 border-solid"
-              : "border-dashed border-primary/20 bg-primary/5"
-          )}
+        <span
+          className="absolute pointer-events-none"
           style={{
             top: 0,
             height: '100%',
             left: `${leftPercent}%`,
             width: `${Math.max(widthPercent, 1)}%`,
-            borderRadius,
-            borderRight: bar.isOvernightStart ? 'none' : undefined,
-            borderLeft: bar.isOvernightContinuation ? 'none' : undefined,
           }}
-          onDoubleClick={handleDoubleClick}
-        >
-          {/* Show recovery info if bar is wide enough */}
-          {widthPercent > 6 && (
-            <div className={cn("flex items-center gap-0.5 text-[8px] font-medium", hasEdit ? "text-warning" : classes.text)}>
-              <span>{getStrategyIcon(bar.sleepStrategy)}</span>
-              <span>{Math.round(bar.recoveryScore)}%</span>
-            </div>
-          )}
-          {/* Sleep quality badge */}
-          {widthPercent > 4 && !hasEdit && (
-            <SleepQualityBadge qualityFactors={bar.qualityFactors} />
-          )}
-          {/* Modified indicator */}
-          {hasEdit && widthPercent > 3 && (
-            <span className="text-[7px] text-warning font-medium ml-0.5">{'\u270E'}</span>
-          )}
-        </button>
+          aria-hidden
+        />
       </PopoverTrigger>
+      {/* Visible bar — handles click/double-click without Radix interference */}
+      <div
+        role="button"
+        tabIndex={0}
+        className={cn(
+          "absolute z-[5] flex items-center justify-end px-1 border cursor-pointer hover:brightness-110 transition-all",
+          hasEdit
+            ? "border-warning/60 bg-warning/10 border-solid"
+            : "border-dashed border-primary/20 bg-primary/5"
+        )}
+        style={{
+          top: 0,
+          height: '100%',
+          left: `${leftPercent}%`,
+          width: `${Math.max(widthPercent, 1)}%`,
+          borderRadius,
+          borderRight: bar.isOvernightStart ? 'none' : undefined,
+          borderLeft: bar.isOvernightContinuation ? 'none' : undefined,
+        }}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+      >
+        {/* Show recovery info if bar is wide enough */}
+        {widthPercent > 6 && (
+          <div className={cn("flex items-center gap-0.5 text-[8px] font-medium", hasEdit ? "text-warning" : classes.text)}>
+            <span>{getStrategyIcon(bar.sleepStrategy)}</span>
+            <span>{Math.round(bar.recoveryScore)}%</span>
+          </div>
+        )}
+        {/* Sleep quality badge */}
+        {widthPercent > 4 && !hasEdit && (
+          <SleepQualityBadge qualityFactors={bar.qualityFactors} />
+        )}
+        {/* Modified indicator */}
+        {hasEdit && widthPercent > 3 && (
+          <span className="text-[7px] text-warning font-medium ml-0.5">{'\u270E'}</span>
+        )}
+      </div>
       <PopoverContent align="start" side="top" className="max-w-xs p-3">
         <div className="space-y-2 text-xs">
           {/* ── HEADER: Type + Score + Confidence ── */}
