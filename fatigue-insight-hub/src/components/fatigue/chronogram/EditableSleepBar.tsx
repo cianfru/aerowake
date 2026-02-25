@@ -22,8 +22,8 @@ interface EditableSleepBarProps {
   pendingEdit?: SleepEdit | null;
   onSleepEdit: (edit: SleepEdit) => void;
   onDeactivate: () => void;
-  /** Ref to the parent row element (for coordinate math) */
-  rowRef: React.RefObject<HTMLDivElement>;
+  /** Stable getter for the parent row element (for coordinate math) */
+  getRowEl: () => HTMLDivElement | null;
 }
 
 // Clamp a number between min and max
@@ -45,7 +45,7 @@ export function EditableSleepBar({
   pendingEdit,
   onSleepEdit,
   onDeactivate,
-  rowRef,
+  getRowEl,
 }: EditableSleepBarProps) {
   const classes = getRecoveryClasses(bar.recoveryScore);
   const hasEdit = pendingEdit != null;
@@ -90,14 +90,14 @@ export function EditableSleepBar({
     e.preventDefault();
     e.stopPropagation();
 
-    if (!rowRef.current) return;
+    if (!getRowEl()) return;
 
-    const initialHour = mouseXToHour(e.clientX, rowRef.current);
+    const initialHour = mouseXToHour(e.clientX, getRowEl());
     setDragState({ edge, currentHour: initialHour });
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!rowRef.current) return;
-      const hour = mouseXToHour(moveEvent.clientX, rowRef.current);
+      if (!getRowEl()) return;
+      const hour = mouseXToHour(moveEvent.clientX, getRowEl());
 
       setDragState((prev) => {
         if (!prev) return null;
@@ -121,12 +121,12 @@ export function EditableSleepBar({
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
 
-      if (!rowRef.current || !bar.sleepId || !bar.sleepStartIso || !bar.sleepEndIso) {
+      if (!getRowEl() || !bar.sleepId || !bar.sleepStartIso || !bar.sleepEndIso) {
         setDragState(null);
         return;
       }
 
-      const finalHour = mouseXToHour(upEvent.clientX, rowRef.current);
+      const finalHour = mouseXToHour(upEvent.clientX, getRowEl());
 
       setDragState((prev) => {
         if (!prev) return null;
@@ -162,7 +162,7 @@ export function EditableSleepBar({
     document.body.style.userSelect = 'none';
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [rowRef, bar, hasEdit, pendingEdit, originalStart, originalEnd, onSleepEdit]);
+  }, [getRowEl, bar, hasEdit, pendingEdit, originalStart, originalEnd, onSleepEdit]);
 
   // ── Click-outside and Escape deactivation ──
 

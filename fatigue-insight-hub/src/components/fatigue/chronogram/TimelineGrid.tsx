@@ -76,14 +76,14 @@ export function TimelineGrid({
     }
   }, []);
 
-  // Create a stable ref object for a given rowIndex
-  const getRowRef = useCallback((rowIndex: number): React.RefObject<HTMLDivElement> => {
-    return {
-      get current() {
-        return rowRefs.current.get(rowIndex) ?? null;
-      },
-    } as React.RefObject<HTMLDivElement>;
-  }, []);
+  // Stable closure factory: returns a getter function that retrieves the row
+  // element from the Map. The returned closure is stable (same identity per
+  // rowIndex across renders) because useCallback has no deps and the closure
+  // captures only the stable rowRefs ref and the rowIndex number.
+  const getRowEl = useCallback(
+    (rowIndex: number) => () => rowRefs.current.get(rowIndex) ?? null,
+    [],
+  );
 
   return (
     <div className="flex">
@@ -196,7 +196,7 @@ export function TimelineGrid({
                     isEditing={bar.sleepId === activeEditBarId}
                     onActivateEdit={onActivateEdit}
                     onDeactivateEdit={onDeactivateEdit}
-                    rowRef={getRowRef(label.rowIndex)}
+                    getRowEl={getRowEl(label.rowIndex)}
                   />
                 ))}
 
