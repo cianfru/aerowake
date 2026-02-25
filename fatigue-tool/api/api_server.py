@@ -1026,9 +1026,12 @@ async def analyze_roster(
         model = BorbelyFatigueModel(config)
         monthly_analysis = model.simulate_roster(roster)
         
+        # Use the month actually parsed from the roster (not the form default)
+        effective_month = roster.month or month
+
         # Generate analysis ID
-        analysis_id = f"{pilot_id}_{month}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        
+        analysis_id = f"{pilot_id}_{effective_month}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
         # Store for later retrieval (include sleep_strategies for GET endpoint)
         analysis_store[analysis_id] = (monthly_analysis, roster, model.sleep_strategies)
 
@@ -1039,7 +1042,7 @@ async def analyze_roster(
                 db_roster = Roster(
                     user_id=user.id,
                     filename=file.filename or "roster.pdf",
-                    month=month,
+                    month=effective_month,
                     pilot_id=pilot_id,
                     home_base=home_base,
                     config_preset=config_preset,
