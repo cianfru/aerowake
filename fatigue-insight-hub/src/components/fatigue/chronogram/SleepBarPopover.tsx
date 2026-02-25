@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { getRecoveryClasses, getStrategyIcon, decimalToHHmm, QUALITY_FACTOR_LABELS } from '@/lib/fatigue-utils';
 import { SleepQualityBadge } from '../SleepQualityBadge';
 import { TimeSlider } from '@/components/ui/time-slider';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { ChevronDown } from 'lucide-react';
 import type { TimelineSleepBar } from '@/lib/timeline-types';
 import type { SleepEdit } from '@/hooks/useSleepEdits';
@@ -380,17 +381,22 @@ export function SleepBarPopover({
                     </p>
                   )}
                   {bar.references && bar.references.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {bar.references.map((ref, i) => (
-                        <span
-                          key={i}
-                          title={ref.full}
-                          className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary cursor-help"
-                        >
-                          {ref.short}
-                        </span>
-                      ))}
-                    </div>
+                    <TooltipProvider delayDuration={200}>
+                      <div className="flex flex-wrap gap-1">
+                        {bar.references.map((ref, i) => (
+                          <Tooltip key={i}>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary cursor-help">
+                                {ref.short}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="max-w-[280px] text-[11px] leading-snug">
+                              {ref.full}
+                            </TooltipContent>
+                          </Tooltip>
+                        ))}
+                      </div>
+                    </TooltipProvider>
                   )}
                 </div>
               </CollapsibleContent>
