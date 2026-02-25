@@ -162,11 +162,20 @@ export function SleepBarPopover({
             </div>
           </div>
 
-          {/* ── EXPLANATION ── */}
-          {bar.explanation && (
-            <div className="bg-primary/5 border border-primary/20 rounded-md p-2 text-[11px] text-muted-foreground leading-relaxed">
-              <span className="text-primary font-medium">{'\u{1F4A1}'} </span>
-              {bar.explanation}
+          {/* ── EXPLANATION + CONFIDENCE BASIS ── */}
+          {(bar.explanation || bar.confidenceBasis) && (
+            <div className="bg-primary/5 border border-primary/20 rounded-md p-2 text-[11px] text-muted-foreground leading-relaxed space-y-1">
+              {bar.explanation && (
+                <p>
+                  <span className="text-primary font-medium">{'\u{1F4A1}'} </span>
+                  {bar.explanation}
+                </p>
+              )}
+              {bar.confidenceBasis && (
+                <p className="text-[10px] text-muted-foreground/80">
+                  {bar.confidenceBasis}
+                </p>
+              )}
             </div>
           )}
 
@@ -330,24 +339,17 @@ export function SleepBarPopover({
             </Collapsible>
           )}
 
-          {/* ── COLLAPSIBLE: References + Confidence ── */}
-          {(bar.references?.length || bar.confidenceBasis) && (
+          {/* ── COLLAPSIBLE: References ── */}
+          {bar.references?.length ? (
             <Collapsible>
               <CollapsibleTrigger className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors w-full group">
                 <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
                 <span>{'\u{1F4DA}'} References</span>
-                {bar.references?.length ? (
-                  <span className="text-[9px] text-muted-foreground/50 ml-auto">{bar.references.length}</span>
-                ) : null}
+                <span className="text-[9px] text-muted-foreground/50 ml-auto">{bar.references.length}</span>
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="bg-secondary/20 rounded-lg p-2 space-y-2 mt-1.5">
-                  {bar.confidenceBasis && (
-                    <p className="text-[10px] text-muted-foreground leading-relaxed">
-                      {bar.confidenceBasis}
-                    </p>
-                  )}
-                  {bar.references && bar.references.length > 0 && (
+                  {bar.references.length > 0 && (
                     <TooltipProvider delayDuration={200}>
                       <div className="flex flex-wrap gap-1">
                         {bar.references.map((ref, i) => (
@@ -368,7 +370,7 @@ export function SleepBarPopover({
                 </div>
               </CollapsibleContent>
             </Collapsible>
-          )}
+          ) : null}
 
           {/* ── FOOTER: Duty context ── */}
           <div className="text-[10px] text-muted-foreground pt-1 border-t border-border/50">
