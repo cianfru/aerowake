@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, BarChart3, Activity, Clock, TrendingDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatisticsCards } from '@/components/fatigue/StatisticsCards';
@@ -19,7 +19,7 @@ export function InsightsContent() {
         <div className="mx-auto max-w-6xl">
           <Card variant="glass" className="p-8 md:p-12 text-center">
             <div className="space-y-4">
-              <span className="text-5xl md:text-6xl">📊</span>
+              <BarChart3 className="h-12 w-12 text-muted-foreground" />
               <h3 className="text-lg md:text-xl font-semibold">No Analysis Data</h3>
               <p className="text-sm md:text-base text-muted-foreground">
                 Run an analysis from the Analysis tab first to see insights here.
@@ -38,7 +38,7 @@ export function InsightsContent() {
         <Card variant="glass" className="data-view-card">
           <CardHeader className="pb-2 md:pb-4">
             <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-              <span className="text-primary">📊</span>
+              <BarChart3 className="h-5 w-5 text-primary" />
               Summary Statistics
             </CardTitle>
           </CardHeader>
@@ -65,15 +65,18 @@ export function InsightsContent() {
 
         {/* Analytics Charts */}
         <Tabs defaultValue="performance" className="w-full">
-          <TabsList className="w-full grid grid-cols-3 h-auto">
-            <TabsTrigger value="performance" className="text-xs md:text-sm py-2">
-              <span className="hidden sm:inline">Performance </span>Timeline
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="performance" className="text-xs">
+              <Activity className="h-3 w-3 mr-1" />
+              Performance Timeline
             </TabsTrigger>
-            <TabsTrigger value="circadian" className="text-xs md:text-sm py-2">
-              <span className="hidden sm:inline">Body Clock </span>Drift
+            <TabsTrigger value="circadian" className="text-xs">
+              <Clock className="h-3 w-3 mr-1" />
+              Body Clock Drift
             </TabsTrigger>
-            <TabsTrigger value="sleepdebt" className="text-xs md:text-sm py-2">
-              <span className="hidden sm:inline">Sleep Debt </span>Trend
+            <TabsTrigger value="sleepdebt" className="text-xs">
+              <TrendingDown className="h-3 w-3 mr-1" />
+              Sleep Debt Trend
             </TabsTrigger>
           </TabsList>
           <TabsContent value="performance" className="mt-4">

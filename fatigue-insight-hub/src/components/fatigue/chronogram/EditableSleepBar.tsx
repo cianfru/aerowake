@@ -15,6 +15,7 @@
  */
 
 import { useRef, useState, useCallback, useEffect } from 'react';
+import { Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getRecoveryClasses, getStrategyIcon, decimalToHHmm } from '@/lib/fatigue-utils';
 import type { TimelineSleepBar } from '@/lib/timeline-types';
@@ -268,13 +269,13 @@ export function EditableSleepBar({
       {/* ── Bar content (recovery info) ── */}
       <div className="flex items-center justify-end w-full px-1">
         {liveWidthPercent > 6 && (
-          <div className="flex items-center gap-0.5 text-[8px] font-medium text-warning">
-            <span>{getStrategyIcon(bar.sleepStrategy)}</span>
+          <div className="flex items-center gap-1 text-[8px] font-medium text-warning">
+            <span className="font-mono bg-warning/15 px-0.5 rounded text-[7px]">{getStrategyIcon(bar.sleepStrategy)}</span>
             <span>{Math.round(bar.recoveryScore)}%</span>
           </div>
         )}
         {liveWidthPercent > 3 && (
-          <span className="text-[7px] text-warning font-medium ml-0.5">{'\u270E'}</span>
+          <Pencil className="h-2.5 w-2.5 text-warning ml-0.5" />
         )}
       </div>
 

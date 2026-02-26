@@ -13,7 +13,7 @@ import {
   Legend,
 } from 'recharts';
 import { Badge } from '@/components/ui/badge';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plane, Moon, Home } from 'lucide-react';
 import { DutyAnalysis, RestDaySleep } from '@/types/fatigue';
 import { useContinuousTimelineData, ContinuousTimelinePoint, DutyDetailTimeline } from '@/hooks/useContinuousTimelineData';
 import { useFetchAllDutyTimelines } from '@/hooks/useFetchAllDutyTimelines';
@@ -58,7 +58,7 @@ function CustomTooltip({ active, payload }: any) {
       <p className="font-medium text-foreground">{formatTimestamp(d.timestampMs)}</p>
       {d.dutyLabel && (
         <p className="text-xs text-muted-foreground mb-1">
-          {d.phase === 'duty' ? '✈️' : d.phase === 'sleep' ? '😴' : '🏠'} {d.dutyLabel}
+          {d.phase === 'duty' ? <Plane className="h-3 w-3 inline-block mr-0.5" /> : d.phase === 'sleep' ? <Moon className="h-3 w-3 inline-block mr-0.5" /> : <Home className="h-3 w-3 inline-block mr-0.5" />} {d.dutyLabel}
         </p>
       )}
       {d.departure && d.arrival && (
