@@ -78,6 +78,11 @@ export function DutyDetailsDialog({
           is_critical: pt.is_critical ?? false,
           timestamp: pt.timestamp,
           timestamp_local: pt.timestamp_local,
+          // Phase 2 model deepening fields
+          debt_penalty: pt.debt_penalty,
+          hypoxia_factor: pt.hypoxia_factor,
+          pvt_lapses: pt.pvt_lapses,
+          microsleep_probability: pt.microsleep_probability,
         })) : undefined;
 
         setDetailedDuty({
