@@ -105,21 +105,22 @@ export function StatisticsCards({ statistics, duties }: StatisticsCardsProps) {
         />
         <RibbonStat
           label="Sleep Debt"
-          value={`${statistics.maxSleepDebt.toFixed(1)}h`}
+          value={`${statistics.averageSleepDebt.toFixed(1)}h`}
+          subValue={`Peak ${statistics.maxSleepDebt.toFixed(1)}h`}
           icon={<Clock className="h-3.5 w-3.5" />}
-          variant={statistics.maxSleepDebt <= 2 ? 'success' : statistics.maxSleepDebt <= 4 ? 'warning' : 'critical'}
+          variant={statistics.averageSleepDebt <= 4 ? 'success' : statistics.averageSleepDebt <= 8 ? 'warning' : 'critical'}
           info={FATIGUE_INFO.sleepDebt}
           sparkline={sparklineData && (
             <SparklineChart
               data={sparklineData.sleepDebt}
-              color={statistics.maxSleepDebt <= 4 ? 'hsl(var(--warning))' : 'hsl(var(--critical))'}
+              color={statistics.averageSleepDebt <= 4 ? 'hsl(var(--success))' : statistics.averageSleepDebt <= 8 ? 'hsl(var(--warning))' : 'hsl(var(--critical))'}
             />
           )}
         />
         {duties && duties.length > 0 && (
           <RibbonStat
             label="Total FHA"
-            value={rosterFHA.toLocaleString()}
+            value={`${rosterFHA}h`}
             icon={<AlertTriangle className="h-3.5 w-3.5" />}
             variant={fhaSeverity.variant}
             info={FATIGUE_INFO.fha}
@@ -172,6 +173,8 @@ export function StatisticsCards({ statistics, duties }: StatisticsCardsProps) {
 interface RibbonStatProps {
   label: string;
   value: string;
+  /** Optional secondary value shown in smaller text next to the label */
+  subValue?: string;
   icon: React.ReactNode;
   variant?: 'neutral' | 'success' | 'warning' | 'critical';
   /** Optional info tooltip entry — shows (i) icon on hover/click. */
@@ -180,7 +183,7 @@ interface RibbonStatProps {
   sparkline?: React.ReactNode;
 }
 
-function RibbonStat({ label, value, icon, variant = 'neutral', info, sparkline }: RibbonStatProps) {
+function RibbonStat({ label, value, subValue, icon, variant = 'neutral', info, sparkline }: RibbonStatProps) {
   const variantStyles = {
     neutral: { value: 'text-foreground', icon: 'text-muted-foreground' },
     success: { value: 'text-success', icon: 'text-success' },
@@ -196,6 +199,7 @@ function RibbonStat({ label, value, icon, variant = 'neutral', info, sparkline }
         <div className={cn("text-base font-semibold tabular-nums leading-tight", styles.value)}>{value}</div>
         <div className="flex items-center gap-1 text-[11px] text-muted-foreground truncate">
           <span className="truncate">{label}</span>
+          {subValue && <span className="text-[10px] opacity-70">({subValue})</span>}
           {info && <InfoTooltip entry={info} size="sm" />}
         </div>
         {sparkline && (

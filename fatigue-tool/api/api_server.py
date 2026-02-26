@@ -400,6 +400,7 @@ class AnalysisResponse(BaseModel):
     # Sleep metrics
     avg_sleep_per_night: float
     max_sleep_debt: float
+    average_sleep_debt: float = 0.0
     
     # Worst case
     worst_duty_id: str
@@ -1101,6 +1102,7 @@ async def analyze_roster(
             total_pinch_events=monthly_analysis.total_pinch_events,
             avg_sleep_per_night=monthly_analysis.average_sleep_per_night,
             max_sleep_debt=monthly_analysis.max_sleep_debt,
+            average_sleep_debt=getattr(monthly_analysis, 'average_sleep_debt', 0.0),
             worst_duty_id=monthly_analysis.lowest_performance_duty,
             worst_performance=monthly_analysis.lowest_performance_value,
             duties=duties_response,
@@ -1178,6 +1180,7 @@ async def get_analysis(analysis_id: str, db=Depends(get_db)):
             total_pinch_events=monthly_analysis.total_pinch_events,
             avg_sleep_per_night=monthly_analysis.average_sleep_per_night,
             max_sleep_debt=monthly_analysis.max_sleep_debt,
+            average_sleep_debt=getattr(monthly_analysis, 'average_sleep_debt', 0.0),
             worst_duty_id=monthly_analysis.lowest_performance_duty,
             worst_performance=monthly_analysis.lowest_performance_value,
             duties=duties_response,
@@ -1359,6 +1362,7 @@ async def get_statistics(analysis_id: str):
         "sleep": {
             "avg_sleep_per_night": monthly_analysis.average_sleep_per_night,
             "max_sleep_debt": monthly_analysis.max_sleep_debt,
+            "average_sleep_debt": getattr(monthly_analysis, 'average_sleep_debt', 0.0),
         }
     }
 
@@ -1928,6 +1932,7 @@ class MonthlyMetrics(BaseModel):
     # Sleep
     avg_sleep_per_night: float = 0.0
     max_sleep_debt: float = 0.0
+    average_sleep_debt: float = 0.0
 
     # WOCL
     total_wocl_hours: float = 0.0
@@ -2089,6 +2094,7 @@ async def get_yearly_dashboard(
             critical_risk_count=risk_counts["critical"],
             avg_sleep_per_night=round(aj.get("avg_sleep_per_night", 0) or 0, 1),
             max_sleep_debt=round(aj.get("max_sleep_debt", 0) or 0, 1),
+            average_sleep_debt=round(aj.get("average_sleep_debt", 0) or 0, 1),
             total_wocl_hours=round(total_wocl, 1),
             total_pinch_events=aj.get("total_pinch_events", 0) or 0,
             high_risk_duties=aj.get("high_risk_duties", 0) or 0,

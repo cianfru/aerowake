@@ -1866,7 +1866,10 @@ class BorbelyFatigueModel:
             avg_sleep = 0.0
         
         max_debt = max(dt.cumulative_sleep_debt for dt in duty_timelines)
-        
+        avg_debt = round(
+            sum(dt.cumulative_sleep_debt for dt in duty_timelines) / len(duty_timelines), 2
+        )
+
         worst_duty = min(duty_timelines, key=lambda dt: dt.min_performance)
         
         # Serialize body clock timeline for API exposure
@@ -1900,6 +1903,7 @@ class BorbelyFatigueModel:
             total_pinch_events=total_pinch,
             average_sleep_per_night=avg_sleep,
             max_sleep_debt=max_debt,
+            average_sleep_debt=avg_debt,
             lowest_performance_duty=worst_duty.duty_id,
             lowest_performance_value=worst_duty.min_performance,
             body_clock_timeline=bcl,
