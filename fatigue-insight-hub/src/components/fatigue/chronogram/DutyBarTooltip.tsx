@@ -27,8 +27,8 @@ import {
 } from '@/lib/fatigue-utils';
 import {
   decomposePerformance,
-  calculateImpairedPercent,
-  getImpairedSeverity,
+  calculateFHA,
+  getFHASeverity,
   performanceToKSS,
   getKSSLabel,
 } from '@/lib/fatigue-calculations';
@@ -404,11 +404,10 @@ export function DutyBarTooltip({
               const kss = performanceToKSS(worst.performance);
               const kssLabel = getKSSLabel(kss);
               const validPts = tp.filter((pt) => pt.performance != null);
-              // Only compute impaired% with full timeline (>1 point); seed data = 1 worst point
-              const impPct = validPts.length > 1
-                ? calculateImpairedPercent(validPts.map((pt) => ({ performance: pt.performance ?? 0 })))
-                : null;
-              const impSev = impPct != null ? getImpairedSeverity(impPct) : null;
+              const fha = calculateFHA(
+                validPts.map((pt) => ({ performance: pt.performance ?? 0 }))
+              );
+              const fhaSev = getFHASeverity(fha);
               return (
                 <div className="border-t border-border pt-2 mt-1 space-y-1.5">
                   <span className="text-muted-foreground font-medium">
@@ -454,9 +453,9 @@ export function DutyBarTooltip({
                     <Badge variant={kssLabel.variant} className="text-[10px]">
                       KSS {kss.toFixed(1)}
                     </Badge>
-                    {impPct != null && impPct > 0 && impSev && (
-                      <Badge variant={impSev.variant} className="text-[10px]">
-                        {impPct}% impaired
+                    {fha > 0 && (
+                      <Badge variant={fhaSev.variant} className="text-[10px]">
+                        FHA {fha}
                       </Badge>
                     )}
                   </div>

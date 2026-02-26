@@ -189,11 +189,11 @@ export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
   },
   fha: {
     description:
-      'Percentage of duty time where performance falls below the 77% moderate-risk threshold. Higher values indicate more time spent in a fatigued state.',
+      'Fatigue Hazard Area \u2014 cumulative fatigue exposure below the 77% moderate-risk threshold. Integrates the depth and duration of performance deficits into a single score.',
     reference: 'Dawson & McCulloch, 2005',
-    formula: 'Impaired % = (time below 77%) / total duty time',
-    threshold: '\u226410% low, 10-25% moderate, >25% high',
-    actionTip: 'High impaired time may warrant fatigue report filing under EASA ORO.FTL.120.',
+    formula: 'FHA = \u03A3 max(0, 77% \u2212 P(t)) \u00D7 \u0394t',
+    threshold: '\u22645 low, 5\u201320 moderate, >20 high (%-hours)',
+    actionTip: 'High FHA may warrant fatigue report filing under EASA ORO.FTL.120.',
   },
   kss: {
     description:
