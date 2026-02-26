@@ -226,6 +226,19 @@
     border-right: 1px solid hsl(var(--wocl) / 0.35);
   }
 
+  /* WMZ (Wake Maintenance Zone) band — gold/amber tint, Dijk & Czeisler 1994 */
+  .wmz-band {
+    background: hsl(var(--warning) / 0.10);
+    border-left: 1px solid hsl(var(--warning) / 0.20);
+    border-right: 1px solid hsl(var(--warning) / 0.20);
+  }
+
+  .light .wmz-band {
+    background: hsl(var(--warning) / 0.14);
+    border-left: 1px solid hsl(var(--warning) / 0.25);
+    border-right: 1px solid hsl(var(--warning) / 0.25);
+  }
+
   /* Data-heavy views: increase card opacity */
   .data-view-card {
     @apply bg-card/70 backdrop-blur-2xl;

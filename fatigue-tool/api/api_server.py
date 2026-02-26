@@ -341,6 +341,10 @@ class DutyResponse(BaseModel):
     # Validation warnings (NEW - BUG FIX #5)
     time_validation_warnings: List[str] = []
 
+    # Cabin environment
+    cabin_altitude_ft: Optional[float] = None  # Inferred cabin altitude from aircraft type (ft)
+    aircraft_type: Optional[str] = None  # Aircraft type for cabin altitude inference (e.g. "A320")
+
     # Worst-point S/C/W decomposition (for immediate PerformanceSummaryCard rendering)
     worst_point: Optional[dict] = None  # {performance, sleep_pressure, circadian, sleep_inertia, time_on_task_penalty, hours_on_duty}
 
@@ -678,6 +682,25 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
     sleep_quality = _build_sleep_quality(duty_timeline)
     ulr_compliance_dict, inflight_blocks = _build_ulr_data(duty_timeline, duty)
 
+    # Infer cabin altitude from aircraft type in roster
+    cabin_alt = None
+    aircraft_type_str = None
+    if hasattr(roster, 'pilot_aircraft') and roster.pilot_aircraft:
+        aircraft_type_str = roster.pilot_aircraft
+        # Use the model's aircraft cabin altitude mapping
+        AIRCRAFT_CABIN_ALT = {
+            'A350': 6000, 'A359': 6000, 'A35K': 6000, '351': 6000, '359': 6000,
+            'A320': 7000, 'A321': 7000, 'A319': 7000, '320': 7000, '32Q': 7000, '321': 7000,
+            '777': 7300, '77W': 7300, '77L': 7300,
+            '787': 6000, '789': 6000, '78J': 6000,
+            'A330': 6900, '330': 6900, '333': 6900, '339': 6900,
+            'A380': 5000, '380': 5000, '388': 5000,
+        }
+        for key, alt in AIRCRAFT_CABIN_ALT.items():
+            if key.upper() in aircraft_type_str.upper():
+                cabin_alt = float(alt)
+                break
+
     # Extract worst-point S/C/W decomposition for immediate frontend rendering
     worst_point_dict = None
     if duty_timeline.timeline:
@@ -738,6 +761,9 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
         time_validation_warnings=time_warnings,
         sleep_quality=sleep_quality,
         worst_point=worst_point_dict,
+        # Cabin environment
+        cabin_altitude_ft=cabin_alt,
+        aircraft_type=aircraft_type_str,
         # Training duty metadata
         duty_type=duty.duty_type.value if hasattr(duty, 'duty_type') else 'flight',
         training_code=getattr(duty, 'training_code', None),

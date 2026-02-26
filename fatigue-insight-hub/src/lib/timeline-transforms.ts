@@ -19,6 +19,7 @@ import type {
   TimelineFdpMarker,
   TimelineSegment,
   WoclBand,
+  WmzBand,
   RowLabel,
 } from '@/lib/timeline-types';
 
@@ -37,6 +38,8 @@ import {
   DEFAULT_CHECK_IN_MINUTES,
   WOCL_START,
   WOCL_END,
+  WMZ_START,
+  WMZ_END,
   ADAPTATION_RATE_EAST,
   ADAPTATION_RATE_WEST,
 } from '@/lib/fatigue-utils';
@@ -610,6 +613,9 @@ export function homeBaseTransform(
   // ---- WOCL band (static) ----
   const woclBands: WoclBand[] = [{ rowIndex: -1, startHour: WOCL_START, endHour: WOCL_END }];
 
+  // ---- WMZ band (static — 18:00-21:00 home base time, Dijk & Czeisler 1994) ----
+  const wmzBands: WmzBand[] = [{ rowIndex: -1, startHour: WMZ_START, endHour: WMZ_END }];
+
   return {
     variant: 'homebase',
     dutyBars,
@@ -617,6 +623,7 @@ export function homeBaseTransform(
     inflightRestBars: irBars,
     fdpMarkers,
     woclBands,
+    wmzBands,
     rowLabels: buildMonthRowLabels(duties, month),
     totalRows: daysInMonth,
     xAxisLabel: 'Time of Day (Home Base)',
@@ -1001,6 +1008,9 @@ export function utcTransform(
   // ---- WOCL band (static) ----
   const woclBands: WoclBand[] = [{ rowIndex: -1, startHour: WOCL_START, endHour: WOCL_END }];
 
+  // ---- WMZ band (static — 18:00-21:00 home base time, Dijk & Czeisler 1994) ----
+  const wmzBands: WmzBand[] = [{ rowIndex: -1, startHour: WMZ_START, endHour: WMZ_END }];
+
   return {
     variant: 'utc',
     dutyBars,
@@ -1008,6 +1018,7 @@ export function utcTransform(
     inflightRestBars: irBars,
     fdpMarkers,
     woclBands,
+    wmzBands,
     rowLabels: buildMonthRowLabels(duties, month),
     totalRows: daysInMonth,
     xAxisLabel: 'Time of Day (UTC / Zulu)',
@@ -1454,15 +1465,17 @@ export function elapsedTransform(
     }
   }
 
-  // ---- WOCL bands (DYNAMIC per row, shifted by circadian phase) ----
+  // ---- WOCL + WMZ bands (DYNAMIC per row, shifted by circadian phase) ----
   const totalRows = Math.max(1, Math.ceil(maxElapsedHour / 24));
   const woclBands: WoclBand[] = [];
+  const wmzBands: WmzBand[] = [];
 
   for (let row = 0; row < totalRows; row++) {
     // Map row back to approximate day-of-month for shift lookup
     const approxDay = row + 1; // row 0 = day 1
     const shift = circadianShiftByDay.get(Math.min(approxDay, daysInMonth)) ?? 0;
 
+    // WOCL bands
     let shiftedStart = WOCL_START + shift;
     let shiftedEnd = WOCL_END + shift;
 
@@ -1476,6 +1489,19 @@ export function elapsedTransform(
       // Wraps midnight: two bands
       woclBands.push({ rowIndex: row, startHour: shiftedStart, endHour: 24 });
       woclBands.push({ rowIndex: row, startHour: 0, endHour: shiftedEnd });
+    }
+
+    // WMZ bands (18:00-21:00, shifted by circadian phase — Dijk & Czeisler 1994)
+    let wmzStart = WMZ_START + shift;
+    let wmzEnd = WMZ_END + shift;
+    wmzStart = ((wmzStart % 24) + 24) % 24;
+    wmzEnd = ((wmzEnd % 24) + 24) % 24;
+
+    if (wmzStart < wmzEnd) {
+      wmzBands.push({ rowIndex: row, startHour: wmzStart, endHour: wmzEnd });
+    } else {
+      wmzBands.push({ rowIndex: row, startHour: wmzStart, endHour: 24 });
+      wmzBands.push({ rowIndex: row, startHour: 0, endHour: wmzEnd });
     }
   }
 
@@ -1517,6 +1543,7 @@ export function elapsedTransform(
     inflightRestBars: irBars,
     fdpMarkers,
     woclBands,
+    wmzBands,
     rowLabels,
     totalRows,
     xAxisLabel: 'Hours (Elapsed)',

@@ -177,8 +177,9 @@ export function ContinuousPerformanceTimeline({
   const minTime = data[0].timestampMs;
   const maxTime = data[data.length - 1].timestampMs;
 
-  // Generate WOCL bands (02:00-06:00 each day)
+  // Generate WOCL bands (02:00-06:00 each day) and WMZ bands (18:00-21:00 each day)
   const woclBands: Array<{ start: number; end: number }> = [];
+  const wmzBands: Array<{ start: number; end: number }> = [];
   const dayStart = new Date(minTime);
   dayStart.setHours(0, 0, 0, 0);
   for (let d = dayStart.getTime(); d < maxTime + 24 * 60 * 60 * 1000; d += 24 * 60 * 60 * 1000) {
@@ -186,6 +187,12 @@ export function ContinuousPerformanceTimeline({
     const woclEnd = d + 6 * 60 * 60 * 1000;   // 06:00
     if (woclEnd > minTime && woclStart < maxTime) {
       woclBands.push({ start: Math.max(woclStart, minTime), end: Math.min(woclEnd, maxTime) });
+    }
+    // WMZ — Wake Maintenance Zone (Dijk & Czeisler, 1994)
+    const wmzStart = d + 18 * 60 * 60 * 1000; // 18:00
+    const wmzEnd = d + 21 * 60 * 60 * 1000;   // 21:00
+    if (wmzEnd > minTime && wmzStart < maxTime) {
+      wmzBands.push({ start: Math.max(wmzStart, minTime), end: Math.min(wmzEnd, maxTime) });
     }
   }
 
@@ -261,6 +268,18 @@ export function ContinuousPerformanceTimeline({
                   x2={band.end}
                   fill="hsl(var(--chart-5))"
                   fillOpacity={0.08}
+                  yAxisId="left"
+                />
+              ))}
+
+              {/* WMZ bands (Wake Maintenance Zone — Dijk & Czeisler 1994) */}
+              {wmzBands.map((band, idx) => (
+                <ReferenceArea
+                  key={`wmz-${idx}`}
+                  x1={band.start}
+                  x2={band.end}
+                  fill="hsl(var(--warning))"
+                  fillOpacity={0.06}
                   yAxisId="left"
                 />
               ))}

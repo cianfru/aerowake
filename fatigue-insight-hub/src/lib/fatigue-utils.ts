@@ -125,6 +125,10 @@ export const ROW_HEIGHT = 40;
 export const WOCL_START = 2;
 export const WOCL_END = 6;
 
+/** WMZ (Wake Maintenance Zone) boundaries in hours — Dijk & Czeisler (1994) */
+export const WMZ_START = 18;
+export const WMZ_END = 21;
+
 /** Circadian adaptation rates (hours/day) — HPT view */
 export const ADAPTATION_RATE_EAST = 1.0;
 export const ADAPTATION_RATE_WEST = 1.5;

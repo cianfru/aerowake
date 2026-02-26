@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Moon, Sun, Clock, Zap, Brain, Activity, Gauge, Timer, AlertTriangle } from 'lucide-react';
+import { Moon, Sun, Clock, Zap, Brain, Activity, Gauge, Timer, AlertTriangle, TrendingDown, Mountain, Eye } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { InfoTooltip, FATIGUE_INFO } from '@/components/ui/InfoTooltip';
@@ -236,6 +236,28 @@ export function PerformanceSummaryCard({ duty }: PerformanceSummaryCardProps) {
                 infoKey="fha"
               />
             )}
+            {/* PVT Lapses badge — from model deepening (Van Dongen 2003) */}
+            {worstPoint?.pvt_lapses != null && (
+              <ScaleBadge
+                icon={<Eye className="h-3 w-3" />}
+                label="PVT"
+                value={worstPoint.pvt_lapses.toFixed(1)}
+                sublabel={worstPoint.pvt_lapses <= 2 ? 'Normal' : worstPoint.pvt_lapses <= 5 ? 'Impaired' : 'Severe'}
+                variant={worstPoint.pvt_lapses <= 2 ? 'success' : worstPoint.pvt_lapses <= 5 ? 'warning' : 'critical'}
+                infoKey="pvtLapses"
+              />
+            )}
+            {/* Microsleep probability badge — from model deepening (Åkerstedt 2010) */}
+            {worstPoint?.microsleep_probability != null && worstPoint.microsleep_probability > 0.01 && (
+              <ScaleBadge
+                icon={<Zap className="h-3 w-3" />}
+                label="Microsleep"
+                value={`${(worstPoint.microsleep_probability * 100).toFixed(1)}%`}
+                sublabel={worstPoint.microsleep_probability < 0.02 ? 'Low risk' : worstPoint.microsleep_probability < 0.05 ? 'Moderate' : 'High risk'}
+                variant={worstPoint.microsleep_probability < 0.02 ? 'success' : worstPoint.microsleep_probability < 0.05 ? 'warning' : 'critical'}
+                infoKey="microsleepProbability"
+              />
+            )}
           </div>
         </div>
 
@@ -285,11 +307,41 @@ export function PerformanceSummaryCard({ duty }: PerformanceSummaryCardProps) {
                 infoKey="sleepInertia"
               />
             )}
+            {/* Chronic Debt factor — Van Dongen (2003) */}
+            {worstPoint?.debt_penalty != null && worstPoint.debt_penalty < 0.99 && (
+              <FactorBar
+                icon={<TrendingDown className="h-3.5 w-3.5 text-amber-500" />}
+                label="Chronic Debt"
+                tag="D"
+                rawValue={worstPoint.debt_penalty}
+                contribution={Number(((1 - worstPoint.debt_penalty) * 100).toFixed(1))}
+                barColor="hsl(var(--warning))"
+                detail={`${duty.sleepDebt.toFixed(1)}h cumulative debt`}
+                infoKey="sleepDebt"
+              />
+            )}
+            {/* Cabin altitude hypoxia — Nesthus (2007) */}
+            {worstPoint?.hypoxia_factor != null && worstPoint.hypoxia_factor < 0.99 && (
+              <FactorBar
+                icon={<Mountain className="h-3.5 w-3.5 text-blue-400" />}
+                label="Cabin Altitude"
+                tag="Hx"
+                rawValue={worstPoint.hypoxia_factor}
+                contribution={Number(((1 - worstPoint.hypoxia_factor) * 100).toFixed(1))}
+                barColor="hsl(220, 70%, 60%)"
+                detail={duty.cabinAltitudeFt ? `${duty.cabinAltitudeFt.toLocaleString()} ft cabin` : 'Mild hypoxia'}
+                infoKey="cabinAltitude"
+              />
+            )}
           </div>
         </div>
 
         {/* Stacked contribution bar */}
-        <ContributionBar decomp={decomp} />
+        <ContributionBar
+          decomp={decomp}
+          debtPenalty={worstPoint?.debt_penalty}
+          hypoxiaFactor={worstPoint?.hypoxia_factor}
+        />
 
         {/* Natural language explanation */}
         {explanation && (
@@ -392,8 +444,14 @@ function FactorBar({
   );
 }
 
-function ContributionBar({ decomp }: { decomp: ReturnType<typeof decomposePerformance> }) {
-  const totalDeficit = decomp.sContribution + decomp.cContribution + decomp.wContribution + decomp.totContribution;
+function ContributionBar({ decomp, debtPenalty, hypoxiaFactor }: {
+  decomp: ReturnType<typeof decomposePerformance>;
+  debtPenalty?: number;
+  hypoxiaFactor?: number;
+}) {
+  const debtContribution = debtPenalty != null && debtPenalty < 0.99 ? (1 - debtPenalty) * 100 : 0;
+  const hypoxiaContribution = hypoxiaFactor != null && hypoxiaFactor < 0.99 ? (1 - hypoxiaFactor) * 100 : 0;
+  const totalDeficit = decomp.sContribution + decomp.cContribution + decomp.wContribution + decomp.totContribution + debtContribution + hypoxiaContribution;
   const remaining = Math.max(0, 100 - totalDeficit);
 
   const segments = [
@@ -402,6 +460,8 @@ function ContributionBar({ decomp }: { decomp: ReturnType<typeof decomposePerfor
     { width: decomp.cContribution, color: 'hsl(220, 80%, 60%)', label: 'C' },
     { width: decomp.wContribution, color: 'hsl(30, 90%, 55%)', label: 'W' },
     { width: decomp.totContribution, color: 'hsl(var(--muted-foreground))', label: 'ToT' },
+    { width: debtContribution, color: 'hsl(var(--warning))', label: 'Debt' },
+    { width: hypoxiaContribution, color: 'hsl(220, 70%, 60%)', label: 'Hx' },
   ].filter(s => s.width > 0.5);
 
   return (
