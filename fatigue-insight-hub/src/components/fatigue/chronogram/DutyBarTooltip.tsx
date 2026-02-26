@@ -24,6 +24,7 @@ import {
   isTrainingDuty,
   getTrainingDutyColor,
   getTrainingDutyLabel,
+  formatAircraftType,
 } from '@/lib/fatigue-utils';
 import {
   decomposePerformance,
@@ -273,12 +274,18 @@ export function DutyBarTooltip({
               </>
             ) : (
               <>
-                {/* Flight duty: flights list */}
+                {/* Flight duty: flights list + aircraft type */}
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                   <span className="text-muted-foreground">Flights:</span>
                   <span>
                     {bar.duty.flightSegments.map((s) => s.flightNumber).join(', ')}
                   </span>
+                  {bar.duty.aircraftType && (
+                    <>
+                      <span className="text-muted-foreground">Aircraft:</span>
+                      <span className="font-medium">{formatAircraftType(bar.duty.aircraftType)}</span>
+                    </>
+                  )}
                 </div>
 
                 {/* EASA ORO.FTL Section */}
@@ -480,7 +487,7 @@ export function DutyBarTooltip({
                   {bar.duty.aircraftType && (
                     <>
                       <span className="text-muted-foreground">Aircraft</span>
-                      <span className="text-foreground font-medium">{bar.duty.aircraftType}</span>
+                      <span className="text-foreground font-medium">{formatAircraftType(bar.duty.aircraftType)}</span>
                     </>
                   )}
                   <span className="text-muted-foreground">Cabin Alt.</span>

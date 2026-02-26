@@ -982,10 +982,17 @@ class BorbelyFatigueModel:
                 cached_s_value = previous_timeline.final_process_s
             
             # Determine cabin altitude for hypoxia calculation.
-            # Flight duties use aircraft type from roster; training = ground level.
+            # Prefer per-segment aircraft type (from PDF trailing tokens like (359)),
+            # fall back to roster-level pilot_aircraft from PDF header.
+            # Training duties = ground level (0 ft).
             cabin_alt = 0.0
             if duty.duty_type == DutyType.FLIGHT:
-                cabin_alt = self.get_cabin_altitude(roster.pilot_aircraft)
+                duty_aircraft = None
+                for seg in duty.segments:
+                    if getattr(seg, 'aircraft_type', None) and not seg.is_deadhead and not seg.is_inflight_rest:
+                        duty_aircraft = seg.aircraft_type
+                        break
+                cabin_alt = self.get_cabin_altitude(duty_aircraft or roster.pilot_aircraft)
 
             timeline_obj = self.simulate_duty(
                 duty, relevant_sleep, phase_shift,

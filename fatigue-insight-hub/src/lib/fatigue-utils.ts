@@ -129,6 +129,25 @@ export const WOCL_END = 6;
 export const WMZ_START = 18;
 export const WMZ_END = 21;
 
+/**
+ * Map raw PDF aircraft codes (e.g. "351", "359", "77W") to human-readable names.
+ * Falls through to the raw code if no match found.
+ */
+const AIRCRAFT_DISPLAY_NAMES: Record<string, string> = {
+  '351': 'A350-900', '359': 'A350-1000', 'A350': 'A350', 'A35K': 'A350-1000',
+  '320': 'A320', '32Q': 'A320neo', '321': 'A321', 'A320': 'A320', 'A321': 'A321', 'A319': 'A319',
+  '77W': 'B777-300ER', '77L': 'B777-200LR', '777': 'B777', 'B777': 'B777',
+  '787': 'B787', '789': 'B787-9', '78J': 'B787-8',
+  '330': 'A330', '333': 'A330-300', '339': 'A330-900', 'A330': 'A330',
+  '380': 'A380', '388': 'A380-800', 'A380': 'A380',
+};
+
+export function formatAircraftType(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const upper = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return AIRCRAFT_DISPLAY_NAMES[upper] ?? raw;
+}
+
 /** Circadian adaptation rates (hours/day) — HPT view */
 export const ADAPTATION_RATE_EAST = 1.0;
 export const ADAPTATION_RATE_WEST = 1.5;

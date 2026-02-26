@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { SettingsSidebar } from '@/components/fatigue/SettingsSidebar';
 import { Chronogram } from '@/components/fatigue/Chronogram';
 import { PinchEventAlerts } from '@/components/fatigue/PinchEventAlerts';
-import { DutyDetailsDrawer } from '@/components/fatigue/DutyDetailsDrawer';
+import { DutyDetailsDialog } from '@/components/fatigue/DutyDetailsDialog';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { useAnalyzeRoster } from '@/hooks/useAnalyzeRoster';
 import { useTheme } from '@/hooks/useTheme';
@@ -151,8 +151,8 @@ export function DashboardContent() {
         </div>
       </main>
 
-      {/* Duty Details Drawer */}
-      <DutyDetailsDrawer
+      {/* Duty Details Dialog (full-screen, tabbed) */}
+      <DutyDetailsDialog
         duty={selectedDuty}
         analysisId={analysisResults?.analysisId}
         open={drawerOpen}

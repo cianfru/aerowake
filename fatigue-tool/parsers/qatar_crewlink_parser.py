@@ -981,6 +981,7 @@ class CrewLinkRosterParser:
                         i += 1  # Skip irrelevant codes
                     elif re.match(r'^\(\w{2,3}\)$', token_upper):
                         # Parenthesized aircraft type e.g. (359), (351), (77W)
+                        segment.aircraft_type = clean  # Store on segment
                         i += 1
                     elif re.match(r'^[A-Z0-9]{2,3}$', clean) and not re.match(r'^[A-Z]{3}$', token_upper):
                         # Bare aircraft type code e.g. 359, 77W (not an airport).
@@ -1001,6 +1002,7 @@ class CrewLinkRosterParser:
                         )
                         if looks_like_flight_num and next_is_airport and next_is_time:
                             break  # Next segment starts here — stop consuming trailing tokens
+                        segment.aircraft_type = clean  # Store on segment
                         i += 1
                     else:
                         break  # Unknown token — likely start of next segment

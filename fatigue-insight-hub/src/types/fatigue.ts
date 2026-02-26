@@ -57,6 +57,8 @@ export interface FlightSegment {
   isDeadhead?: boolean;          // true when activity_code == "DH"
   // Line training annotations (X, U, UL, L, E, ZFT)
   lineTrainingCodes?: string[];
+  // Aircraft type from PDF trailing tokens (e.g. "351", "359", "320", "77W")
+  aircraftType?: string | null;
 }
 
 export type FlightPhase = 'preflight' | 'taxi' | 'takeoff' | 'climb' | 'cruise' | 'descent' | 'approach' | 'landing';

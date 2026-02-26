@@ -75,6 +75,9 @@ ALLOWED_ORIGINS += [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
 ]
 
 app.add_middleware(
@@ -150,6 +153,8 @@ class DutySegmentResponse(BaseModel):
     is_deadhead: bool = False
     # Line training annotations (X, U, UL, L, E, ZFT) — metadata only
     line_training_codes: Optional[List[str]] = None
+    # Per-segment aircraft type from PDF trailing tokens (e.g. "351", "359", "77W")
+    aircraft_type: Optional[str] = None
 
 
 class QualityFactorsResponse(BaseModel):
@@ -506,6 +511,7 @@ def _build_segments(duty, home_tz) -> list:
             activity_code=getattr(seg, 'activity_code', None),
             is_deadhead=getattr(seg, 'is_deadhead', False),
             line_training_codes=getattr(seg, 'line_training_codes', None),
+            aircraft_type=getattr(seg, 'aircraft_type', None),
         ))
     return segments
 
@@ -682,20 +688,34 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
     sleep_quality = _build_sleep_quality(duty_timeline)
     ulr_compliance_dict, inflight_blocks = _build_ulr_data(duty_timeline, duty)
 
-    # Infer cabin altitude from aircraft type in roster
-    cabin_alt = None
+    # Infer cabin altitude from per-segment aircraft type (fall back to roster header)
+    AIRCRAFT_CABIN_ALT = {
+        'A350': 6000, 'A359': 6000, 'A35K': 6000, '351': 6000, '359': 6000,
+        'A320': 7000, 'A321': 7000, 'A319': 7000, '320': 7000, '32Q': 7000, '321': 7000,
+        '777': 7300, '77W': 7300, '77L': 7300,
+        '787': 6000, '789': 6000, '78J': 6000,
+        'A330': 6900, '330': 6900, '333': 6900, '339': 6900,
+        'A380': 5000, '380': 5000, '388': 5000,
+    }
+    # 1. Prefer per-segment aircraft type (first operating segment)
     aircraft_type_str = None
-    if hasattr(roster, 'pilot_aircraft') and roster.pilot_aircraft:
+    if duty.segments:
+        for seg in duty.segments:
+            if getattr(seg, 'aircraft_type', None) and not seg.is_deadhead and not seg.is_inflight_rest:
+                aircraft_type_str = seg.aircraft_type
+                break
+        # Fall back to any segment with aircraft type
+        if not aircraft_type_str:
+            for seg in duty.segments:
+                if getattr(seg, 'aircraft_type', None):
+                    aircraft_type_str = seg.aircraft_type
+                    break
+    # 2. Final fallback: roster-level pilot_aircraft from PDF header
+    if not aircraft_type_str and hasattr(roster, 'pilot_aircraft') and roster.pilot_aircraft:
         aircraft_type_str = roster.pilot_aircraft
-        # Use the model's aircraft cabin altitude mapping
-        AIRCRAFT_CABIN_ALT = {
-            'A350': 6000, 'A359': 6000, 'A35K': 6000, '351': 6000, '359': 6000,
-            'A320': 7000, 'A321': 7000, 'A319': 7000, '320': 7000, '32Q': 7000, '321': 7000,
-            '777': 7300, '77W': 7300, '77L': 7300,
-            '787': 6000, '789': 6000, '78J': 6000,
-            'A330': 6900, '330': 6900, '333': 6900, '339': 6900,
-            'A380': 5000, '380': 5000, '388': 5000,
-        }
+    # 3. Resolve cabin altitude
+    cabin_alt = None
+    if aircraft_type_str:
         for key, alt in AIRCRAFT_CABIN_ALT.items():
             if key.upper() in aircraft_type_str.upper():
                 cabin_alt = float(alt)

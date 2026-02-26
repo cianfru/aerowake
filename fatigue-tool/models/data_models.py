@@ -153,6 +153,7 @@ class FlightSegment:
     scheduled_arrival_utc: datetime
     activity_code: Optional[str] = None  # "IR", "DH", etc. from roster PDF
     line_training_codes: Optional[List[str]] = None  # X, U, UL, L, E, ZFT annotations
+    aircraft_type: Optional[str] = None  # e.g. "351", "359", "320", "77W" from PDF trailing tokens
 
     @property
     def is_deadhead(self) -> bool:
