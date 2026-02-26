@@ -1850,14 +1850,18 @@ class BorbelyFatigueModel:
         total_pinch = sum(len(dt.pinch_events) for dt in duty_timelines)
         
         # Compute true per-night average from all roster sleep blocks.
-        # Previous code averaged prior_sleep_hours (sum of last 3 blocks per
-        # duty), which inflated the result when multi-day rest periods contributed
-        # 24h+ as a single data point.  Instead we use total actual sleep hours
-        # (duration_hours) divided by the number of calendar nights in the roster.
-        if all_sleep:
+        # all_sleep includes ROFF fill blocks from the start of the calendar
+        # month (not just the duty span), so the denominator must be the full
+        # month length to avoid inflating the average.
+        if all_sleep and roster.month:
             total_sleep_hours = sum(s.duration_hours for s in all_sleep)
-            roster_days = max(1, (roster.duties[-1].date - roster.duties[0].date).days + 1)
-            avg_sleep = round(total_sleep_hours / roster_days, 2)
+            year_m, mon_m = int(roster.month[:4]), int(roster.month[5:7])
+            from datetime import date as _date
+            if mon_m == 12:
+                month_days = (_date(year_m + 1, 1, 1) - _date(year_m, mon_m, 1)).days
+            else:
+                month_days = (_date(year_m, mon_m + 1, 1) - _date(year_m, mon_m, 1)).days
+            avg_sleep = round(total_sleep_hours / month_days, 2)
         else:
             avg_sleep = 0.0
         
