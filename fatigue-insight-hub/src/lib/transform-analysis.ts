@@ -219,7 +219,6 @@ export function transformAnalysisResult(
       highRiskDuties: result.high_risk_duties,
       criticalRiskDuties: result.critical_risk_duties,
       maxSleepDebt: result.max_sleep_debt,
-      averageSleepDebt: result.average_sleep_debt ?? result.max_sleep_debt,
       totalPinchEvents: result.total_pinch_events || 0,
       avgSleepPerNight: result.avg_sleep_per_night || 0,
       worstPerformance: result.worst_performance || 0,
