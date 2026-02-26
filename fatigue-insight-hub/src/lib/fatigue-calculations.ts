@@ -22,49 +22,53 @@ interface TimelineDataPoint {
 }
 
 /**
- * Calculate the percentage of timeline spent below the performance threshold.
+ * Calculate the Fatigue Hazard Area (FHA) in %-hours.
  *
- * Impaired % = (points below threshold / total points) × 100
+ * FHA = Σ max(0, threshold − P(t)) × Δt / 60
  *
- * A simple, intuitive metric that directly relates to the 77% benchmark:
- * "What fraction of duty time was performance below the fatigue threshold?"
+ * This is the trapezoidal integration of the area under the moderate-risk
+ * threshold (77%) across all timeline points, converted from %-minutes
+ * to %-hours for intuitive display. Higher values indicate greater
+ * cumulative fatigue exposure.
  *
- * Reference: Dawson & McCulloch, 2005 (adapted from FHA area metric).
+ * Reference: Dawson & McCulloch, 2005.
  *
  * @param points Array of timeline data points with performance values.
  * @param threshold Performance threshold (default 77%).
- * @returns Percentage of time below threshold (0-100).
+ * @param resolutionMin Time step in minutes (default 5).
+ * @returns FHA value in %-hours.
  */
-export function calculateImpairedPercent(
+export function calculateFHA(
   points: TimelineDataPoint[],
   threshold: number = FHA_THRESHOLD,
+  resolutionMin: number = TIMELINE_RESOLUTION_MIN,
 ): number {
   if (!points || points.length === 0) return 0;
-  const impaired = points.filter(p => p.performance < threshold).length;
-  return Math.round((impaired / points.length) * 100);
+
+  let fha = 0;
+  for (let i = 0; i < points.length; i++) {
+    const deficit = Math.max(0, threshold - points[i].performance);
+    fha += deficit * resolutionMin;
+  }
+  return Math.round(fha / 60);
 }
 
 /**
- * Classify impaired time severity for display.
+ * Classify FHA severity for display.
  *
- *   ≤10%  → Low (most duty time above threshold)
- *   ≤25%  → Moderate (notable fatigue exposure)
- *   >25%  → High (significant portion of duty time impaired)
+ * Thresholds calibrated for %-hours:
+ *   ≤5 %-hours  → Low (typical well-rested roster)
+ *   ≤20 %-hours → Moderate (some fatigue exposure)
+ *   >20 %-hours → High (significant cumulative exposure)
  */
-export function getImpairedSeverity(pct: number): {
+export function getFHASeverity(fha: number): {
   label: string;
   variant: 'success' | 'warning' | 'critical';
 } {
-  if (pct <= 10) return { label: 'Low', variant: 'success' };
-  if (pct <= 25) return { label: 'Moderate', variant: 'warning' };
+  if (fha <= 5) return { label: 'Low', variant: 'success' };
+  if (fha <= 20) return { label: 'Moderate', variant: 'warning' };
   return { label: 'High', variant: 'critical' };
 }
-
-// Legacy aliases for backward compatibility
-/** @deprecated Use calculateImpairedPercent */
-export const calculateFHA = calculateImpairedPercent;
-/** @deprecated Use getImpairedSeverity */
-export const getFHASeverity = getImpairedSeverity;
 
 // ---------------------------------------------------------------------------
 // Derived Fatigue Scales
@@ -304,19 +308,6 @@ export function decomposePerformance(point: {
 import type { DutyAnalysis } from '@/types/fatigue';
 
 /**
- * Calculate the percentage of duties where average performance fell below threshold.
- *
- * Uses duty-level `avgPerformance` (always available from the initial analysis)
- * rather than timeline points (which are only loaded lazily via the SAFTE tab).
- * This gives a reliable roster-level "% duties impaired" metric.
- */
-export function calculateRosterImpairedPercent(duties: DutyAnalysis[]): number {
-  if (duties.length === 0) return 0;
-  const impaired = duties.filter(d => (d.avgPerformance ?? 100) < FHA_THRESHOLD).length;
-  return Math.round((impaired / duties.length) * 100);
-}
-
-/**
  * Find the worst (highest) KSS across all duties in a roster.
  *
  * Returns the KSS value at the worst performance point of any duty.
@@ -328,12 +319,4 @@ export function calculateRosterWorstKSS(duties: DutyAnalysis[]): number {
     if (minPerf < worstPerf) worstPerf = minPerf;
   }
   return performanceToKSS(worstPerf);
-}
-
-/**
- * Compute per-duty impaired flag for sparkline display.
- * Returns 1 (impaired: avgPerf < 77%) or 0 per duty, same order as input.
- */
-export function computePerDutyImpairedPercent(duties: DutyAnalysis[]): number[] {
-  return duties.map(duty => (duty.avgPerformance ?? 100) < FHA_THRESHOLD ? 1 : 0);
 }
