@@ -91,19 +91,17 @@ export function TimelineLegend({ showDiscretion, variant = 'homebase' }: Timelin
             </span>
           )}
 
-          {/* Circadian markers for HPT */}
+          {/* WMZ swatch (all views) + circadian markers (HPT only) */}
+          <span className="text-border">|</span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-3 w-4 rounded-sm bg-warning/10 border border-warning/30" />
+            <span className="text-muted-foreground">WMZ</span>
+          </span>
           {variant === 'elapsed' && (
-            <>
-              <span className="text-border">|</span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-1 bg-critical/60 rounded-full" />
-                <span className="text-muted-foreground">Nadir</span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-4 rounded-sm bg-warning/10 border border-warning/30" />
-                <span className="text-muted-foreground">WMZ</span>
-              </span>
-            </>
+            <span className="flex items-center gap-1.5">
+              <span className="h-3 w-1 bg-critical/60 rounded-full" />
+              <span className="text-muted-foreground">Nadir</span>
+            </span>
           )}
 
           {/* Performance gradient inline */}

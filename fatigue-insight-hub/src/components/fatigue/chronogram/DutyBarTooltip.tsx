@@ -8,7 +8,7 @@
  * (homebase, utc, elapsed).
  */
 
-import { AlertTriangle, Battery } from 'lucide-react';
+import { AlertTriangle, Battery, Mountain } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Tooltip,
@@ -369,6 +369,13 @@ export function DutyBarTooltip({
               <span className="text-muted-foreground">Sleep Debt:</span>
               <span className={bar.duty.sleepDebt > 4 ? 'text-high' : ''}>
                 {bar.duty.sleepDebt.toFixed(1)}h
+                {(() => {
+                  const wp = bar.duty.timelinePoints?.[0];
+                  if (wp?.debt_penalty != null && wp.debt_penalty < 0.99) {
+                    return <span className="text-warning ml-1">({((1 - wp.debt_penalty) * 100).toFixed(0)}%)</span>;
+                  }
+                  return null;
+                })()}
               </span>
               <span className="text-muted-foreground">Risk Level:</span>
               <span
@@ -457,6 +464,79 @@ export function DutyBarTooltip({
                       <Badge variant={fhaSev.variant} className="text-[10px]">
                         FHA {fha}
                       </Badge>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Cabin Environment — only for flight duties with known cabin alt */}
+            {bar.duty.cabinAltitudeFt && bar.duty.cabinAltitudeFt > 5000 && !isTrainingDuty(bar.duty) && (
+              <div className="border-t border-border pt-2 mt-2 space-y-1">
+                <div className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
+                  <Mountain className="h-3 w-3" /> Cabin Environment
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
+                  {bar.duty.aircraftType && (
+                    <>
+                      <span className="text-muted-foreground">Aircraft</span>
+                      <span className="text-foreground font-medium">{bar.duty.aircraftType}</span>
+                    </>
+                  )}
+                  <span className="text-muted-foreground">Cabin Alt.</span>
+                  <span className="text-foreground font-medium">{bar.duty.cabinAltitudeFt.toLocaleString()} ft</span>
+                  {(() => {
+                    const wp = bar.duty.timelinePoints?.[0];
+                    if (wp?.hypoxia_factor != null && wp.hypoxia_factor < 0.99) {
+                      return (
+                        <>
+                          <span className="text-muted-foreground">Hypoxia</span>
+                          <span className="text-warning font-medium">
+                            {((1 - wp.hypoxia_factor) * 100).toFixed(1)}%
+                          </span>
+                        </>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* PVT Lapses + Microsleep probability */}
+            {(() => {
+              const wp = bar.duty.timelinePoints?.[0];
+              if (!wp) return null;
+              const pvt = wp.pvt_lapses;
+              const micro = wp.microsleep_probability;
+              if (pvt == null && micro == null) return null;
+              return (
+                <div className="border-t border-border pt-2 mt-2 space-y-1">
+                  <span className="text-[10px] font-medium text-muted-foreground">
+                    Alertness Indicators
+                  </span>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
+                    {pvt != null && (
+                      <>
+                        <span className="text-muted-foreground">PVT Lapses</span>
+                        <span className={cn(
+                          'font-medium',
+                          pvt <= 2 ? 'text-success' : pvt <= 5 ? 'text-warning' : 'text-critical',
+                        )}>
+                          ~{pvt.toFixed(1)}/10min
+                        </span>
+                      </>
+                    )}
+                    {micro != null && micro > 0.01 && (
+                      <>
+                        <span className="text-muted-foreground">Microsleep</span>
+                        <span className={cn(
+                          'font-medium',
+                          micro < 0.02 ? 'text-success' : micro < 0.05 ? 'text-warning' : 'text-critical',
+                        )}>
+                          {(micro * 100).toFixed(1)}%/hr
+                        </span>
+                      </>
                     )}
                   </div>
                 </div>

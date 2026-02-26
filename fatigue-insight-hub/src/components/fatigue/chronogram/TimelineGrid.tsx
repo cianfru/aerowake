@@ -159,6 +159,40 @@ export function TimelineGrid({
             ))}
 
           {/* -------------------------------------------------------------- */}
+          {/* Static WMZ bands (rowIndex === -1 spans all rows)              */}
+          {/* -------------------------------------------------------------- */}
+          {data.wmzBands
+            .filter((band) => band.rowIndex === -1)
+            .map((band, i) => (
+              <div
+                key={`wmz-static-${i}`}
+                className="absolute top-0 bottom-0 wmz-band pointer-events-none"
+                style={{
+                  left: `${(band.startHour / 24) * 100}%`,
+                  width: `${((band.endHour - band.startHour) / 24) * 100}%`,
+                }}
+              />
+            ))}
+
+          {/* -------------------------------------------------------------- */}
+          {/* Per-row WMZ bands (elapsed view, rowIndex >= 0)                */}
+          {/* -------------------------------------------------------------- */}
+          {data.wmzBands
+            .filter((band) => band.rowIndex >= 0)
+            .map((band, i) => (
+              <div
+                key={`wmz-row-${i}`}
+                className="absolute wmz-band pointer-events-none"
+                style={{
+                  top: `${band.rowIndex * rowHeight}px`,
+                  height: `${rowHeight}px`,
+                  left: `${(band.startHour / 24) * 100}%`,
+                  width: `${((band.endHour - band.startHour) / 24) * 100}%`,
+                }}
+              />
+            ))}
+
+          {/* -------------------------------------------------------------- */}
           {/* Vertical grid lines (24 columns, every 3rd more prominent)     */}
           {/* -------------------------------------------------------------- */}
           <div className="absolute inset-0 flex pointer-events-none">

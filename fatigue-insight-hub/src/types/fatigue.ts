@@ -216,6 +216,10 @@ export interface DutyAnalysis {
   returnToDeckPerformance: number | null;
   preDutyAwakeHours: number;
 
+  // Cabin environment (Phase 2 model deepening)
+  cabinAltitudeFt?: number | null;   // Inferred cabin altitude from aircraft type (ft)
+  aircraftType?: string | null;      // Aircraft type string (e.g., "A320")
+
   // Training duty classification
   dutyType?: 'flight' | 'simulator' | 'ground_training';
   trainingCode?: string;           // Raw activity code: "OPTR", "FFS", "EBTGR", etc.
@@ -247,6 +251,11 @@ export interface TimelinePoint {
   is_critical?: boolean;           // True during takeoff/landing phases
   timestamp?: string;              // ISO 8601 UTC timestamp
   timestamp_local?: string;        // ISO 8601 home-base timezone timestamp
+  // Phase 2 — Model deepening additions
+  debt_penalty?: number;           // Chronic sleep debt multiplicative penalty (0.80-1.0) (Van Dongen, 2003)
+  hypoxia_factor?: number;         // Cabin altitude hypoxia factor (0.97-1.0) (Nesthus, 2007)
+  pvt_lapses?: number;             // Predicted PVT lapses per 10-min trial (Van Dongen, 2003)
+  microsleep_probability?: number; // Estimated microsleep probability per hour (Åkerstedt, 2010)
 }
 
 // Academic reference for sleep calculations

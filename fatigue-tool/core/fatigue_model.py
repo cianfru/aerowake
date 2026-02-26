@@ -76,11 +76,40 @@ class BorbelyFatigueModel:
         # (~17:00-19:00, Wright et al. 2002 Am J Physiol 283:R1370).
         # Note: these are operational choices, not literature-derived values.
         self.c_amplitude = self.params.circadian_amplitude + 0.03
-        self.c_peak_hour = self.params.circadian_acrophase_hours - 1.0
+        # Chronotype shifts the acrophase (Roenneberg et al. 2007)
+        self.c_peak_hour = self.params.circadian_acrophase_hours - 1.0 + self.params.chronotype_offset_hours
         
+        # Aircraft type → cabin altitude mapping (ft)
+        # Composite materials (A350, 787) pressurize lower; legacy aluminium higher.
+        # Source: manufacturer specifications / airline SOPs.
+        self.AIRCRAFT_CABIN_ALTITUDE = {
+            'A350': 6000, '351': 6000, '359': 6000, 'A35K': 6000,
+            'A320': 7000, '320': 7000, '32Q': 7000, 'A321': 7000,
+            'A330': 6800, '330': 6800,
+            '777': 7300, '77W': 7300, 'B777': 7300,
+            '787': 6000, 'B787': 6000,
+            '737': 7400, 'B737': 7400,
+            '747': 7200, 'B747': 7200,
+        }
+
         # Storage for API access
         self.sleep_strategies = {}
     
+    def get_cabin_altitude(self, aircraft_type: Optional[str] = None) -> float:
+        """
+        Look up cabin altitude for a given aircraft type string.
+
+        Returns altitude in feet.  Falls back to default_cabin_altitude_ft
+        if aircraft type is unknown or not provided.
+        """
+        if aircraft_type:
+            # Try exact match, then common substrings
+            clean = aircraft_type.upper().replace('-', '').replace(' ', '')
+            for key, alt in self.AIRCRAFT_CABIN_ALTITUDE.items():
+                if key.upper() in clean or clean in key.upper():
+                    return float(alt)
+        return self.params.default_cabin_altitude_ft
+
     # ========================================================================
     # CIRCADIAN ADAPTATION
     # ========================================================================
@@ -144,20 +173,59 @@ class BorbelyFatigueModel:
         self,
         time_utc: datetime,
         reference_timezone: str,
-        circadian_phase_shift: float = 0.0
+        circadian_phase_shift: float = 0.0,
+        cumulative_sleep_debt: float = 0.0
     ) -> float:
-        """Process C: Circadian alertness rhythm"""
+        """
+        Process C: Circadian alertness rhythm (two-harmonic model)
+
+        C(t) = mesor + A1_eff·cos(2π(t−φ1)/24) + A2_eff·cos(4π(t−φ2)/24)
+
+        The first harmonic (24-h period) captures the primary circadian
+        oscillation with peak alertness around 16:00-17:00 and nadir
+        at 04:00-05:00 (WOCL).
+
+        The second harmonic (12-h period) creates the Wake Maintenance
+        Zone (WMZ, ~18:00-21:00) — a paradoxical evening alertness
+        plateau despite rising homeostatic pressure.
+
+        Circadian amplitude dampening (McCauley et al. 2013):
+        Chronic sleep debt flattens the circadian rhythm — well-rested
+        subjects show large day-night alertness differences, while
+        sleep-deprived subjects show less circadian variation.
+
+        References:
+            Dijk & Czeisler (1994) J Sleep Res 3:73-82
+            Lavie (1986) Sleep 9:355-366 (forbidden zone for sleep)
+            Strogatz et al. (1987) Am J Physiol 253:R173
+            McCauley et al. (2013) Proc Natl Acad Sci 110:E2380-E2389
+        """
         tz = pytz.timezone(reference_timezone)
         local_time = time_utc.astimezone(tz)
         hour_of_day = local_time.hour + local_time.minute / 60.0
-        
+
         effective_hour = (hour_of_day - circadian_phase_shift) % 24
-        angle = 2 * math.pi * (effective_hour - self.c_peak_hour) / 24
-        c_value = (
-            self.params.circadian_mesor +
-            self.c_amplitude * math.cos(angle)
-        )
-        
+
+        # Circadian amplitude dampening under chronic sleep debt
+        # McCauley et al. (2013): effective_amplitude = base × (1 − k × min(debt, max) / max)
+        dampening = 1.0
+        if cumulative_sleep_debt > 0 and self.params.circadian_dampening_max_debt > 0:
+            clamped_debt = min(cumulative_sleep_debt, self.params.circadian_dampening_max_debt)
+            dampening = 1.0 - self.params.circadian_dampening_coeff * clamped_debt / self.params.circadian_dampening_max_debt
+
+        # First harmonic: 24-h period (primary circadian oscillation)
+        effective_amplitude_1 = self.c_amplitude * dampening
+        angle_1 = 2 * math.pi * (effective_hour - self.c_peak_hour) / 24
+        fundamental = effective_amplitude_1 * math.cos(angle_1)
+
+        # Second harmonic: 12-h period (Wake Maintenance Zone)
+        # Dijk & Czeisler (1994): A2 ≈ 0.3 × A1, phase ~20:00
+        effective_amplitude_2 = self.params.circadian_second_harmonic_amplitude * dampening
+        angle_2 = 4 * math.pi * (effective_hour - self.params.circadian_second_harmonic_phase) / 24
+        second_harmonic = effective_amplitude_2 * math.cos(angle_2)
+
+        c_value = self.params.circadian_mesor + fundamental + second_harmonic
+
         return max(0.0, min(1.0, c_value))
     
     def compute_sleep_inertia(self, time_since_wake: timedelta) -> float:
@@ -172,7 +240,56 @@ class BorbelyFatigueModel:
         )
         
         return inertia
-    
+
+    @staticmethod
+    def compute_pvt_lapses(
+        cumulative_sleep_debt: float,
+        hours_awake: float
+    ) -> float:
+        """
+        Estimate PVT (Psychomotor Vigilance Task) lapses per 10-minute trial.
+
+        Based on Van Dongen et al. (2003) Sleep 26(2):117-126 dose-response
+        curves and Basner & Dinges (2011) Sleep 34(5):581-591.
+
+        Formula: lapses = 1.5 + 0.4 × debt + 1.2 × max(0, hours_awake − 16)
+
+        Well-rested baseline: ~1.5 lapses/10min (normal variability).
+        Each hour of sleep debt adds ~0.4 lapses.
+        Extended wakefulness beyond 16h contributes 1.2 lapses/h
+        (equivalent to ~0.05% BAC per additional hour, Dawson & Reid 1997).
+        """
+        lapses = (
+            1.5
+            + 0.4 * cumulative_sleep_debt
+            + 1.2 * max(0.0, hours_awake - 16.0)
+        )
+        return max(0.0, round(lapses, 1))
+
+    @staticmethod
+    def compute_microsleep_probability(
+        s: float,
+        c: float
+    ) -> float:
+        """
+        Estimate probability of involuntary microsleep events per hour.
+
+        Based on Åkerstedt et al. (2010) J Sleep Res 19:549-560 — microsleep
+        occurrences increase exponentially with sleep pressure and are
+        amplified during circadian low.
+
+        Formula: P = 0.02 × exp(4 × (S − 0.50)) × (1 + 2 × max(0, 0.5 − C))
+
+        S = 0.50 → baseline ~2% (normal range for 12h awake)
+        S = 0.70 → ~4.4% (16h+ awake)
+        S = 0.90 → ~9.8% (24h+ awake)
+        Circadian low (C < 0.3) amplifies by up to 1.4×.
+        """
+        s_term = 0.02 * math.exp(4.0 * (s - 0.50))
+        c_amplifier = 1.0 + 2.0 * max(0.0, 0.5 - c)
+        probability = s_term * c_amplifier
+        return max(0.0, min(1.0, round(probability, 4)))
+
     def integrate_s_and_c_multiplicative(self, s: float, c: float) -> float:
         """
         Weighted average integration of S and C with pilot resilience factor
@@ -209,8 +326,10 @@ class BorbelyFatigueModel:
         return base_alertness
     
     def integrate_performance(
-        self, c: float, s: float, w: float, hours_on_duty: float = 0.0
-    ) -> float:
+        self, c: float, s: float, w: float, hours_on_duty: float = 0.0,
+        cumulative_sleep_debt: float = 0.0,
+        cabin_altitude_ft: float = 0.0
+    ) -> tuple:
         """
         Integrate processes into performance (0-100 scale)
 
@@ -218,14 +337,24 @@ class BorbelyFatigueModel:
           S — homeostatic sleep pressure     (Borbély 1982)
           C — circadian rhythm               (Dijk & Czeisler 1995)
           W — sleep inertia                  (Tassi & Muzet 2000)
-          T — time-on-task linear decrement  (Folkard & Åkerstedt 1999)
+          T — time-on-task (non-linear)      (Folkard 1999, Cabon 2008)
+          D — sleep debt vulnerability       (Van Dongen et al. 2003)
+          H — cabin altitude hypoxia         (Nesthus 2007, Muhm 2007)
 
         Weights (50/50 S/C) provide balanced operational model.
         Pilot resilience factor accounts for professional training effects.
         References: Åkerstedt & Folkard (1997) three-process model;
                     Dawson & Reid (1997) performance equivalence framework;
                     Folkard et al. (1999) J Biol Rhythms 14:577-587;
-                    Gander et al. (2013) operational fatigue management.
+                    Cabon et al. (2008) Int J Ind Ergon 38:885-891;
+                    Gander et al. (2013) operational fatigue management;
+                    Van Dongen et al. (2003) Sleep 26(2):117-126;
+                    Nesthus et al. (2007) DOT/FAA/AM-07/21;
+                    Muhm et al. (2007) Aviat Space Environ Med 78:B13-B18.
+
+        Returns:
+            (performance, debt_penalty, hypoxia_factor) — performance on
+            20-100 scale, debt_penalty multiplier, hypoxia multiplier.
         """
         # Input validation with graceful clamping
         c = max(0.0, min(1.0, c))
@@ -236,18 +365,56 @@ class BorbelyFatigueModel:
         base_alertness = self.integrate_s_and_c_multiplicative(s, c_phase)
         alertness_with_inertia = base_alertness * (1.0 - w)
 
-        # Time-on-task: linear decrement per hour on duty
-        # Folkard & Åkerstedt (1999) found ~0.7 %/h decline in subjective
-        # alertness across 12-h shifts, independent of S and C.
-        tot_penalty = self.params.time_on_task_rate * max(0.0, hours_on_duty)
-        alertness_final = max(0.0, alertness_with_inertia - tot_penalty)
+        # Time-on-task: non-linear model (Folkard 1999, Cabon 2008)
+        # tot = k1·log(1+h) + k2·max(0, h−h_inf)²
+        # Logarithmic ramp captures gentle initial fatigue; quadratic term
+        # accelerates degradation beyond inflection point (~8h).
+        h = max(0.0, hours_on_duty)
+        h_inf = self.params.tot_inflection_hours
+        tot_penalty = (
+            self.params.tot_log_coeff * math.log(1.0 + h) +
+            self.params.tot_quadratic_coeff * max(0.0, h - h_inf) ** 2
+        )
+        alertness_after_tot = max(0.0, alertness_with_inertia - tot_penalty)
+
+        # Sleep debt vulnerability: chronic restriction amplification
+        # Van Dongen et al. (2003) showed cumulative cognitive deficits
+        # grow linearly with accumulated sleep debt hours.
+        # Banks & Dinges (2007) confirmed dose-response relationship.
+        # 4h debt → −10%, 8h debt → −20%, capped at floor (0.80).
+        debt_penalty = max(
+            self.params.sleep_debt_vulnerability_floor,
+            1.0 - self.params.sleep_debt_vulnerability_coeff * cumulative_sleep_debt
+        )
+        alertness_after_debt = alertness_after_tot * debt_penalty
+
+        # Cabin altitude hypoxia (Nesthus 2007, Muhm 2007)
+        # Mild cognitive impairment from reduced cabin pressure.
+        # Only applies above 5000 ft equivalent. −1% per 1000 ft above 5000.
+        hypoxia_factor = 1.0
+        if cabin_altitude_ft > 5000:
+            hypoxia_factor = max(
+                0.95,  # Floor: max 5% reduction
+                1.0 - self.params.hypoxia_coeff * (cabin_altitude_ft - 5000) / 1000
+            )
+        alertness_final = alertness_after_debt * hypoxia_factor
 
         # Performance floor of 20 (severe impairment, ~0.05% BAC equivalent)
         MIN_PERFORMANCE_FLOOR = 20.0
         performance = MIN_PERFORMANCE_FLOOR + (alertness_final * (100.0 - MIN_PERFORMANCE_FLOOR))
+
+        # Individual vulnerability (Van Dongen et al. 2004)
+        # Scales the performance DEFICIT, not the score directly.
+        # vulnerability > 1.0 → more sensitive (deficit is amplified)
+        # vulnerability < 1.0 → more resilient (deficit is reduced)
+        if self.params.individual_vulnerability != 1.0:
+            deficit = 100.0 - performance
+            deficit *= self.params.individual_vulnerability
+            performance = 100.0 - deficit
+
         performance = max(MIN_PERFORMANCE_FLOOR, min(100.0, performance))
 
-        return performance
+        return performance, debt_penalty, hypoxia_factor
     
     # ========================================================================
     # FLIGHT PHASES
@@ -291,7 +458,9 @@ class BorbelyFatigueModel:
         circadian_phase_shift: float = 0.0,
         initial_s: float = 0.3,
         resolution_minutes: int = 5,
-        cached_s: Optional[float] = None
+        cached_s: Optional[float] = None,
+        cumulative_sleep_debt: float = 0.0,
+        cabin_altitude_ft: float = 0.0
     ) -> DutyTimeline:
         """Simulate single duty with high-resolution timeline"""
         
@@ -394,14 +563,19 @@ class BorbelyFatigueModel:
                             math.exp(-effective_wake_hours / self.params.tau_i)
                 s_current = max(self.params.S_min, min(self.params.S_max, s_current))
 
-                c = self.compute_process_c(current_time, duty.home_base_timezone, circadian_phase_shift)
+                c = self.compute_process_c(current_time, duty.home_base_timezone, circadian_phase_shift, cumulative_sleep_debt)
 
                 # Sleep inertia from pre-duty wake
                 time_since_wake = current_time - wake_time
                 w = self.compute_sleep_inertia(time_since_wake)
 
                 tot_penalty = self.params.time_on_task_rate * max(0.0, hours_on_duty)
-                performance = self.integrate_performance(c, s_current, w, hours_on_duty)
+                performance, dp, hf = self.integrate_performance(c, s_current, w, hours_on_duty, cumulative_sleep_debt, cabin_altitude_ft)
+
+                # Derived safety metrics
+                total_awake = pre_duty_awake_hours + hours_on_duty
+                pvt = self.compute_pvt_lapses(cumulative_sleep_debt, total_awake)
+                msp = self.compute_microsleep_probability(s_current, c)
 
                 point = PerformancePoint(
                     timestamp_utc=current_time,
@@ -412,6 +586,10 @@ class BorbelyFatigueModel:
                     raw_performance=performance,
                     hours_on_duty=hours_on_duty,
                     time_on_task_penalty=tot_penalty,
+                    debt_penalty=dp,
+                    hypoxia_factor=hf,
+                    pvt_lapses=pvt,
+                    microsleep_probability=msp,
                     current_flight_phase=FlightPhase.CRUISE,  # Placeholder — no flight phases
                     is_critical_phase=False
                 )
@@ -429,18 +607,24 @@ class BorbelyFatigueModel:
                         # Transition: entering rest
                         in_rest = True
                         rest_entry_s = s_current
+                        rest_duration_hours = 0.0
+
+                    rest_duration_hours += step_duration_hours
 
                     # Process S DECAYS during sleep (recovery equation)
                     # Reduced efficiency in bunk: effective tau_d = tau_d / rest_quality
                     # Signal et al. (2013) Sleep 36(1):109-118: ~70% efficiency in bunk
-                    effective_tau_d = self.params.tau_d / rest_quality
+                    # SWA diminishing returns (Borbély & Achermann 1999):
+                    # Later hours of sleep are less restorative.
+                    swa_factor = 1.0 + self.params.swa_diminishing_coeff * rest_duration_hours / 8.0
+                    effective_tau_d = (self.params.tau_d * swa_factor) / rest_quality
                     s_current = self.params.S_min + (rest_entry_s - self.params.S_min) * \
                         math.exp(-step_duration_hours / effective_tau_d)
                     # Update rest_entry_s for next step (progressive decay)
                     rest_entry_s = s_current
                     s_current = max(self.params.S_min, min(self.params.S_max, s_current))
 
-                    c = self.compute_process_c(current_time, duty.home_base_timezone, circadian_phase_shift)
+                    c = self.compute_process_c(current_time, duty.home_base_timezone, circadian_phase_shift, cumulative_sleep_debt)
 
                     # Pilot not on deck — record rest status in timeline
                     point = PerformancePoint(
@@ -482,7 +666,7 @@ class BorbelyFatigueModel:
                                 math.exp(-effective_wake_hours / self.params.tau_i)
                     s_current = max(self.params.S_min, min(self.params.S_max, s_current))
 
-                    c = self.compute_process_c(current_time, duty.home_base_timezone, circadian_phase_shift)
+                    c = self.compute_process_c(current_time, duty.home_base_timezone, circadian_phase_shift, cumulative_sleep_debt)
 
                     # Sleep inertia: from last rest wake or from pre-duty wake
                     if last_rest_end:
@@ -492,11 +676,16 @@ class BorbelyFatigueModel:
                     w = self.compute_sleep_inertia(time_since_wake)
 
                     tot_penalty = self.params.time_on_task_rate * max(0.0, hours_on_duty)
-                    performance = self.integrate_performance(c, s_current, w, hours_on_duty)
+                    performance, dp, hf = self.integrate_performance(c, s_current, w, hours_on_duty, cumulative_sleep_debt, cabin_altitude_ft)
 
                     # Track return-to-deck performance (first point after rest)
                     if last_rest_end and return_to_deck_perf is None:
                         return_to_deck_perf = performance
+
+                    # Derived safety metrics
+                    total_awake = pre_duty_awake_hours + hours_on_duty
+                    pvt = self.compute_pvt_lapses(cumulative_sleep_debt, total_awake)
+                    msp = self.compute_microsleep_probability(s_current, c)
 
                     point = PerformancePoint(
                         timestamp_utc=current_time,
@@ -507,6 +696,10 @@ class BorbelyFatigueModel:
                         raw_performance=performance,
                         hours_on_duty=hours_on_duty,
                         time_on_task_penalty=tot_penalty,
+                        debt_penalty=dp,
+                        hypoxia_factor=hf,
+                        pvt_lapses=pvt,
+                        microsleep_probability=msp,
                         current_flight_phase=phase,
                         is_critical_phase=(phase in [FlightPhase.TAKEOFF, FlightPhase.LANDING, FlightPhase.APPROACH])
                     )
@@ -566,7 +759,7 @@ class BorbelyFatigueModel:
                     break
             
             c_estimate = self.compute_process_c(mid_duty_time, duty.home_base_timezone, phase_shift)
-            default_performance = self.integrate_performance(c_estimate, s_estimate, 0.0)
+            default_performance, _, _ = self.integrate_performance(c_estimate, s_estimate, 0.0)
             
             return DutyTimeline(
                 duty_id=duty.duty_id,
@@ -788,10 +981,18 @@ class BorbelyFatigueModel:
             if previous_timeline and previous_timeline.final_process_s > 0:
                 cached_s_value = previous_timeline.final_process_s
             
+            # Determine cabin altitude for hypoxia calculation.
+            # Flight duties use aircraft type from roster; training = ground level.
+            cabin_alt = 0.0
+            if duty.duty_type == DutyType.FLIGHT:
+                cabin_alt = self.get_cabin_altitude(roster.pilot_aircraft)
+
             timeline_obj = self.simulate_duty(
-                duty, relevant_sleep, phase_shift, 
+                duty, relevant_sleep, phase_shift,
                 initial_s=current_s,
-                cached_s=cached_s_value
+                cached_s=cached_s_value,
+                cumulative_sleep_debt=cumulative_sleep_debt,
+                cabin_altitude_ft=cabin_alt
             )
             previous_timeline = timeline_obj
             
@@ -1040,6 +1241,12 @@ class BorbelyFatigueModel:
             except (ValueError, IndexError, AttributeError):
                 pass  # Malformed month string — skip silently
 
+        # Running sleep debt estimate for rebound sleep extension.
+        # This is a lightweight pre-simulation debt tracker: it compares
+        # generated sleep block durations against the 8h baseline need
+        # to estimate cumulative debt before full simulation runs.
+        running_debt_estimate = roster.initial_sleep_debt
+
         for i, duty in enumerate(roster.duties):
             previous_duty = roster.duties[i - 1] if i > 0 else None
             next_duty = roster.duties[i + 1] if i < len(roster.duties) - 1 else None
@@ -1095,12 +1302,26 @@ class BorbelyFatigueModel:
                     previous_duty=previous_duty,
                     next_duty=duty,
                     home_timezone=roster.home_base_timezone,
-                    home_base=roster.pilot_base
+                    home_base=roster.pilot_base,
+                    cumulative_sleep_debt=running_debt_estimate
                 )
                 strategy_key = duty.duty_id
 
             for sleep_block in strategy.sleep_blocks:
                 sleep_blocks.append(sleep_block)
+
+            # Update running debt estimate (lightweight — mirrors simulation loop logic)
+            if previous_duty:
+                days_gap = max(1, (duty.date - previous_duty.date).days)
+                period_sleep = sum(b.duration_hours for b in strategy.sleep_blocks)
+                period_need = self.params.baseline_sleep_need_hours * days_gap
+                balance = period_sleep - period_need
+                if balance < 0:
+                    running_debt_estimate += abs(balance)
+                elif balance > 0 and running_debt_estimate > 0:
+                    running_debt_estimate = max(0, running_debt_estimate - balance / 1.30)
+                # Exponential decay
+                running_debt_estimate *= math.exp(-self.params.sleep_debt_decay_rate * days_gap)
 
             if getattr(duty, 'is_augmented_crew', False):
                 blk_dates = [(b.start_utc.isoformat()[:10], b.end_utc.isoformat()[:10]) for b in strategy.sleep_blocks]

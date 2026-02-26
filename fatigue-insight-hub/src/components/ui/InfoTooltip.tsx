@@ -234,4 +234,28 @@ export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
     threshold: '>80% good, 65-80% moderate, <65% depleted',
     actionTip: 'Sleep reservoir replenishes slowly. Multiple nights of good sleep are needed to rebuild.',
   },
+  wmz: {
+    description:
+      'Wake Maintenance Zone — a paradoxical period of elevated alertness from ~18:00-21:00 home base time, driven by the second harmonic of the circadian rhythm.',
+    reference: 'Dijk & Czeisler, 1994',
+    threshold: '~18:00-21:00 home base time',
+  },
+  pvtLapses: {
+    description:
+      'Predicted Psychomotor Vigilance Task lapses per 10-minute trial. A validated objective measure of sustained attention failure.',
+    reference: 'Van Dongen et al., 2003; Basner & Dinges, 2011',
+    threshold: '\u22642 normal, 2-5 impaired, >5 severely impaired',
+  },
+  microsleepProbability: {
+    description:
+      'Estimated probability of involuntary microsleep events per hour of wakefulness. Increases exponentially with sleep debt and circadian misalignment.',
+    reference: '\u00c5kerstedt et al., 2010',
+    threshold: '<2% low, 2-5% moderate, >5% high risk',
+    actionTip: 'Microsleep probability >5% warrants enhanced crew monitoring.',
+  },
+  cabinAltitude: {
+    description:
+      'Mild hypoxia from reduced cabin pressure (6,000-8,000 ft equivalent) can impair cognitive performance by 1-3%. Effect is multiplicative with fatigue.',
+    reference: 'Nesthus et al., 2007; Muhm et al., 2007',
+  },
 };

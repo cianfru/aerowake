@@ -127,6 +127,17 @@ export interface WoclBand {
 }
 
 // ---------------------------------------------------------------------------
+// WMZ band (Wake Maintenance Zone — ~18:00-21:00 home base time)
+// ---------------------------------------------------------------------------
+
+export interface WmzBand {
+  /** Row index — -1 means "all rows" (static band) */
+  rowIndex: number;
+  startHour: number;
+  endHour: number;
+}
+
+// ---------------------------------------------------------------------------
 // Row label (Y-axis)
 // ---------------------------------------------------------------------------
 
@@ -156,6 +167,8 @@ export interface TimelineData {
   inflightRestBars: TimelineIRBar[];
   fdpMarkers: TimelineFdpMarker[];
   woclBands: WoclBand[];
+  /** Wake Maintenance Zone bands (~18:00-21:00 home base, shifted in elapsed view) */
+  wmzBands: WmzBand[];
   rowLabels: RowLabel[];
   /** Total number of rows to render */
   totalRows: number;

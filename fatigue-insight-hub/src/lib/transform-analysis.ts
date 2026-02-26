@@ -361,6 +361,9 @@ export function transformAnalysisResult(
         dutyType: duty.duty_type || 'flight',
         trainingCode: duty.training_code || undefined,
         trainingAnnotations: duty.training_annotations || undefined,
+        // Cabin environment
+        cabinAltitudeFt: duty.cabin_altitude_ft ?? null,
+        aircraftType: duty.aircraft_type ?? null,
         // Seed timelinePoints from worst_point so PerformanceSummaryCard renders immediately
         timelinePoints: duty.worst_point ? [{
           hours_on_duty: duty.worst_point.hours_on_duty ?? 0,
@@ -371,6 +374,10 @@ export function transformAnalysisResult(
           performance: duty.worst_point.performance,
           timestamp: duty.worst_point.timestamp,
           timestamp_local: duty.worst_point.timestamp_local,
+          debt_penalty: duty.worst_point.debt_penalty,
+          hypoxia_factor: duty.worst_point.hypoxia_factor,
+          pvt_lapses: duty.worst_point.pvt_lapses,
+          microsleep_probability: duty.worst_point.microsleep_probability,
         }] : undefined,
         flightSegments: (duty.segments ?? []).map((seg, idx) => ({
           flightNumber: seg.flight_number,

@@ -17,6 +17,7 @@ References:
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from dataclasses import dataclass
+import math
 import pytz
 import logging
 
@@ -39,28 +40,50 @@ class SleepQualityAnalysis:
     time_pressure_factor: float
     insufficient_penalty: float
 
+    # Sleep onset latency (Åkerstedt 2008, Lavie 1986)
+    sleep_onset_latency_minutes: float = 0.0
+
+    # First-night effect (Agnew 1966, Tamaki 2016)
+    first_night_extra_minutes: float = 0.0
+    is_first_night: bool = False
+    is_second_night: bool = False
+
+    # Nap recovery efficiency (Brooks & Lack 2006)
+    nap_efficiency_modifier: float = 1.0
+    nap_duration_band: str = ''  # e.g. '10-20 min (optimal)'
+
+    # Anticipatory arousal (Kecklund & Åkerstedt 2004)
+    alarm_anxiety_factor: float = 1.0
+
     # Context
-    wocl_overlap_hours: float
-    sleep_start_hour: float
-    hours_since_duty: Optional[float]
-    hours_until_duty: Optional[float]
+    wocl_overlap_hours: float = 0.0
+    sleep_start_hour: float = 0.0
+    hours_since_duty: Optional[float] = None
+    hours_until_duty: Optional[float] = None
 
     # Warnings
-    warnings: List[Dict[str, str]]
+    warnings: List[Dict[str, str]] = None
+
+    def __post_init__(self):
+        if self.warnings is None:
+            self.warnings = []
 
 
 class SleepQualityEngine:
     """
     Computes sleep quality from multiplicative efficiency factors.
 
-    Seven factors applied to raw sleep duration:
+    Ten factors applied to raw sleep duration:
     1. Base location efficiency (home/hotel/bunk)
     2. Circadian alignment (WOCL overlap)
     3. Late sleep onset penalty
     4. Recovery boost (post-duty SWA rebound)
     5. Time pressure factor
     6. Insufficient sleep penalty (currently disabled — avoids double-count)
-    7. Nap penalty (Stage 1-2 dominant)
+    7. Nap efficiency by duration (Brooks & Lack 2006)
+    8. Sleep onset latency (Åkerstedt 2008, Lavie 1986)
+    9. First-night effect (Agnew 1966, Tamaki 2016)
+    10. Anticipatory arousal / alarm anxiety (Kecklund & Åkerstedt 2004)
     """
 
     def __init__(self, config):
@@ -91,7 +114,12 @@ class SleepQualityEngine:
         next_event: datetime,
         is_nap: bool = False,
         location_timezone: str = 'UTC',
-        biological_timezone: str = None
+        biological_timezone: str = None,
+        is_first_layover_night: bool = False,
+        is_second_layover_night: bool = False,
+        next_report_hour: Optional[float] = None,
+        is_split_sleep: bool = False,
+        split_block_min_hours: float = 0.0,
     ) -> SleepQualityAnalysis:
         """Calculate realistic sleep quality with all factors.
 
@@ -101,6 +129,12 @@ class SleepQualityEngine:
                 ``location_timezone``; for layovers it is the home-base TZ
                 (short layovers) or partially adapted TZ (longer layovers).
                 When ``None``, defaults to ``location_timezone``.
+            is_first_layover_night: True if this is the first night at a new
+                layover location (triggers first-night effect).
+            is_second_layover_night: True if this is the second night at a
+                layover location (attenuated first-night effect).
+            next_report_hour: Hour of next duty report (0-24) in local time.
+                If < 6.0, triggers anticipatory arousal penalty.
         """
 
         # 1. Calculate raw duration
@@ -111,8 +145,30 @@ class SleepQualityEngine:
 
         # 3. Base efficiency by location
         base_efficiency = self.LOCATION_EFFICIENCY.get(location, 0.85)
+
+        # 7a. Nap efficiency by duration (Brooks & Lack 2006, Tietzel & Lack 2002)
+        # Replaces the flat 0.88 nap penalty with duration-dependent lookup.
+        nap_eff_modifier = 1.0
+        nap_band = ''
         if is_nap:
-            base_efficiency *= 0.88
+            nap_minutes = total_hours * 60
+            sq_params = self.config.sleep_quality_params
+            if nap_minutes <= 10:
+                nap_eff_modifier = sq_params.nap_efficiency_under_10
+                nap_band = '≤10 min (light)'
+            elif nap_minutes <= 20:
+                nap_eff_modifier = sq_params.nap_efficiency_10_20
+                nap_band = '10-20 min (optimal)'
+            elif nap_minutes <= 30:
+                nap_eff_modifier = sq_params.nap_efficiency_20_30
+                nap_band = '20-30 min (SWS entry)'
+            elif nap_minutes <= 60:
+                nap_eff_modifier = sq_params.nap_efficiency_30_60
+                nap_band = '30-60 min (inertia risk)'
+            else:
+                nap_eff_modifier = sq_params.nap_efficiency_over_60
+                nap_band = '>60 min (full cycle)'
+            base_efficiency *= nap_eff_modifier
 
         # 4. Circadian alignment factor — BONUS for WOCL-aligned sleep only
         # Sleep that substantially covers the WOCL window (02:00-06:00) benefits
@@ -173,6 +229,41 @@ class SleepQualityEngine:
         # 8. Insufficient sleep penalty (disabled — avoids double-counting)
         insufficient_penalty = 1.0
 
+        # 8a. Sleep onset latency (Åkerstedt 2008, Lavie 1986)
+        # SOL reduces effective time in bed. Modelled as a circadian gate:
+        # easier to fall asleep during WOCL (low C), harder during WMZ (high C).
+        sol_minutes = self._calculate_sleep_onset_latency(
+            sleep_start_hour, actual_duration, is_nap
+        )
+
+        # 8b. First-night effect (Agnew 1966, Tamaki 2016)
+        # Novel environment → increased SOL, reduced SWS, more WASO.
+        first_night_extra = 0.0
+        sq_params = self.config.sleep_quality_params
+        if is_first_layover_night and not is_nap:
+            first_night_extra = sq_params.first_night_sol_extra_minutes
+        elif is_second_layover_night and not is_nap:
+            first_night_extra = sq_params.second_night_sol_extra_minutes
+
+        total_sol = sol_minutes + first_night_extra
+
+        # 8c. Anticipatory arousal / alarm anxiety (Kecklund & Åkerstedt 2004)
+        # Early-morning report (<06:00) reduces sleep quality via alarm anxiety.
+        alarm_anxiety = 1.0
+        if next_report_hour is not None and next_report_hour < sq_params.early_report_hour:
+            alarm_anxiety = sq_params.alarm_anxiety_penalty
+
+        # 8d. Split sleep quality differential (Jackson 2014, Kosmadopoulos 2017)
+        # Split sleep fragments lose quality depending on shortest block length.
+        split_modifier = 1.0
+        if is_split_sleep and not is_nap:
+            if split_block_min_hours >= 4.0:
+                split_modifier = sq_params.split_efficiency_4h_plus  # 0.92
+            elif split_block_min_hours >= 3.0:
+                split_modifier = sq_params.split_efficiency_3h_plus  # 0.85
+            else:
+                split_modifier = sq_params.split_efficiency_under_3h  # 0.78
+
         # 9. Combine all factors
         combined_efficiency = (
             base_efficiency
@@ -181,11 +272,16 @@ class SleepQualityEngine:
             * recovery_boost
             * time_pressure_factor
             * insufficient_penalty
+            * alarm_anxiety
+            * split_modifier
         )
         combined_efficiency = max(0.70, min(1.0, combined_efficiency))
 
-        # 10. Calculate effective sleep
-        effective_sleep_hours = actual_duration * combined_efficiency
+        # 10. Calculate effective sleep (subtract SOL from actual time in bed)
+        # SOL reduces the time actually asleep, not the quality of sleep obtained.
+        sol_hours = total_sol / 60.0
+        effective_duration = max(0.0, actual_duration - sol_hours)
+        effective_sleep_hours = effective_duration * combined_efficiency
 
         # 11. Generate warnings
         warnings = self._generate_sleep_warnings(
@@ -203,12 +299,66 @@ class SleepQualityEngine:
             recovery_boost=recovery_boost,
             time_pressure_factor=time_pressure_factor,
             insufficient_penalty=insufficient_penalty,
+            sleep_onset_latency_minutes=total_sol,
+            first_night_extra_minutes=first_night_extra,
+            is_first_night=is_first_layover_night,
+            is_second_night=is_second_layover_night,
+            nap_efficiency_modifier=nap_eff_modifier,
+            nap_duration_band=nap_band,
+            alarm_anxiety_factor=alarm_anxiety,
             wocl_overlap_hours=wocl_overlap,
             sleep_start_hour=sleep_start_hour,
             hours_since_duty=hours_since_duty,
             hours_until_duty=hours_until_duty,
             warnings=warnings
         )
+
+    def _calculate_sleep_onset_latency(
+        self,
+        sleep_start_hour: float,
+        sleep_duration_hours: float,
+        is_nap: bool
+    ) -> float:
+        """
+        Estimate sleep onset latency in minutes.
+
+        SOL = base × circadian_gate / max(0.3, sleep_pressure_proxy)
+
+        The circadian gate is highest (hardest to fall asleep) during the
+        Wake Maintenance Zone (~18:00-21:00) and lowest (easiest) during
+        the WOCL (02:00-06:00).
+
+        Sleep pressure proxy: longer planned sleep ≈ higher homeostatic
+        drive (more tired pilots planned longer sleep).
+
+        References:
+            Åkerstedt et al. (2008) J Sleep Res 17:295-304
+            Lavie (1986) Sleep 9:355-366
+        """
+        sq_params = self.config.sleep_quality_params
+        base_sol = sq_params.sol_base_minutes
+
+        # Circadian gate: cosine model peaking at WMZ (~19:00)
+        # Gate value 0.0 (easy sleep, WOCL) to 1.0+wmz_amp (hard, WMZ)
+        wmz_peak = 19.0
+        gate_angle = 2 * math.pi * (sleep_start_hour - wmz_peak) / 24.0
+        # Gate ranges from (1.0 - wmz_amp) at WOCL to (1.0 + wmz_amp) at WMZ
+        circadian_gate = 1.0 + sq_params.sol_wmz_amplitude * math.cos(gate_angle)
+        circadian_gate = max(0.2, circadian_gate)  # Floor to prevent near-zero
+
+        # Sleep pressure proxy: pilots who sleep longer had higher sleep need
+        # Inverse relationship: more tired → shorter SOL
+        if is_nap:
+            sleep_pressure_proxy = 0.6  # Naps taken during moderate tiredness
+        else:
+            # Longer planned sleep ≈ pilot had adequate time, less extreme pressure
+            # Shorter planned sleep ≈ pilot was exhausted or constrained
+            sleep_pressure_proxy = max(0.3, min(1.5, sleep_duration_hours / 8.0))
+
+        sol = base_sol * circadian_gate / sleep_pressure_proxy
+        sol = max(5.0, min(60.0, sol))  # Clamp to 5-60 min
+
+        return sol
 
     def _calculate_wocl_overlap(
         self,
