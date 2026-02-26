@@ -404,10 +404,11 @@ export function DutyBarTooltip({
               const kss = performanceToKSS(worst.performance);
               const kssLabel = getKSSLabel(kss);
               const validPts = tp.filter((pt) => pt.performance != null);
-              const impPct = calculateImpairedPercent(
-                validPts.map((pt) => ({ performance: pt.performance ?? 0 }))
-              );
-              const impSev = getImpairedSeverity(impPct);
+              // Only compute impaired% with full timeline (>1 point); seed data = 1 worst point
+              const impPct = validPts.length > 1
+                ? calculateImpairedPercent(validPts.map((pt) => ({ performance: pt.performance ?? 0 })))
+                : null;
+              const impSev = impPct != null ? getImpairedSeverity(impPct) : null;
               return (
                 <div className="border-t border-border pt-2 mt-1 space-y-1.5">
                   <span className="text-muted-foreground font-medium">
@@ -453,7 +454,7 @@ export function DutyBarTooltip({
                     <Badge variant={kssLabel.variant} className="text-[10px]">
                       KSS {kss.toFixed(1)}
                     </Badge>
-                    {impPct > 0 && (
+                    {impPct != null && impPct > 0 && impSev && (
                       <Badge variant={impSev.variant} className="text-[10px]">
                         {impPct}% impaired
                       </Badge>
