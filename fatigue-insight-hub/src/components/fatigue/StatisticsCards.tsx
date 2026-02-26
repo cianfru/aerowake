@@ -4,11 +4,8 @@ import { DutyStatistics, DutyAnalysis } from '@/types/fatigue';
 import { InfoTooltip, FATIGUE_INFO, type InfoTooltipEntry } from '@/components/ui/InfoTooltip';
 import { SparklineChart } from '@/components/ui/SparklineChart';
 import {
-  calculateRosterImpairedPercent,
-  getImpairedSeverity,
   calculateRosterWorstKSS,
   getKSSLabel,
-  computePerDutyImpairedPercent,
 } from '@/lib/fatigue-calculations';
 import { cn } from '@/lib/utils';
 
@@ -34,14 +31,11 @@ export function StatisticsCards({ statistics, duties }: StatisticsCardsProps) {
       performance: sorted.map(d => d.minPerformance ?? 0),
       sleepDebt: sorted.map(d => d.sleepDebt ?? 0),
       priorSleep: sorted.map(d => d.priorSleep ?? 0),
-      impaired: computePerDutyImpairedPercent(sorted),
     };
   }, [duties]);
 
-  // Roster-level FHA and KSS
-  const rosterImpaired = useMemo(() => (duties ? calculateRosterImpairedPercent(duties) : 0), [duties]);
+  // Roster-level worst KSS
   const rosterWorstKSS = useMemo(() => (duties ? calculateRosterWorstKSS(duties) : 1), [duties]);
-  const impairedSeverity = getImpairedSeverity(rosterImpaired);
   const kssInfo = getKSSLabel(rosterWorstKSS);
 
   return (
@@ -116,21 +110,6 @@ export function StatisticsCards({ statistics, duties }: StatisticsCardsProps) {
             />
           )}
         />
-        {duties && duties.length > 0 && (
-          <RibbonStat
-            label="Impaired"
-            value={`${rosterImpaired}%`}
-            icon={<AlertTriangle className="h-3.5 w-3.5" />}
-            variant={impairedSeverity.variant}
-            info={FATIGUE_INFO.fha}
-            sparkline={sparklineData && (
-              <SparklineChart
-                data={sparklineData.impaired}
-                color={impairedSeverity.variant === 'success' ? 'hsl(var(--success))' : impairedSeverity.variant === 'warning' ? 'hsl(var(--warning))' : 'hsl(var(--critical))'}
-              />
-            )}
-          />
-        )}
         {duties && duties.length > 0 && (
           <RibbonStat
             label="Worst KSS"
