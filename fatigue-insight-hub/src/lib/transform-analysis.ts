@@ -396,6 +396,7 @@ export function transformAnalysisResult(
           departureUtcOffset: seg.departure_utc_offset,
           arrivalUtcOffset: seg.arrival_utc_offset,
           lineTrainingCodes: seg.line_training_codes || undefined,
+          aircraftType: seg.aircraft_type ?? null,
         })),
       } as DutyAnalysis;
     }),

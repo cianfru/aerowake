@@ -1,4 +1,4 @@
-import { AlertTriangle, Plane, Clock, Moon, ChevronDown, Globe, Zap, Users, RefreshCw, Monitor, BookOpen } from 'lucide-react';
+import { AlertTriangle, Plane, Clock, Moon, ChevronDown, Globe, Zap, Users, RefreshCw, Monitor, BookOpen, PlaneTakeoff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { FlightPhasePerformance } from './FlightPhasePerformance';
 import { PerformanceSummaryCard } from './PerformanceSummaryCard';
 import { ProcessBreakdownChart } from './ProcessBreakdownChart';
 import { WorkloadPhaseIndicator } from './WorkloadPhaseIndicator';
-import { isTrainingDuty, getTrainingDutyColor, getTrainingDutyLabel } from '@/lib/fatigue-utils';
+import { isTrainingDuty, getTrainingDutyColor, getTrainingDutyLabel, formatAircraftType } from '@/lib/fatigue-utils';
 import { FDPUtilizationBar } from './FDPUtilizationBar';
 import { CrewRestTimeline } from './CrewRestTimeline';
 
@@ -278,6 +278,11 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
                         <span className="text-sm md:text-base font-medium">
                           {segment.departure} → {segment.arrival}
                         </span>
+                        {segment.aircraftType && (
+                          <span className="text-[10px] md:text-xs text-muted-foreground bg-secondary/50 px-1.5 py-0.5 rounded font-medium">
+                            {formatAircraftType(segment.aircraftType)}
+                          </span>
+                        )}
                       </div>
                       <Badge variant={(segment.performance ?? 0) < 50 ? 'critical' : (segment.performance ?? 0) < 60 ? 'warning' : 'success'} className="text-[10px] md:text-xs">
                         {(segment.performance ?? 0).toFixed(0)}%
