@@ -114,11 +114,17 @@ class SleepQualityEngine:
         if is_nap:
             base_efficiency *= 0.88
 
-        # 4. Circadian alignment factor
+        # 4. Circadian alignment factor — BONUS for WOCL-aligned sleep only
+        # Sleep that substantially covers the WOCL window (02:00-06:00) benefits
+        # from concentrated slow-wave sleep. Non-WOCL sleep is NOT penalized.
+        # Reference: Signal et al. (2013) — SWS concentrated during WOCL hours.
         wocl_overlap = self._calculate_wocl_overlap(sleep_start, sleep_end, location_timezone, biological_timezone)
-        wocl_window_hours = float(self.WOCL_END - self.WOCL_START)
-        alignment_ratio = min(1.0, wocl_overlap / max(1.0, min(actual_duration, wocl_window_hours)))
-        wocl_boost = 1.0 - 0.08 * (1.0 - alignment_ratio) if actual_duration > 0.5 else 1.0
+        if wocl_overlap >= 2.0 and actual_duration > 0.5:
+            wocl_boost = 1.05  # Full WOCL coverage bonus
+        elif wocl_overlap >= 1.0 and actual_duration > 0.5:
+            wocl_boost = 1.02  # Partial WOCL coverage bonus
+        else:
+            wocl_boost = 1.0   # No penalty for non-WOCL sleep
 
         # 5. Late sleep onset penalty
         tz = pytz.timezone(location_timezone)
