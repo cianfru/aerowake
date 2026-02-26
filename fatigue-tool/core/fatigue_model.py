@@ -896,7 +896,7 @@ class BorbelyFatigueModel:
             duty_timelines.append(timeline_obj)
             previous_duty = duty
         
-        return self._build_monthly_analysis(roster, duty_timelines, body_clock_timeline)
+        return self._build_monthly_analysis(roster, duty_timelines, body_clock_timeline, all_sleep)
     
     def _extract_sleep_from_roster(
         self,
@@ -1832,7 +1832,8 @@ class BorbelyFatigueModel:
         return 0.0
     
     def _build_monthly_analysis(self, roster: Roster, duty_timelines: List[DutyTimeline],
-                                body_clock_timeline: list = None) -> MonthlyAnalysis:
+                                body_clock_timeline: list = None,
+                                all_sleep: list = None) -> MonthlyAnalysis:
         """Build monthly summary with aggregate statistics"""
         
         risk_thresholds = self.config.risk_thresholds
@@ -1848,8 +1849,17 @@ class BorbelyFatigueModel:
         
         total_pinch = sum(len(dt.pinch_events) for dt in duty_timelines)
         
-        all_sleep = [dt.prior_sleep_hours for dt in duty_timelines if dt.prior_sleep_hours > 0]
-        avg_sleep = sum(all_sleep) / len(all_sleep) if all_sleep else 0.0
+        # Compute true per-night average from all roster sleep blocks.
+        # Previous code averaged prior_sleep_hours (sum of last 3 blocks per
+        # duty), which inflated the result when multi-day rest periods contributed
+        # 24h+ as a single data point.  Instead we use total actual sleep hours
+        # (duration_hours) divided by the number of calendar nights in the roster.
+        if all_sleep:
+            total_sleep_hours = sum(s.duration_hours for s in all_sleep)
+            roster_days = max(1, (roster.duties[-1].date - roster.duties[0].date).days + 1)
+            avg_sleep = round(total_sleep_hours / roster_days, 2)
+        else:
+            avg_sleep = 0.0
         
         max_debt = max(dt.cumulative_sleep_debt for dt in duty_timelines)
         
