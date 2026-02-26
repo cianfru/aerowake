@@ -650,6 +650,18 @@ class PerformancePoint:
     hours_on_duty: float = 0.0            # hours since report
     time_on_task_penalty: float = 0.0     # linear alertness decrement
 
+    # Sleep debt vulnerability (Van Dongen et al. 2003)
+    debt_penalty: float = 1.0  # Multiplier: 1.0 = no debt, 0.80 = floor
+
+    # Cabin altitude hypoxia (Nesthus 2007, Muhm 2007)
+    hypoxia_factor: float = 1.0  # Multiplier: 1.0 = no hypoxia, 0.95 = floor
+
+    # PVT lapses per 10-min trial (Van Dongen 2003, Basner & Dinges 2011)
+    pvt_lapses: float = 0.0
+
+    # Microsleep probability per hour (Åkerstedt et al. 2010)
+    microsleep_probability: float = 0.0
+
     # Context
     current_flight_phase: Optional[FlightPhase] = None
     is_critical_phase: bool = False

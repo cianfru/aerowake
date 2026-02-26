@@ -327,7 +327,8 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         previous_duty: Duty,
         next_duty: Duty,
         home_timezone: str,
-        home_base: Optional[str] = None
+        home_base: Optional[str] = None,
+        cumulative_sleep_debt: float = 0.0
     ) -> SleepStrategy:
         """
         Generate a single, scientifically grounded recovery sleep block for the
@@ -437,6 +438,15 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         elif prior_wake_estimate < 10:
             # Short duty → slightly less recovery needed
             base_duration = max(6.5, 7.5 - 0.2 * (10 - prior_wake_estimate))
+
+        # Recovery sleep rebound (Banks 2010, Kitamura 2016)
+        # Cumulative sleep debt drives longer recovery sleep via
+        # homeostatic rebound. Capped at ~10h by circadian wake gate.
+        if cumulative_sleep_debt > 0:
+            rebound_coeff = self.config.borbely_params.sleep_rebound_coeff
+            max_debt = self.config.borbely_params.sleep_rebound_max_debt
+            rebound_hours = rebound_coeff * min(cumulative_sleep_debt, max_debt)
+            base_duration = min(10.0, base_duration + rebound_hours)
 
         # Morning arrivals (biological clock): circadian opposition truncates
         # daytime recovery nap.  Pilots whose body clock says morning
