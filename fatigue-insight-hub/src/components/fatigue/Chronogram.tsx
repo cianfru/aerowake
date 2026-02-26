@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Brain, Battery } from 'lucide-react';
+import { Brain, Battery, Home, Globe, BarChart3, Pencil } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -55,7 +55,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
     <Card variant="glass">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2">
-          <span className="text-primary">📊</span>
+          <BarChart3 className="h-5 w-5 text-primary" />
           Monthly Chronogram
         </CardTitle>
         <p className="text-sm text-muted-foreground">
@@ -67,10 +67,12 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'homebase' | 'utc' | 'elapsed' | 'continuous')}>
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="homebase" className="text-xs">
-              🏠 Home-Base Timeline
+              <Home className="h-3 w-3 mr-1" />
+              Home-Base Timeline
             </TabsTrigger>
             <TabsTrigger value="utc" className="text-xs">
-              🌐 UTC (Zulu)
+              <Globe className="h-3 w-3 mr-1" />
+              UTC (Zulu)
             </TabsTrigger>
             <TabsTrigger value="elapsed" className="text-xs">
               <Brain className="h-3 w-3 mr-1" />
@@ -150,8 +152,9 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
         {/* Floating Apply bar — shows when sleep edits are pending */}
         {sleepEdits.hasEdits && (
           <div className="sticky bottom-0 z-10 bg-background/95 backdrop-blur-sm border border-border/30 px-4 py-3 flex items-center justify-between rounded-xl shadow-lg">
-            <span className="text-sm text-muted-foreground">
-              ✎ {sleepEdits.editCount} sleep edit{sleepEdits.editCount > 1 ? 's' : ''} pending
+            <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+              <Pencil className="h-3.5 w-3.5" />
+              {sleepEdits.editCount} sleep edit{sleepEdits.editCount > 1 ? 's' : ''} pending
             </span>
             <div className="flex gap-2">
               <Button

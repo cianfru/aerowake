@@ -6,7 +6,7 @@ import { getRecoveryClasses, getStrategyIcon, decimalToHHmm, QUALITY_FACTOR_LABE
 import { SleepQualityBadge } from '../SleepQualityBadge';
 import { EditableSleepBar } from './EditableSleepBar';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, BedDouble, BatteryCharging, Lightbulb, Clock, Sparkles, Moon, Microscope, BookOpen } from 'lucide-react';
 import type { TimelineSleepBar } from '@/lib/timeline-types';
 import type { SleepEdit } from '@/hooks/useSleepEdits';
 import { format } from 'date-fns';
@@ -172,7 +172,7 @@ export function SleepBarPopover({
           {/* ── HEADER: Type + Score + Confidence ── */}
           <div className="flex items-center justify-between">
             <div className="font-semibold flex items-center gap-1.5">
-              <span className="text-base">{bar.isPreDuty ? '\u{1F6CF}\uFE0F' : '\u{1F50B}'}</span>
+              {bar.isPreDuty ? <BedDouble className="h-4 w-4" /> : <BatteryCharging className="h-4 w-4" />}
               <span>{bar.isPreDuty ? 'Pre-Duty Sleep' : 'Recovery Sleep'}</span>
               {hasEdit && (
                 <span className="text-[9px] font-medium text-warning bg-warning/10 px-1.5 py-0.5 rounded">
@@ -203,7 +203,7 @@ export function SleepBarPopover({
             <div className="bg-primary/5 border border-primary/20 rounded-md p-2 text-[11px] text-muted-foreground leading-relaxed space-y-1">
               {bar.explanation && (
                 <p>
-                  <span className="text-primary font-medium">{'\u{1F4A1}'} </span>
+                  <Lightbulb className="h-3 w-3 text-primary inline-block mr-0.5" />
                   {bar.explanation}
                 </p>
               )}
@@ -235,7 +235,7 @@ export function SleepBarPopover({
           {/* ── COMPACT RECOVERY SUMMARY ── */}
           <div className="flex items-center gap-3 text-[11px]">
             <div className="flex items-center gap-1">
-              <span className="text-muted-foreground">{'\u23F1\uFE0F'}</span>
+              <Clock className="h-3 w-3 text-muted-foreground" />
               <span className={cn(
                 "font-mono font-medium",
                 bar.effectiveSleep >= 7 ? "text-success" :
@@ -245,7 +245,7 @@ export function SleepBarPopover({
               </span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-muted-foreground">{'\u2728'}</span>
+              <Sparkles className="h-3 w-3 text-muted-foreground" />
               <span className={cn(
                 "font-mono font-medium",
                 bar.sleepEfficiency >= 0.9 ? "text-success" :
@@ -256,14 +256,16 @@ export function SleepBarPopover({
             </div>
             {(bar.woclOverlapHours ?? 0) > 0 && (
               <div className="flex items-center gap-1">
-                <span className="text-muted-foreground">{'\u{1F319}'}</span>
+                <Moon className="h-3 w-3 text-muted-foreground" />
                 <span className="font-mono font-medium text-critical">
                   {bar.woclOverlapHours!.toFixed(1)}h
                 </span>
               </div>
             )}
             <div className="flex items-center gap-1 ml-auto">
-              <span>{getStrategyIcon(bar.sleepStrategy)}</span>
+              <span className="text-[10px] font-mono font-medium bg-primary/10 text-primary px-1 rounded">
+                {getStrategyIcon(bar.sleepStrategy)}
+              </span>
               <span className="capitalize text-muted-foreground">{bar.sleepStrategy.split('_').join(' ')}</span>
             </div>
           </div>
@@ -285,7 +287,7 @@ export function SleepBarPopover({
               <div className="bg-secondary/30 rounded-lg p-2 space-y-1.5 mt-1.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-muted-foreground">{'\u23F1\uFE0F'}</span>
+                    <Clock className="h-3 w-3 text-muted-foreground" />
                     <span>Effective Sleep</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -302,7 +304,7 @@ export function SleepBarPopover({
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-muted-foreground">{'\u2728'}</span>
+                    <Sparkles className="h-3 w-3 text-muted-foreground" />
                     <span>Sleep Quality</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -320,7 +322,7 @@ export function SleepBarPopover({
                 {(bar.woclOverlapHours ?? 0) > 0 && (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground">{'\u{1F319}'}</span>
+                      <Moon className="h-3 w-3 text-muted-foreground" />
                       <span>WOCL Overlap</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -347,7 +349,7 @@ export function SleepBarPopover({
             <Collapsible>
               <CollapsibleTrigger className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors w-full group">
                 <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
-                <span>{'\u{1F52C}'} Model Factors</span>
+                <Microscope className="h-3 w-3 inline-block" /> <span>Model Factors</span>
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="bg-secondary/20 rounded-lg p-2 space-y-1.5 mt-1.5">
@@ -380,7 +382,7 @@ export function SleepBarPopover({
             <Collapsible>
               <CollapsibleTrigger className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors w-full group">
                 <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
-                <span>{'\u{1F4DA}'} References</span>
+                <BookOpen className="h-3 w-3 inline-block" /> <span>References</span>
                 <span className="text-[9px] text-muted-foreground/50 ml-auto">{bar.references.length}</span>
               </CollapsibleTrigger>
               <CollapsibleContent>

@@ -491,7 +491,7 @@ export function DutyBarTooltip({
                   <span className="capitalize">{bar.duty.sleepEstimate.sleepStrategy}</span>
                   {bar.duty.sleepEstimate.warnings.length > 0 && (
                     <span className="text-muted-foreground col-span-2 text-warning text-[10px] mt-1">
-                      {'\u26A0\uFE0F'} {bar.duty.sleepEstimate.warnings[0]}
+                      <AlertTriangle className="h-3 w-3 inline-block mr-0.5" /> {bar.duty.sleepEstimate.warnings[0]}
                     </span>
                   )}
                 </div>

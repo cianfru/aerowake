@@ -54,22 +54,22 @@ export const getRecoveryClasses = (score: number): { border: string; bg: string;
   return { border: 'border-critical', bg: 'bg-critical/10', text: 'text-critical' };
 };
 
-/** Map sleep strategy to its display emoji. */
+/** Map sleep strategy to a short text code for display. */
 export const getStrategyIcon = (strategy: string): string => {
   switch (strategy) {
-    case 'anchor': return '⚓';
-    case 'split': return '✂️';
-    case 'nap': return '💤';
-    case 'afternoon_nap': return '☀️';
-    case 'early_bedtime': return '🌙';
-    case 'extended': return '🛏️';
-    case 'restricted': return '⏰';
-    case 'recovery': return '🔋';
-    case 'post_duty_recovery': return '🛏️';
-    case 'normal': return '😴';
-    case 'ulr_pre_duty': return '✈️🌙';
-    case 'augmented_3_pilot': return '✈️😴';
-    default: return '😴';
+    case 'anchor': return 'ANC';
+    case 'split': return 'SPL';
+    case 'nap': return 'NAP';
+    case 'afternoon_nap': return 'NAP';
+    case 'early_bedtime': return 'EBT';
+    case 'extended': return 'EXT';
+    case 'restricted': return 'RST';
+    case 'recovery': return 'REC';
+    case 'post_duty_recovery': return 'REC';
+    case 'normal': return 'NRM';
+    case 'ulr_pre_duty': return 'ULR';
+    case 'augmented_3_pilot': return 'AUG';
+    default: return 'SLP';
   }
 };
 

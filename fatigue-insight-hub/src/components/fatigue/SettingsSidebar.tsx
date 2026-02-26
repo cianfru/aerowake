@@ -1,4 +1,4 @@
-import { Info, BookOpen, ChevronDown, User, MapPin, Plane, Users, Settings2, Save } from 'lucide-react';
+import { Info, BookOpen, ChevronDown, User, MapPin, Plane, Users, Settings2, Save, Microscope } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -200,7 +200,7 @@ export function SettingsSidebar({
       <Card variant="glass">
         <CardHeader className="pb-4">
           <CardTitle className="flex items-center gap-2 text-base">
-            <span className="text-primary">🔬</span>
+            <Microscope className="h-5 w-5 text-primary" />
             Model Configuration
           </CardTitle>
         </CardHeader>
