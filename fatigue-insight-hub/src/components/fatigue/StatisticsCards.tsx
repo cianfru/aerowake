@@ -4,11 +4,11 @@ import { DutyStatistics, DutyAnalysis } from '@/types/fatigue';
 import { InfoTooltip, FATIGUE_INFO, type InfoTooltipEntry } from '@/components/ui/InfoTooltip';
 import { SparklineChart } from '@/components/ui/SparklineChart';
 import {
-  calculateRosterFHA,
-  getFHASeverity,
+  calculateRosterImpairedPercent,
+  getImpairedSeverity,
   calculateRosterWorstKSS,
   getKSSLabel,
-  computePerDutyFHA,
+  computePerDutyImpairedPercent,
 } from '@/lib/fatigue-calculations';
 import { cn } from '@/lib/utils';
 
@@ -34,14 +34,14 @@ export function StatisticsCards({ statistics, duties }: StatisticsCardsProps) {
       performance: sorted.map(d => d.minPerformance ?? 0),
       sleepDebt: sorted.map(d => d.sleepDebt ?? 0),
       priorSleep: sorted.map(d => d.priorSleep ?? 0),
-      fha: computePerDutyFHA(sorted),
+      impaired: computePerDutyImpairedPercent(sorted),
     };
   }, [duties]);
 
   // Roster-level FHA and KSS
-  const rosterFHA = useMemo(() => (duties ? calculateRosterFHA(duties) : 0), [duties]);
+  const rosterImpaired = useMemo(() => (duties ? calculateRosterImpairedPercent(duties) : 0), [duties]);
   const rosterWorstKSS = useMemo(() => (duties ? calculateRosterWorstKSS(duties) : 1), [duties]);
-  const fhaSeverity = getFHASeverity(rosterFHA);
+  const impairedSeverity = getImpairedSeverity(rosterImpaired);
   const kssInfo = getKSSLabel(rosterWorstKSS);
 
   return (
@@ -118,15 +118,15 @@ export function StatisticsCards({ statistics, duties }: StatisticsCardsProps) {
         />
         {duties && duties.length > 0 && (
           <RibbonStat
-            label="Total FHA"
-            value={`${rosterFHA}h`}
+            label="Impaired"
+            value={`${rosterImpaired}%`}
             icon={<AlertTriangle className="h-3.5 w-3.5" />}
-            variant={fhaSeverity.variant}
+            variant={impairedSeverity.variant}
             info={FATIGUE_INFO.fha}
             sparkline={sparklineData && (
               <SparklineChart
-                data={sparklineData.fha}
-                color={fhaSeverity.variant === 'success' ? 'hsl(var(--success))' : fhaSeverity.variant === 'warning' ? 'hsl(var(--warning))' : 'hsl(var(--critical))'}
+                data={sparklineData.impaired}
+                color={impairedSeverity.variant === 'success' ? 'hsl(var(--success))' : impairedSeverity.variant === 'warning' ? 'hsl(var(--warning))' : 'hsl(var(--critical))'}
               />
             )}
           />
