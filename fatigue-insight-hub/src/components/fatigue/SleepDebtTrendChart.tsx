@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DutyAnalysis } from '@/types/fatigue';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { format, eachDayOfInterval, startOfMonth, endOfMonth, isSameDay } from 'date-fns';
-import { Battery, TrendingUp, TrendingDown } from 'lucide-react';
+import { Battery, TrendingUp, TrendingDown, Plane, BedDouble } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface SleepDebtTrendChartProps {
@@ -15,30 +15,42 @@ export function SleepDebtTrendChart({ duties, month }: SleepDebtTrendChartProps)
   const monthEnd = endOfMonth(month);
   const allDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  // Build cumulative sleep debt data
-  let cumulativeDebt = 0;
-  const decayRate = 0.15; // Debt reduction per rest day
+  // Backend returns cumulative sleep debt per duty (running total).
+  // On rest days between duties we interpolate using the same exponential
+  // decay the backend uses: debt * exp(-0.35 * days).  (Banks & Dinges 2007)
+  const DECAY_RATE = 0.35;
+  let lastDutyDebt = 0;
+  let daysSinceLastDuty = 0;
 
   const chartData = allDays.map((day) => {
     const duty = duties.find(d => isSameDay(d.date, day));
-    
+    let currentDebt: number;
+    let dailyChange = 0;
+
     if (duty) {
-      // Add daily debt from duty
-      cumulativeDebt += duty.sleepDebt;
+      // Use the backend's cumulative value directly (no re-accumulation)
+      currentDebt = duty.sleepDebt;
+      // Estimate the net debt added by this duty:
+      // pre-duty debt is the decayed value from the previous duty
+      const preDutyDebt = lastDutyDebt * Math.exp(-DECAY_RATE * (daysSinceLastDuty + 1));
+      dailyChange = Math.max(0, duty.sleepDebt - preDutyDebt);
+      lastDutyDebt = duty.sleepDebt;
+      daysSinceLastDuty = 0;
     } else {
-      // Decay on rest days
-      cumulativeDebt = Math.max(0, cumulativeDebt * (1 - decayRate));
+      // Exponential decay on rest days (matches backend model)
+      daysSinceLastDuty++;
+      currentDebt = lastDutyDebt * Math.exp(-DECAY_RATE * daysSinceLastDuty);
     }
 
-    const riskLevel = cumulativeDebt > 10 ? 'critical' : 
-                      cumulativeDebt > 6 ? 'high' : 
-                      cumulativeDebt > 3 ? 'moderate' : 'low';
+    const riskLevel = currentDebt > 10 ? 'critical' :
+                      currentDebt > 6 ? 'high' :
+                      currentDebt > 3 ? 'moderate' : 'low';
 
     return {
       date: format(day, 'dd'),
       fullDate: format(day, 'MMM dd'),
-      sleepDebt: Math.round(cumulativeDebt * 10) / 10,
-      dailyDebt: duty?.sleepDebt || 0,
+      sleepDebt: Math.round(currentDebt * 10) / 10,
+      dailyDebt: Math.round(dailyChange * 10) / 10,
       isDuty: !!duty,
       riskLevel,
     };
@@ -58,8 +70,10 @@ export function SleepDebtTrendChart({ duties, month }: SleepDebtTrendChartProps)
       return (
         <div className="rounded-lg border border-border bg-card p-3 shadow-lg">
           <p className="text-sm font-medium text-foreground">{data.fullDate}</p>
-          <p className="text-xs text-muted-foreground mb-2">
-            {data.isDuty ? '✈️ Flight Duty' : '🛏️ Rest Day (Recovery)'}
+          <p className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
+            {data.isDuty
+              ? <><Plane className="h-3 w-3" /> Flight Duty</>
+              : <><BedDouble className="h-3 w-3" /> Rest Day (Recovery)</>}
           </p>
           <div className="space-y-1">
             <p className="text-xs">
@@ -206,7 +220,7 @@ export function SleepDebtTrendChart({ duties, month }: SleepDebtTrendChartProps)
           </div>
           <div className="rounded-lg bg-secondary/30 p-2">
             <p className="text-muted-foreground">Recovery Rate</p>
-            <p className="font-bold text-success">~{(decayRate * 100).toFixed(0)}%/day</p>
+            <p className="font-bold text-success">~{Math.round((1 - Math.exp(-DECAY_RATE)) * 100)}%/day</p>
           </div>
         </div>
       </CardContent>

@@ -1,4 +1,4 @@
-import { Moon, Sun, Menu, LogIn, LogOut, FolderOpen, CalendarRange, Shield } from 'lucide-react';
+import { Moon, Sun, Menu, LogIn, LogOut, FolderOpen, CalendarRange, Shield, BarChart3, Activity, BookOpen, Info } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -81,8 +81,12 @@ export function Header({ theme, onThemeChange, onMenuToggle, showMenuButton, act
                   }
                 `}
               >
+                {item.value === 'analysis' && <BarChart3 className="h-3.5 w-3.5 inline-block mr-1 -mt-0.5" />}
+                {item.value === 'insights' && <Activity className="h-3.5 w-3.5 inline-block mr-1 -mt-0.5" />}
                 {item.value === 'yearly' && <CalendarRange className="h-3.5 w-3.5 inline-block mr-1 -mt-0.5" />}
                 {item.value === 'rosters' && <FolderOpen className="h-3.5 w-3.5 inline-block mr-1 -mt-0.5" />}
+                {item.value === 'learn' && <BookOpen className="h-3.5 w-3.5 inline-block mr-1 -mt-0.5" />}
+                {item.value === 'about' && <Info className="h-3.5 w-3.5 inline-block mr-1 -mt-0.5" />}
                 {item.label}
                 {activeTab === item.value && (
                   <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full bg-primary" />
