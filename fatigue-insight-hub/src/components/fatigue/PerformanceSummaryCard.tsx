@@ -6,8 +6,8 @@ import { InfoTooltip, FATIGUE_INFO } from '@/components/ui/InfoTooltip';
 import { DutyAnalysis, TimelinePoint } from '@/types/fatigue';
 import {
   decomposePerformance,
-  calculateFHA,
-  getFHASeverity,
+  calculateImpairedPercent,
+  getImpairedSeverity,
   performanceToKSS,
   getKSSLabel,
   performanceToSamnPerelli,
@@ -39,12 +39,12 @@ export function PerformanceSummaryCard({ duty }: PerformanceSummaryCardProps) {
     );
   }, [duty.timelinePoints]);
 
-  // Calculate FHA — only meaningful with a full timeline (>1 point)
-  const fha = useMemo(() => {
+  // Calculate impaired % — only meaningful with a full timeline (>1 point)
+  const impairedPct = useMemo(() => {
     if (!duty.timelinePoints || duty.timelinePoints.length <= 1) return null;
     const validPoints = duty.timelinePoints.filter(pt => pt.performance != null);
     if (validPoints.length <= 1) return null;
-    return calculateFHA(validPoints.map(pt => ({ performance: pt.performance ?? 0 })));
+    return calculateImpairedPercent(validPoints.map(pt => ({ performance: pt.performance ?? 0 })));
   }, [duty.timelinePoints]);
 
   // Decompose the worst point into S/C/W/ToT contributions
@@ -68,7 +68,7 @@ export function PerformanceSummaryCard({ duty }: PerformanceSummaryCardProps) {
   const spInfo = getSamnPerelliLabel(sp);
   const rt = performanceToReactionTime(worstPerf);
   const rtInfo = getReactionTimeLabel(rt);
-  const fhaSeverity = fha != null ? getFHASeverity(fha) : null;
+  const impairedSeverity = impairedPct != null ? getImpairedSeverity(impairedPct) : null;
 
   // Timestamp of worst point
   const worstTimestamp = worstPoint?.timestamp_local
@@ -226,13 +226,13 @@ export function PerformanceSummaryCard({ duty }: PerformanceSummaryCardProps) {
               variant={rtInfo.variant}
               infoKey="reactionTime"
             />
-            {fha != null && fha > 0 && fhaSeverity && (
+            {impairedPct != null && impairedPct > 0 && impairedSeverity && (
               <ScaleBadge
                 icon={<AlertTriangle className="h-3 w-3" />}
-                label="FHA"
-                value={`${fha}`}
-                sublabel={`${fhaSeverity.label} (%-min)`}
-                variant={fhaSeverity.variant}
+                label="Impaired"
+                value={`${impairedPct}%`}
+                sublabel={`${impairedSeverity.label} (time < 77%)`}
+                variant={impairedSeverity.variant}
                 infoKey="fha"
               />
             )}
