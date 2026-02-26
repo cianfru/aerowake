@@ -85,6 +85,8 @@ export interface TimelineSleepBar {
   sleepStartIso?: string;
   /** ISO end timestamp in UTC — for what-if sleep modifications */
   sleepEndIso?: string;
+  /** Unique key per sleep block: "${dutyId}::${blockIndex}" — used as pendingEdits Map key */
+  blockKey?: string;
 }
 
 // ---------------------------------------------------------------------------
