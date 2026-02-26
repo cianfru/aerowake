@@ -71,12 +71,13 @@ class BorbelyParameters:
     # Performance integration — operational weighting choice.
     # The Åkerstedt-Folkard three-process model uses additive S+C
     # combination; these explicit weights are an operational adaptation,
-    # not directly from the literature. Research config uses 50/50.
-    # Adjusted to 50/50 to provide better balance and reduce over-sensitivity
-    # to homeostatic pressure during normal daytime operations while maintaining
-    # sensitivity to true sleep deprivation.
-    weight_circadian: float = 0.50
-    weight_homeostatic: float = 0.50
+    # not directly from the literature. Homeostatic component weighted
+    # slightly higher (55%) because sleep recovery should dominate over
+    # circadian phase for well-rested pilots — Gander et al. (2013)
+    # showed trained pilots maintain performance better than predicted
+    # during moderate circadian lows. Research config retains 50/50.
+    weight_circadian: float = 0.45
+    weight_homeostatic: float = 0.55
     interaction_exponent: float = 1.5
 
     # Sleep inertia (Tassi & Muzet 2000)

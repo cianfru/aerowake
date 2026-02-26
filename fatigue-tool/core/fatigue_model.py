@@ -152,10 +152,10 @@ class BorbelyFatigueModel:
         hour_of_day = local_time.hour + local_time.minute / 60.0
         
         effective_hour = (hour_of_day - circadian_phase_shift) % 24
-        angle = 2 * math.pi * (effective_hour - self.params.circadian_acrophase_hours) / 24
+        angle = 2 * math.pi * (effective_hour - self.c_peak_hour) / 24
         c_value = (
             self.params.circadian_mesor +
-            self.params.circadian_amplitude * math.cos(angle)
+            self.c_amplitude * math.cos(angle)
         )
         
         return max(0.0, min(1.0, c_value))
@@ -188,19 +188,22 @@ class BorbelyFatigueModel:
         """
         s_alertness = 1.0 - s
         c_alertness = (c + 1.0) / 2.0
-        # Balanced 50/50 weights for better operational realism
-        base_alertness = s_alertness * 0.50 + c_alertness * 0.50
+        # Configurable S/C weights — see parameters.py for preset values
+        base_alertness = (
+            s_alertness * self.params.weight_homeostatic +
+            c_alertness * self.params.weight_circadian
+        )
         
-        # Pilot resilience factor: conservative boost during moderate pressure states
-        # Applies to S range 0.15-0.30 (typical after 5-7h effective sleep)
-        # This represents trained pilot adaptation, not captured in the base model.
-        # The boost is intentionally small to avoid masking genuine fatigue.
-        if 0.15 <= s <= 0.30:
-            # Maximum 5% boost at s=0.20, tapering to 0 at boundaries
+        # Pilot resilience factor: trained professionals maintain operational
+        # performance under moderate sleep pressure (Gander et al. 2013).
+        # Expanded range [0.10, 0.45] with Gaussian decay covers morning
+        # flights where S has risen to 0.25-0.40 after 3-6h awake.
+        # Peak 5% boost at S=0.20, continuous decay with sigma=0.12.
+        if 0.10 <= s <= 0.45:
             resilience_peak = 0.20
-            resilience_width = 0.10
-            distance_from_peak = abs(s - resilience_peak) / resilience_width
-            resilience_boost = 0.05 * max(0.0, 1.0 - distance_from_peak)
+            resilience_sigma = 0.12
+            gaussian = math.exp(-0.5 * ((s - resilience_peak) / resilience_sigma) ** 2)
+            resilience_boost = 0.05 * gaussian
             base_alertness = min(1.0, base_alertness * (1.0 + resilience_boost))
         
         return base_alertness
@@ -305,11 +308,13 @@ class BorbelyFatigueModel:
         if last_sleep:
             # Improved s_at_wake calculation with gentler curve
             # Reference: Van Dongen et al. (2003) - sleep recovery is non-linear
-            # Good sleep (8h effective) should give s_at_wake ≈ 0.05-0.10
-            # Moderate sleep (6h effective) should give s_at_wake ≈ 0.15-0.20
-            # Poor sleep (4h effective) should give s_at_wake ≈ 0.30-0.35
-            # Formula: use exponential-like curve for biological realism
-            sleep_quality_ratio = last_sleep.effective_sleep_hours / 8.0
+            # Good sleep (8h) should give s_at_wake ≈ 0.03
+            # Moderate sleep (6h) should give s_at_wake ≈ 0.15-0.20
+            # Poor sleep (4h) should give s_at_wake ≈ 0.30-0.35
+            # Uses duration_hours (raw), NOT effective_sleep_hours, to avoid
+            # double-penalty — quality is already penalized in the sleep debt
+            # ledger and sleep efficiency calculations.
+            sleep_quality_ratio = last_sleep.duration_hours / 8.0
             # Clamp ratio to reasonable bounds
             sleep_quality_ratio = max(0.3, min(1.3, sleep_quality_ratio))
             # New formula: 0.45 - (sleep_quality_ratio^1.3 * 0.42)
@@ -554,11 +559,9 @@ class BorbelyFatigueModel:
             s_estimate = 0.3
             for sleep in reversed(sleep_history):
                 if sleep.end_utc <= duty.report_time_utc:
-                    sleep_quality_ratio = sleep.effective_sleep_hours / 8.0
-                    # Clamp ratio to reasonable bounds
+                    # Use duration_hours (raw) — quality already penalized elsewhere
+                    sleep_quality_ratio = sleep.duration_hours / 8.0
                     sleep_quality_ratio = max(0.3, min(1.3, sleep_quality_ratio))
-                    # New formula: 0.45 - (sleep_quality_ratio^1.3 * 0.42)
-                    # This gives: 8h -> 0.03, 6h -> 0.15, 5.7h -> 0.18, 4h -> 0.27
                     s_estimate = max(0.03, 0.45 - (sleep_quality_ratio ** 1.3) * 0.42)
                     break
             
@@ -572,7 +575,7 @@ class BorbelyFatigueModel:
                 min_performance=default_performance,
                 average_performance=default_performance,
                 landing_performance=default_performance,
-                prior_sleep_hours=sum(s.effective_sleep_hours for s in sleep_history[-3:] if s.end_utc <= duty.report_time_utc),
+                prior_sleep_hours=sum(s.duration_hours for s in sleep_history[-3:] if s.end_utc <= duty.report_time_utc),
                 wocl_encroachment_hours=self.validator.is_disruptive_duty(duty).get('wocl_hours', 0.0)
             )
         
@@ -585,7 +588,7 @@ class BorbelyFatigueModel:
         landing_time = landing_points[-1].timestamp_utc if landing_points else None
         
         recent_sleep = [s for s in sleep_history if s.end_utc <= duty.report_time_utc][-3:]
-        total_prior_sleep = sum(s.effective_sleep_hours for s in recent_sleep)
+        total_prior_sleep = sum(s.duration_hours for s in recent_sleep)
         
         disruption = self.validator.is_disruptive_duty(duty)
         pinch_events = self._detect_pinch_events(timeline)
