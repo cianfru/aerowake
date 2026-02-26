@@ -22,20 +22,21 @@ interface TimelineDataPoint {
 }
 
 /**
- * Calculate the Fatigue Hazard Area (FHA) in %-minutes.
+ * Calculate the Fatigue Hazard Area (FHA) in %-hours.
  *
- * FHA = Σ max(0, threshold − P(t)) × Δt
+ * FHA = Σ max(0, threshold − P(t)) × Δt / 60
  *
  * This is the trapezoidal integration of the area under the moderate-risk
- * threshold (77%) across all timeline points. Higher values indicate
- * greater cumulative fatigue exposure.
+ * threshold (77%) across all timeline points, converted from %-minutes
+ * to %-hours for intuitive display. Higher values indicate greater
+ * cumulative fatigue exposure.
  *
  * Reference: Dawson & McCulloch, 2005.
  *
  * @param points Array of timeline data points with performance values.
  * @param threshold Performance threshold (default 77%).
  * @param resolutionMin Time step in minutes (default 5).
- * @returns FHA value in %-minutes.
+ * @returns FHA value in %-hours.
  */
 export function calculateFHA(
   points: TimelineDataPoint[],
@@ -49,18 +50,23 @@ export function calculateFHA(
     const deficit = Math.max(0, threshold - points[i].performance);
     fha += deficit * resolutionMin;
   }
-  return Math.round(fha);
+  return Math.round(fha / 60);
 }
 
 /**
  * Classify FHA severity for display.
+ *
+ * Thresholds calibrated for %-hours:
+ *   ≤5 %-hours  → Low (typical well-rested roster)
+ *   ≤20 %-hours → Moderate (some fatigue exposure)
+ *   >20 %-hours → High (significant cumulative exposure)
  */
 export function getFHASeverity(fha: number): {
   label: string;
   variant: 'success' | 'warning' | 'critical';
 } {
-  if (fha <= 100) return { label: 'Low', variant: 'success' };
-  if (fha <= 500) return { label: 'Moderate', variant: 'warning' };
+  if (fha <= 5) return { label: 'Low', variant: 'success' };
+  if (fha <= 20) return { label: 'Moderate', variant: 'warning' };
   return { label: 'High', variant: 'critical' };
 }
 

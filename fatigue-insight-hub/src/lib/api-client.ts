@@ -293,7 +293,8 @@ export interface AnalysisResult {
   
   avg_sleep_per_night: number;
   max_sleep_debt: number;
-  
+  average_sleep_debt?: number;
+
   worst_duty_id: string;
   worst_performance: number;
   

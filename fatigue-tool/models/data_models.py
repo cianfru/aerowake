@@ -795,6 +795,7 @@ class MonthlyAnalysis:
     # Sleep statistics
     average_sleep_per_night: float = 0.0
     max_sleep_debt: float = 0.0
+    average_sleep_debt: float = 0.0
     
     # Worst events
     lowest_performance_duty: Optional[str] = None

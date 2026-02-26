@@ -24,6 +24,7 @@ export interface DutyStatistics {
   highRiskDuties: number;
   criticalRiskDuties: number;
   maxSleepDebt: number;
+  averageSleepDebt: number;
   // Additional statistics from backend
   totalPinchEvents: number;
   avgSleepPerNight: number;
