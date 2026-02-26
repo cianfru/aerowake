@@ -304,26 +304,17 @@ export function decomposePerformance(point: {
 import type { DutyAnalysis } from '@/types/fatigue';
 
 /**
- * Calculate the percentage of total duty time below threshold across all duties.
+ * Calculate the percentage of duties where average performance fell below threshold.
  *
- * Pools all timeline points from every duty and computes the fraction below 77%.
- * This gives a single roster-level "% time impaired" metric.
+ * Uses duty-level `avgPerformance` (always available from the initial analysis)
+ * rather than timeline points (which are only loaded lazily via the SAFTE tab).
+ * This gives a reliable roster-level "% duties impaired" metric.
  */
 export function calculateRosterImpairedPercent(duties: DutyAnalysis[]): number {
-  let totalPoints = 0;
-  let impairedPoints = 0;
-  for (const duty of duties) {
-    if (!duty.timelinePoints || duty.timelinePoints.length === 0) continue;
-    const validPoints = duty.timelinePoints.filter(pt => pt.performance != null);
-    totalPoints += validPoints.length;
-    impairedPoints += validPoints.filter(pt => (pt.performance ?? 0) < FHA_THRESHOLD).length;
-  }
-  if (totalPoints === 0) return 0;
-  return Math.round((impairedPoints / totalPoints) * 100);
+  if (duties.length === 0) return 0;
+  const impaired = duties.filter(d => (d.avgPerformance ?? 100) < FHA_THRESHOLD).length;
+  return Math.round((impaired / duties.length) * 100);
 }
-
-/** @deprecated Use calculateRosterImpairedPercent */
-export const calculateRosterFHA = calculateRosterImpairedPercent;
 
 /**
  * Find the worst (highest) KSS across all duties in a roster.
@@ -340,17 +331,9 @@ export function calculateRosterWorstKSS(duties: DutyAnalysis[]): number {
 }
 
 /**
- * Compute per-duty impaired % for sparkline display.
- * Returns array in same order as input duties.
+ * Compute per-duty impaired flag for sparkline display.
+ * Returns 1 (impaired: avgPerf < 77%) or 0 per duty, same order as input.
  */
 export function computePerDutyImpairedPercent(duties: DutyAnalysis[]): number[] {
-  return duties.map(duty => {
-    if (!duty.timelinePoints || duty.timelinePoints.length === 0) return 0;
-    const validPoints = duty.timelinePoints.filter(pt => pt.performance != null);
-    if (validPoints.length === 0) return 0;
-    return calculateImpairedPercent(validPoints.map(pt => ({ performance: pt.performance ?? 0 })));
-  });
+  return duties.map(duty => (duty.avgPerformance ?? 100) < FHA_THRESHOLD ? 1 : 0);
 }
-
-/** @deprecated Use computePerDutyImpairedPercent */
-export const computePerDutyFHA = computePerDutyImpairedPercent;
