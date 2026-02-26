@@ -1,20 +1,24 @@
 /**
  * useSleepEdits — manages ephemeral sleep overrides for what-if recalculation.
  *
- * Pilots adjust sleep timing via sliders in SleepBarPopover (homebase view only).
- * Edits accumulate in a Map keyed by dutyId. When the pilot clicks "Apply &
- * Recalculate", all pending edits are converted to UTC ISO timestamps and sent
- * to `POST /api/what-if` as `sleep_modifications[]`. The backend re-runs the
- * full Borbely simulation and returns a new AnalysisResult, which replaces the
- * current analysis in AnalysisContext.
+ * Pilots adjust sleep timing via drag handles on the homebase chronogram.
+ * Edits accumulate in a Map keyed by blockKey (unique per sleep block:
+ * "${dutyId}::${blockIndex}"). When the pilot clicks "Apply & Recalculate",
+ * edits are grouped by dutyId (last edit per duty wins) and sent to
+ * `POST /api/what-if` as `sleep_modifications[]`. The backend re-runs the
+ * full Borbely simulation and returns a new AnalysisResult.
+ *
+ * After recalculation, the original (pre-edit) analysis is preserved in a ref
+ * so the user can "Reset to Original" without re-uploading the roster.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { runWhatIf } from '@/lib/api-client';
 import { transformAnalysisResult } from '@/lib/transform-analysis';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { useToast } from '@/hooks/use-toast';
+import type { AnalysisResults } from '@/types/fatigue';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -22,6 +26,8 @@ import { useToast } from '@/hooks/use-toast';
 
 export interface SleepEdit {
   dutyId: string;
+  /** Unique per-block key: "${dutyId}::${blockIndex}" — used as Map key */
+  blockKey: string;
   /** Original bedtime as decimal hour in homebase TZ (for display / reset) */
   originalStartHour: number;
   /** Original wake-up as decimal hour in homebase TZ */
@@ -39,7 +45,7 @@ export interface SleepEdit {
 export interface UseSleepEditsReturn {
   pendingEdits: Map<string, SleepEdit>;
   addEdit: (edit: SleepEdit) => void;
-  removeEdit: (dutyId: string) => void;
+  removeEdit: (blockKey: string) => void;
   clearEdits: () => void;
   applyEdits: () => void;
   isApplying: boolean;
@@ -47,10 +53,14 @@ export interface UseSleepEditsReturn {
   editCount: number;
   /** ID of the sleep bar currently in drag-edit mode (null when none) */
   activeBarId: string | null;
-  /** Enter drag-edit mode for a specific sleep bar */
-  activateEdit: (sleepId: string) => void;
+  /** Enter drag-edit mode for a specific sleep bar (by blockKey) */
+  activateEdit: (blockKey: string) => void;
   /** Exit drag-edit mode */
   deactivateEdit: () => void;
+  /** Whether an original (pre-recalculation) analysis is stored */
+  hasOriginal: boolean;
+  /** Restore the analysis to the state before any what-if recalculation */
+  resetToOriginal: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,8 +90,11 @@ export function useSleepEdits(
   const { state, setAnalysisResults } = useAnalysis();
   const { toast } = useToast();
 
-  const activateEdit = useCallback((sleepId: string) => {
-    setActiveBarId(sleepId);
+  // Snapshot of the analysis before any what-if recalculation
+  const originalAnalysisRef = useRef<AnalysisResults | null>(null);
+
+  const activateEdit = useCallback((blockKey: string) => {
+    setActiveBarId(blockKey);
   }, []);
 
   const deactivateEdit = useCallback(() => {
@@ -96,18 +109,18 @@ export function useSleepEdits(
         Math.abs(edit.newStartHour - edit.originalStartHour) < 0.01 &&
         Math.abs(edit.newEndHour - edit.originalEndHour) < 0.01
       ) {
-        next.delete(edit.dutyId);
+        next.delete(edit.blockKey);
       } else {
-        next.set(edit.dutyId, edit);
+        next.set(edit.blockKey, edit);
       }
       return next;
     });
   }, []);
 
-  const removeEdit = useCallback((dutyId: string) => {
+  const removeEdit = useCallback((blockKey: string) => {
     setPendingEdits((prev) => {
       const next = new Map(prev);
-      next.delete(dutyId);
+      next.delete(blockKey);
       return next;
     });
   }, []);
@@ -122,8 +135,20 @@ export function useSleepEdits(
         throw new Error('No edits to apply');
       }
 
+      // Snapshot original analysis before first recalculation
+      if (!originalAnalysisRef.current && state.analysisResults) {
+        originalAnalysisRef.current = state.analysisResults;
+      }
+
+      // Group edits by dutyId — the backend accepts one modification per duty_id.
+      // If multiple blocks of the same duty are edited, last one wins.
+      const editsByDuty = new Map<string, SleepEdit>();
+      for (const edit of pendingEdits.values()) {
+        editsByDuty.set(edit.dutyId, edit);
+      }
+
       // Convert each edit to UTC sleep modifications
-      const sleepModifications = Array.from(pendingEdits.values()).map((edit) => {
+      const sleepModifications = Array.from(editsByDuty.values()).map((edit) => {
         const startDelta = edit.newStartHour - edit.originalStartHour;
         const endDelta = edit.newEndHour - edit.originalEndHour;
         return {
@@ -161,10 +186,23 @@ export function useSleepEdits(
 
   const hasEdits = pendingEdits.size > 0;
   const editCount = pendingEdits.size;
+  const hasOriginal = originalAnalysisRef.current != null;
 
   const applyEdits = useCallback(() => {
     mutation.mutate();
   }, [mutation]);
+
+  const resetToOriginal = useCallback(() => {
+    if (originalAnalysisRef.current) {
+      setAnalysisResults(originalAnalysisRef.current);
+      originalAnalysisRef.current = null;
+      clearEdits();
+      toast({
+        title: 'Analysis restored',
+        description: 'Reverted to the original analysis before sleep edits.',
+      });
+    }
+  }, [setAnalysisResults, clearEdits, toast]);
 
   return useMemo(() => ({
     pendingEdits,
@@ -178,5 +216,7 @@ export function useSleepEdits(
     activeBarId,
     activateEdit,
     deactivateEdit,
-  }), [pendingEdits, addEdit, removeEdit, clearEdits, applyEdits, mutation.isPending, hasEdits, editCount, activeBarId, activateEdit, deactivateEdit]);
+    hasOriginal,
+    resetToOriginal,
+  }), [pendingEdits, addEdit, removeEdit, clearEdits, applyEdits, mutation.isPending, hasEdits, editCount, activeBarId, activateEdit, deactivateEdit, hasOriginal, resetToOriginal]);
 }

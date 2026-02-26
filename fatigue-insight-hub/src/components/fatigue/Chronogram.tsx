@@ -173,6 +173,22 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             </div>
           </div>
         )}
+
+        {/* Reset to Original bar — shows after recalculation when no new edits pending */}
+        {sleepEdits.hasOriginal && !sleepEdits.hasEdits && (
+          <div className="sticky bottom-0 z-10 bg-background/95 backdrop-blur-sm border border-primary/20 px-4 py-3 flex items-center justify-between rounded-xl shadow-lg">
+            <span className="text-sm text-muted-foreground">
+              Viewing recalculated results
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={sleepEdits.resetToOriginal}
+            >
+              ↩ Reset to Original
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -204,15 +204,30 @@ function buildTrainingSegment(
   };
 }
 
-/** Build common sleep bar fields shared across all three views. */
+/** Build common sleep bar fields shared across all three views.
+ *  When `blockOverrides` is provided, per-block ISO timestamps and a unique
+ *  `blockKey` are generated. Without overrides, the first sleep block's ISOs
+ *  are used (single-block / fallback path). */
 function baseSleepFields(
   est: NonNullable<DutyAnalysis['sleepEstimate']>,
   duty: DutyAnalysis,
+  blockOverrides?: {
+    blockIndex: number;
+    sleepStartUtcIso?: string;
+    sleepEndUtcIso?: string;
+  },
 ): Omit<TimelineSleepBar, 'rowIndex' | 'startHour' | 'endHour' | 'isOvernightStart' | 'isOvernightContinuation'> {
-  // Extract UTC ISO timestamps from sleep blocks for what-if editing
-  const firstBlock = est.sleepBlocks?.[0];
-  const sleepStartUtcIso = firstBlock?.sleepStartUtc ?? undefined;
-  const sleepEndUtcIso = firstBlock?.sleepEndUtc ?? undefined;
+  // Per-block ISOs if provided, otherwise fall back to first block (single-block case)
+  const sleepStartUtcIso = blockOverrides?.sleepStartUtcIso
+    ?? est.sleepBlocks?.[0]?.sleepStartUtc
+    ?? undefined;
+  const sleepEndUtcIso = blockOverrides?.sleepEndUtcIso
+    ?? est.sleepBlocks?.[0]?.sleepEndUtc
+    ?? undefined;
+
+  // Unique per-block key: "${dutyId}::${blockIndex}"
+  const blockIdx = blockOverrides?.blockIndex ?? 0;
+  const blockKey = duty.dutyId ? `${duty.dutyId}::${blockIdx}` : undefined;
 
   return {
     recoveryScore: getRecoveryScore(est),
@@ -234,6 +249,7 @@ function baseSleepFields(
     sleepId: duty.dutyId,
     sleepStartIso: sleepStartUtcIso,
     sleepEndIso: sleepEndUtcIso,
+    blockKey,
   };
 }
 
@@ -384,8 +400,14 @@ export function homeBaseTransform(
         );
 
         if (blocksWithPos.length >= 2) {
-          // Render each block as a separate bar
-          for (const block of blocksWithPos) {
+          // Render each block as a separate bar with per-block ISOs and unique blockKey
+          for (let blockIdx = 0; blockIdx < blocksWithPos.length; blockIdx++) {
+            const block = blocksWithPos[blockIdx];
+            const blockBase = baseSleepFields(est, duty, {
+              blockIndex: blockIdx,
+              sleepStartUtcIso: block.sleepStartUtc,
+              sleepEndUtcIso: block.sleepEndUtc,
+            });
             const bStartDay = block.sleepStartDayHomeTz!;
             const bStartHour = block.sleepStartHourHomeTz!;
             const bEndDay = block.sleepEndDayHomeTz!;
@@ -397,11 +419,11 @@ export function homeBaseTransform(
               if (bEndHour <= bStartHour) {
                 const slices = splitOvernightBar(bStartDay, bStartHour, bEndHour, daysInMonth);
                 for (const s of slices) {
-                  sleepBars.push({ ...base, ...s });
+                  sleepBars.push({ ...blockBase, ...s });
                 }
               } else {
                 sleepBars.push({
-                  ...base,
+                  ...blockBase,
                   rowIndex: bStartDay,
                   startHour: bStartHour,
                   endHour: bEndHour,
@@ -410,7 +432,7 @@ export function homeBaseTransform(
             } else {
               if (bStartDay >= 1 && bStartDay <= daysInMonth) {
                 sleepBars.push({
-                  ...base,
+                  ...blockBase,
                   rowIndex: bStartDay,
                   startHour: bStartHour,
                   endHour: 24,
@@ -419,7 +441,7 @@ export function homeBaseTransform(
               }
               if (bEndDay >= 1 && bEndDay <= daysInMonth) {
                 sleepBars.push({
-                  ...base,
+                  ...blockBase,
                   rowIndex: bEndDay,
                   startHour: 0,
                   endHour: bEndHour,
@@ -524,7 +546,8 @@ export function homeBaseTransform(
   if (restDaysSleep) {
     for (const restDay of restDaysSleep) {
       const pseudoDuty = createRestDayPseudoDuty(restDay);
-      for (const block of restDay.sleepBlocks) {
+      for (let blockIdx = 0; blockIdx < restDay.sleepBlocks.length; blockIdx++) {
+        const block = restDay.sleepBlocks[blockIdx];
         if (
           block.sleepStartDayHomeTz != null &&
           block.sleepStartHourHomeTz != null &&
@@ -554,6 +577,9 @@ export function homeBaseTransform(
             confidenceBasis: restDay.confidenceBasis,
             confidence: restDay.confidence,
             references: restDay.references,
+            blockKey: `rest::${format(restDay.date, 'yyyy-MM-dd')}::${blockIdx}`,
+            sleepStartIso: block.sleepStartIso,
+            sleepEndIso: block.sleepEndIso,
           };
 
           if (startDay === endDay) {
@@ -853,10 +879,16 @@ export function utcTransform(
       );
 
       if (blocksWithUtc.length >= 2) {
-        for (const block of blocksWithUtc) {
+        for (let blockIdx = 0; blockIdx < blocksWithUtc.length; blockIdx++) {
+          const block = blocksWithUtc[blockIdx];
+          const blockBase = baseSleepFields(est, duty, {
+            blockIndex: blockIdx,
+            sleepStartUtcIso: block.sleepStartUtc,
+            sleepEndUtcIso: block.sleepEndUtc,
+          });
           const sUtc = utcDayHour(block.sleepStartUtc!);
           const eUtc = utcDayHour(block.sleepEndUtc!);
-          addUtcSleepBar(sleepBars, sUtc.day, sUtc.hour, eUtc.day, eUtc.hour, base, daysInMonth);
+          addUtcSleepBar(sleepBars, sUtc.day, sUtc.hour, eUtc.day, eUtc.hour, blockBase, daysInMonth);
         }
       } else {
         // Single-block fallback
@@ -914,7 +946,8 @@ export function utcTransform(
   if (restDaysSleep) {
     for (const restDay of restDaysSleep) {
       const pseudoDuty = createRestDayPseudoDuty(restDay);
-      for (const block of restDay.sleepBlocks) {
+      for (let blockIdx = 0; blockIdx < restDay.sleepBlocks.length; blockIdx++) {
+        const block = restDay.sleepBlocks[blockIdx];
         let startDay: number | undefined;
         let startHour: number | undefined;
         let endDay: number | undefined;
@@ -955,6 +988,9 @@ export function utcTransform(
             confidenceBasis: restDay.confidenceBasis,
             confidence: restDay.confidence,
             references: restDay.references,
+            blockKey: `rest::${format(restDay.date, 'yyyy-MM-dd')}::${blockIdx}`,
+            sleepStartIso: block.sleepStartIso,
+            sleepEndIso: block.sleepEndIso,
           };
           addUtcSleepBar(sleepBars, startDay, startHour, endDay, endHour, baseFields, daysInMonth);
         }
@@ -1252,13 +1288,19 @@ export function elapsedTransform(
       );
 
       if (blocksWithPos.length >= 2) {
-        for (const block of blocksWithPos) {
+        for (let blockIdx = 0; blockIdx < blocksWithPos.length; blockIdx++) {
+          const block = blocksWithPos[blockIdx];
+          const blockBase = baseSleepFields(est, duty, {
+            blockIndex: blockIdx,
+            sleepStartUtcIso: block.sleepStartUtc,
+            sleepEndUtcIso: block.sleepEndUtc,
+          });
           let se = dayHourToElapsed(block.sleepStartDayHomeTz!, block.sleepStartHourHomeTz!);
           let ee = dayHourToElapsed(block.sleepEndDayHomeTz!, block.sleepEndHourHomeTz!);
           if (ee <= se) ee += 24;
           maxElapsedHour = Math.max(maxElapsedHour, ee);
           const slices = splitElapsedAcrossRows(se, ee);
-          for (const s of slices) sleepBars.push({ ...base, ...s });
+          for (const s of slices) sleepBars.push({ ...blockBase, ...s });
         }
       } else {
         // Single-block fallback
@@ -1352,7 +1394,8 @@ export function elapsedTransform(
   if (restDaysSleep) {
     for (const restDay of restDaysSleep) {
       const pseudoDuty = createRestDayPseudoDuty(restDay);
-      for (const block of restDay.sleepBlocks) {
+      for (let blockIdx = 0; blockIdx < restDay.sleepBlocks.length; blockIdx++) {
+        const block = restDay.sleepBlocks[blockIdx];
         let startElapsed: number | undefined;
         let endElapsed: number | undefined;
 
@@ -1397,6 +1440,9 @@ export function elapsedTransform(
             confidenceBasis: restDay.confidenceBasis,
             confidence: restDay.confidence,
             references: restDay.references,
+            blockKey: `rest::${format(restDay.date, 'yyyy-MM-dd')}::${blockIdx}`,
+            sleepStartIso: block.sleepStartIso,
+            sleepEndIso: block.sleepEndIso,
           };
 
           const slices = splitElapsedAcrossRows(startElapsed, endElapsed);

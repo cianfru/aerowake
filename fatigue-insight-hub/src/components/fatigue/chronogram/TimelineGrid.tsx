@@ -27,16 +27,16 @@ interface TimelineGridProps {
   showFlightPhases: boolean;
   selectedDuty: DutyAnalysis | null;
   onDutySelect: (duty: DutyAnalysis) => void;
-  /** Pending sleep edits (Map<dutyId, SleepEdit>) — homebase only */
+  /** Pending sleep edits (Map<blockKey, SleepEdit>) — homebase only */
   pendingEdits?: Map<string, SleepEdit>;
   /** Callback when user adjusts a sleep bar via drag */
   onSleepEdit?: (edit: SleepEdit) => void;
   /** Callback when user resets a single sleep edit */
-  onRemoveEdit?: (dutyId: string) => void;
-  /** ID of the sleep bar currently in drag-edit mode */
+  onRemoveEdit?: (blockKey: string) => void;
+  /** ID (blockKey) of the sleep bar currently in drag-edit mode */
   activeEditBarId?: string | null;
-  /** Called on double-click to enter drag-edit mode */
-  onActivateEdit?: (sleepId: string) => void;
+  /** Called on double-click to enter drag-edit mode (by blockKey) */
+  onActivateEdit?: (blockKey: string) => void;
   /** Called to exit drag-edit mode */
   onDeactivateEdit?: () => void;
 }
@@ -194,10 +194,10 @@ export function TimelineGrid({
                     leftPercent={(bar.startHour / 24) * 100}
                     variant={data.variant}
                     isEditable={data.variant === 'homebase'}
-                    pendingEdit={bar.sleepId ? pendingEdits?.get(bar.sleepId) ?? null : null}
+                    pendingEdit={bar.blockKey ? pendingEdits?.get(bar.blockKey) ?? null : null}
                     onSleepEdit={onSleepEdit}
                     onRemoveEdit={onRemoveEdit}
-                    isEditing={bar.sleepId === activeEditBarId}
+                    isEditing={bar.blockKey === activeEditBarId}
                     onActivateEdit={onActivateEdit}
                     onDeactivateEdit={onDeactivateEdit}
                     getRowEl={getRowEl(label.rowIndex)}

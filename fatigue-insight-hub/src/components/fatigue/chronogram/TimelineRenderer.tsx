@@ -34,11 +34,11 @@ interface TimelineRendererProps {
   /** Callback when user adjusts a sleep bar via drag */
   onSleepEdit?: (edit: SleepEdit) => void;
   /** Callback when user resets a single sleep edit */
-  onRemoveEdit?: (dutyId: string) => void;
-  /** ID of the sleep bar currently in drag-edit mode */
+  onRemoveEdit?: (blockKey: string) => void;
+  /** ID of the sleep bar currently in drag-edit mode (blockKey) */
   activeEditBarId?: string | null;
-  /** Called on double-click to enter drag-edit mode */
-  onActivateEdit?: (sleepId: string) => void;
+  /** Called on double-click to enter drag-edit mode (blockKey) */
+  onActivateEdit?: (blockKey: string) => void;
   /** Called to exit drag-edit mode */
   onDeactivateEdit?: () => void;
 }

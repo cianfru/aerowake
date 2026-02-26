@@ -25,11 +25,11 @@ interface SleepBarPopoverProps {
   /** Called when user adjusts a sleep bar edge via drag */
   onSleepEdit?: (edit: SleepEdit) => void;
   /** Called when user resets a single edit */
-  onRemoveEdit?: (dutyId: string) => void;
+  onRemoveEdit?: (blockKey: string) => void;
   /** Whether this bar is currently in drag-edit mode */
   isEditing?: boolean;
-  /** Called on double-click to enter edit mode */
-  onActivateEdit?: (sleepId: string) => void;
+  /** Called on double-click to enter edit mode (by blockKey) */
+  onActivateEdit?: (blockKey: string) => void;
   /** Called to exit edit mode */
   onDeactivateEdit?: () => void;
   /** Stable getter for the parent row element (for drag coordinate math) */
@@ -70,9 +70,9 @@ export function SleepBarPopover({
   const displayStartHour = hasEdit ? pendingEdit!.newStartHour : originalStart;
   const displayEndHour = hasEdit ? pendingEdit!.newEndHour : originalEnd;
 
-  // Can edit: must be homebase, have a sleepId, have UTC ISOs, and NOT be an overnight continuation
+  // Can edit: must be homebase, have a blockKey + sleepId, have UTC ISOs, and NOT be an overnight continuation
   // (only the primary half of an overnight sleep is editable — the continuation just follows)
-  const canEdit = isEditable && bar.sleepId && bar.sleepStartIso && bar.sleepEndIso && !bar.isOvernightContinuation;
+  const canEdit = isEditable && bar.blockKey && bar.sleepId && bar.sleepStartIso && bar.sleepEndIso && !bar.isOvernightContinuation;
 
   // ── Click / double-click discrimination ──
   // Single-click (after 250ms timeout) → open popover
@@ -93,10 +93,10 @@ export function SleepBarPopover({
       clearTimeout(clickTimer.current);
       clickTimer.current = null;
     }
-    if (canEdit && onActivateEdit && bar.sleepId) {
-      onActivateEdit(bar.sleepId);
+    if (canEdit && onActivateEdit && bar.blockKey) {
+      onActivateEdit(bar.blockKey);
     }
-  }, [canEdit, onActivateEdit, bar.sleepId]);
+  }, [canEdit, onActivateEdit, bar.blockKey]);
 
   // ── If in edit mode, render the draggable bar instead of popover ──
   if (isEditing && canEdit && onSleepEdit && onDeactivateEdit && getRowEl) {
