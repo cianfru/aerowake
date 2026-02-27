@@ -4,6 +4,8 @@ import { loadPersistedSettings, savePersistedSettings } from '@/hooks/usePersist
 
 // ── State ────────────────────────────────────────────────────
 
+export type ExpandedPanel = 'rosters' | 'settings' | null;
+
 export interface AnalysisState {
   settings: PilotSettings;
   uploadedFile: UploadedFile | null;
@@ -11,7 +13,8 @@ export interface AnalysisState {
   analysisResults: AnalysisResults | null;
   selectedDuty: DutyAnalysis | null;
   drawerOpen: boolean;
-  sidebarOpen: boolean;
+  expandedPanel: ExpandedPanel;
+  mobileNavOpen: boolean;
   activeTab: string;
   dutyCrewOverrides: Map<string, 'crew_a' | 'crew_b'>;
   showLanding: boolean;
@@ -36,7 +39,8 @@ function buildInitialState(): AnalysisState {
     analysisResults: null,
     selectedDuty: null,
     drawerOpen: false,
-    sidebarOpen: false,
+    expandedPanel: null,
+    mobileNavOpen: false,
     activeTab: 'analysis',
     dutyCrewOverrides: new Map(),
     showLanding: true,
@@ -52,7 +56,9 @@ type AnalysisAction =
   | { type: 'SELECT_DUTY'; payload: DutyAnalysis }
   | { type: 'CLEAR_SELECTED_DUTY' }
   | { type: 'TOGGLE_DRAWER'; payload?: boolean }
-  | { type: 'TOGGLE_SIDEBAR'; payload?: boolean }
+  | { type: 'SET_EXPANDED_PANEL'; payload: ExpandedPanel }
+  | { type: 'TOGGLE_PANEL'; payload: 'rosters' | 'settings' }
+  | { type: 'SET_MOBILE_NAV_OPEN'; payload: boolean }
   | { type: 'SET_ACTIVE_TAB'; payload: string }
   | { type: 'SET_CREW_OVERRIDE'; payload: { dutyId: string; crewSet: 'crew_a' | 'crew_b' } }
   | { type: 'REMOVE_FILE' }
@@ -88,11 +94,20 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
     case 'TOGGLE_DRAWER':
       return { ...state, drawerOpen: action.payload ?? !state.drawerOpen };
 
-    case 'TOGGLE_SIDEBAR':
-      return { ...state, sidebarOpen: action.payload ?? !state.sidebarOpen };
+    case 'SET_EXPANDED_PANEL':
+      return { ...state, expandedPanel: action.payload };
+
+    case 'TOGGLE_PANEL':
+      return {
+        ...state,
+        expandedPanel: state.expandedPanel === action.payload ? null : action.payload,
+      };
+
+    case 'SET_MOBILE_NAV_OPEN':
+      return { ...state, mobileNavOpen: action.payload };
 
     case 'SET_ACTIVE_TAB':
-      return { ...state, activeTab: action.payload };
+      return { ...state, activeTab: action.payload, expandedPanel: null };
 
     case 'SET_CREW_OVERRIDE': {
       const updated = new Map(state.dutyCrewOverrides);
@@ -123,6 +138,7 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
         analysisResults: action.payload,
         selectedDuty: null,
         drawerOpen: false,
+        expandedPanel: null,
         activeTab: 'analysis',
         showLanding: false,
       };
@@ -147,7 +163,9 @@ interface AnalysisContextValue {
   selectDuty: (d: DutyAnalysis) => void;
   clearSelectedDuty: () => void;
   setDrawerOpen: (open: boolean) => void;
-  setSidebarOpen: (open: boolean) => void;
+  setExpandedPanel: (panel: ExpandedPanel) => void;
+  togglePanel: (panel: 'rosters' | 'settings') => void;
+  setMobileNavOpen: (open: boolean) => void;
   setActiveTab: (tab: string) => void;
   setCrewOverride: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
   removeFile: () => void;
@@ -174,7 +192,9 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     selectDuty: (d) => dispatch({ type: 'SELECT_DUTY', payload: d }),
     clearSelectedDuty: () => dispatch({ type: 'CLEAR_SELECTED_DUTY' }),
     setDrawerOpen: (open) => dispatch({ type: 'TOGGLE_DRAWER', payload: open }),
-    setSidebarOpen: (open) => dispatch({ type: 'TOGGLE_SIDEBAR', payload: open }),
+    setExpandedPanel: (panel) => dispatch({ type: 'SET_EXPANDED_PANEL', payload: panel }),
+    togglePanel: (panel) => dispatch({ type: 'TOGGLE_PANEL', payload: panel }),
+    setMobileNavOpen: (open) => dispatch({ type: 'SET_MOBILE_NAV_OPEN', payload: open }),
     setActiveTab: (tab) => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab }),
     setCrewOverride: (dutyId, crewSet) =>
       dispatch({ type: 'SET_CREW_OVERRIDE', payload: { dutyId, crewSet } }),

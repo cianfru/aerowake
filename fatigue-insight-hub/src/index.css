@@ -54,6 +54,10 @@
 
     --radius: 0.75rem;
 
+    /* Navigation layout */
+    --icon-rail-width: 52px;
+    --panel-width: 280px;
+
     --chart-1: 199 89% 48%;
     --chart-2: 142 76% 36%;
     --chart-3: 38 92% 50%;

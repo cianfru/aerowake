@@ -1,61 +1,38 @@
-import { Moon, Sun, Menu, LogIn, LogOut, FolderOpen, CalendarRange, Shield, BarChart3, Activity, BookOpen, Info } from 'lucide-react';
+import { Moon, Sun, LogIn, LogOut, Shield } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAnalysis } from '@/contexts/AnalysisContext';
+import { cn } from '@/lib/utils';
 import logoDark from '@/assets/logo-dark.png';
 import logoLight from '@/assets/logo-light.png';
 
 interface HeaderProps {
   theme: 'dark' | 'light';
   onThemeChange: (theme: 'dark' | 'light') => void;
-  onMenuToggle?: () => void;
-  showMenuButton?: boolean;
-  activeTab?: string;
-  onTabChange?: (tab: string) => void;
 }
 
-interface NavItem {
-  value: string;
-  label: string;
-  requiresAuth?: boolean;
-}
-
-const navItems: NavItem[] = [
-  { value: 'analysis', label: 'Analysis' },
-  { value: 'insights', label: 'Insights' },
-  { value: 'yearly', label: '12-Month', requiresAuth: true },
-  { value: 'rosters', label: 'Rosters', requiresAuth: true },
-  { value: 'learn', label: 'Learn' },
-  { value: 'about', label: 'About' },
-];
-
-export function Header({ theme, onThemeChange, onMenuToggle, showMenuButton, activeTab = 'analysis', onTabChange }: HeaderProps) {
+export function Header({ theme, onThemeChange }: HeaderProps) {
   const { isAuthenticated, user, logout } = useAuth();
+  const { state } = useAnalysis();
+  const hasPanel = state.expandedPanel !== null;
 
   const handleSignOut = async () => {
     await logout();
   };
 
   return (
-    <header className="border-b border-border/50 glass-strong relative z-20">
-      <div className="flex items-center justify-between px-4 py-2.5 md:px-6 md:py-3">
+    <header className={cn(
+      "border-b border-border/50 glass-strong relative z-20 transition-[margin-left] duration-200",
+      "ml-0 md:ml-[var(--icon-rail-width)]",
+      hasPanel && "md:ml-[calc(var(--icon-rail-width)+var(--panel-width))]",
+    )}>
+      <div className="flex items-center justify-between px-4 py-2 md:px-6 md:py-2.5">
         {/* Left: Logo + subtitle */}
         <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-          {showMenuButton && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden h-8 w-8"
-              onClick={onMenuToggle}
-            >
-              <Menu className="h-4.5 w-4.5" />
-            </Button>
-          )}
-
           <img
             src={theme === 'dark' ? logoDark : logoLight}
             alt="Aerowake Logo"
-            className="h-7 w-auto object-contain md:h-9"
+            className="h-6 w-auto object-contain md:h-8"
           />
           <div className="hidden lg:block">
             <p className="text-[10px] text-muted-foreground">
@@ -63,38 +40,6 @@ export function Header({ theme, onThemeChange, onMenuToggle, showMenuButton, act
             </p>
           </div>
         </div>
-
-        {/* Center: Navigation tabs */}
-        <nav className="flex items-center gap-0.5 md:gap-1 mx-2 md:mx-8 overflow-x-auto scrollbar-none">
-          {navItems.map((item) => {
-            // Hide auth-required tabs when not logged in
-            if (item.requiresAuth && !isAuthenticated) return null;
-
-            return (
-              <button
-                key={item.value}
-                onClick={() => onTabChange?.(item.value)}
-                className={`relative px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-medium rounded-lg transition-all duration-200 whitespace-nowrap
-                  ${activeTab === item.value
-                    ? 'text-foreground bg-secondary/60 backdrop-blur-sm shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/30'
-                  }
-                `}
-              >
-                {item.value === 'analysis' && <BarChart3 className="h-3.5 w-3.5 inline-block mr-1 -mt-0.5" />}
-                {item.value === 'insights' && <Activity className="h-3.5 w-3.5 inline-block mr-1 -mt-0.5" />}
-                {item.value === 'yearly' && <CalendarRange className="h-3.5 w-3.5 inline-block mr-1 -mt-0.5" />}
-                {item.value === 'rosters' && <FolderOpen className="h-3.5 w-3.5 inline-block mr-1 -mt-0.5" />}
-                {item.value === 'learn' && <BookOpen className="h-3.5 w-3.5 inline-block mr-1 -mt-0.5" />}
-                {item.value === 'about' && <Info className="h-3.5 w-3.5 inline-block mr-1 -mt-0.5" />}
-                {item.label}
-                {activeTab === item.value && (
-                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full bg-primary" />
-                )}
-              </button>
-            );
-          })}
-        </nav>
 
         {/* Right: Auth + Badge + theme toggle */}
         <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
