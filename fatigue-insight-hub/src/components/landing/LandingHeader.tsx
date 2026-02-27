@@ -131,7 +131,7 @@ export function LandingHeader({ onEnter }: LandingHeaderProps) {
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-5 md:px-8">
         {/* Left — Logo */}
         <div className="flex items-center gap-3">
-          <img src={logoDark} alt="Aerowake" className="h-7 md:h-8" />
+          <img src={logoDark} alt="Aerowake" className="h-9 md:h-11" />
           <span className="hidden sm:inline text-[10px] font-mono text-white/25 tracking-wider uppercase">
             v2.1.2
           </span>
