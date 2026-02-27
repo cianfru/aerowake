@@ -1,10 +1,13 @@
 import { Header } from '@/components/fatigue/Header';
 import { Footer } from '@/components/fatigue/Footer';
+import { IconRail } from '@/components/fatigue/IconRail';
+import { RosterPanel } from '@/components/fatigue/RosterPanel';
+import { SettingsPanel } from '@/components/fatigue/SettingsPanel';
+import { MobileBottomBar } from '@/components/fatigue/MobileBottomBar';
 import { DashboardContent } from '@/components/fatigue/DashboardContent';
 import { InsightsContent } from '@/components/fatigue/InsightsContent';
 import { LearnPage } from '@/components/fatigue/LearnPage';
 import { AboutPage } from '@/components/fatigue/AboutPage';
-import { MyRostersPage } from '@/components/fatigue/MyRostersPage';
 import { YearlyDashboardPage } from '@/components/fatigue/YearlyDashboardPage';
 
 import { LandingPage } from '@/components/landing/LandingPage';
@@ -12,10 +15,11 @@ import { AuroraBackground } from '@/components/ui/aurora-background';
 import { useTheme } from '@/hooks/useTheme';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { useEffect } from 'react';
+import { cn } from '@/lib/utils';
 import { PilotSettings } from '@/types/fatigue';
 
 const Index = () => {
-  const { state, setSettings, setSidebarOpen, setActiveTab, setShowLanding } = useAnalysis();
+  const { state, setSettings, setShowLanding } = useAnalysis();
   const { theme, setTheme } = useTheme();
 
   // Sync theme from context → DOM (useTheme manages localStorage + <html> class)
@@ -36,56 +40,63 @@ const Index = () => {
     return <LandingPage onEnter={() => setShowLanding(false)} />;
   }
 
+  const hasPanel = state.expandedPanel !== null;
+
   return (
-    <div className="relative flex min-h-screen flex-col bg-background">
+    <div className="relative min-h-screen bg-background">
       <AuroraBackground />
-      <div className="relative z-10 flex min-h-screen flex-col">
+      <div className="relative z-10 min-h-screen flex flex-col">
+        {/* Desktop: Icon Rail */}
+        <IconRail />
+
+        {/* Expandable Panels (desktop only, hidden on mobile) */}
+        <div className="hidden md:block">
+          {state.expandedPanel === 'rosters' && <RosterPanel />}
+          {state.expandedPanel === 'settings' && <SettingsPanel />}
+        </div>
+
+        {/* Header (positioned right of rail on desktop) */}
         <Header
           theme={state.settings.theme}
           onThemeChange={(t) => handleSettingsChange({ theme: t })}
-          onMenuToggle={() => setSidebarOpen(true)}
-          showMenuButton={true}
-          activeTab={state.activeTab}
-          onTabChange={setActiveTab}
         />
 
-        {state.activeTab === 'analysis' && (
-          <div className="flex-1">
-            <DashboardContent />
-          </div>
-        )}
+        {/* Main content (dynamic margin based on rail + panel) */}
+        <main
+          className={cn(
+            'flex-1 transition-[margin-left] duration-200',
+            'ml-0 md:ml-[var(--icon-rail-width)]',
+            hasPanel && 'md:ml-[calc(var(--icon-rail-width)+var(--panel-width))]',
+            // Mobile: add bottom padding for bottom nav bar
+            'pb-16 md:pb-0',
+          )}
+        >
+          {state.activeTab === 'analysis' && <DashboardContent />}
+          {state.activeTab === 'insights' && (
+            <div className="flex-1">
+              <InsightsContent />
+            </div>
+          )}
+          {state.activeTab === 'yearly' && (
+            <div className="flex-1">
+              <YearlyDashboardPage />
+            </div>
+          )}
+          {state.activeTab === 'learn' && (
+            <div className="flex-1">
+              <LearnPage />
+            </div>
+          )}
+          {state.activeTab === 'about' && (
+            <div className="flex-1">
+              <AboutPage />
+            </div>
+          )}
+          <Footer />
+        </main>
 
-        {state.activeTab === 'insights' && (
-          <div className="flex-1">
-            <InsightsContent />
-          </div>
-        )}
-
-        {state.activeTab === 'yearly' && (
-          <div className="flex-1">
-            <YearlyDashboardPage />
-          </div>
-        )}
-
-        {state.activeTab === 'rosters' && (
-          <div className="flex-1">
-            <MyRostersPage />
-          </div>
-        )}
-
-        {state.activeTab === 'learn' && (
-          <div className="flex-1">
-            <LearnPage />
-          </div>
-        )}
-
-        {state.activeTab === 'about' && (
-          <div className="flex-1">
-            <AboutPage />
-          </div>
-        )}
-
-        <Footer />
+        {/* Mobile: Bottom Tab Bar */}
+        <MobileBottomBar />
       </div>
     </div>
   );
