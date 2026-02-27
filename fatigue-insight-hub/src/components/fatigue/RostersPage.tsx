@@ -1,20 +1,17 @@
 import { useNavigate } from 'react-router-dom';
-import { FolderOpen, Upload, Calendar, FileText, MapPin, Plane, Timer, Hash, Eye, RotateCcw, Trash2 } from 'lucide-react';
+import { FolderOpen, FileText, MapPin, Plane, Timer, Hash, Eye, RotateCcw, Trash2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { ConnectionStatus } from './ConnectionStatus';
 import { SidebarUpload } from './SidebarUpload';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { useAnalyzeRoster } from '@/hooks/useAnalyzeRoster';
 import { useRosterHistory } from '@/hooks/useRosterHistory';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/hooks/useTheme';
 import { getRoster } from '@/lib/api-client';
 import { transformAnalysisResult } from '@/lib/transform-analysis';
 import type { RosterSummary } from '@/lib/api-client';
-import type { PilotSettings } from '@/types/fatigue';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -46,12 +43,11 @@ function formatMonth(month: string) {
 
 export function RostersPage() {
   const navigate = useNavigate();
-  const { state, setSettings, uploadFile, removeFile, loadAnalysis, setActiveTab } = useAnalysis();
+  const { state, uploadFile, removeFile, loadAnalysis, setActiveTab } = useAnalysis();
   const { runAnalysis, isAnalyzing } = useAnalyzeRoster();
-  const { setTheme } = useTheme();
   const { isAuthenticated } = useAuth();
 
-  const { settings, uploadedFile, analysisResults } = state;
+  const { uploadedFile, analysisResults } = state;
 
   const {
     rosters,
@@ -62,11 +58,6 @@ export function RostersPage() {
     reanalyze,
     isReanalyzing,
   } = useRosterHistory();
-
-  const handleSettingsChange = (newSettings: Partial<PilotSettings>) => {
-    if (newSettings.theme) setTheme(newSettings.theme);
-    setSettings(newSettings);
-  };
 
   const handleViewRoster = async (roster: RosterSummary) => {
     if (!roster.analysis_id) return;
@@ -106,54 +97,17 @@ export function RostersPage() {
           <ConnectionStatus />
         </div>
 
-        {/* Upload + Analysis Period Section */}
+        {/* Upload Section */}
         <Card variant="glass">
           <CardContent className="p-4 md:p-5">
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-start">
-              {/* Upload area */}
-              <div className="space-y-3">
-                <SidebarUpload
-                  uploadedFile={uploadedFile}
-                  onFileUpload={uploadFile}
-                  onRemoveFile={removeFile}
-                  onRunAnalysis={() => runAnalysis()}
-                  isAnalyzing={isAnalyzing}
-                  hasResults={!!analysisResults}
-                />
-              </div>
-
-              {/* Analysis period */}
-              <div className="space-y-2 md:min-w-[200px]">
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5 text-primary" />
-                  <p className="text-xs font-medium">Analysis Period</p>
-                </div>
-                <div className="flex gap-1.5">
-                  <Button
-                    variant={settings.analysisType === 'single' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => handleSettingsChange({ analysisType: 'single' })}
-                    className="flex-1 text-[10px] h-7"
-                  >
-                    Single Month
-                  </Button>
-                  <Button
-                    variant={settings.analysisType === 'range' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => handleSettingsChange({ analysisType: 'range' })}
-                    className="flex-1 text-[10px] h-7"
-                  >
-                    Date Range
-                  </Button>
-                </div>
-                <Input
-                  type="month"
-                  value={settings.selectedMonth.toISOString().slice(0, 7)}
-                  onChange={(e) => handleSettingsChange({ selectedMonth: new Date(e.target.value) })}
-                  className="h-8 bg-secondary/50 text-xs"
-                />
-              </div>
-            </div>
+            <SidebarUpload
+              uploadedFile={uploadedFile}
+              onFileUpload={uploadFile}
+              onRemoveFile={removeFile}
+              onRunAnalysis={() => runAnalysis()}
+              isAnalyzing={isAnalyzing}
+              hasResults={!!analysisResults}
+            />
           </CardContent>
         </Card>
 

@@ -4,8 +4,6 @@ import { loadPersistedSettings, savePersistedSettings } from '@/hooks/usePersist
 
 // ── State ────────────────────────────────────────────────────
 
-export type ExpandedPanel = 'settings' | null;
-
 export interface AnalysisState {
   settings: PilotSettings;
   uploadedFile: UploadedFile | null;
@@ -13,8 +11,6 @@ export interface AnalysisState {
   analysisResults: AnalysisResults | null;
   selectedDuty: DutyAnalysis | null;
   drawerOpen: boolean;
-  expandedPanel: ExpandedPanel;
-  mobileNavOpen: boolean;
   activeTab: string;
   dutyCrewOverrides: Map<string, 'crew_a' | 'crew_b'>;
   showLanding: boolean;
@@ -32,6 +28,8 @@ const DEFAULT_SETTINGS: PilotSettings = {
 
 function buildInitialState(): AnalysisState {
   const persisted = loadPersistedSettings();
+  // Once the user has dismissed the landing page, remember it
+  const landingDismissed = localStorage.getItem('aerowake_landing_dismissed') === 'true';
   return {
     settings: { ...DEFAULT_SETTINGS, ...persisted },
     uploadedFile: null,
@@ -39,11 +37,9 @@ function buildInitialState(): AnalysisState {
     analysisResults: null,
     selectedDuty: null,
     drawerOpen: false,
-    expandedPanel: null,
-    mobileNavOpen: false,
-    activeTab: 'analysis',
+    activeTab: 'summary',
     dutyCrewOverrides: new Map(),
-    showLanding: true,
+    showLanding: !landingDismissed,
   };
 }
 
@@ -56,9 +52,6 @@ type AnalysisAction =
   | { type: 'SELECT_DUTY'; payload: DutyAnalysis }
   | { type: 'CLEAR_SELECTED_DUTY' }
   | { type: 'TOGGLE_DRAWER'; payload?: boolean }
-  | { type: 'SET_EXPANDED_PANEL'; payload: ExpandedPanel }
-  | { type: 'TOGGLE_PANEL'; payload: 'settings' }
-  | { type: 'SET_MOBILE_NAV_OPEN'; payload: boolean }
   | { type: 'SET_ACTIVE_TAB'; payload: string }
   | { type: 'SET_CREW_OVERRIDE'; payload: { dutyId: string; crewSet: 'crew_a' | 'crew_b' } }
   | { type: 'REMOVE_FILE' }
@@ -94,20 +87,8 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
     case 'TOGGLE_DRAWER':
       return { ...state, drawerOpen: action.payload ?? !state.drawerOpen };
 
-    case 'SET_EXPANDED_PANEL':
-      return { ...state, expandedPanel: action.payload };
-
-    case 'TOGGLE_PANEL':
-      return {
-        ...state,
-        expandedPanel: state.expandedPanel === action.payload ? null : action.payload,
-      };
-
-    case 'SET_MOBILE_NAV_OPEN':
-      return { ...state, mobileNavOpen: action.payload };
-
     case 'SET_ACTIVE_TAB':
-      return { ...state, activeTab: action.payload, expandedPanel: null };
+      return { ...state, activeTab: action.payload };
 
     case 'SET_CREW_OVERRIDE': {
       const updated = new Map(state.dutyCrewOverrides);
@@ -130,15 +111,18 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
       };
 
     case 'SET_SHOW_LANDING':
+      if (!action.payload) {
+        localStorage.setItem('aerowake_landing_dismissed', 'true');
+      }
       return { ...state, showLanding: action.payload };
 
     case 'LOAD_ANALYSIS':
+      localStorage.setItem('aerowake_landing_dismissed', 'true');
       return {
         ...state,
         analysisResults: action.payload,
         selectedDuty: null,
         drawerOpen: false,
-        expandedPanel: null,
         activeTab: 'analysis',
         showLanding: false,
       };
@@ -163,9 +147,6 @@ interface AnalysisContextValue {
   selectDuty: (d: DutyAnalysis) => void;
   clearSelectedDuty: () => void;
   setDrawerOpen: (open: boolean) => void;
-  setExpandedPanel: (panel: ExpandedPanel) => void;
-  togglePanel: (panel: 'settings') => void;
-  setMobileNavOpen: (open: boolean) => void;
   setActiveTab: (tab: string) => void;
   setCrewOverride: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
   removeFile: () => void;
@@ -192,9 +173,6 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     selectDuty: (d) => dispatch({ type: 'SELECT_DUTY', payload: d }),
     clearSelectedDuty: () => dispatch({ type: 'CLEAR_SELECTED_DUTY' }),
     setDrawerOpen: (open) => dispatch({ type: 'TOGGLE_DRAWER', payload: open }),
-    setExpandedPanel: (panel) => dispatch({ type: 'SET_EXPANDED_PANEL', payload: panel }),
-    togglePanel: (panel) => dispatch({ type: 'TOGGLE_PANEL', payload: panel }),
-    setMobileNavOpen: (open) => dispatch({ type: 'SET_MOBILE_NAV_OPEN', payload: open }),
     setActiveTab: (tab) => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab }),
     setCrewOverride: (dutyId, crewSet) =>
       dispatch({ type: 'SET_CREW_OVERRIDE', payload: { dutyId, crewSet } }),
