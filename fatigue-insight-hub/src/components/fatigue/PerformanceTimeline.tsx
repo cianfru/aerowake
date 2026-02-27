@@ -171,7 +171,7 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
                 )}
                 {/* Backend confidence indicator */}
                 {data.confidence && (
-                  <p className="text-xs text-muted-foreground/70">
+                  <p className="text-xs text-muted-foreground">
                     Confidence: {(data.confidence * 100).toFixed(0)}%
                   </p>
                 )}

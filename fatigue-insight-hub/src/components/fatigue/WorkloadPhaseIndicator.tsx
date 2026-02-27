@@ -146,7 +146,7 @@ export function WorkloadPhaseIndicator({
   const content = (
     <div className="space-y-2">
       {/* Horizontal phase bar */}
-      <div className="flex items-stretch h-7 rounded-lg overflow-hidden border border-border/40 bg-secondary/20">
+      <div className="flex items-stretch h-7 rounded-lg overflow-hidden border border-border/50 bg-secondary/20">
         {segments.map((seg, i) => {
           const widthPct = Math.max(2, (seg.durationMin / totalDuration) * 100);
           return (
@@ -182,7 +182,7 @@ export function WorkloadPhaseIndicator({
             key={`${seg.phase}-${i}`}
             className={cn(
               'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border',
-              seg.isCritical ? 'border-critical/50' : 'border-border/40',
+              seg.isCritical ? 'border-critical/50' : 'border-border/50',
             )}
             style={{
               backgroundColor: `${seg.color}15`,

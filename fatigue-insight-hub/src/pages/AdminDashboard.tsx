@@ -26,7 +26,7 @@ export default function AdminDashboard() {
       <AuroraBackground />
       <div className="relative z-10 min-h-screen w-full">
         {/* Header */}
-        <header className="sticky top-0 z-40 w-full border-b border-border/30 bg-background/80 backdrop-blur-xl">
+        <header className="sticky top-0 z-40 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl">
           <div className="mx-auto max-w-7xl flex items-center justify-between px-4 h-14">
             <div className="flex items-center gap-3">
               <Link
@@ -57,7 +57,7 @@ export default function AdminDashboard() {
         {/* Content */}
         <main className="mx-auto max-w-7xl px-4 py-6">
           <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="bg-card/40 backdrop-blur-sm border border-border/30">
+            <TabsList className="bg-card/40 backdrop-blur-sm border border-border/50">
               <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
               <TabsTrigger value="users" className="text-xs">
                 Users {!isLoading && users.length > 0 && (

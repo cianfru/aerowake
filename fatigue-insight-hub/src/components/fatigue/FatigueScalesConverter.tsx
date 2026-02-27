@@ -81,7 +81,7 @@ export function FatigueScalesConverter({
       <CardContent>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* KSS */}
-          <div className="rounded-xl border border-border/40 bg-secondary/30 p-3 space-y-1.5">
+          <div className="rounded-xl border border-border/50 bg-secondary/30 p-3 space-y-1.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
@@ -106,7 +106,7 @@ export function FatigueScalesConverter({
           </div>
 
           {/* Samn-Perelli */}
-          <div className="rounded-xl border border-border/40 bg-secondary/30 p-3 space-y-1.5">
+          <div className="rounded-xl border border-border/50 bg-secondary/30 p-3 space-y-1.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <Activity className="h-3.5 w-3.5 text-muted-foreground" />
@@ -131,7 +131,7 @@ export function FatigueScalesConverter({
           </div>
 
           {/* PVT Reaction Time */}
-          <div className="rounded-xl border border-border/40 bg-secondary/30 p-3 space-y-1.5">
+          <div className="rounded-xl border border-border/50 bg-secondary/30 p-3 space-y-1.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <Timer className="h-3.5 w-3.5 text-muted-foreground" />
@@ -176,7 +176,7 @@ function ScaleChip({
 }) {
   const info = FATIGUE_INFO[infoKey];
   return (
-    <div className="flex items-center gap-2 rounded-lg bg-secondary/30 border border-border/40 px-2.5 py-1.5 min-w-0">
+    <div className="flex items-center gap-2 rounded-lg bg-secondary/30 border border-border/50 px-2.5 py-1.5 min-w-0">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1">
           <span className="text-[10px] text-muted-foreground font-medium">{label}</span>

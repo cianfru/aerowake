@@ -159,7 +159,7 @@ export function SleepQualityInfo({
                 />
               </div>
               {confidenceBasis && (
-                <p className="text-[11px] text-muted-foreground/80 leading-relaxed italic">
+                <p className="text-[11px] text-muted-foreground leading-relaxed italic">
                   {confidenceBasis}
                 </p>
               )}
@@ -191,7 +191,7 @@ export function SleepQualityInfo({
                         >
                           <div className="space-y-0.5">
                             <div className="text-xs font-medium">{factor.label}</div>
-                            <div className="text-[10px] text-muted-foreground/70 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
                               {factor.description}
                             </div>
                           </div>
@@ -223,7 +223,7 @@ export function SleepQualityInfo({
                       .map(([, value]) => value);
                     const netEffect = multiplierFactors.reduce((a, b) => a * b, 1);
                     return (
-                      <div className="flex items-center justify-between pt-2 border-t border-border/30">
+                      <div className="flex items-center justify-between pt-2 border-t border-border/50">
                         <span className="text-xs font-medium">Net Effect</span>
                         <span className={cn(
                           "font-mono text-sm font-bold",
@@ -256,7 +256,7 @@ export function SleepQualityInfo({
                         <div className="text-xs font-medium text-primary/90">
                           {ref.short}
                         </div>
-                        <div className="text-[10px] text-muted-foreground/70 leading-relaxed mt-0.5 line-clamp-2 group-hover:line-clamp-none transition-all">
+                        <div className="text-[10px] text-muted-foreground leading-relaxed mt-0.5 line-clamp-2 group-hover:line-clamp-none transition-all">
                           {ref.full}
                         </div>
                       </div>
@@ -268,7 +268,7 @@ export function SleepQualityInfo({
 
             {/* Footer */}
             <div className="pt-2 text-center">
-              <p className="text-[10px] text-muted-foreground/50">
+              <p className="text-[10px] text-muted-foreground/80">
                 Based on biomathematical fatigue modeling
               </p>
             </div>

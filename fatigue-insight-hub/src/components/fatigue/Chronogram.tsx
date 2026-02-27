@@ -151,7 +151,7 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
 
         {/* Floating Apply bar — shows when sleep edits are pending */}
         {sleepEdits.hasEdits && (
-          <div className="sticky bottom-0 z-10 bg-background/95 backdrop-blur-sm border border-border/30 px-4 py-3 flex items-center justify-between rounded-xl shadow-lg">
+          <div className="sticky bottom-0 z-10 bg-background/95 backdrop-blur-sm border border-border/50 px-4 py-3 flex items-center justify-between rounded-xl shadow-lg">
             <span className="text-sm text-muted-foreground flex items-center gap-1.5">
               <Pencil className="h-3.5 w-3.5" />
               {sleepEdits.editCount} sleep edit{sleepEdits.editCount > 1 ? 's' : ''} pending

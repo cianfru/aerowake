@@ -236,7 +236,7 @@ export function HighResolutionTimeline({ duties, statistics, month, pilotId }: H
                       key={hour}
                       className={cn(
                         "flex-1 border-r",
-                        hour % 3 === 0 ? "border-border/50" : "border-border/20"
+                        hour % 3 === 0 ? "border-border/50" : "border-border/50"
                       )}
                     />
                   ))}
@@ -246,7 +246,7 @@ export function HighResolutionTimeline({ duties, statistics, month, pilotId }: H
                 {allDays.map((day, dayIndex) => (
                   <div
                     key={dayIndex}
-                    className="relative h-7 border-b border-border/20"
+                    className="relative h-7 border-b border-border/50"
                   >
                     {/* Duty bars for this day with gradient showing performance decay */}
                     {dutyBars

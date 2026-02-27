@@ -128,14 +128,14 @@ export function DutyDetailsDialog({
         </DialogTitle>
 
         {/* Sticky header */}
-        <div className="flex-shrink-0 border-b border-border/40 bg-background/95 backdrop-blur-sm px-4 md:px-6 py-3 md:py-4">
+        <div className="flex-shrink-0 border-b border-border/50 bg-background/95 backdrop-blur-sm px-4 md:px-6 py-3 md:py-4">
           <DutyDetailsHeader duty={displayDuty} />
         </div>
 
         {/* Tabs area — scrollable content */}
         <Tabs defaultValue="performance" className="flex flex-col flex-1 min-h-0">
           {/* Tab triggers — sticky below header */}
-          <div className="flex-shrink-0 border-b border-border/30 bg-background/80 backdrop-blur-sm px-4 md:px-6">
+          <div className="flex-shrink-0 border-b border-border/50 bg-background/80 backdrop-blur-sm px-4 md:px-6">
             <TabsList className="w-full h-10 bg-transparent justify-start gap-1 rounded-none p-0">
               <TabsTrigger
                 value="performance"

@@ -108,7 +108,7 @@ export function LoginPage() {
               </Link>
             </p>
 
-            <p className="text-center text-xs text-muted-foreground/60">
+            <p className="text-center text-xs text-muted-foreground">
               <Link to="/" className="hover:text-muted-foreground">
                 Continue without account
               </Link>

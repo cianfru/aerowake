@@ -16,7 +16,7 @@ export function DayLabel({ label, rowHeight }: DayLabelProps) {
     <div
       className={cn(
         "relative flex items-center gap-1 pr-2 text-[11px]",
-        !label.hasDuty && "opacity-40",
+        !label.hasDuty && "opacity-60",
         riskClass
       )}
       style={{ height: `${rowHeight}px` }}

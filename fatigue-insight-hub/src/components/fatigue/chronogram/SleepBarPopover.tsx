@@ -208,7 +208,7 @@ export function SleepBarPopover({
                 </p>
               )}
               {bar.confidenceBasis && (
-                <p className="text-[10px] text-muted-foreground/80">
+                <p className="text-[10px] text-muted-foreground">
                   {bar.confidenceBasis}
                 </p>
               )}
@@ -225,7 +225,7 @@ export function SleepBarPopover({
                  displayStartHour > displayEndHour && ' (+1d)'}
               </span>
               {bar.sleepStartZulu && bar.sleepEndZulu && (
-                <span className="text-[10px] text-muted-foreground/60 font-mono">
+                <span className="text-[10px] text-muted-foreground font-mono">
                   {bar.sleepStartZulu}{'\u2192'}{bar.sleepEndZulu}
                 </span>
               )}
@@ -272,7 +272,7 @@ export function SleepBarPopover({
 
           {/* ── Edit hint (homebase only) ── */}
           {canEdit && (
-            <div className="text-[10px] text-muted-foreground/60 italic">
+            <div className="text-[10px] text-muted-foreground italic">
               Double-click to adjust sleep times
             </div>
           )}
@@ -383,7 +383,7 @@ export function SleepBarPopover({
               <CollapsibleTrigger className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors w-full group">
                 <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
                 <BookOpen className="h-3 w-3 inline-block" /> <span>References</span>
-                <span className="text-[9px] text-muted-foreground/50 ml-auto">{bar.references.length}</span>
+                <span className="text-[9px] text-muted-foreground/80 ml-auto">{bar.references.length}</span>
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="bg-secondary/20 rounded-lg p-2 space-y-2 mt-1.5">

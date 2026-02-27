@@ -105,9 +105,9 @@ export function DutyDetailsHeader({ duty }: DutyDetailsHeaderProps) {
                 key={i}
                 className={cn(
                   'flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs border',
-                  isDH ? 'bg-muted/40 border-border/30 opacity-70' :
+                  isDH ? 'bg-muted/40 border-border/50 opacity-70' :
                   isIR ? 'bg-blue-500/5 border-blue-500/20' :
-                  'bg-secondary/40 border-border/30'
+                  'bg-secondary/40 border-border/50'
                 )}
               >
                 {/* Flight number */}
@@ -137,12 +137,12 @@ export function DutyDetailsHeader({ duty }: DutyDetailsHeaderProps) {
                 <span className="text-muted-foreground hidden sm:inline">
                   {depTime}
                   {seg.departureUtcOffset != null && (
-                    <span className="text-[8px] text-muted-foreground/60 ml-0.5">({formatOffset(seg.departureUtcOffset)})</span>
+                    <span className="text-[8px] text-muted-foreground ml-0.5">({formatOffset(seg.departureUtcOffset)})</span>
                   )}
                   {' → '}
                   {arrTime}
                   {seg.arrivalUtcOffset != null && (
-                    <span className="text-[8px] text-muted-foreground/60 ml-0.5">({formatOffset(seg.arrivalUtcOffset)})</span>
+                    <span className="text-[8px] text-muted-foreground ml-0.5">({formatOffset(seg.arrivalUtcOffset)})</span>
                   )}
                 </span>
               </div>
@@ -185,7 +185,7 @@ export function DutyDetailsHeader({ duty }: DutyDetailsHeaderProps) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <span>
-      <span className="text-muted-foreground/70">{label}</span>{' '}
+      <span className="text-muted-foreground">{label}</span>{' '}
       <span className="font-medium text-foreground">{value}</span>
     </span>
   );
@@ -196,7 +196,7 @@ function StatPerf({ label, value }: { label: string; value: number }) {
   const color = v < 50 ? 'text-critical' : v < 60 ? 'text-warning' : 'text-foreground';
   return (
     <span>
-      <span className="text-muted-foreground/70">{label}</span>{' '}
+      <span className="text-muted-foreground">{label}</span>{' '}
       <span className={cn('font-medium', color)}>{v.toFixed(0)}%</span>
     </span>
   );

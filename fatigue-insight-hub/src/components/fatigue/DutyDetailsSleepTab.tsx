@@ -146,14 +146,14 @@ export function DutyDetailsSleepTab({ duty }: DutyDetailsSleepTabProps) {
 
       {/* 4. Detailed Assessment (Collapsible) */}
       <Collapsible open={assessmentOpen} onOpenChange={setAssessmentOpen}>
-        <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg bg-secondary/30 p-3 text-sm hover:bg-secondary/50">
+        <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg bg-secondary/50 p-3 text-sm hover:bg-secondary/60">
           <span className="flex items-center gap-2">
             Detailed Assessment & Recommendations
           </span>
           <ChevronDown className={`h-4 w-4 transition-transform ${assessmentOpen ? 'rotate-180' : ''}`} />
         </CollapsibleTrigger>
         <CollapsibleContent className="pt-3">
-          <div className="space-y-3 rounded-lg bg-secondary/20 p-4 text-sm">
+          <div className="space-y-3 rounded-lg bg-secondary/40 p-4 text-sm">
             <div>
               <h5 className="mb-1 font-medium">Fatigue Factors</h5>
               <ul className="list-inside list-disc space-y-1 text-muted-foreground">

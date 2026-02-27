@@ -271,7 +271,7 @@ export function ResearchReferencesPage() {
                 {refs.map(ref => (
                   <div
                     key={ref.key}
-                    className="rounded-lg bg-secondary/30 p-3 border border-border/20"
+                    className="rounded-lg bg-secondary/30 p-3 border border-border/50"
                   >
                     <p className="text-sm font-medium text-foreground mb-0.5">
                       {ref.short}

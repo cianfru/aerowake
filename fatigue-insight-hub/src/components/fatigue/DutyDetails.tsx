@@ -199,7 +199,7 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="rounded-xl border border-border/40 bg-secondary/30 p-3 md:p-4 space-y-2.5">
+            <div className="rounded-xl border border-border/50 bg-secondary/30 p-3 md:p-4 space-y-2.5">
               <div className="flex items-center gap-3">
                 <span className="font-mono text-xs md:text-sm font-semibold px-2 py-0.5 rounded"
                   style={{ backgroundColor: `${getTrainingDutyColor(duty.dutyType!)}20`, color: getTrainingDutyColor(duty.dutyType!) }}>
@@ -254,7 +254,7 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
                 return (
                   <div
                     key={index}
-                    className="rounded-xl border border-border/40 bg-secondary/30 p-3 md:p-4 space-y-2.5"
+                    className="rounded-xl border border-border/50 bg-secondary/30 p-3 md:p-4 space-y-2.5"
                   >
                     {/* Row 1: Flight number + Route + Performance */}
                     <div className="flex items-center justify-between">
@@ -295,11 +295,11 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
                       <div className="flex items-center gap-1.5 text-xs md:text-sm text-foreground">
                         <span>{depTimeAirport}</span>
                         <span className="text-muted-foreground">{segment.departure}</span>
-                        {depTzBadge && <span className="text-[8px] md:text-[9px] text-muted-foreground/70">({depTzBadge})</span>}
+                        {depTzBadge && <span className="text-[8px] md:text-[9px] text-muted-foreground">({depTzBadge})</span>}
                         <span className="text-muted-foreground mx-1">—</span>
                         <span>{arrTimeAirport}</span>
                         <span className="text-muted-foreground">{segment.arrival}</span>
-                        {arrTzBadge && <span className="text-[8px] md:text-[9px] text-muted-foreground/70">({arrTzBadge})</span>}
+                        {arrTzBadge && <span className="text-[8px] md:text-[9px] text-muted-foreground">({arrTzBadge})</span>}
                       </div>
                       {/* Secondary: UTC times */}
                       {segment.departureTimeUtc && segment.arrivalTimeUtc && (
@@ -309,7 +309,7 @@ export function DutyDetails({ duty, globalCrewSet, dutyCrewOverride, onCrewChang
                       )}
                       {/* Tertiary: Home base times */}
                       {segment.departureTimeAirportLocal && segment.departureTime !== segment.departureTimeAirportLocal && (
-                        <p className="text-[9px] md:text-[10px] text-muted-foreground/70">
+                        <p className="text-[9px] md:text-[10px] text-muted-foreground">
                           Home: {segment.departureTime} — {segment.arrivalTime}
                         </p>
                       )}

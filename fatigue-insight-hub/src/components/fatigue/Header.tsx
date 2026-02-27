@@ -37,7 +37,7 @@ export function Header({ theme, onThemeChange, onMenuToggle, showMenuButton, act
   };
 
   return (
-    <header className="border-b border-border/20 glass-strong relative z-20">
+    <header className="border-b border-border/50 glass-strong relative z-20">
       <div className="flex items-center justify-between px-4 py-2.5 md:px-6 md:py-3">
         {/* Left: Logo + subtitle */}
         <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
@@ -58,7 +58,7 @@ export function Header({ theme, onThemeChange, onMenuToggle, showMenuButton, act
             className="h-7 w-auto object-contain md:h-9"
           />
           <div className="hidden lg:block">
-            <p className="text-[10px] text-muted-foreground/70">
+            <p className="text-[10px] text-muted-foreground">
               Biomathematical fatigue prediction
             </p>
           </div>
@@ -135,7 +135,7 @@ export function Header({ theme, onThemeChange, onMenuToggle, showMenuButton, act
 
           <button
             onClick={() => onThemeChange(theme === 'dark' ? 'light' : 'dark')}
-            className="relative h-7 w-12 rounded-full bg-secondary/60 backdrop-blur-sm p-1 transition-all duration-300 hover:bg-secondary/80 md:h-7 md:w-13 border border-border/20"
+            className="relative h-7 w-12 rounded-full bg-secondary/60 backdrop-blur-sm p-1 transition-all duration-300 hover:bg-secondary/80 md:h-7 md:w-13 border border-border/50"
             aria-label="Toggle theme"
           >
             <div

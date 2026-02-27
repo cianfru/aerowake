@@ -237,7 +237,7 @@ export function ContinuousPerformanceTimeline({
       </div>
 
       {/* Scrollable chart container */}
-      <div className="overflow-x-auto border border-border/30 rounded-lg">
+      <div className="overflow-x-auto border border-border/50 rounded-lg">
         <div style={{ minWidth: `${chartMinWidth}px`, height: 380 }}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
