@@ -66,7 +66,7 @@ export function DashboardContent() {
           <X className="h-5 w-5" />
         </Button>
 
-        <div className="h-full overflow-y-auto glass-strong border-r border-border/30">
+        <div className="h-full overflow-y-auto glass-strong border-r border-border/50">
           <SettingsSidebar
             settings={settings}
             onSettingsChange={handleSettingsChange}

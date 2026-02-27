@@ -93,7 +93,7 @@ export function RosterCard({
         </div>
 
         {/* Upload date */}
-        <div className="text-[10px] text-muted-foreground/60">
+        <div className="text-[10px] text-muted-foreground">
           Uploaded {formatDate(roster.created_at)}
         </div>
 

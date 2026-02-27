@@ -201,7 +201,7 @@ export function TimelineGrid({
                 key={hour}
                 className={cn(
                   'flex-1 border-r',
-                  hour % 3 === 0 ? 'border-border/50' : 'border-border/20',
+                  hour % 3 === 0 ? 'border-border/50' : 'border-border/50',
                 )}
               />
             ))}
@@ -214,7 +214,7 @@ export function TimelineGrid({
             <div
               key={label.rowIndex}
               ref={setRowRef(label.rowIndex)}
-              className="relative border-b border-border/20"
+              className="relative border-b border-border/50"
               style={{ height: `${rowHeight}px` }}
             >
               {/* Sleep bars */}

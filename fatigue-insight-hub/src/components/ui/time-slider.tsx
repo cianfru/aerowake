@@ -91,7 +91,7 @@ export function TimeSlider({
       />
 
       {isChanged && originalDisplay && (
-        <div className="text-[10px] text-muted-foreground/60 text-right">
+        <div className="text-[10px] text-muted-foreground text-right">
           was {originalDisplay.time}
           {originalDisplay.nextDay && ' (+1d)'}
         </div>

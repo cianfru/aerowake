@@ -345,7 +345,7 @@ export function PerformanceSummaryCard({ duty }: PerformanceSummaryCardProps) {
 
         {/* Natural language explanation */}
         {explanation && (
-          <p className="text-xs text-muted-foreground leading-relaxed border-t border-border/30 pt-3">
+          <p className="text-xs text-muted-foreground leading-relaxed border-t border-border/50 pt-3">
             {explanation}
           </p>
         )}
@@ -375,7 +375,7 @@ function ScaleBadge({
 }) {
   const info = FATIGUE_INFO[infoKey];
   return (
-    <div className="rounded-lg bg-secondary/30 border border-border/30 px-2.5 py-2 min-w-0">
+    <div className="rounded-lg bg-secondary/30 border border-border/50 px-2.5 py-2 min-w-0">
       <div className="flex items-center gap-1 mb-0.5">
         <span className="text-muted-foreground">{icon}</span>
         <span className="text-[10px] text-muted-foreground font-medium">{label}</span>
@@ -417,7 +417,7 @@ function FactorBar({
   const barWidth = Math.min(100, (contribution / 40) * 100);
 
   return (
-    <div className="rounded-lg bg-secondary/20 border border-border/20 px-3 py-2 space-y-1.5">
+    <div className="rounded-lg bg-secondary/20 border border-border/50 px-3 py-2 space-y-1.5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           {icon}

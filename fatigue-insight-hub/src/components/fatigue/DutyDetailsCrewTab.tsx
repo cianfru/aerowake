@@ -182,7 +182,7 @@ export function DutyDetailsCrewTab({ duty, globalCrewSet, dutyCrewOverride, onCr
           <CardContent>
             <div className="space-y-2">
               {duty.inflightRestBlocks.map((block, index) => (
-                <div key={index} className="flex items-center justify-between rounded-lg bg-secondary/50 p-3">
+                <div key={index} className="flex items-center justify-between rounded-lg bg-secondary/60 p-3">
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-mono text-muted-foreground">
                       {block.startUtc.slice(11, 16)}Z - {block.endUtc.slice(11, 16)}Z

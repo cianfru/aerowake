@@ -22,7 +22,7 @@ export function TimelineLegend({ showDiscretion, variant = 'homebase' }: Timelin
       </button>
 
       {expanded && (
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] p-2.5 rounded-lg bg-secondary/30 border border-border/30 animate-fade-in">
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] p-2.5 rounded-lg bg-secondary/30 border border-border/50 animate-fade-in">
           {/* WOCL */}
           <span className="flex items-center gap-1.5">
             <span className="h-3.5 w-8 rounded-sm wocl-hatch" />

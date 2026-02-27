@@ -107,7 +107,7 @@ export function AdminUsersTab({ users, isLoading }: AdminUsersTabProps) {
           </TableBody>
         </Table>
       </div>
-      <div className="px-4 py-2.5 border-t border-border/30 text-xs text-muted-foreground">
+      <div className="px-4 py-2.5 border-t border-border/50 text-xs text-muted-foreground">
         {users.length} user{users.length !== 1 ? 's' : ''} total
       </div>
     </Card>

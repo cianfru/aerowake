@@ -35,7 +35,7 @@ function CustomTooltip({ active, payload, label }: any) {
             <span className="font-mono font-medium">{entry.value}</span>
           </p>
         ))}
-        <p className="text-xs text-muted-foreground mt-1 pt-1 border-t border-border/30">
+        <p className="text-xs text-muted-foreground mt-1 pt-1 border-t border-border/50">
           Total: <span className="font-mono font-medium">{total}</span> duties
         </p>
       </div>

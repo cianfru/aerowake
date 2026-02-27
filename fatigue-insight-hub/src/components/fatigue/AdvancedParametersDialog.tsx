@@ -168,10 +168,10 @@ interface PresetConfig {
 
 function ParamRow({ entry }: { entry: ParamEntry }) {
   return (
-    <div className="flex items-center justify-between py-1.5 border-b border-border/20 last:border-0">
+    <div className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
       <div className="min-w-0">
         <span className="text-xs text-foreground">{entry.label}</span>
-        <span className="block text-[10px] text-muted-foreground/70 italic truncate">{entry.citation}</span>
+        <span className="block text-[10px] text-muted-foreground italic truncate">{entry.citation}</span>
       </div>
       <span className="text-xs font-mono font-semibold tabular-nums text-primary flex-shrink-0 ml-3">
         {entry.value}{entry.unit ? ` ${entry.unit}` : ''}
@@ -193,7 +193,7 @@ export function AdvancedParametersDialog({ preset, open, onOpenChange }: Advance
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto bg-card/95 backdrop-blur-2xl border-border/40">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto bg-card/95 backdrop-blur-2xl border-border/50">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Brain className="h-5 w-5 text-primary" />
@@ -268,7 +268,7 @@ export function AdvancedParametersDialog({ preset, open, onOpenChange }: Advance
             <AccordionContent>
               <div className="space-y-1 px-1">
                 {Object.entries(config.riskThresholds).map(([key, entry]) => (
-                  <div key={key} className="flex items-center justify-between py-1.5 border-b border-border/20 last:border-0">
+                  <div key={key} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
                     <span className={`text-xs font-medium ${RISK_COLORS[key] || 'text-foreground'}`}>
                       {entry.label}
                     </span>

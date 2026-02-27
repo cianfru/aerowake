@@ -7,7 +7,7 @@
     --background: 222 47% 6%;
     --foreground: 210 40% 98%;
 
-    --card: 222 47% 8%;
+    --card: 222 47% 11%;
     --card-foreground: 210 40% 98%;
 
     --popover: 222 47% 10%;
@@ -16,11 +16,11 @@
     --primary: 199 89% 48%;
     --primary-foreground: 222 47% 6%;
 
-    --secondary: 222 47% 14%;
+    --secondary: 222 40% 16%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 222 30% 18%;
-    --muted-foreground: 215 20% 55%;
+    --muted: 222 25% 22%;
+    --muted-foreground: 215 15% 65%;
 
     --accent: 199 89% 48%;
     --accent-foreground: 222 47% 6%;
@@ -48,8 +48,8 @@
     --ground-training: 215 30% 55%;
     --ground-training-foreground: 210 40% 98%;
 
-    --border: 222 30% 18%;
-    --input: 222 30% 14%;
+    --border: 215 20% 32%;
+    --input: 222 25% 18%;
     --ring: 199 89% 48%;
 
     --radius: 0.75rem;
@@ -64,9 +64,9 @@
     --sidebar-foreground: 210 40% 98%;
     --sidebar-primary: 199 89% 48%;
     --sidebar-primary-foreground: 222 47% 6%;
-    --sidebar-accent: 222 47% 12%;
+    --sidebar-accent: 222 40% 16%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 222 30% 15%;
+    --sidebar-border: 222 30% 22%;
     --sidebar-ring: 199 89% 48%;
 
     /* Gradients */
@@ -97,7 +97,7 @@
     --secondary-foreground: 222 47% 11%;
 
     --muted: 210 40% 94%;
-    --muted-foreground: 215 16% 47%;
+    --muted-foreground: 215 16% 43%;
 
     --accent: 199 89% 48%;
     --accent-foreground: 0 0% 100%;
@@ -166,24 +166,24 @@
 
 @layer utilities {
   .glass {
-    @apply bg-card/40 backdrop-blur-2xl border-border/30;
-    box-shadow: 
-      0 0 0 1px hsl(var(--border) / 0.1),
+    @apply bg-card/60 backdrop-blur-2xl border-border/50;
+    box-shadow:
+      0 0 0 1px hsl(var(--border) / 0.15),
       0 8px 32px hsl(var(--background) / 0.4),
-      inset 0 1px 0 hsl(var(--foreground) / 0.03);
+      inset 0 1px 0 hsl(var(--foreground) / 0.06);
   }
 
   .glass-subtle {
-    @apply bg-card/20 backdrop-blur-xl border-border/20;
-    box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.02);
+    @apply bg-card/35 backdrop-blur-xl border-border/35;
+    box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.05);
   }
 
   .glass-strong {
-    @apply bg-card/60 backdrop-blur-2xl border-border/40;
-    box-shadow: 
-      0 0 0 1px hsl(var(--border) / 0.15),
+    @apply bg-card/80 backdrop-blur-2xl border-border/60;
+    box-shadow:
+      0 0 0 1px hsl(var(--border) / 0.2),
       0 16px 48px hsl(var(--background) / 0.5),
-      inset 0 1px 0 hsl(var(--foreground) / 0.05);
+      inset 0 1px 0 hsl(var(--foreground) / 0.08);
   }
 
   .glow-primary {
