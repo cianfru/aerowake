@@ -18,7 +18,6 @@ import { useAnalysis } from '@/contexts/AnalysisContext';
 import { useTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/utils';
 import logoDark from '@/assets/logo-dark.png';
-import logoLight from '@/assets/logo-light.png';
 import type { PilotSettings } from '@/types/fatigue';
 
 // ── Config presets (shared with former SettingsPanel) ─────────
@@ -102,9 +101,9 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
               aria-label="Go to Summary"
             >
               <img
-                src={theme === 'dark' ? logoDark : logoLight}
+                src={logoDark}
                 alt="Aerowake Logo"
-                className="h-12 w-auto object-contain md:h-16 cursor-pointer"
+                className="h-8 w-auto object-contain md:h-10 cursor-pointer"
               />
             </button>
             <div className="hidden lg:block">
