@@ -10,7 +10,7 @@ interface AdvancedParametersDialogProps {
 }
 
 // Mirrors fatigue-tool/core/parameters.py — each preset's key parameter values
-const PRESET_PARAMS: Record<string, PresetConfig> = {
+export const PRESET_PARAMS: Record<string, PresetConfig> = {
   default: {
     label: 'EASA Default',
     processS: {
@@ -145,19 +145,19 @@ const PRESET_PARAMS: Record<string, PresetConfig> = {
   },
 };
 
-interface ParamEntry {
+export interface ParamEntry {
   value: number;
   unit: string;
   label: string;
   citation: string;
 }
 
-interface RiskEntry {
+export interface RiskEntry {
   range: string;
   label: string;
 }
 
-interface PresetConfig {
+export interface PresetConfig {
   label: string;
   processS: Record<string, ParamEntry>;
   processC: Record<string, ParamEntry>;
@@ -166,7 +166,7 @@ interface PresetConfig {
   adaptation: Record<string, ParamEntry>;
 }
 
-function ParamRow({ entry }: { entry: ParamEntry }) {
+export function ParamRow({ entry }: { entry: ParamEntry }) {
   return (
     <div className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
       <div className="min-w-0">
@@ -180,7 +180,7 @@ function ParamRow({ entry }: { entry: ParamEntry }) {
   );
 }
 
-const RISK_COLORS: Record<string, string> = {
+export const RISK_COLORS: Record<string, string> = {
   low: 'text-success',
   moderate: 'text-warning',
   high: 'text-high',
