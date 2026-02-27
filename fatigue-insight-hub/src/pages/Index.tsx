@@ -1,8 +1,8 @@
 import { Header } from '@/components/fatigue/Header';
 import { Footer } from '@/components/fatigue/Footer';
 import { IconRail } from '@/components/fatigue/IconRail';
-import { RosterPanel } from '@/components/fatigue/RosterPanel';
 import { SettingsPanel } from '@/components/fatigue/SettingsPanel';
+import { RostersPage } from '@/components/fatigue/RostersPage';
 import { MobileBottomBar } from '@/components/fatigue/MobileBottomBar';
 import { DashboardContent } from '@/components/fatigue/DashboardContent';
 import { InsightsContent } from '@/components/fatigue/InsightsContent';
@@ -49,9 +49,8 @@ const Index = () => {
         {/* Desktop: Icon Rail */}
         <IconRail />
 
-        {/* Expandable Panels (desktop only, hidden on mobile) */}
+        {/* Expandable Settings Panel (desktop only, hidden on mobile) */}
         <div className="hidden md:block">
-          {state.expandedPanel === 'rosters' && <RosterPanel />}
           {state.expandedPanel === 'settings' && <SettingsPanel />}
         </div>
 
@@ -71,6 +70,7 @@ const Index = () => {
             'pb-16 md:pb-0',
           )}
         >
+          {state.activeTab === 'rosters' && <RostersPage />}
           {state.activeTab === 'analysis' && <DashboardContent />}
           {state.activeTab === 'insights' && (
             <div className="flex-1">

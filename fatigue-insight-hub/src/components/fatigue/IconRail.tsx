@@ -9,13 +9,13 @@ interface NavItem {
   icon: React.ElementType;
   label: string;
   /** If true, clicking toggles a panel instead of switching content. */
-  panel?: 'rosters' | 'settings';
+  panel?: 'settings';
   requiresAuth?: boolean;
   section: 'top' | 'bottom';
 }
 
 const navItems: NavItem[] = [
-  { id: 'rosters',  icon: FolderOpen,     label: 'Rosters',   panel: 'rosters',  section: 'top' },
+  { id: 'rosters',  icon: FolderOpen,     label: 'Rosters',   section: 'top' },
   { id: 'analysis', icon: BarChart3,      label: 'Analysis',  section: 'top' },
   { id: 'insights', icon: Activity,       label: 'Insights',  section: 'top' },
   { id: 'yearly',   icon: CalendarRange,  label: '12-Month',  requiresAuth: true, section: 'top' },

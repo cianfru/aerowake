@@ -1,27 +1,17 @@
 import { useState } from 'react';
-import { FolderOpen, BarChart3, Activity, MoreHorizontal, CalendarRange, BookOpen, Info, Settings2 } from 'lucide-react';
+import { FolderOpen, BarChart3, Activity, MoreHorizontal, CalendarRange, BookOpen, Info } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useAnalysis } from '@/contexts/AnalysisContext';
-import { useAnalyzeRoster } from '@/hooks/useAnalyzeRoster';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/utils';
 
-import { ConnectionStatus } from './ConnectionStatus';
-import { SidebarUpload } from './SidebarUpload';
-
 export function MobileBottomBar() {
-  const { state, setActiveTab, uploadFile, removeFile, setSettings } = useAnalysis();
-  const { runAnalysis, isAnalyzing } = useAnalyzeRoster();
+  const { state, setActiveTab } = useAnalysis();
   const { isAuthenticated } = useAuth();
-  const { setTheme } = useTheme();
-  const [rosterSheetOpen, setRosterSheetOpen] = useState(false);
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
 
-  const { settings, uploadedFile, analysisResults } = state;
-
   const primaryTabs = [
-    { id: 'rosters-mobile', icon: FolderOpen, label: 'Rosters', action: () => setRosterSheetOpen(true) },
+    { id: 'rosters', icon: FolderOpen, label: 'Rosters', action: () => setActiveTab('rosters') },
     { id: 'analysis', icon: BarChart3, label: 'Analysis', action: () => setActiveTab('analysis') },
     { id: 'insights', icon: Activity, label: 'Insights', action: () => setActiveTab('insights') },
     { id: 'more', icon: MoreHorizontal, label: 'More', action: () => setMoreSheetOpen(true) },
@@ -41,9 +31,8 @@ export function MobileBottomBar() {
           {primaryTabs.map(tab => {
             const Icon = tab.icon;
             const isActive =
-              (tab.id === 'rosters-mobile' && rosterSheetOpen) ||
               (tab.id === 'more' && moreSheetOpen) ||
-              (tab.id !== 'rosters-mobile' && tab.id !== 'more' && state.activeTab === tab.id);
+              (tab.id !== 'more' && state.activeTab === tab.id);
 
             return (
               <button
@@ -63,26 +52,6 @@ export function MobileBottomBar() {
           })}
         </div>
       </nav>
-
-      {/* Roster Sheet (mobile) */}
-      <Sheet open={rosterSheetOpen} onOpenChange={setRosterSheetOpen}>
-        <SheetContent side="left" className="w-[85vw] max-w-[320px] p-0 glass-strong">
-          <SheetHeader className="px-4 pt-4 pb-2">
-            <SheetTitle className="text-sm">Rosters</SheetTitle>
-          </SheetHeader>
-          <div className="overflow-y-auto px-4 pb-20 space-y-3">
-            <ConnectionStatus />
-            <SidebarUpload
-              uploadedFile={uploadedFile}
-              onFileUpload={uploadFile}
-              onRemoveFile={removeFile}
-              onRunAnalysis={() => { runAnalysis(); setRosterSheetOpen(false); }}
-              isAnalyzing={isAnalyzing}
-              hasResults={!!analysisResults}
-            />
-          </div>
-        </SheetContent>
-      </Sheet>
 
       {/* More Sheet (mobile) */}
       <Sheet open={moreSheetOpen} onOpenChange={setMoreSheetOpen}>

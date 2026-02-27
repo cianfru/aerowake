@@ -4,7 +4,7 @@ import { loadPersistedSettings, savePersistedSettings } from '@/hooks/usePersist
 
 // ── State ────────────────────────────────────────────────────
 
-export type ExpandedPanel = 'rosters' | 'settings' | null;
+export type ExpandedPanel = 'settings' | null;
 
 export interface AnalysisState {
   settings: PilotSettings;
@@ -57,7 +57,7 @@ type AnalysisAction =
   | { type: 'CLEAR_SELECTED_DUTY' }
   | { type: 'TOGGLE_DRAWER'; payload?: boolean }
   | { type: 'SET_EXPANDED_PANEL'; payload: ExpandedPanel }
-  | { type: 'TOGGLE_PANEL'; payload: 'rosters' | 'settings' }
+  | { type: 'TOGGLE_PANEL'; payload: 'settings' }
   | { type: 'SET_MOBILE_NAV_OPEN'; payload: boolean }
   | { type: 'SET_ACTIVE_TAB'; payload: string }
   | { type: 'SET_CREW_OVERRIDE'; payload: { dutyId: string; crewSet: 'crew_a' | 'crew_b' } }
@@ -164,7 +164,7 @@ interface AnalysisContextValue {
   clearSelectedDuty: () => void;
   setDrawerOpen: (open: boolean) => void;
   setExpandedPanel: (panel: ExpandedPanel) => void;
-  togglePanel: (panel: 'rosters' | 'settings') => void;
+  togglePanel: (panel: 'settings') => void;
   setMobileNavOpen: (open: boolean) => void;
   setActiveTab: (tab: string) => void;
   setCrewOverride: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
