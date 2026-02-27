@@ -32,7 +32,7 @@ export function useRosterHistory() {
   });
 
   return {
-    rosters: rostersQuery.data ?? [],
+    rosters: [...(rostersQuery.data ?? [])].sort((a, b) => b.month.localeCompare(a.month)),
     isLoading: rostersQuery.isLoading,
     isError: rostersQuery.isError,
     error: rostersQuery.error,

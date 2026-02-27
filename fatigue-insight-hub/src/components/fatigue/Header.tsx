@@ -2,14 +2,16 @@ import { useState } from 'react';
 import {
   Menu, Moon, Sun, LogIn, LogOut, Shield,
   Home, FolderOpen, BarChart3, Activity, CalendarRange,
-  BookOpen, Info, Microscope, Settings2, User,
+  BookOpen, Info, Microscope, Settings2, Globe, ShieldAlert,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AdvancedParametersDialog } from './AdvancedParametersDialog';
+import { PRESET_PARAMS, ParamRow, RISK_COLORS } from './AdvancedParametersDialog';
+import { PilotAvatar } from './PilotAvatar';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { SettingsProfileManager } from './SettingsProfileManager';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAnalysis } from '@/contexts/AnalysisContext';
@@ -52,7 +54,6 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
   const { state, setSettings, setActiveTab } = useAnalysis();
   const { setTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [paramsOpen, setParamsOpen] = useState(false);
 
   const { settings, analysisResults } = state;
 
@@ -77,6 +78,7 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
   const pilotAircraft = analysisResults?.pilotAircraft || null;
 
   const activePreset = configPresets.find(p => p.value === settings.configPreset);
+  const paramConfig = PRESET_PARAMS[settings.configPreset] || PRESET_PARAMS.default;
 
   const primaryNav = navItems.filter(n => n.section === 'primary');
   const secondaryNav = navItems.filter(n => n.section === 'secondary');
@@ -94,11 +96,17 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
             >
               <Menu className="h-4.5 w-4.5 text-foreground" />
             </button>
-            <img
-              src={theme === 'dark' ? logoDark : logoLight}
-              alt="Aerowake Logo"
-              className="h-6 w-auto object-contain md:h-8"
-            />
+            <button
+              onClick={() => { setActiveTab('summary'); setSidebarOpen(false); }}
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+              aria-label="Go to Summary"
+            >
+              <img
+                src={theme === 'dark' ? logoDark : logoLight}
+                alt="Aerowake Logo"
+                className="h-6 w-auto object-contain md:h-8 cursor-pointer"
+              />
+            </button>
             <div className="hidden lg:block">
               <p className="text-[10px] text-muted-foreground">
                 Biomathematical fatigue prediction
@@ -171,9 +179,7 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
             {/* Pilot card */}
             <div className="p-4 pb-3 border-b border-border/30">
               <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center h-9 w-9 rounded-full bg-primary/10 border border-primary/20">
-                  <User className="h-4 w-4 text-primary" />
-                </div>
+                <PilotAvatar pilotName={pilotName} size="sm" />
                 <div className="flex-1 min-w-0">
                   {pilotName ? (
                     <p className="text-sm font-semibold truncate">{pilotName}</p>
@@ -287,16 +293,95 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
                 </Select>
               </div>
 
-              {/* Advanced params */}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start text-[10px] text-muted-foreground gap-1.5 h-7"
-                onClick={() => setParamsOpen(true)}
-              >
-                <Settings2 className="h-3 w-3" />
-                View Model Parameters
-              </Button>
+              {/* Inline model parameters (collapsed accordions) */}
+              <Accordion type="multiple" className="w-full">
+                <AccordionItem value="processS" className="border-border/30">
+                  <AccordionTrigger className="text-[11px] font-medium py-2">
+                    <span className="flex items-center gap-1.5">
+                      <Activity className="h-3 w-3 text-chart-1" />
+                      Process S
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-0">
+                      {Object.values(paramConfig.processS).map((entry, i) => (
+                        <ParamRow key={i} entry={entry} />
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="processC" className="border-border/30">
+                  <AccordionTrigger className="text-[11px] font-medium py-2">
+                    <span className="flex items-center gap-1.5">
+                      <Globe className="h-3 w-3 text-chart-2" />
+                      Process C
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-0">
+                      {Object.values(paramConfig.processC).map((entry, i) => (
+                        <ParamRow key={i} entry={entry} />
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="sleepQuality" className="border-border/30">
+                  <AccordionTrigger className="text-[11px] font-medium py-2">
+                    <span className="flex items-center gap-1.5">
+                      <Moon className="h-3 w-3 text-chart-3" />
+                      Sleep Quality
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-0">
+                      {Object.values(paramConfig.sleepQuality).map((entry, i) => (
+                        <ParamRow key={i} entry={entry} />
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="riskThresholds" className="border-border/30">
+                  <AccordionTrigger className="text-[11px] font-medium py-2">
+                    <span className="flex items-center gap-1.5">
+                      <ShieldAlert className="h-3 w-3 text-warning" />
+                      Risk Thresholds
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-1">
+                      {Object.entries(paramConfig.riskThresholds).map(([key, entry]) => (
+                        <div key={key} className="flex items-center justify-between py-1 border-b border-border/50 last:border-0">
+                          <span className={`text-[10px] font-medium ${RISK_COLORS[key] || 'text-foreground'}`}>
+                            {entry.label}
+                          </span>
+                          <span className="text-[10px] font-mono tabular-nums text-muted-foreground">
+                            {entry.range}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="adaptation" className="border-border/30">
+                  <AccordionTrigger className="text-[11px] font-medium py-2">
+                    <span className="flex items-center gap-1.5">
+                      <Globe className="h-3 w-3 text-chart-4" />
+                      Adaptation
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-0">
+                      {Object.values(paramConfig.adaptation).map((entry, i) => (
+                        <ParamRow key={i} entry={entry} />
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
 
               {/* Settings profiles */}
               <SettingsProfileManager
@@ -305,12 +390,6 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
               />
             </div>
           </div>
-
-          <AdvancedParametersDialog
-            preset={settings.configPreset}
-            open={paramsOpen}
-            onOpenChange={setParamsOpen}
-          />
         </SheetContent>
       </Sheet>
     </>

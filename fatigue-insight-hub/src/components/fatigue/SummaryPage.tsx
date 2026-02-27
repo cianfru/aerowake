@@ -1,12 +1,16 @@
 import { useState } from 'react';
-import { User, Plane, MapPin, Hash, Timer, FileText, Eye, ArrowRight, Upload, LogIn } from 'lucide-react';
+import { Plane, MapPin, Hash, Timer, FileText, Eye, ArrowRight, Upload, LogIn } from 'lucide-react';
+import { PilotAvatar } from './PilotAvatar';
+import { RouteNetworkMapbox } from './RouteNetworkMapbox';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { StatisticsCards } from './StatisticsCards';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRosterHistory } from '@/hooks/useRosterHistory';
+import { useAllDuties } from '@/hooks/useAllDuties';
 import { getRoster } from '@/lib/api-client';
 import { transformAnalysisResult } from '@/lib/transform-analysis';
 import type { RosterSummary } from '@/lib/api-client';
@@ -31,6 +35,7 @@ export function SummaryPage() {
   const { state, loadAnalysis, setActiveTab } = useAnalysis();
   const { isAuthenticated } = useAuth();
   const { rosters, isLoading } = useRosterHistory();
+  const { allDuties, isLoading: isLoadingDuties } = useAllDuties();
   const [loadingRosterId, setLoadingRosterId] = useState<string | null>(null);
 
   const { analysisResults, settings } = state;
@@ -103,9 +108,7 @@ export function SummaryPage() {
           <Card variant="glass">
             <CardContent className="p-4 md:p-5">
               <div className="flex items-center gap-4">
-                <div className="flex items-center justify-center h-12 w-12 rounded-full bg-primary/10 border border-primary/20 flex-shrink-0">
-                  <User className="h-5 w-5 text-primary" />
-                </div>
+                <PilotAvatar pilotName={pilotName} size="md" />
                 <div className="flex-1 min-w-0">
                   {pilotName && (
                     <h2 className="text-lg font-semibold truncate">{pilotName}</h2>
@@ -134,6 +137,22 @@ export function SummaryPage() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Route Network Map */}
+        {(allDuties.length > 0 || isLoadingDuties) && (
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-muted-foreground">Route Network</h3>
+            {isLoadingDuties ? (
+              <Skeleton className="h-[350px] w-full rounded-xl" />
+            ) : (
+              <RouteNetworkMapbox
+                duties={allDuties}
+                homeBase={pilotBase}
+                theme={settings.theme}
+              />
+            )}
+          </div>
         )}
 
         {/* Latest Analysis Statistics */}
