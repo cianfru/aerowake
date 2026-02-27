@@ -104,7 +104,7 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
               <img
                 src={theme === 'dark' ? logoDark : logoLight}
                 alt="Aerowake Logo"
-                className="h-6 w-auto object-contain md:h-8 cursor-pointer"
+                className="h-12 w-auto object-contain md:h-16 cursor-pointer"
               />
             </button>
             <div className="hidden lg:block">
