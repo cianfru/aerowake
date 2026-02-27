@@ -11,7 +11,7 @@ export function DashboardContent() {
     selectDuty,
     setDrawerOpen,
     setCrewOverride,
-    togglePanel,
+    setActiveTab,
   } = useAnalysis();
 
   const {
@@ -68,7 +68,7 @@ export function DashboardContent() {
               <span className="text-5xl md:text-6xl">📊</span>
               <h3 className="text-lg md:text-xl font-semibold">Ready to Analyze</h3>
               <p className="text-sm md:text-base text-muted-foreground">
-                Click "Run Analysis" in the Rosters panel to generate your fatigue analysis.
+                Click "Run Analysis" on the Rosters page to generate your fatigue analysis.
               </p>
             </div>
           </Card>
@@ -80,12 +80,12 @@ export function DashboardContent() {
               <span className="text-5xl md:text-6xl">📄</span>
               <h3 className="text-lg md:text-xl font-semibold">No Roster Uploaded</h3>
               <p className="text-sm md:text-base text-muted-foreground">
-                Open the{' '}
+                Go to the{' '}
                 <button
-                  onClick={() => togglePanel('rosters')}
+                  onClick={() => setActiveTab('rosters')}
                   className="text-primary hover:underline font-medium"
                 >
-                  Rosters panel
+                  Rosters page
                 </button>
                 {' '}to upload a roster file and get started.
               </p>
