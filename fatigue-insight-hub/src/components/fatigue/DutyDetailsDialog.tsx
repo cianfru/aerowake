@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DutyAnalysis } from '@/types/fatigue';
 import { getDutyDetail } from '@/lib/api-client';
 import { DutyDetailsHeader } from './DutyDetailsHeader';
-import { DutyDetailsPerformanceTab } from './DutyDetailsPerformanceTab';
-import { DutyDetailsSleepTab } from './DutyDetailsSleepTab';
-import { DutyDetailsCrewTab } from './DutyDetailsCrewTab';
+import { DutyInfoColumn } from './DutyInfoColumn';
+import { PerformanceColumn } from './PerformanceColumn';
 import { format } from 'date-fns';
 
 interface DutyDetailsDialogProps {
@@ -20,14 +18,16 @@ interface DutyDetailsDialogProps {
 }
 
 /**
- * DutyDetailsDialog — full-screen centered overlay replacing the old Sheet drawer.
+ * DutyDetailsDialog — full-screen two-column overlay.
  *
  * Layout:
- *  - Sticky header: DutyDetailsHeader (date, flight segments, stats, FDP)
- *  - Tabs: Performance | Sleep & Recovery | Crew & Compliance (conditional)
+ *  - Compact header: date, stats, risk badge
+ *  - Two columns:
+ *    Left  → DutyInfoColumn (segments, FDP, sleep, risk, crew)
+ *    Right → PerformanceColumn (summary, S/C/W chart, phase performance)
  *
- * Data fetching: same pattern as old DutyDetailsDrawer — fetches detailed
- * timeline_points when the dialog opens.
+ * Desktop: side-by-side, no scrolling for typical 1-3 sector duties.
+ * Mobile: stacked vertically, scrollable.
  */
 export function DutyDetailsDialog({
   duty,
@@ -127,63 +127,30 @@ export function DutyDetailsDialog({
           Duty Details — {format(displayDuty.date, 'MMM dd, yyyy')}
         </DialogTitle>
 
-        {/* Sticky header */}
-        <div className="flex-shrink-0 border-b border-border/50 bg-background/95 backdrop-blur-sm px-4 md:px-6 py-3 md:py-4">
+        {/* Compact header */}
+        <div className="flex-shrink-0 border-b border-border/50 bg-background/95 backdrop-blur-sm px-4 md:px-6 py-2.5 md:py-3">
           <DutyDetailsHeader duty={displayDuty} />
         </div>
 
-        {/* Tabs area — scrollable content */}
-        <Tabs defaultValue="performance" className="flex flex-col flex-1 min-h-0">
-          {/* Tab triggers — sticky below header */}
-          <div className="flex-shrink-0 border-b border-border/50 bg-background/80 backdrop-blur-sm px-4 md:px-6">
-            <TabsList className="w-full h-10 bg-transparent justify-start gap-1 rounded-none p-0">
-              <TabsTrigger
-                value="performance"
-                className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none rounded-md px-3 py-1.5 text-sm"
-              >
-                Performance
-              </TabsTrigger>
-              <TabsTrigger
-                value="sleep"
-                className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none rounded-md px-3 py-1.5 text-sm"
-              >
-                <span className="hidden sm:inline">Sleep & Recovery</span>
-                <span className="sm:hidden">Sleep</span>
-              </TabsTrigger>
-              {hasCrewContent && (
-                <TabsTrigger
-                  value="crew"
-                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none rounded-md px-3 py-1.5 text-sm"
-                >
-                  <span className="hidden sm:inline">Crew & Compliance</span>
-                  <span className="sm:hidden">Crew</span>
-                </TabsTrigger>
-              )}
-            </TabsList>
+        {/* Two-column content */}
+        <div className="flex-1 min-h-0 px-3 md:px-5 py-3 md:py-4">
+          <div className="h-full grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 overflow-y-auto md:overflow-hidden">
+            {/* Left: Duty Info */}
+            <div className="md:overflow-y-auto md:pr-1 space-y-3">
+              <DutyInfoColumn
+                duty={displayDuty}
+                globalCrewSet={globalCrewSet}
+                dutyCrewOverride={dutyCrewOverride}
+                onCrewChange={hasCrewContent ? onCrewChange : undefined}
+                hasCrewContent={!!hasCrewContent}
+              />
+            </div>
+            {/* Right: Performance */}
+            <div className="md:overflow-y-auto md:pl-1 space-y-3">
+              <PerformanceColumn duty={displayDuty} />
+            </div>
           </div>
-
-          {/* Scrollable tab content */}
-          <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5">
-            <TabsContent value="performance" className="mt-0">
-              <DutyDetailsPerformanceTab duty={displayDuty} />
-            </TabsContent>
-
-            <TabsContent value="sleep" className="mt-0">
-              <DutyDetailsSleepTab duty={displayDuty} />
-            </TabsContent>
-
-            {hasCrewContent && (
-              <TabsContent value="crew" className="mt-0">
-                <DutyDetailsCrewTab
-                  duty={displayDuty}
-                  globalCrewSet={globalCrewSet}
-                  dutyCrewOverride={dutyCrewOverride}
-                  onCrewChange={onCrewChange}
-                />
-              </TabsContent>
-            )}
-          </div>
-        </Tabs>
+        </div>
       </DialogContent>
     </Dialog>
   );
