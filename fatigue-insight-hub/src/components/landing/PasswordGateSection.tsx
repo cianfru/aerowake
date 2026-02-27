@@ -53,7 +53,7 @@ export function PasswordGateSection({ onEnter }: PasswordGateSectionProps) {
         >
           {/* Logo */}
           <div className="mb-6 flex justify-center">
-            <img src={logoDark} alt="Aerowake" className="h-11" />
+            <img src={logoDark} alt="Aerowake" className="h-16" />
           </div>
 
           {/* Title */}
