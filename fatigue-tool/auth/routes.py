@@ -29,7 +29,7 @@ from auth.jwt import (
     REFRESH_TOKEN_EXPIRE_DAYS,
 )
 from auth.dependencies import get_current_user
-from db.models import User, RefreshToken
+from db.models import User, Company, RefreshToken
 from db.session import get_db
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,9 @@ class UserResponse(BaseModel):
     home_base: Optional[str]
     auth_provider: str
     is_admin: bool = False
+    company_id: Optional[str] = None
+    company_name: Optional[str] = None
+    company_role: str = "pilot"
     created_at: str
 
 
@@ -105,6 +108,14 @@ def _is_admin(user: User) -> bool:
 
 def _user_to_response(user: User) -> UserResponse:
     """Convert DB model to Pydantic response."""
+    # Company name from eagerly loaded relationship (None if not loaded)
+    company_name = None
+    try:
+        if user.company_id and user.company:
+            company_name = user.company.name
+    except Exception:
+        pass  # Relationship not loaded — that's fine
+
     return UserResponse(
         id=str(user.id),
         email=user.email,
@@ -113,6 +124,9 @@ def _user_to_response(user: User) -> UserResponse:
         home_base=user.home_base,
         auth_provider=user.auth_provider,
         is_admin=_is_admin(user),
+        company_id=str(user.company_id) if user.company_id else None,
+        company_name=company_name,
+        company_role=user.company_role or "pilot",
         created_at=user.created_at.isoformat() if user.created_at else "",
     )
 

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FolderOpen, FileText, MapPin, Plane, Timer, Hash, Eye, RotateCcw, Trash2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -5,13 +6,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ConnectionStatus } from './ConnectionStatus';
 import { SidebarUpload } from './SidebarUpload';
+import { AirlineConfirmationDialog } from './AirlineConfirmationDialog';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { useAnalyzeRoster } from '@/hooks/useAnalyzeRoster';
 import { useRosterHistory } from '@/hooks/useRosterHistory';
 import { useAuth } from '@/contexts/AuthContext';
 import { getRoster } from '@/lib/api-client';
 import { transformAnalysisResult } from '@/lib/transform-analysis';
+import { toast } from 'sonner';
 import type { RosterSummary } from '@/lib/api-client';
+import type { CompanyDetection } from '@/types/fatigue';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -45,9 +49,36 @@ export function RostersPage() {
   const navigate = useNavigate();
   const { state, uploadFile, removeFile, loadAnalysis, setActiveTab } = useAnalysis();
   const { runAnalysis, isAnalyzing } = useAnalyzeRoster();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, confirmCompany } = useAuth();
 
   const { uploadedFile, analysisResults } = state;
+
+  // ── Airline confirmation dialog state ──
+  const [airlineDialogOpen, setAirlineDialogOpen] = useState(false);
+  const [pendingDetection, setPendingDetection] = useState<CompanyDetection | null>(null);
+
+  // Watch for company_detection after analysis completes
+  useEffect(() => {
+    if (!analysisResults?.companyDetection || !isAuthenticated || user?.company_id) return;
+
+    const detection = analysisResults.companyDetection;
+
+    if (!detection.needsConfirmation) {
+      // High confidence (>= 0.9) — auto-confirm silently with a toast
+      confirmCompany(detection.suggestedName, detection.suggestedIcao)
+        .then(() => toast.success(`Added to ${detection.suggestedName}`))
+        .catch(() => {
+          // Fall back to showing dialog if auto-confirm fails
+          setPendingDetection(detection);
+          setAirlineDialogOpen(true);
+        });
+    } else {
+      // Lower confidence — ask pilot to confirm
+      setPendingDetection(detection);
+      setAirlineDialogOpen(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysisResults?.companyDetection, isAuthenticated, user?.company_id]);
 
   const {
     rosters,
@@ -192,6 +223,19 @@ export function RostersPage() {
               </div>
             )}
           </div>
+        )}
+
+        {/* Airline confirmation dialog (shown after first upload) */}
+        {pendingDetection && (
+          <AirlineConfirmationDialog
+            detection={pendingDetection}
+            open={airlineDialogOpen}
+            onOpenChange={setAirlineDialogOpen}
+            onConfirmed={() => {
+              setPendingDetection(null);
+              toast.success('Airline confirmed!');
+            }}
+          />
         )}
       </div>
     </div>

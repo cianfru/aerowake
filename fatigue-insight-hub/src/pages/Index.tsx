@@ -6,6 +6,7 @@ import { InsightsContent } from '@/components/fatigue/InsightsContent';
 import { LearnPage } from '@/components/fatigue/LearnPage';
 import { AboutPage } from '@/components/fatigue/AboutPage';
 import { YearlyDashboardPage } from '@/components/fatigue/YearlyDashboardPage';
+import { ComparativeMetricsPage } from '@/components/fatigue/ComparativeMetricsPage';
 import { SummaryPage } from '@/components/fatigue/SummaryPage';
 
 import { LandingPage } from '@/components/landing/LandingPage';
@@ -69,6 +70,11 @@ const Index = () => {
           {state.activeTab === 'yearly' && (
             <div className="flex-1">
               <YearlyDashboardPage />
+            </div>
+          )}
+          {state.activeTab === 'compare' && (
+            <div className="flex-1">
+              <ComparativeMetricsPage />
             </div>
           )}
           {state.activeTab === 'learn' && (

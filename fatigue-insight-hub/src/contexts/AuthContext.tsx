@@ -12,6 +12,9 @@ export interface UserProfile {
   home_base: string | null;
   auth_provider: string;
   is_admin: boolean;
+  company_id: string | null;
+  company_name: string | null;
+  company_role: string;
   created_at: string;
 }
 
@@ -32,6 +35,8 @@ interface AuthContextValue extends AuthState {
   register: (email: string, password: string, displayName?: string, pilotId?: string, homeBase?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (data: { display_name?: string; pilot_id?: string; home_base?: string }) => Promise<void>;
+  confirmCompany: (companyName: string, companyIcao?: string) => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 // ── Token Helpers ────────────────────────────────────────────
@@ -220,6 +225,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ user: null, isAuthenticated: false, isLoading: false });
   };
 
+  // ── Confirm Company (after airline detection) ──
+  const confirmCompany = async (companyName: string, companyIcao?: string) => {
+    const token = getStoredToken();
+    if (!token) throw new Error('Not authenticated');
+
+    const res = await fetch(`${API_BASE_URL}/api/companies/confirm`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        company_name: companyName,
+        company_icao: companyIcao || null,
+      }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: 'Company confirmation failed' }));
+      throw new Error(error.detail || 'Company confirmation failed');
+    }
+
+    // Refresh profile to pick up new company assignment
+    await fetchProfile();
+  };
+
   // ── Update Profile ──
   const updateProfile = async (data: { display_name?: string; pilot_id?: string; home_base?: string }) => {
     const token = getStoredToken();
@@ -250,6 +281,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         register,
         logout,
         updateProfile,
+        confirmCompany,
+        refreshProfile: fetchProfile,
       }}
     >
       {children}

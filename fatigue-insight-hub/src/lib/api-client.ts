@@ -311,6 +311,24 @@ export interface AnalysisResult {
   total_ulr_duties?: number;
   total_augmented_duties?: number;
   ulr_violations?: string[];
+
+  // Company detection (first upload only, when user has no company)
+  company_detection?: {
+    suggested_name: string;
+    suggested_icao: string;
+    confidence: number;
+    needs_confirmation: boolean;
+  } | null;
+
+  // Fatigue continuity (multi-roster chaining)
+  continuity_from_month?: string | null;
+  initial_conditions?: {
+    process_s: number;
+    sleep_debt: number;
+    circadian_phase_shift: number;
+    from_month: string;
+    gap_days: number;
+  } | null;
 }
 
 export interface Statistics {
@@ -590,6 +608,99 @@ export async function runWhatIf(request: WhatIfRequest): Promise<AnalysisResult>
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'What-if analysis failed' }));
     throw new Error(error.detail || 'What-if analysis failed');
+  }
+
+  return response.json();
+}
+
+
+// ============================================================================
+// COMPARATIVE METRICS
+// ============================================================================
+
+export interface PilotMetrics {
+  avg_performance: number | null;
+  total_duties: number;
+  total_sectors: number;
+  total_duty_hours: number;
+  avg_sleep_per_night: number;
+  avg_sleep_debt: number;
+  high_risk_duty_count: number;
+}
+
+export interface GroupMetrics {
+  group_type: string;
+  group_value: string;
+  sample_size: number;
+  avg_performance: number | null;
+  min_performance: number | null;
+  p25_performance: number | null;
+  p75_performance: number | null;
+  avg_sleep_debt: number | null;
+  avg_sleep_per_night: number | null;
+  avg_duty_hours: number | null;
+  avg_sector_count: number | null;
+  high_risk_duty_rate: number | null;
+}
+
+export interface PercentilePosition {
+  group_type: string;
+  group_value: string;
+  metric: string;
+  value: number | null;
+  percentile: number | null;
+  vs_avg: number | null;
+}
+
+export interface ComparativeMetrics {
+  month: string;
+  pilot: PilotMetrics;
+  groups: GroupMetrics[];
+  positions: PercentilePosition[];
+  has_sufficient_data: boolean;
+}
+
+export interface TrendPoint {
+  month: string;
+  group_type: string;
+  group_value: string;
+  your_performance: number | null;
+  group_avg_performance: number | null;
+  percentile: number | null;
+  sample_size: number;
+}
+
+export interface TrendData {
+  months: TrendPoint[];
+  primary_group: string | null;
+}
+
+export async function getComparativeMetrics(month?: string): Promise<ComparativeMetrics> {
+  const params = month ? `?month=${month}` : '';
+  const response = await fetch(`${API_BASE_URL}/api/metrics/comparative${params}`, {
+    headers: { ...getAuthHeaders() },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('Not authenticated');
+    if (response.status === 400) {
+      const err = await response.json().catch(() => ({ detail: 'No company assigned' }));
+      throw new Error(err.detail);
+    }
+    throw new Error('Failed to fetch comparative metrics');
+  }
+
+  return response.json();
+}
+
+export async function getComparativeTrend(): Promise<TrendData> {
+  const response = await fetch(`${API_BASE_URL}/api/metrics/comparative/trend`, {
+    headers: { ...getAuthHeaders() },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('Not authenticated');
+    throw new Error('Failed to fetch comparative trend');
   }
 
   return response.json();

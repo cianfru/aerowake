@@ -257,6 +257,8 @@ class PDFRosterParser:
             full_text = ""
             for page in pdf.pages:
                 full_text += page.extract_text() + "\n"
+
+        self.raw_pdf_text = full_text  # Expose for company detection
         
         # Extract the Roster Period Year
         self._extract_roster_year(full_text)
@@ -266,8 +268,9 @@ class PDFRosterParser:
         
         # Detect roster format
         roster_format = self._detect_format(full_text)
+        self.detected_format = roster_format  # Expose for company detection
         print(f"   Detected format: {roster_format}")
-        
+
         pilot_info = {}
         duties = []
 
@@ -371,6 +374,9 @@ class PDFRosterParser:
             except (AttributeError, IndexError):
                 pass
 
+        # Expose pilot_info for company detection (merge header + parser info)
+        self.pilot_info = {**pilot_info, **header_info}
+
         print(f"   Found Pilot: {final_pilot_name} (ID: {final_pilot_id})")
         print(f"   Base: {final_base} | Aircraft: {final_aircraft}")
 
@@ -435,13 +441,14 @@ class PDFRosterParser:
             info['name'] = name_match.group(1).strip()
             print(f"   [DEBUG] Extracted Name: '{info['name']}'")
 
-        # 3. Extract Base and Aircraft from parens
+        # 3. Extract Base, Role, and Aircraft from parens
         # Looks for patterns like (DOH CP-A320) or (DOH FO-A320)
-        details_match = re.search(r'\(([A-Z]{3})\s+[A-Z]{2}-([A-Z0-9\-]+)\)', text)
+        details_match = re.search(r'\(([A-Z]{3})\s+([A-Z]{2})-([A-Z0-9\-]+)\)', text)
         if details_match:
             info['base'] = details_match.group(1)      # e.g. DOH
-            info['aircraft'] = details_match.group(2)  # e.g. A320
-            print(f"   [DEBUG] Extracted Base: {info['base']}, Aircraft: {info['aircraft']}")
+            info['role'] = details_match.group(2)       # e.g. CP, FO
+            info['aircraft'] = details_match.group(3)   # e.g. A320
+            print(f"   [DEBUG] Extracted Base: {info['base']}, Role: {info['role']}, Aircraft: {info['aircraft']}")
             
         return info
 

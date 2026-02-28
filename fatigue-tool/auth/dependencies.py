@@ -15,6 +15,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from auth.jwt import decode_token
 from db.models import User
@@ -54,7 +55,9 @@ async def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(
+        select(User).where(User.id == user_id).options(selectinload(User.company))
+    )
     user = result.scalar_one_or_none()
 
     if user is None or not user.is_active:
@@ -85,7 +88,9 @@ async def get_optional_user(
     except JWTError:
         return None
 
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(
+        select(User).where(User.id == user_id).options(selectinload(User.company))
+    )
     user = result.scalar_one_or_none()
 
     if user is None or not user.is_active:

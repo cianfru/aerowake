@@ -5,7 +5,7 @@
  * from the TanStack Query mutation hook.
  */
 
-import { AnalysisResults, DutyAnalysis, PilotSettings } from '@/types/fatigue';
+import { AnalysisResults, DutyAnalysis, PilotSettings, CompanyDetection } from '@/types/fatigue';
 import { AnalysisResult, Duty, SleepEstimate, DutySegment } from '@/lib/api-client';
 import { format, parseISO } from 'date-fns';
 
@@ -401,5 +401,23 @@ export function transformAnalysisResult(
       } as DutyAnalysis;
     }),
     homeBaseTimezone: result.home_base_timezone ?? undefined,
+    companyDetection: result.company_detection
+      ? {
+          suggestedName: result.company_detection.suggested_name,
+          suggestedIcao: result.company_detection.suggested_icao,
+          confidence: result.company_detection.confidence,
+          needsConfirmation: result.company_detection.needs_confirmation,
+        }
+      : undefined,
+    continuityFromMonth: result.continuity_from_month ?? undefined,
+    initialConditions: result.initial_conditions
+      ? {
+          processS: result.initial_conditions.process_s,
+          sleepDebt: result.initial_conditions.sleep_debt,
+          circadianPhaseShift: result.initial_conditions.circadian_phase_shift,
+          fromMonth: result.initial_conditions.from_month,
+          gapDays: result.initial_conditions.gap_days,
+        }
+      : undefined,
   };
 }

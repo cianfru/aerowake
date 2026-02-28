@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Menu, Moon, Sun, LogIn, LogOut, Shield,
-  Home, FolderOpen, BarChart3, Activity, CalendarRange,
+  Home, FolderOpen, BarChart3, Activity, CalendarRange, Users,
   BookOpen, Info, Microscope, Settings2, Globe, ShieldAlert,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -38,6 +38,7 @@ const navItems = [
   { id: 'analysis', icon: BarChart3,     label: 'Analysis',  section: 'primary' },
   { id: 'insights', icon: Activity,      label: 'Insights',  section: 'primary' },
   { id: 'yearly',   icon: CalendarRange, label: '12-Month',  section: 'primary', requiresAuth: true },
+  { id: 'compare',  icon: Users,         label: 'Compare',   section: 'primary', requiresAuth: true },
   { id: 'learn',    icon: BookOpen,      label: 'Learn',     section: 'secondary' },
   { id: 'about',    icon: Info,          label: 'About',     section: 'secondary' },
 ];
@@ -149,6 +150,11 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
                 <span className="hidden md:inline text-xs text-muted-foreground truncate max-w-[100px]">
                   {user?.display_name || user?.email?.split('@')[0] || 'User'}
                 </span>
+                {user?.company_name && (
+                  <Badge variant="outline" className="hidden lg:inline-flex text-[10px]">
+                    {user.company_name}
+                  </Badge>
+                )}
                 {user?.is_admin && (
                   <a
                     href="/admin"

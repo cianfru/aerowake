@@ -933,11 +933,11 @@ class BorbelyFatigueModel:
         current_s = roster.initial_sleep_pressure
         cumulative_sleep_debt = roster.initial_sleep_debt
 
-        # Initialize circadian tracking
+        # Initialize circadian tracking (uses prior month's end state if available)
         body_clock = CircadianState(
-            current_phase_shift_hours=0.0,
+            current_phase_shift_hours=roster.initial_circadian_phase_shift,
             last_update_utc=roster.duties[0].report_time_utc - timedelta(days=1),
-            reference_timezone=roster.home_base_timezone
+            reference_timezone=roster.initial_circadian_reference_tz or roster.home_base_timezone
         )
 
         body_clock_timeline = [(body_clock.last_update_utc, body_clock)]
@@ -1105,7 +1105,12 @@ class BorbelyFatigueModel:
             # Update current S for next iteration
             if timeline_obj.timeline:
                 current_s = timeline_obj.timeline[-1].homeostatic_component
-            
+
+            # Store final circadian state for fatigue continuity (Phase B)
+            # body_clock_timeline[i+1] is the state at this duty's report time
+            if i + 1 < len(body_clock_timeline):
+                timeline_obj.final_circadian_state = body_clock_timeline[i + 1][1]
+
             duty_timelines.append(timeline_obj)
             previous_duty = duty
         
