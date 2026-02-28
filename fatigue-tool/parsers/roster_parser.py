@@ -268,10 +268,40 @@ class PDFRosterParser:
         roster_format = self._detect_format(full_text)
         print(f"   Detected format: {roster_format}")
         
-        pilot_info = {} 
+        pilot_info = {}
         duties = []
 
-        if roster_format == 'crewlink' or roster_format == 'generic':
+        if roster_format == 'easyjet':
+            # ── easyJet "Personal Crew Schedule" parser ──────────────────────
+            # Auto-detects home_base and home_timezone from the PDF header,
+            # overriding whatever the frontend sent as defaults (DOH/Asia:Qatar).
+            from parsers.easyjet_parser import EasyJetParser
+            print("   Attempting easyJet roster parser...")
+            try:
+                ezy_parser = EasyJetParser()
+                result = ezy_parser.parse_roster(pdf_path)
+                duties = result['duties']
+                pilot_info = result.get('pilot_info', {})
+                # Always local station time for easyJet PDFs
+                self.effective_timezone_format = 'local'
+                # Override instance home_base / timezone from PDF-extracted values
+                if pilot_info.get('base'):
+                    self.home_base = pilot_info['base']
+                    self.home_timezone = ezy_parser.home_timezone
+                if result.get('unknown_airports'):
+                    print(f"   ⚠️  Found {len(result['unknown_airports'])} unknown airports:")
+                    for code in sorted(result['unknown_airports']):
+                        print(f"      - {code}")
+                if duties:
+                    print(f"   ✅ easyJet parser succeeded: {len(duties)} duties")
+                else:
+                    print("   ⚠️  easyJet parser returned no duties")
+            except Exception as e:
+                print(f"   ⚠️  easyJet parser failed: {e}")
+                import traceback
+                traceback.print_exc()
+
+        elif roster_format == 'crewlink' or roster_format == 'generic':
             # Try specialized CrewLink-style grid parser first
             try:
                 print("   Attempting CrewLink grid-format parser...")
@@ -316,16 +346,22 @@ class PDFRosterParser:
         final_base = header_info.get('base') or pilot_info.get('base') or self.home_base
         final_aircraft = header_info.get('aircraft') or pilot_info.get('aircraft')
 
-        # Auto-derive roster month from PDF period (e.g. "Mar" + 2026 → "2026-03").
-        # The API default month param is a placeholder; the PDF is authoritative.
-        pdf_month_abbr = pilot_info.get('month')  # e.g. "Mar"
-        pdf_year = pilot_info.get('year')          # e.g. 2026
-        if pdf_month_abbr and pdf_year:
-            try:
-                pdf_month_num = datetime.strptime(pdf_month_abbr, '%b').month
-                month = f"{pdf_year}-{pdf_month_num:02d}"
-            except ValueError:
-                pass  # Keep API-supplied month if parsing fails
+        # Auto-derive roster month from PDF period — PDF is authoritative over API default.
+        # easyJet: pilot_info['month'] is an int (1-12)
+        # CrewLink: pilot_info['month'] is a 3-letter abbreviation (e.g. "Mar")
+        pdf_month_val = pilot_info.get('month')
+        pdf_year = pilot_info.get('year')
+        if pdf_month_val and pdf_year:
+            if isinstance(pdf_month_val, int):
+                # easyJet path — month already numeric
+                month = f"{pdf_year}-{pdf_month_val:02d}"
+            else:
+                # CrewLink path — parse 3-letter abbreviation
+                try:
+                    pdf_month_num = datetime.strptime(pdf_month_val, '%b').month
+                    month = f"{pdf_year}-{pdf_month_num:02d}"
+                except ValueError:
+                    pass  # Keep API-supplied month if parsing fails
         # Final fallback: derive from first parsed duty date (covers line-parser
         # fallback path and any PDF missing a Period: header).
         if month == "2026-02" and duties:
@@ -410,18 +446,42 @@ class PDFRosterParser:
         return info
 
     def _detect_format(self, text: str) -> str:
-        """Auto-detect roster format from content"""
+        """
+        Auto-detect roster format from PDF content.
+
+        Detection priority:
+          1. easyJet  — checked first (no CrewLink/Qatar keywords to clash)
+          2. Qatar Airways CrewLink
+          3. Generic CrewLink-style grid (DDMon date headers)
+          4. Generic fallback
+
+        To add a new airline: insert a new detection block before the Qatar block,
+        returning a new format string, then add a routing branch in parse_pdf().
+        """
         text_lower = text.lower()
-        
-        # Explicit Qatar Airways CrewLink indicators
+
+        # ── easyJet "Personal Crew Schedule" ──────────────────────────────────
+        # Strong signals: EJU-prefixed flight numbers, "Local Station" timezone phrase,
+        # and/or DD/MM date header density.
+        has_eju_flight = bool(re.search(r'\bEJU\d{4}\b', text))
+        has_local_station = 'local station' in text_lower
+        ezy_dd_mm_count = len(re.findall(r'\b\d{2}/\d{2}\b', text))
+        has_ezy_header = bool(re.search(
+            r'^\d{4,6}\s+[A-Z][A-Z\s]+\s{2,}[A-Z]{3},[A-Z]{2},\d{2,3}',
+            text, re.MULTILINE
+        ))
+        if has_eju_flight or (has_local_station and ezy_dd_mm_count >= 5) or has_ezy_header:
+            return 'easyjet'
+
+        # ── Qatar Airways CrewLink ─────────────────────────────────────────────
         if 'crewlink' in text_lower or 'qatar airways' in text_lower or 'qatar' in text_lower:
             return 'crewlink'
-        
-        # Grid format indicators
+
+        # ── Generic CrewLink-style grid (DDMon date headers) ──────────────────
         date_pattern_count = len(re.findall(r'\d{2}[A-Z][a-z]{2}', text))
-        if date_pattern_count >= 5: 
+        if date_pattern_count >= 5:
             return 'crewlink'
-        
+
         return 'generic'
     
     def _parse_crewlink_format(self, text: str) -> List[Duty]:
