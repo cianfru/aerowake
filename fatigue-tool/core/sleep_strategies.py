@@ -235,8 +235,10 @@ class SleepStrategyMixin:
         )
 
         # A7b: Supplementary afternoon nap for early reports (04:00-06:00)
-        # When rest window is long enough (>10h), add a 1.5h afternoon nap
-        # before the early bedtime to boost total sleep opportunity.
+        # Only when pilot is coming off a recent duty (10-24h rest window),
+        # meaning they flew recently and need recovery. If rest >24h, pilot
+        # is coming from days off and is well-rested — sleep onset latency
+        # would make a nap ineffective for a fully rested pilot.
         blocks = [early_sleep]
         quality_list = [sleep_quality]
         all_warnings = sleep_warnings
@@ -244,7 +246,7 @@ class SleepStrategyMixin:
 
         if previous_duty and 4.0 <= report_hour < 6.0:
             rest_window_hours = (duty.report_time_utc - previous_duty.release_time_utc).total_seconds() / 3600
-            if rest_window_hours > 10.0:
+            if 10.0 < rest_window_hours <= 24.0:
                 # Place nap at ~14:00-15:30 local (post-lunch dip, ~2h before earliest bedtime)
                 nap_start_local = report_local.replace(hour=14, minute=0) - timedelta(days=1)
                 nap_end_local = nap_start_local + timedelta(hours=1.5)
