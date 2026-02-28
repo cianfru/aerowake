@@ -27,7 +27,6 @@ const configPresets = [
   { value: 'operational', label: 'Operational', description: 'Calibrated for experienced airline crew. Core science unchanged.' },
   { value: 'easa_default', label: 'EASA Default', description: 'Pure literature values, EASA-compliant thresholds' },
   { value: 'conservative', label: 'Conservative', description: 'Faster fatigue buildup, stricter thresholds, 8.5h sleep need' },
-  { value: 'liberal', label: 'Liberal', description: 'Relaxed thresholds for experienced crew, 7.5h sleep need' },
   { value: 'research', label: 'Research', description: 'Textbook Borbely (Jewett & Kronauer 1999), 50/50 S/C weighting' },
 ];
 

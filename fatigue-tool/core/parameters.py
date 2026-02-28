@@ -390,23 +390,23 @@ class ModelConfig:
         S/C weights, hypoxia, PVT, time-on-task) unchanged from literature values.
 
         Calibration choices (transparent deviations from EASA defaults):
-        - tau_i: 18.2h → 19.0h — trained pilots manage wakefulness better (Gander 2013)
-        - tau_d: 4.2h → 4.0h — slightly faster recovery for sleep-disciplined crew
+        - tau_i: 18.2h → 19.5h — trained pilots manage wakefulness better (Gander 2013)
+        - tau_d: 4.2h → 3.9h — faster recovery for sleep-disciplined crew
         - baseline_sleep_need: 8.0h → 7.5h — matches airline planning standard
         - sleep_debt_vuln_coeff: 0.025 → 0.018 — less aggressive debt curve
-        - inertia_duration: 30 → 25 min — trained arousal protocols
+        - inertia_duration: 30 → 22 min — trained arousal protocols
         - inertia_magnitude: 0.30 → 0.25 — reduced post-wake grogginess
-        - Risk thresholds: slightly relaxed (operational judgment)
+        - Risk thresholds: relaxed (operational judgment)
         - Hotel quality: 0.85 → 0.87 (airline-contracted hotels, QR standard)
         """
         return cls(
             easa_framework=EASAFatigueFramework(),
             borbely_params=BorbelyParameters(
-                tau_i=19.0,
-                tau_d=4.0,
+                tau_i=19.5,
+                tau_d=3.9,
                 baseline_sleep_need_hours=7.5,
                 sleep_debt_vulnerability_coeff=0.018,
-                inertia_duration_minutes=25.0,
+                inertia_duration_minutes=22.0,
                 inertia_max_magnitude=0.25,
             ),
             risk_thresholds=RiskThresholds(thresholds={
@@ -457,42 +457,6 @@ class ModelConfig:
                 quality_hotel_airport=0.70,
                 quality_crew_rest_facility=0.60,
                 max_circadian_quality_penalty=0.30,
-            )
-        )
-
-    @classmethod
-    def liberal_config(cls):
-        """
-        Relaxed thresholds for experienced-crew / low-risk route analysis.
-        - Slower homeostatic pressure buildup (longer tau_i)
-        - Faster recovery during sleep (shorter tau_d)
-        - Lower baseline sleep need
-        - Looser risk thresholds (scores shift down by ~5 points)
-        """
-        return cls(
-            easa_framework=EASAFatigueFramework(),
-            borbely_params=BorbelyParameters(
-                tau_i=20.0,
-                tau_d=3.8,
-                baseline_sleep_need_hours=7.5,
-                inertia_duration_minutes=20.0,
-                inertia_max_magnitude=0.25,
-            ),
-            risk_thresholds=RiskThresholds(thresholds={
-                'low': (70, 100),
-                'moderate': (60, 70),
-                'high': (50, 60),
-                'critical': (40, 50),
-                'extreme': (0, 40)
-            }),
-            adaptation_rates=AdaptationRates(
-                westward_hours_per_day=1.8,
-                eastward_hours_per_day=1.2,
-            ),
-            sleep_quality_params=SleepQualityParameters(
-                quality_hotel_typical=0.85,
-                quality_hotel_airport=0.80,
-                quality_crew_rest_facility=0.70,
             )
         )
 

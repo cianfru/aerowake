@@ -1069,7 +1069,7 @@ async def analyze_roster(
             "operational": ModelConfig.operational_config,
             "easa_default": ModelConfig.default_easa_config,
             "conservative": ModelConfig.conservative_config,
-            "liberal": ModelConfig.liberal_config,
+            "liberal": ModelConfig.operational_config,  # legacy → operational
             "research": ModelConfig.research_config
         }
         config_func = config_map.get(config_preset, ModelConfig.operational_config)
@@ -1307,7 +1307,7 @@ async def get_duty_detail(analysis_id: str, duty_id: str, db=Depends(get_db)):
                         "operational": ModelConfig.operational_config,
                         "easa_default": ModelConfig.default_easa_config,
                         "conservative": ModelConfig.conservative_config,
-                        "liberal": ModelConfig.liberal_config,
+                        "liberal": ModelConfig.operational_config,  # legacy → operational
                         "research": ModelConfig.research_config,
                     }
                     config = config_map.get(preset, ModelConfig.operational_config)()
@@ -1612,7 +1612,7 @@ async def reanalyze_roster(
         "operational": ModelConfig.operational_config,
         "easa_default": ModelConfig.default_easa_config,
         "conservative": ModelConfig.conservative_config,
-        "liberal": ModelConfig.liberal_config,
+        "liberal": ModelConfig.operational_config,  # legacy → operational
         "research": ModelConfig.research_config,
     }
     config = config_map.get(config_preset, ModelConfig.operational_config)()
@@ -1783,7 +1783,7 @@ async def run_what_if(request: WhatIfRequest, db=Depends(get_db)):
                         "operational": ModelConfig.operational_config,
                         "easa_default": ModelConfig.default_easa_config,
                         "conservative": ModelConfig.conservative_config,
-                        "liberal": ModelConfig.liberal_config,
+                        "liberal": ModelConfig.operational_config,  # legacy → operational
                         "research": ModelConfig.research_config,
                     }
                     config = config_map.get(preset, ModelConfig.operational_config)()
@@ -1907,7 +1907,7 @@ async def run_what_if(request: WhatIfRequest, db=Depends(get_db)):
         "operational": ModelConfig.operational_config,
         "easa_default": ModelConfig.default_easa_config,
         "conservative": ModelConfig.conservative_config,
-        "liberal": ModelConfig.liberal_config,
+        "liberal": ModelConfig.operational_config,  # legacy → operational
         "research": ModelConfig.research_config,
     }
     config = config_map.get(request.config_preset, ModelConfig.operational_config)()

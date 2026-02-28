@@ -29,6 +29,7 @@ export function loadPersistedSettings(): Partial<PilotSettings> {
       // Migrate legacy preset values from before Phase 3
       const LEGACY_PRESET_MAP: Record<string, string> = {
         'default': 'operational',
+        'liberal': 'operational',
         'easa-default': 'operational',
         'faa-standard': 'operational',
         'custom': 'operational',
