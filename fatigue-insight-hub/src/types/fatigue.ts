@@ -325,6 +325,7 @@ export interface AnalysisResults {
   generatedAt: Date;
   month: Date; // Actual month from the roster data
   analysisId?: string; // Backend analysis_id
+  rosterId?: string;   // Backend roster_id (for reanalyze with new params)
   // Pilot info from backend
   pilotId?: string;
   pilotName?: string;

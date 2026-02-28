@@ -204,6 +204,7 @@ export function transformAnalysisResult(
     generatedAt: new Date(),
     month: analysisMonth,
     analysisId: result.analysis_id || undefined,
+    rosterId: result.roster_id || undefined,
     pilotId: result.pilot_id || undefined,
     pilotName: result.pilot_name || undefined,
     pilotBase: result.pilot_base || undefined,
