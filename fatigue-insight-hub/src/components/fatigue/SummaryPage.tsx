@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plane, MapPin, Hash, Timer, FileText, Eye, ArrowRight, Upload, LogIn } from 'lucide-react';
+import { Plane, MapPin, Hash, Timer, FileText, Eye, ArrowRight, Upload, LogIn, Link } from 'lucide-react';
 import logoDark from '@/assets/logo-dark.png';
 import { PilotAvatar } from './PilotAvatar';
 import { RouteNetworkMapbox } from './RouteNetworkMapbox';
@@ -159,11 +159,21 @@ export function SummaryPage() {
         {analysisResults && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm font-semibold text-muted-foreground">Latest Analysis</h3>
                 <Badge variant="outline" className="text-[10px]">
                   {analysisResults.month.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
                 </Badge>
+                {analysisResults.continuityFromMonth && (
+                  <Badge variant="info" className="text-[10px] gap-1">
+                    <Link className="h-2.5 w-2.5" />
+                    Carried over from{' '}
+                    {new Date(
+                      Number(analysisResults.continuityFromMonth.split('-')[0]),
+                      Number(analysisResults.continuityFromMonth.split('-')[1]) - 1,
+                    ).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
+                  </Badge>
+                )}
               </div>
               <Button
                 variant="ghost"

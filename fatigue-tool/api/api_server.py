@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 from typing import Optional, List
+import math
 import tempfile
 import os
 import json
@@ -39,10 +40,12 @@ from models.data_models import MonthlyAnalysis, DutyTimeline
 
 # Database & Auth imports
 from db.session import init_db, get_db, is_db_available
-from db.models import User, Roster, Analysis
+from db.models import User, Roster, Analysis, FatigueState
 from auth.routes import auth_router
 from auth.dependencies import get_optional_user
 from admin.routes import admin_router
+from company.routes import router as company_router
+from company.detection import detect_airline, extract_fleet_and_role
 
 
 # ============================================================================
@@ -62,9 +65,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Include auth + admin routes
+# Include auth + admin + company + metrics routes
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(company_router)
+
+from metrics.routes import router as metrics_router
+app.include_router(metrics_router)
 
 # CORS - Allow Aerowake frontend origins
 # Production origins loaded from CORS_ORIGINS env var (comma-separated)
@@ -429,6 +436,13 @@ class AnalysisResponse(BaseModel):
     total_ulr_duties: int = 0
     total_augmented_duties: int = 0
     ulr_violations: List[str] = []
+
+    # Company detection (included only on first upload when user has no company)
+    company_detection: Optional[dict] = None
+
+    # Fatigue continuity (multi-roster chaining)
+    continuity_from_month: Optional[str] = None   # "2026-01" if prior state was injected
+    initial_conditions: Optional[dict] = None      # {process_s, sleep_debt, circadian_phase_shift}
 
 
 
@@ -1063,6 +1077,46 @@ async def analyze_roster(
                 crew_set_key = overrides_dict.get(d.duty_id, crew_set.lower())
                 d.ulr_crew_set = valid_crew_sets.get(crew_set_key, ULRCrewSet.CREW_B)
         
+        # ── Company detection & fleet/role extraction ──────────────────
+        # Only run airline detection if user has no company yet
+        company_detection_result = None
+        if user is not None and user.company_id is None:
+            try:
+                # Gather detection signals from the parser
+                roster_format = getattr(parser, 'detected_format', None) or ''
+                raw_pdf_text = getattr(parser, 'raw_pdf_text', None) or ''
+                flight_numbers = [
+                    seg.flight_number
+                    for d in roster.duties
+                    for seg in d.segments
+                    if hasattr(seg, 'flight_number') and seg.flight_number
+                ]
+                airline_guess = detect_airline(
+                    roster_format=roster_format,
+                    home_base=roster.pilot_base or home_base,
+                    raw_pdf_text=raw_pdf_text,
+                    flight_numbers=flight_numbers,
+                )
+                if airline_guess:
+                    company_detection_result = airline_guess.to_dict()
+                    logger.info(
+                        f"Airline detection for {user.email}: "
+                        f"{airline_guess.name} (confidence={airline_guess.confidence})"
+                    )
+            except Exception as e:
+                logger.warning(f"Airline detection failed: {e}")
+
+        # Extract fleet and pilot role from parser info
+        extracted_fleet = None
+        extracted_pilot_role = None
+        try:
+            pilot_info = getattr(parser, 'pilot_info', {}) or {}
+            fleet_role = extract_fleet_and_role(pilot_info)
+            extracted_fleet = fleet_role.get('fleet')
+            extracted_pilot_role = fleet_role.get('pilot_role')
+        except Exception as e:
+            logger.warning(f"Fleet/role extraction failed: {e}")
+
         # Get config
         config_map = {
             "default": ModelConfig.operational_config,
@@ -1074,13 +1128,54 @@ async def analyze_roster(
         }
         config_func = config_map.get(config_preset, ModelConfig.operational_config)
         config = config_func()
-        
+
+        # Use the month actually parsed from the roster (not the form default)
+        effective_month = roster.month or month
+
+        # ── Fatigue continuity: inject prior month's end state ────────
+        continuity_from_month = None
+        initial_conditions_dict = None
+        if user is not None and db is not None:
+            try:
+                from sqlalchemy import select as sa_select
+                prior_result = await db.execute(
+                    sa_select(FatigueState)
+                    .where(FatigueState.user_id == user.id)
+                    .where(FatigueState.month < effective_month)
+                    .order_by(FatigueState.month.desc())
+                    .limit(1)
+                )
+                prior_state = prior_result.scalar_one_or_none()
+                if prior_state and roster.duties:
+                    # Calculate gap days for exponential decay
+                    gap_days = max(0, (roster.duties[0].report_time_utc - prior_state.period_end_utc).days)
+                    decay = math.exp(-0.1 * gap_days)  # Matches sleep_debt_decay_rate
+
+                    roster.initial_sleep_pressure = prior_state.final_process_s
+                    roster.initial_sleep_debt = prior_state.final_sleep_debt * decay
+                    roster.initial_circadian_phase_shift = prior_state.final_phase_shift * decay
+                    roster.initial_circadian_reference_tz = prior_state.final_phase_tz
+                    continuity_from_month = prior_state.month
+
+                    initial_conditions_dict = {
+                        "process_s": round(roster.initial_sleep_pressure, 4),
+                        "sleep_debt": round(roster.initial_sleep_debt, 2),
+                        "circadian_phase_shift": round(roster.initial_circadian_phase_shift, 2),
+                        "from_month": prior_state.month,
+                        "gap_days": gap_days,
+                    }
+                    logger.info(
+                        f"Fatigue continuity: {user.email} month={effective_month} "
+                        f"← {prior_state.month} (gap={gap_days}d, "
+                        f"S={roster.initial_sleep_pressure:.3f}, "
+                        f"debt={roster.initial_sleep_debt:.1f}h)"
+                    )
+            except Exception as e:
+                logger.warning(f"Fatigue continuity lookup failed: {e}")
+
         # Run analysis
         model = BorbelyFatigueModel(config)
         monthly_analysis = model.simulate_roster(roster)
-        
-        # Use the month actually parsed from the roster (not the form default)
-        effective_month = roster.month or month
 
         # Generate analysis ID
         analysis_id = f"{pilot_id}_{effective_month}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -1104,6 +1199,9 @@ async def analyze_roster(
                     total_duty_hours=roster.total_duty_hours,
                     total_block_hours=roster.total_block_hours,
                     original_file_bytes=content,  # PDF bytes captured earlier
+                    company_id=user.company_id,  # Copy from user (may be None)
+                    fleet=extracted_fleet,
+                    pilot_role=extracted_pilot_role,
                 )
                 db.add(db_roster)
                 await db.flush()  # Get db_roster.id
@@ -1166,6 +1264,9 @@ async def analyze_roster(
             total_ulr_duties=getattr(monthly_analysis, 'total_ulr_duties', 0),
             total_augmented_duties=getattr(monthly_analysis, 'total_augmented_duties', 0),
             ulr_violations=getattr(monthly_analysis, 'ulr_violations', []),
+            company_detection=company_detection_result,
+            continuity_from_month=continuity_from_month,
+            initial_conditions=initial_conditions_dict,
         )
 
         # Persist analysis JSON to database if roster was stored
@@ -1179,6 +1280,43 @@ async def analyze_roster(
                 db.add(db_analysis)
                 await db.commit()
                 logger.info(f"Analysis {analysis_id} persisted to database for user {user.id}")
+
+                # ── Save end-of-roster fatigue state for continuity ───
+                try:
+                    if monthly_analysis.duty_timelines:
+                        last_tl = monthly_analysis.duty_timelines[-1]
+                        last_duty = roster.duties[-1]
+                        fc = last_tl.final_circadian_state
+
+                        fs = FatigueState(
+                            user_id=user.id,
+                            roster_id=_pending_db_roster.id,
+                            month=effective_month,
+                            period_end_utc=last_duty.release_time_utc,
+                            final_process_s=last_tl.final_process_s,
+                            final_sleep_debt=last_tl.cumulative_sleep_debt,
+                            final_phase_shift=fc.current_phase_shift_hours if fc else 0.0,
+                            final_phase_tz=fc.reference_timezone if fc else roster.home_base_timezone,
+                        )
+                        await db.merge(fs)
+                        await db.commit()
+                        logger.info(
+                            f"Fatigue state saved: month={effective_month} "
+                            f"S={last_tl.final_process_s:.3f} "
+                            f"debt={last_tl.cumulative_sleep_debt:.1f}h"
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to save fatigue state: {e}")
+                    await db.rollback()
+
+                # ── Trigger comparative metrics aggregation ───
+                if user.company_id:
+                    try:
+                        from metrics.aggregator import compute_aggregate_metrics
+                        await compute_aggregate_metrics(db, user.company_id, effective_month)
+                    except Exception as e:
+                        logger.warning(f"Failed to compute aggregate metrics: {e}")
+
             except Exception as e:
                 logger.warning(f"Failed to persist analysis to DB: {e}")
                 await db.rollback()
@@ -1599,6 +1737,17 @@ async def reanalyze_roster(
     finally:
         os.unlink(tmp_path)
 
+    # Extract fleet/role from re-parsed roster
+    try:
+        re_pilot_info = getattr(parser, 'pilot_info', {}) or {}
+        re_fleet_role = extract_fleet_and_role(re_pilot_info)
+        if re_fleet_role.get('fleet'):
+            db_roster.fleet = re_fleet_role['fleet']
+        if re_fleet_role.get('pilot_role'):
+            db_roster.pilot_role = re_fleet_role['pilot_role']
+    except Exception as e:
+        logger.warning(f"Fleet/role extraction on reanalyze failed: {e}")
+
     # Apply crew set
     from models.data_models import ULRCrewSet
     valid_crew = {"crew_a": ULRCrewSet.CREW_A, "crew_b": ULRCrewSet.CREW_B}
@@ -1616,6 +1765,40 @@ async def reanalyze_roster(
         "research": ModelConfig.research_config,
     }
     config = config_map.get(config_preset, ModelConfig.operational_config)()
+
+    # ── Fatigue continuity for re-analysis ────────────────────
+    reanalyze_effective_month = roster_obj.month or db_roster.month or "2026-02"
+    re_continuity_from_month = None
+    re_initial_conditions = None
+    try:
+        from sqlalchemy import select as sa_select
+        prior_result = await db.execute(
+            sa_select(FatigueState)
+            .where(FatigueState.user_id == user.id)
+            .where(FatigueState.month < reanalyze_effective_month)
+            .order_by(FatigueState.month.desc())
+            .limit(1)
+        )
+        prior_state = prior_result.scalar_one_or_none()
+        if prior_state and roster_obj.duties:
+            gap_days = max(0, (roster_obj.duties[0].report_time_utc - prior_state.period_end_utc).days)
+            decay = math.exp(-0.1 * gap_days)
+
+            roster_obj.initial_sleep_pressure = prior_state.final_process_s
+            roster_obj.initial_sleep_debt = prior_state.final_sleep_debt * decay
+            roster_obj.initial_circadian_phase_shift = prior_state.final_phase_shift * decay
+            roster_obj.initial_circadian_reference_tz = prior_state.final_phase_tz
+            re_continuity_from_month = prior_state.month
+            re_initial_conditions = {
+                "process_s": round(roster_obj.initial_sleep_pressure, 4),
+                "sleep_debt": round(roster_obj.initial_sleep_debt, 2),
+                "circadian_phase_shift": round(roster_obj.initial_circadian_phase_shift, 2),
+                "from_month": prior_state.month,
+                "gap_days": gap_days,
+            }
+    except Exception as e:
+        logger.warning(f"Fatigue continuity lookup on reanalyze failed: {e}")
+
     model = BorbelyFatigueModel(config)
     monthly_analysis = model.simulate_roster(roster_obj)
 
@@ -1667,6 +1850,8 @@ async def reanalyze_roster(
         total_ulr_duties=getattr(monthly_analysis, "total_ulr_duties", 0),
         total_augmented_duties=getattr(monthly_analysis, "total_augmented_duties", 0),
         ulr_violations=getattr(monthly_analysis, "ulr_violations", []),
+        continuity_from_month=re_continuity_from_month,
+        initial_conditions=re_initial_conditions,
     )
 
     # Update analysis in DB
@@ -1687,6 +1872,38 @@ async def reanalyze_roster(
         # Update roster config
         db_roster.config_preset = config_preset
         await db.commit()
+
+        # ── Save end-of-roster fatigue state (reanalyze) ─────────
+        try:
+            if monthly_analysis.duty_timelines:
+                last_tl = monthly_analysis.duty_timelines[-1]
+                last_duty = roster_obj.duties[-1]
+                fc = last_tl.final_circadian_state
+
+                fs = FatigueState(
+                    user_id=user.id,
+                    roster_id=db_roster.id,
+                    month=reanalyze_effective_month,
+                    period_end_utc=last_duty.release_time_utc,
+                    final_process_s=last_tl.final_process_s,
+                    final_sleep_debt=last_tl.cumulative_sleep_debt,
+                    final_phase_shift=fc.current_phase_shift_hours if fc else 0.0,
+                    final_phase_tz=fc.reference_timezone if fc else roster_obj.home_base_timezone,
+                )
+                await db.merge(fs)
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to save fatigue state on reanalyze: {e}")
+            await db.rollback()
+
+        # ── Trigger comparative metrics aggregation (reanalyze) ───
+        if user.company_id:
+            try:
+                from metrics.aggregator import compute_aggregate_metrics
+                await compute_aggregate_metrics(db, user.company_id, reanalyze_effective_month)
+            except Exception as e:
+                logger.warning(f"Failed to compute aggregate metrics on reanalyze: {e}")
+
     except Exception as e:
         logger.warning(f"Failed to persist re-analysis: {e}")
         await db.rollback()

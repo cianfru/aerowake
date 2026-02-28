@@ -70,6 +70,13 @@ async def init_db():
         # Migration 002: add is_admin to users
         await _add_column_if_missing(conn, "users", "is_admin", "BOOLEAN NOT NULL DEFAULT false")
 
+        # Migration 003: company groups + fleet/role
+        await _add_column_if_missing(conn, "users", "company_id", "UUID REFERENCES companies(id) ON DELETE SET NULL")
+        await _add_column_if_missing(conn, "users", "company_role", "VARCHAR(20) NOT NULL DEFAULT 'pilot'")
+        await _add_column_if_missing(conn, "rosters", "company_id", "UUID REFERENCES companies(id) ON DELETE SET NULL")
+        await _add_column_if_missing(conn, "rosters", "fleet", "VARCHAR(10)")
+        await _add_column_if_missing(conn, "rosters", "pilot_role", "VARCHAR(20)")
+
     logger.info("Database tables initialized successfully")
 
 

@@ -291,9 +291,11 @@ class Roster:
     pilot_base: Optional[str] = None  # Home base airport code (e.g., "DOH")
     pilot_aircraft: Optional[str] = None  # Aircraft type (e.g., "A320", "B777")
     
-    # Initial conditions
+    # Initial conditions (defaults = well-rested; overridden by fatigue continuity)
     initial_sleep_pressure: float = 0.15
     initial_sleep_debt: float = 0.0
+    initial_circadian_phase_shift: float = 0.0          # hours offset from home base
+    initial_circadian_reference_tz: Optional[str] = None # reference tz for phase shift
     
     @property
     def total_duties(self) -> int:

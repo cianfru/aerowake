@@ -312,6 +312,13 @@ export interface RestDaySleep {
   references?: SleepReference[];
 }
 
+export interface CompanyDetection {
+  suggestedName: string;
+  suggestedIcao: string;
+  confidence: number;
+  needsConfirmation: boolean;
+}
+
 export interface AnalysisResults {
   statistics: DutyStatistics;
   duties: DutyAnalysis[];
@@ -328,6 +335,17 @@ export interface AnalysisResults {
   restDaysSleep?: RestDaySleep[];
   // Circadian adaptation curve across the roster
   bodyClockTimeline?: BodyClockTimelineEntry[];
+  // Company detection (first upload only)
+  companyDetection?: CompanyDetection;
+  // Fatigue continuity (multi-roster chaining)
+  continuityFromMonth?: string;    // "2026-01" if prior state was injected
+  initialConditions?: {
+    processS: number;
+    sleepDebt: number;
+    circadianPhaseShift: number;
+    fromMonth: string;
+    gapDays: number;
+  };
 }
 
 // Body clock adaptation curve entry
