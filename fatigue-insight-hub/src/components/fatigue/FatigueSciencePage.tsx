@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { 
+import {
   Moon,
   MapPin,
   Clock,
@@ -13,7 +13,12 @@ import {
   Calculator,
   FileText,
   Code,
-  Info
+  Info,
+  Zap,
+  BedDouble,
+  AlarmClock,
+  Split,
+  Hourglass
 } from 'lucide-react';
 import { SleepEfficiencyChart } from './charts';
 
@@ -31,8 +36,10 @@ export function FatigueSciencePage() {
         <CardContent>
           <div className="flex justify-center gap-2 flex-wrap">
             <Badge variant="outline">Location Efficiency</Badge>
-            <Badge variant="outline">WOCL Penalties</Badge>
+            <Badge variant="outline">WOCL Alignment</Badge>
             <Badge variant="outline">Recovery Factors</Badge>
+            <Badge variant="outline">Nap Science</Badge>
+            <Badge variant="outline">11 Quality Factors</Badge>
           </div>
         </CardContent>
       </Card>
@@ -128,56 +135,26 @@ export function FatigueSciencePage() {
         </CardContent>
       </Card>
 
-      {/* Step 2: WOCL Overlap */}
+      {/* Step 2: WOCL Alignment */}
       <Card variant="glass">
         <CardHeader>
           <CardTitle className="flex items-center gap-3">
             <Moon className="h-5 w-5 text-primary" />
-            Step 2: WOCL Overlap Penalty
+            Step 2: WOCL Alignment Bonus
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <p className="text-muted-foreground">
-            Sleep occurring during WOCL (02:00-06:00 local) is less restorative due to circadian misalignment.
-            The penalty is <strong>-5% per hour</strong> of overlap.
+            Sleep occurring during the Window of Circadian Low (02:00-06:00 local) is
+            <strong> circadian-aligned</strong> — your body is naturally primed for deep sleep.
+            Overlap with WOCL provides a quality bonus of <strong>+5% per hour</strong> (up to 4h).
           </p>
 
-          <div className="rounded-lg border border-border bg-muted/30 overflow-hidden">
-            <div className="bg-muted/50 px-4 py-2 border-b border-border">
-              <span className="text-sm font-medium">WOCL Overlap Calculation</span>
-            </div>
-            <pre className="p-4 overflow-x-auto text-sm font-mono">
-{`function calculateWOCLOverlap(sleepStart: DateTime, sleepEnd: DateTime): number {
-  // Convert to local time FIRST
-  const startLocal = sleepStart.toLocal();
-  const endLocal = sleepEnd.toLocal();
-  
-  const WOCL_START = 2;  // 02:00
-  const WOCL_END = 6;    // 06:00
-  
-  let overlapHours = 0;
-  
-  // Handle midnight-crossing sleep
-  if (endLocal.date > startLocal.date) {
-    // Check overlap on both days
-    const day1Overlap = Math.max(0, 
-      Math.min(24, WOCL_END) - Math.max(startLocal.hour, WOCL_START));
-    const day2Overlap = Math.max(0, 
-      Math.min(endLocal.hour, WOCL_END) - WOCL_START);
-    overlapHours = day1Overlap + day2Overlap;
-  } else {
-    // Same-day sleep
-    const overlapStart = Math.max(startLocal.hour, WOCL_START);
-    const overlapEnd = Math.min(endLocal.hour, WOCL_END);
-    overlapHours = Math.max(0, overlapEnd - overlapStart);
-  }
-  
-  return overlapHours;
-}
-
-// Penalty calculation
-const woclPenalty = 1.0 - (woclOverlap * 0.05);  // -5% per hour`}
-            </pre>
+          <div className="rounded-lg border border-border bg-muted/30 p-4">
+            <p className="text-sm font-medium mb-2">Formula:</p>
+            <code className="block bg-background/50 rounded p-3 text-sm font-mono">
+              woclBonus = 1.0 + min(woclOverlapHours, 4) × 0.05
+            </code>
           </div>
 
           <div>
@@ -192,18 +169,28 @@ const woclPenalty = 1.0 - (woclOverlap * 0.05);  // -5% per hour`}
                   <span className="text-muted-foreground w-28">WOCL overlap:</span>
                   <span>02:00-06:00 (4h)</span>
                 </div>
-                <div className="flex gap-3 text-destructive">
-                  <span className="w-28">Penalty:</span>
-                  <span>1.0 - (4 × 0.05) = <strong>0.80</strong> (20% reduction)</span>
+                <div className="flex gap-3 text-success">
+                  <span className="w-28">Bonus:</span>
+                  <span>1.0 + (4 × 0.05) = <strong>1.20</strong> (+20% quality boost)</span>
                 </div>
               </div>
             </div>
+          </div>
+
+          <div className="p-3 rounded-lg bg-info/5 border border-info/20 text-sm">
+            <p className="font-medium mb-1">Why a bonus instead of a penalty?</p>
+            <p className="text-muted-foreground">
+              WOCL (02:00-06:00) is when the circadian system most strongly promotes sleep.
+              Sleep during this window achieves the deepest slow-wave sleep and most efficient
+              adenosine clearance. The penalty applies to being <em>awake</em> during WOCL, not
+              sleeping during it.
+            </p>
           </div>
         </CardContent>
       </Card>
 
       {/* Steps 3-6 in Accordion */}
-      <Accordion type="multiple" defaultValue={["late-onset", "recovery", "time-pressure", "insufficient"]} className="space-y-4">
+      <Accordion type="multiple" defaultValue={["late-onset", "recovery", "time-pressure", "insufficient", "nap-efficiency", "sol", "first-night", "alarm-anxiety", "split-sleep"]} className="space-y-4">
         {/* Step 3: Late Sleep Onset */}
         <AccordionItem value="late-onset" className="border border-border rounded-lg bg-card/50 backdrop-blur-sm px-4">
           <AccordionTrigger className="hover:no-underline">
@@ -307,45 +294,37 @@ const woclPenalty = 1.0 - (woclOverlap * 0.05);  // -5% per hour`}
           <AccordionContent className="pt-2 pb-4">
             <div className="space-y-4">
               <p className="text-muted-foreground">
-                Anxiety about waking on time can reduce sleep quality. Conversely, no time pressure allows 
-                for more relaxed, higher-quality sleep.
+                Anxiety about waking on time can reduce sleep quality. Shorter rest windows before
+                the next duty create psychological pressure that fragments sleep.
               </p>
 
               <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <pre className="text-sm font-mono overflow-x-auto">
-{`function calculateTimePressure(hoursUntilNextEvent: number): number {
-  if (hoursUntilNextEvent < 1.5) {
-    return 0.88;  // -12% very short turnaround
-  } else if (hoursUntilNextEvent < 3) {
-    return 0.93;  // -7% short turnaround
-  } else if (hoursUntilNextEvent < 6) {
-    return 0.97;  // -3% moderate pressure
-  }
-  return 1.03;  // +3% no pressure (relaxed)
-}`}
-                </pre>
+                <p className="text-sm font-medium mb-2">Time Pressure Factor:</p>
+                <code className="block bg-background/50 rounded p-3 text-sm font-mono">
+                  {"< 3h → 0.93 | < 6h → 0.96 | < 9h → 0.98 | ≥ 9h → 1.00"}
+                </code>
               </div>
 
               <div className="grid gap-2 text-sm">
                 <div className="flex items-center gap-3 p-2 rounded bg-destructive/10 border border-destructive/20">
-                  <span className="w-24">{"< 1.5h"}</span>
-                  <span className="font-mono">0.88</span>
-                  <span className="text-muted-foreground">-12% very short turnaround</span>
-                </div>
-                <div className="flex items-center gap-3 p-2 rounded bg-warning/20 border border-warning/30">
                   <span className="w-24">{"< 3h"}</span>
                   <span className="font-mono">0.93</span>
-                  <span className="text-muted-foreground">-7% short turnaround</span>
+                  <span className="text-muted-foreground">−7% very short turnaround</span>
                 </div>
                 <div className="flex items-center gap-3 p-2 rounded bg-warning/10 border border-warning/20">
                   <span className="w-24">{"< 6h"}</span>
-                  <span className="font-mono">0.97</span>
-                  <span className="text-muted-foreground">-3% moderate pressure</span>
+                  <span className="font-mono">0.96</span>
+                  <span className="text-muted-foreground">−4% short turnaround</span>
+                </div>
+                <div className="flex items-center gap-3 p-2 rounded bg-muted/20">
+                  <span className="w-24">{"< 9h"}</span>
+                  <span className="font-mono">0.98</span>
+                  <span className="text-muted-foreground">−2% moderate pressure</span>
                 </div>
                 <div className="flex items-center gap-3 p-2 rounded bg-success/10 border border-success/20">
-                  <span className="w-24">{">= 6h"}</span>
-                  <span className="font-mono">1.03</span>
-                  <span className="text-muted-foreground">+3% no pressure (relaxed)</span>
+                  <span className="w-24">{">= 9h"}</span>
+                  <span className="font-mono">1.00</span>
+                  <span className="text-muted-foreground">No pressure</span>
                 </div>
               </div>
             </div>
@@ -363,41 +342,330 @@ const woclPenalty = 1.0 - (woclOverlap * 0.05);  // -5% per hour`}
           <AccordionContent className="pt-2 pb-4">
             <div className="space-y-4">
               <p className="text-muted-foreground">
-                Very short sleep ({"<"}6h) is disproportionately less effective. Naps are exempt from this penalty 
+                Very short sleep ({"<"}6h) is disproportionately less effective. Naps are exempt from this penalty
                 as they serve a different physiological purpose.
               </p>
-
-              <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <pre className="text-sm font-mono overflow-x-auto">
-{`function calculateInsufficientPenalty(duration: number, isNap: boolean): number {
-  if (isNap) return 1.0;  // Naps exempt
-  
-  if (duration < 4) {
-    return 0.75;  // -25% for <4h
-  } else if (duration < 6) {
-    return 0.88;  // -12% for 4-6h
-  }
-  return 1.0;
-}`}
-                </pre>
-              </div>
 
               <div className="grid gap-2 text-sm">
                 <div className="flex items-center gap-3 p-2 rounded bg-destructive/20 border border-destructive/30">
                   <span className="w-24">{"< 4h"}</span>
                   <span className="font-mono">0.75</span>
-                  <span className="text-muted-foreground">-25% severely insufficient</span>
+                  <span className="text-muted-foreground">−25% severely insufficient</span>
                 </div>
                 <div className="flex items-center gap-3 p-2 rounded bg-warning/10 border border-warning/20">
                   <span className="w-24">4-6h</span>
                   <span className="font-mono">0.88</span>
-                  <span className="text-muted-foreground">-12% insufficient</span>
+                  <span className="text-muted-foreground">−12% insufficient</span>
                 </div>
                 <div className="flex items-center gap-3 p-2 rounded bg-success/10 border border-success/20">
                   <span className="w-24">{">= 6h"}</span>
                   <span className="font-mono">1.00</span>
                   <span className="text-muted-foreground">No penalty</span>
                 </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-warning/10 border border-warning/20 text-sm">
+                <p className="font-medium text-warning mb-1">Implementation Note</p>
+                <p className="text-muted-foreground">
+                  This factor is currently <strong>disabled</strong> in the engine to avoid
+                  double-counting — sleep debt already penalizes short sleep through the
+                  vulnerability coefficient (Step 5 of the Mathematical Model). The values are
+                  retained for documentation and future use with alternative model configurations.
+                </p>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Step 7: Nap Efficiency by Duration */}
+        <AccordionItem value="nap-efficiency" className="border border-border rounded-lg bg-card/50 backdrop-blur-sm px-4">
+          <AccordionTrigger className="hover:no-underline">
+            <div className="flex items-center gap-3">
+              <Zap className="h-5 w-5 text-primary" />
+              <span className="font-semibold">Step 7: Nap Efficiency by Duration</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pt-2 pb-4">
+            <div className="space-y-4">
+              <p className="text-muted-foreground">
+                Not all naps are equal. Duration determines which sleep stages are reached,
+                directly affecting restorative value and post-nap inertia risk.
+              </p>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-2 font-medium">Duration</th>
+                      <th className="text-left py-2 font-medium">Efficiency</th>
+                      <th className="text-left py-2 font-medium text-muted-foreground">Sleep Stages & Rationale</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    <tr>
+                      <td className="py-2 font-mono">≤ 10 min</td>
+                      <td className="py-2"><code className="font-mono text-warning">0.75</code></td>
+                      <td className="py-2 text-muted-foreground">Mostly Stage 1 — limited restoration</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 font-mono">10-20 min</td>
+                      <td className="py-2"><code className="font-mono text-success">0.90</code></td>
+                      <td className="py-2 text-muted-foreground">Optimal — Stage 2 without SWS inertia risk</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 font-mono">20-30 min</td>
+                      <td className="py-2"><code className="font-mono text-success">0.92</code></td>
+                      <td className="py-2 text-muted-foreground">Some SWS entry, slight inertia risk</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 font-mono">30-60 min</td>
+                      <td className="py-2"><code className="font-mono">0.88</code></td>
+                      <td className="py-2 text-muted-foreground">Deep SWS → inertia reduces net benefit</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 font-mono">&gt; 60 min</td>
+                      <td className="py-2"><code className="font-mono">0.85</code></td>
+                      <td className="py-2 text-muted-foreground">Full cycle but high inertia risk on wake</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="p-3 rounded-lg bg-success/10 border border-success/20 text-sm">
+                <p className="font-medium text-success mb-1">The 10-20 Minute Sweet Spot</p>
+                <p className="text-muted-foreground">
+                  A 10-20 minute nap reaches Stage 2 sleep (spindle activity) which improves alertness
+                  and reaction time, but avoids entering slow-wave sleep which causes grogginess upon waking.
+                </p>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <p className="font-medium">Scientific Basis:</p>
+                <ul className="mt-1 space-y-1">
+                  <li>• Brooks & Lack (2006): 10-min nap optimal for alertness restoration</li>
+                  <li>• Tietzel & Lack (2002): Brief naps ({`<`}20 min) improve alertness without SWS inertia</li>
+                </ul>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Step 8: Sleep Onset Latency */}
+        <AccordionItem value="sol" className="border border-border rounded-lg bg-card/50 backdrop-blur-sm px-4">
+          <AccordionTrigger className="hover:no-underline">
+            <div className="flex items-center gap-3">
+              <Hourglass className="h-5 w-5 text-primary" />
+              <span className="font-semibold">Step 8: Sleep Onset Latency (SOL)</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pt-2 pb-4">
+            <div className="space-y-4">
+              <p className="text-muted-foreground">
+                Not all time in bed is sleep. Sleep Onset Latency — the time it takes to actually
+                fall asleep — varies with circadian phase and homeostatic pressure. The model
+                subtracts estimated SOL from sleep duration to get actual sleep time.
+              </p>
+
+              <div className="rounded-lg border border-border bg-muted/30 p-4">
+                <p className="text-sm font-medium mb-2">Formula:</p>
+                <code className="block bg-background/50 rounded p-3 text-sm font-mono">
+                  SOL = base × circadian_gate / max(0.3, S_pressure)
+                </code>
+                <p className="text-xs text-muted-foreground mt-2">Clamped to 5-60 minutes</p>
+              </div>
+
+              <div className="grid gap-2 text-sm">
+                <div className="flex gap-3 p-2 rounded bg-muted/20">
+                  <code className="font-mono text-primary w-16">base</code>
+                  <span className="text-muted-foreground">= <strong>15 minutes</strong> (average SOL)</span>
+                </div>
+                <div className="flex gap-3 p-2 rounded bg-muted/20">
+                  <code className="font-mono text-primary w-16">gate</code>
+                  <span className="text-muted-foreground">Circadian gating factor — high during WMZ (18:00-21:00), low during WOCL</span>
+                </div>
+                <div className="flex gap-3 p-2 rounded bg-muted/20">
+                  <code className="font-mono text-primary w-16">S</code>
+                  <span className="text-muted-foreground">Sleep pressure — higher pressure = faster onset</span>
+                </div>
+              </div>
+
+              <div className="grid gap-2 text-sm font-mono">
+                <div className="flex items-center gap-3 p-2 rounded bg-success/10 border border-success/20">
+                  <span className="w-32">High S, WOCL</span>
+                  <span className="w-20">SOL ≈ 5 min</span>
+                  <span className="text-muted-foreground font-sans">Very tired, circadian low → instant sleep</span>
+                </div>
+                <div className="flex items-center gap-3 p-2 rounded bg-muted/20">
+                  <span className="w-32">Average</span>
+                  <span className="w-20">SOL ≈ 15 min</span>
+                  <span className="text-muted-foreground font-sans">Normal bedtime</span>
+                </div>
+                <div className="flex items-center gap-3 p-2 rounded bg-destructive/10 border border-destructive/20">
+                  <span className="w-32">Low S, WMZ</span>
+                  <span className="w-20">SOL ≈ 45 min</span>
+                  <span className="text-muted-foreground font-sans">Not tired, "forbidden zone" → hard to sleep</span>
+                </div>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <p className="font-medium">Scientific Basis:</p>
+                <ul className="mt-1 space-y-1">
+                  <li>• Åkerstedt et al. (2008): SOL varies with circadian phase and homeostatic pressure</li>
+                  <li>• Lavie (1986): Circadian gates for sleep onset — "forbidden zone" during WMZ</li>
+                </ul>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Step 9: First-Night Effect */}
+        <AccordionItem value="first-night" className="border border-border rounded-lg bg-card/50 backdrop-blur-sm px-4">
+          <AccordionTrigger className="hover:no-underline">
+            <div className="flex items-center gap-3">
+              <BedDouble className="h-5 w-5 text-primary" />
+              <span className="font-semibold">Step 9: First-Night Effect</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pt-2 pb-4">
+            <div className="space-y-4">
+              <p className="text-muted-foreground">
+                The first night in a novel environment (hotel, layover) produces measurably worse sleep.
+                One brain hemisphere remains more vigilant — a survival mechanism that reduces deep sleep quality.
+              </p>
+
+              <div className="grid gap-2 text-sm">
+                <div className="flex items-center gap-3 p-2 rounded bg-warning/10 border border-warning/20">
+                  <span className="w-28">First night</span>
+                  <span className="font-mono w-24">+12 min SOL</span>
+                  <span className="text-muted-foreground">Increased SOL, reduced SWS%, more awakenings</span>
+                </div>
+                <div className="flex items-center gap-3 p-2 rounded bg-muted/20">
+                  <span className="w-28">Second night</span>
+                  <span className="font-mono w-24">+5 min SOL</span>
+                  <span className="text-muted-foreground">Attenuated effect</span>
+                </div>
+                <div className="flex items-center gap-3 p-2 rounded bg-success/10 border border-success/20">
+                  <span className="w-28">Third+ night</span>
+                  <span className="font-mono w-24">+0 min</span>
+                  <span className="text-muted-foreground">Negligible — adapted to environment</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-info/5 border border-info/20 text-sm">
+                <p className="font-medium mb-1">Why This Matters for Pilots</p>
+                <p className="text-muted-foreground">
+                  Pilots frequently sleep in different hotel rooms across layovers. The first-night effect
+                  means the first layover sleep is always slightly degraded — even in a quiet, comfortable hotel.
+                  Multi-night layovers benefit from familiarization by the second night.
+                </p>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <p className="font-medium">Scientific Basis:</p>
+                <ul className="mt-1 space-y-1">
+                  <li>• Agnew et al. (1966): The first-night effect — EEG study of sleep</li>
+                  <li>• Tamaki et al. (2016): Unihemispheric slow-wave activity on first night in novel environment</li>
+                </ul>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Step 10: Alarm Anxiety */}
+        <AccordionItem value="alarm-anxiety" className="border border-border rounded-lg bg-card/50 backdrop-blur-sm px-4">
+          <AccordionTrigger className="hover:no-underline">
+            <div className="flex items-center gap-3">
+              <AlarmClock className="h-5 w-5 text-primary" />
+              <span className="font-semibold">Step 10: Alarm Anxiety (Early Report)</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pt-2 pb-4">
+            <div className="space-y-4">
+              <p className="text-muted-foreground">
+                When the next duty report time is before 06:00 local, pilots experience
+                anticipatory arousal — anxiety about oversleeping that fragments the last hours
+                of sleep and reduces overall quality by 3%.
+              </p>
+
+              <div className="rounded-lg border border-border bg-muted/30 p-4">
+                <p className="text-sm font-medium mb-2">Rule:</p>
+                <code className="block bg-background/50 rounded p-3 text-sm font-mono">
+                  If report_time {"<"} 06:00 → quality × 0.97 (−3%)
+                </code>
+              </div>
+
+              <div className="grid gap-2 text-sm">
+                <div className="flex items-center gap-3 p-2 rounded bg-warning/10 border border-warning/20">
+                  <span className="w-28">Report 04:30</span>
+                  <span className="font-mono">× 0.97</span>
+                  <span className="text-muted-foreground">Alarm anxiety — light sleep, early termination</span>
+                </div>
+                <div className="flex items-center gap-3 p-2 rounded bg-success/10 border border-success/20">
+                  <span className="w-28">Report 08:00</span>
+                  <span className="font-mono">× 1.00</span>
+                  <span className="text-muted-foreground">No alarm anxiety</span>
+                </div>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <p className="font-medium">Scientific Basis:</p>
+                <p className="mt-1">Kecklund & Åkerstedt (2004): Apprehension of the subsequent working day is associated with a low amount of sleep — Biol Psychol 66(2):169-176</p>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Step 11: Split Sleep Quality */}
+        <AccordionItem value="split-sleep" className="border border-border rounded-lg bg-card/50 backdrop-blur-sm px-4">
+          <AccordionTrigger className="hover:no-underline">
+            <div className="flex items-center gap-3">
+              <Split className="h-5 w-5 text-primary" />
+              <span className="font-semibold">Step 11: Split Sleep Quality</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pt-2 pb-4">
+            <div className="space-y-4">
+              <p className="text-muted-foreground">
+                When sleep is split across multiple blocks (e.g., nap + main sleep, or two separate rest
+                periods), each fragment's restorative value depends on its duration. Longer fragments
+                allow at least one full SWS cycle per block.
+              </p>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-2 font-medium">Fragment Length</th>
+                      <th className="text-left py-2 font-medium">Efficiency</th>
+                      <th className="text-left py-2 font-medium text-muted-foreground">Rationale</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    <tr>
+                      <td className="py-2 font-mono">≥ 4 hours</td>
+                      <td className="py-2"><code className="font-mono text-success">0.92</code></td>
+                      <td className="py-2 text-muted-foreground">Full SWS cycle possible — 4+4h split ≈ 92% of consolidated 8h</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 font-mono">≥ 3 hours</td>
+                      <td className="py-2"><code className="font-mono text-warning">0.85</code></td>
+                      <td className="py-2 text-muted-foreground">Partial SWS — meaningful but reduced restoration</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 font-mono">{"< 3 hours"}</td>
+                      <td className="py-2"><code className="font-mono text-destructive">0.78</code></td>
+                      <td className="py-2 text-muted-foreground">Too short for SWS entry — minimal deep sleep recovery</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <p className="font-medium">Scientific Basis:</p>
+                <ul className="mt-1 space-y-1">
+                  <li>• Jackson et al. (2014): Split sleep (4+4h) maintains ~92% of consolidated 8h effectiveness</li>
+                  <li>• Kosmadopoulos et al. (2017): Confirmed 4+4h split provides near-equivalent performance</li>
+                </ul>
               </div>
             </div>
           </AccordionContent>
@@ -435,19 +703,24 @@ const woclPenalty = 1.0 - (woclOverlap * 0.05);  // -5% per hour`}
           <Separator />
 
           <div>
-            <h4 className="font-semibold mb-3">Combined Formula</h4>
+            <h4 className="font-semibold mb-3">Combined Formula (11 Factors)</h4>
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 mb-4">
               <pre className="text-sm font-mono overflow-x-auto">
-{`combinedEfficiency = 
-  baseEfficiency ×
-  woclPenalty ×
-  lateOnsetPenalty ×
-  recoveryBoost ×
-  timePressure ×
-  insufficientPenalty
+{`combinedEfficiency =
+  baseEfficiency          // Step 1: Location (home/hotel/crew rest)
+  × woclBonus             // Step 2: WOCL alignment (+5% per overlap hour)
+  × lateOnsetPenalty      // Step 3: Late sleep start
+  × recoveryBoost         // Step 4: Post-duty recovery
+  × timePressure          // Step 5: Time until next duty
+  × insufficientPenalty   // Step 6: Short sleep (currently disabled)
+  × napEfficiency         // Step 7: Duration-dependent nap factor
+  × solFactor             // Step 8: Sleep onset latency subtracted
+  × firstNightFactor      // Step 9: Novel environment penalty
+  × alarmAnxiety          // Step 10: Early report anxiety
+  × splitSleepFactor      // Step 11: Fragment-size quality
 
-// Clamped to range [0.50, 1.00]
-finalEfficiency = Math.max(0.50, Math.min(1.0, combinedEfficiency))
+// Clamped to range [0.50, 1.20]
+finalEfficiency = clamp(combinedEfficiency, 0.50, 1.20)
 
 // Final result
 effectiveSleep = actualHours × finalEfficiency`}
@@ -472,41 +745,45 @@ effectiveSleep = actualHours × finalEfficiency`}
 
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between p-2 rounded bg-muted/20">
-                <span>Base efficiency (home)</span>
+                <span>1. Base efficiency (home)</span>
                 <code className="font-mono">0.90</code>
               </div>
               <div className="flex items-center justify-between p-2 rounded bg-muted/20">
-                <span>Nap penalty</span>
-                <code className="font-mono">0.88</code>
-              </div>
-              <div className="flex items-center justify-between p-2 rounded bg-muted/20">
-                <span>WOCL penalty (14:00-17:00, no overlap)</span>
+                <span>2. WOCL bonus (14:00-17:00, no overlap)</span>
                 <code className="font-mono">1.00</code>
               </div>
               <div className="flex items-center justify-between p-2 rounded bg-muted/20">
-                <span>Late onset penalty (14:00 start)</span>
+                <span>3. Late onset penalty (14:00 start)</span>
                 <code className="font-mono">1.00</code>
               </div>
               <div className="flex items-center justify-between p-2 rounded bg-muted/20">
-                <span>Recovery boost (no previous duty)</span>
+                <span>4. Recovery boost (no previous duty)</span>
                 <code className="font-mono">1.00</code>
               </div>
               <div className="flex items-center justify-between p-2 rounded bg-muted/20">
-                <span>Time pressure (6h until report)</span>
-                <code className="font-mono">0.93</code>
+                <span>5. Time pressure (6h until report)</span>
+                <code className="font-mono">0.96</code>
               </div>
               <div className="flex items-center justify-between p-2 rounded bg-muted/20">
-                <span>Insufficient penalty (naps exempt)</span>
+                <span>7. Nap efficiency (3h = 20-30 min band? No, full 3h sleep)</span>
+                <code className="font-mono">1.00</code>
+              </div>
+              <div className="flex items-center justify-between p-2 rounded bg-muted/20">
+                <span>8. SOL (afternoon, low pressure → ~18 min subtracted)</span>
+                <code className="font-mono">2.7h actual</code>
+              </div>
+              <div className="flex items-center justify-between p-2 rounded bg-muted/20">
+                <span>9-11. First-night / Alarm / Split (home, not applicable)</span>
                 <code className="font-mono">1.00</code>
               </div>
               <Separator className="my-2" />
               <div className="flex items-center justify-between p-2 rounded bg-primary/10 border border-primary/20">
                 <span className="font-medium">Combined efficiency</span>
-                <code className="font-mono font-bold">0.90 × 0.88 × 1.0 × 1.0 × 1.0 × 0.93 × 1.0 = 0.74</code>
+                <code className="font-mono font-bold">0.90 × 1.0 × 1.0 × 1.0 × 0.96 × 1.0 = 0.86</code>
               </div>
               <div className="flex items-center justify-between p-2 rounded bg-success/10 border border-success/20">
                 <span className="font-medium">Effective sleep</span>
-                <code className="font-mono font-bold">3.0h × 0.74 = 2.2h</code>
+                <code className="font-mono font-bold">2.7h × 0.86 = 2.3h</code>
               </div>
             </div>
           </div>
