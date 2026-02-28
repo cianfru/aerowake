@@ -78,14 +78,41 @@ def test_header_extraction_with_zwsp():
 
 
 def test_non_duty_codes_skipped():
-    """D/O, LVE, OFC4, OFC8, PSBL all return None from column parser."""
+    """D/O, LVE, PSBL return None from column parser (no duty created)."""
     parser = EasyJetParser()
     parser.home_timezone = 'Europe/Madrid'
     date = datetime(2025, 9, 1)
-    for code in ['D/O', 'LVE', 'OFC4', 'OFC8', 'PSBL']:
+    for code in ['D/O', 'LVE', 'PSBL']:
         result = parser._parse_column_to_duty(date, [code])
         assert result is None, f"Expected None for code '{code}', got {result}"
-    print(f"{PASS} non-duty codes skipped (D/O, LVE, OFC4, OFC8, PSBL)")
+    print(f"{PASS} non-duty codes skipped (D/O, LVE, PSBL)")
+
+
+def test_office_duty_creates_ground_training():
+    """OFC4/OFC8 produce ground-training duties with correct times."""
+    from models.data_models import DutyType
+    parser = EasyJetParser()
+    parser.home_timezone = 'Europe/Madrid'
+    parser.home_base_code = 'AGP'
+    date = datetime(2025, 9, 8)
+
+    # OFC8 with start/end times
+    tokens = ['OFC8', '09:30', '17:30']
+    duty = parser._parse_column_to_duty(date, tokens)
+    assert duty is not None, "OFC8 should create a duty"
+    assert duty.duty_type == DutyType.GROUND_TRAINING, f"Expected GROUND_TRAINING, got {duty.duty_type}"
+    assert duty.training_code == 'OFC8'
+    assert len(duty.segments) == 0, "Office duty should have no flight segments"
+    assert duty.release_time_utc > duty.report_time_utc, "release must be after report"
+    print(f"{PASS} OFC8 → ground-training duty")
+
+    # OFC4 with start/end times
+    tokens = ['OFC4', '09:00', '13:00']
+    duty = parser._parse_column_to_duty(date, tokens)
+    assert duty is not None, "OFC4 should create a duty"
+    assert duty.duty_type == DutyType.GROUND_TRAINING
+    assert duty.training_code == 'OFC4'
+    print(f"{PASS} OFC4 → ground-training duty")
 
 
 def test_empty_column_returns_none():
@@ -262,6 +289,7 @@ if __name__ == '__main__':
         test_header_extraction,
         test_header_extraction_with_zwsp,
         test_non_duty_codes_skipped,
+        test_office_duty_creates_ground_training,
         test_empty_column_returns_none,
         test_single_leg_duty,
         test_two_leg_duty,

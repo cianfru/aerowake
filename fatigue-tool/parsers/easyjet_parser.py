@@ -38,7 +38,10 @@ _IATA_DB = airportsdata.load('IATA')
 # ── Constants ────────────────────────────────────────────────────────────────
 
 # easyJet non-duty activity codes → skip (return None from column parser)
-_NON_DUTY_CODES = {'D/O', 'LVE', 'OFC4', 'OFC8', 'PSBL', 'OFF', 'REST', 'DO'}
+_NON_DUTY_CODES = {'D/O', 'LVE', 'PSBL', 'OFF', 'REST', 'DO'}
+
+# Office/ground duty codes → create a ground-training Duty with start/end times
+_OFFICE_CODES = {'OFC4', 'OFC8'}
 
 # Primary flight number pattern for easyJet (EJU + 4 digits)
 _FLIGHT_NUM_RE = re.compile(r'^EJU\d{4}$')
@@ -352,18 +355,22 @@ class EasyJetParser:
         """
         Convert a list of column tokens for a single date into a Duty object.
 
-        Returns None for non-duty days (D/O, LVE, OFC4, OFC8, PSBL).
+        Returns None for non-duty days (D/O, LVE, PSBL).
+        OFC4/OFC8 are treated as ground training duties.
         """
         if not raw_tokens:
             return None
 
-        # Check first meaningful token for non-duty codes
+        # Check first meaningful token for non-duty codes (skip)
         first = raw_tokens[0].strip().upper()
         if first in _NON_DUTY_CODES:
             return None
-        # Also check first token without case for common variants
         if raw_tokens[0].strip() in _NON_DUTY_CODES:
             return None
+
+        # ── Office duty codes (OFC4, OFC8) → ground training duty ─────────
+        if first in _OFFICE_CODES:
+            return self._parse_office_duty(col_date, raw_tokens, first)
 
         # Pre-process: handle ↓ overnight arrows
         # Mark the time token IMMEDIATELY following a ↓ as +1 day offset
@@ -453,6 +460,62 @@ class EasyJetParser:
         )
 
         return duty
+
+    # ── Office duty parsing ────────────────────────────────────────────────
+
+    def _parse_office_duty(self, col_date: datetime, raw_tokens: List[str], code: str) -> Optional[Duty]:
+        """
+        Parse OFC4/OFC8 (office duty 4h/8h) into a ground-training Duty.
+
+        Column tokens typically:
+            OFC4  or  OFC8
+            09:30      (start time)
+            13:30      (end time) — or 17:30 for OFC8
+        """
+        # Collect time tokens from the column
+        times = []
+        for tok in raw_tokens:
+            ts = _parse_time_str(tok)
+            if ts:
+                times.append(ts)
+
+        if len(times) < 2:
+            # Fallback: use default durations based on code
+            default_hours = 4 if code == 'OFC4' else 8
+            if times:
+                start = times[0]
+            else:
+                start = '09:00'
+            start_t = datetime.strptime(start, '%H:%M').time()
+            start_naive = datetime.combine(col_date.date(), start_t)
+            end_naive = start_naive + timedelta(hours=default_hours)
+            report_str = start
+            release_str = end_naive.strftime('%H:%M')
+        else:
+            report_str = times[0]
+            release_str = times[-1]
+
+        home_tz = self.home_timezone
+        try:
+            report_utc = _localize_to_utc(report_str, col_date, home_tz)
+            release_utc = _localize_to_utc(release_str, col_date, home_tz)
+            if release_utc <= report_utc:
+                release_utc += timedelta(days=1)
+        except Exception as e:
+            print(f"   [easyJet] ⚠️  Could not parse office duty times on {col_date.date()}: {e}")
+            return None
+
+        duty_id = f"D{col_date.strftime('%Y%m%d')}_{code}"
+        return Duty(
+            duty_id=duty_id,
+            date=col_date,
+            report_time_utc=report_utc,
+            release_time_utc=release_utc,
+            segments=[],
+            home_base_timezone=self.home_timezone,
+            duty_type=DutyType.GROUND_TRAINING,
+            training_code=code,
+        )
 
     # ── Segment extraction ────────────────────────────────────────────────
 
