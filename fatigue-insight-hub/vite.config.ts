@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import pkg from "./package.json";
 
 export default defineConfig({
   server: {
@@ -9,6 +10,9 @@ export default defineConfig({
     hmr: {
       overlay: false,
     },
+  },
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
   },
   plugins: [react()],
   resolve: {

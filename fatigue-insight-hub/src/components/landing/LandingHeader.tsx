@@ -4,6 +4,7 @@ import { Shield, LogIn, UserPlus, Mail, Lock, User, MapPin, AlertCircle, Chevron
 import { useAuth } from '@/contexts/AuthContext';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import logoDark from '@/assets/logo-dark.png';
+import { APP_VERSION } from '@/lib/version';
 
 const ACCESS_PASSWORD = 'Admin123';
 
@@ -133,7 +134,7 @@ export function LandingHeader({ onEnter }: LandingHeaderProps) {
         <div className="flex items-center gap-3">
           <img src={logoDark} alt="Aerowake" className="h-8 md:h-10" />
           <span className="hidden sm:inline text-[10px] font-mono text-white/25 tracking-wider uppercase">
-            v2.1.2
+            v{APP_VERSION}
           </span>
         </div>
 

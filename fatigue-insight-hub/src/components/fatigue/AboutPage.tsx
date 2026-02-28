@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Shield, CheckCircle2 } from 'lucide-react';
+import { APP_VERSION } from '@/lib/version';
 
 export function AboutPage() {
   return (
@@ -14,7 +15,7 @@ export function AboutPage() {
         </CardHeader>
         <CardContent>
           <div className="flex justify-center gap-2 flex-wrap">
-            <Badge variant="info">v2.1.2</Badge>
+            <Badge variant="info">v{APP_VERSION}</Badge>
             <Badge variant="success">EASA ORO.FTL</Badge>
             <Badge variant="outline">Professional Grade</Badge>
           </div>

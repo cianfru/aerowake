@@ -62,7 +62,7 @@ export function HeroSection({ onScrollToContent }: HeroSectionProps) {
           <div className="mx-auto mt-5 flex items-center justify-center gap-2.5">
             <BookOpen className="h-3.5 w-3.5 text-[hsl(199,89%,48%)]/60" />
             <span className="text-xs text-white/35 tracking-wide">
-              Built on <span className="text-white/55 font-medium">100+ peer-reviewed studies</span> in sleep science and human performance
+              Built on <span className="text-white/55 font-medium">56 peer-reviewed studies</span> in sleep science and human performance
             </span>
           </div>
 

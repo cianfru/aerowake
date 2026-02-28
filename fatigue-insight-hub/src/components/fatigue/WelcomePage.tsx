@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { APP_VERSION } from '@/lib/version';
 import { Separator } from '@/components/ui/separator';
 import { 
   Target, 
@@ -744,7 +745,7 @@ export function WelcomePage() {
           <AccordionContent className="pt-2 pb-4">
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <Badge variant="info">v2.1.2</Badge>
+                <Badge variant="info">v{APP_VERSION}</Badge>
                 <span className="text-sm text-muted-foreground">Current Version</span>
               </div>
               <div className="text-sm text-muted-foreground space-y-1">
