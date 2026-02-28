@@ -1,10 +1,12 @@
+import { APP_VERSION } from '@/lib/version';
+
 export function ScienceFooter() {
   return (
     <footer className="relative bg-[#000408] border-t border-white/[0.05] py-10 md:py-12">
       <div className="mx-auto max-w-5xl px-6">
         <div className="flex flex-col items-center text-center">
           <p className="text-xs text-white/25 font-mono uppercase tracking-wider">
-            Aerowake v2.1.2
+            Aerowake v{APP_VERSION}
           </p>
           <p className="mt-2 text-xs text-white/20 max-w-md leading-relaxed">
             Biomathematical fatigue prediction for aviation professionals.
