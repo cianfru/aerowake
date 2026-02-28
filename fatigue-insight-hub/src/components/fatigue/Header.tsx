@@ -107,11 +107,6 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
                 className="h-8 w-auto object-contain md:h-10 cursor-pointer"
               />
             </button>
-            <div className="hidden lg:block">
-              <p className="text-[10px] text-muted-foreground">
-                Biomathematical fatigue prediction
-              </p>
-            </div>
           </div>
 
           {/* Right: Preset switcher + Auth + Badge + theme toggle */}
