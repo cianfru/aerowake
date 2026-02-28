@@ -77,7 +77,6 @@ export function SummaryPage() {
           <Card variant="glass" className="p-8 md:p-12 text-center">
             <div className="space-y-4">
               <img src={logoDark} alt="Aerowake" className="h-12 md:h-16 w-auto mx-auto object-contain" />
-              <h2 className="text-xl md:text-2xl font-semibold">Welcome to Aerowake</h2>
               <p className="text-sm md:text-base text-muted-foreground max-w-md mx-auto">
                 Biomathematical fatigue prediction for airline pilots.
                 Upload a roster to get started, or sign in to access your saved analyses.
