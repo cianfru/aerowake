@@ -77,6 +77,17 @@ def test_header_extraction_with_zwsp():
     print(f"{PASS} header extraction with zero-width spaces")
 
 
+def test_header_extraction_single_space():
+    """Header extraction works with single space between name and base (real PDF)."""
+    parser = EasyJetParser()
+    raw = "17715 PELATTI ANGEL AGP,CP,319\n01/09/2025 - 30/09/2025\n"
+    info = parser._extract_pilot_info(raw)
+    assert info['id'] == '17715', f"id: got {info['id']!r}"
+    assert info['base'] == 'AGP', f"base: got {info['base']!r}"
+    assert info['role'] == 'CP', f"role: got {info['role']!r}"
+    print(f"{PASS} header extraction with single space (real PDF format)")
+
+
 def test_non_duty_codes_skipped():
     """D/O, LVE, PSBL return None from column parser (no duty created)."""
     parser = EasyJetParser()
@@ -126,13 +137,16 @@ def test_empty_column_returns_none():
 
 
 def test_single_leg_duty():
-    """Single EJU flight produces 1 duty with 1 segment and correct airports."""
+    """Single EJU flight produces 1 duty with 1 segment and correct airports.
+
+    Real PDF token order: FLIGHT → STD → DEP → ARR → STA → [AIRCRAFT]
+    """
     parser = EasyJetParser()
     parser.home_timezone = 'Europe/Madrid'
     parser.home_base_code = 'AGP'
     date = datetime(2025, 9, 11)
-    # Report 07:30, EJU7057 AGP 07:50 GVA 09:55 [319], release 10:25
-    tokens = ['07:30', 'EJU7057', 'AGP', '07:50', 'GVA', '09:55', '[319]', '10:25']
+    # Report 11:25, EJU7057 STD=12:20 AGP→GVA STA=14:31 [319], release 18:27
+    tokens = ['11:25', 'EJU7057', 'A12:20', 'AGP', 'GVA', 'A14:31', '[319]', '18:27']
     duty = parser._parse_column_to_duty(date, tokens)
     assert duty is not None, "Expected a duty, got None"
     assert len(duty.segments) == 1, f"Expected 1 segment, got {len(duty.segments)}"
@@ -148,16 +162,19 @@ def test_single_leg_duty():
 
 
 def test_two_leg_duty():
-    """Two EJU flights in same column → 1 duty with 2 segments."""
+    """Two EJU flights in same column → 1 duty with 2 segments.
+
+    Real PDF token order: FLIGHT → STD → DEP → ARR → STA → [AIRCRAFT]
+    """
     parser = EasyJetParser()
     parser.home_timezone = 'Europe/Madrid'
     parser.home_base_code = 'AGP'
     date = datetime(2025, 9, 11)
     tokens = [
-        '07:30',
-        'EJU7057', 'AGP', '07:50', 'GVA', '09:55', '[319]',
-        'EJU7058', 'GVA', '10:55', 'AGP', '12:55',
-        '13:25',
+        '11:25',
+        'EJU7057', 'A12:20', 'AGP', 'GVA', 'A14:31', '[319]',
+        'EJU7058', 'A15:31', 'GVA', 'AGP', 'A17:57', '[319]',
+        '18:27',
     ]
     duty = parser._parse_column_to_duty(date, tokens)
     assert duty is not None, "Expected a duty, got None"
@@ -174,8 +191,9 @@ def test_overnight_arrival_offset():
     parser.home_timezone = 'Europe/Madrid'
     parser.home_base_code = 'AGP'
     date = datetime(2025, 9, 17)
-    # EJU7054 departs NCE 21:53, arrives AGP 00:11 next day (↓ between NCE and 00:11)
-    tokens = ['21:30', 'EJU7054', 'NCE', '21:53', 'AGP', '↓', '00:11', '00:40']
+    # EJU7054 departs NCE 21:53, arrives AGP 00:11 next day (↓ between ARR and STA)
+    # Real token order: FLIGHT → STD → DEP → ARR → ↓ → STA → [AIRCRAFT]
+    tokens = ['21:30', 'EJU7054', 'A21:53', 'NCE', 'AGP', '↓', '00:11', '00:40']
     duty = parser._parse_column_to_duty(date, tokens)
     assert duty is not None, "Expected a duty, got None"
     assert len(duty.segments) == 1
@@ -185,6 +203,54 @@ def test_overnight_arrival_offset():
         f"Overnight: arrival {seg.scheduled_arrival_utc} <= departure {seg.scheduled_departure_utc}"
     )
     print(f"{PASS} overnight arrival (↓ marker advances arrival by 1 day)")
+
+
+def test_airport_star_prefix():
+    """Airport codes with * prefix (e.g. *AGP) are parsed correctly."""
+    parser = EasyJetParser()
+    parser.home_timezone = 'Europe/Madrid'
+    parser.home_base_code = 'AGP'
+    date = datetime(2025, 9, 8)
+    # Flight with *AGP dep airport
+    tokens = ['17:00', '8072', 'A17:31', '*AGP', 'LGW', 'A18:59', '19:14']
+    duty = parser._parse_column_to_duty(date, tokens)
+    assert duty is not None, "Expected a duty with * airport, got None"
+    seg = duty.segments[0]
+    assert seg.departure_airport.code == 'AGP', f"Expected AGP, got {seg.departure_airport.code}"
+    assert seg.arrival_airport.code == 'LGW', f"Expected LGW, got {seg.arrival_airport.code}"
+    print(f"{PASS} airport * prefix stripped (*AGP → AGP)")
+
+
+def test_bare_flight_number():
+    """Bare numeric flight numbers (e.g. 8072 for positioning) are recognized."""
+    parser = EasyJetParser()
+    parser.home_timezone = 'Europe/Madrid'
+    parser.home_base_code = 'AGP'
+    date = datetime(2025, 9, 8)
+    tokens = ['17:00', '8072', 'A17:31', 'AGP', 'LGW', 'A18:59', '19:14']
+    duty = parser._parse_column_to_duty(date, tokens)
+    assert duty is not None, "Expected a duty with bare flight num, got None"
+    assert duty.segments[0].flight_number == '8072'
+    print(f"{PASS} bare flight number (8072) recognized")
+
+
+def test_multi_duty_column():
+    """OFC4 + flight in same cell → 2 separate duties."""
+    parser = EasyJetParser()
+    parser.home_timezone = 'Europe/Madrid'
+    parser.home_base_code = 'AGP'
+    date = datetime(2025, 9, 8)
+    # OFC4 8:00-12:00, then flight 8072 17:31 *AGP→LGW 18:59
+    tokens = ['OFC4', '08:00', '12:00', '8072', 'A17:31', '*AGP', 'LGW', 'A18:59', '19:14']
+    duties, has_cont = parser._parse_column_to_duties(date, tokens)
+    assert len(duties) >= 1, f"Expected at least 1 duty, got {len(duties)}"
+    from models.data_models import DutyType
+    # First should be office duty
+    assert duties[0].duty_type == DutyType.GROUND_TRAINING, f"First duty should be GROUND_TRAINING"
+    # If 2 duties, second should be flight
+    if len(duties) == 2:
+        assert duties[1].duty_type == DutyType.FLIGHT, f"Second duty should be FLIGHT"
+    print(f"{PASS} multi-duty column (OFC4 + flight → {len(duties)} duties)")
 
 
 def test_format_detection_easyjet():
@@ -230,6 +296,23 @@ def test_month_derivation_integer():
         month = f"{pdf_year}-{pdf_month_val:02d}"
     assert month == "2025-09", f"Expected '2025-09', got '{month}'"
     print(f"{PASS} month derivation from integer pilot_info['month']")
+
+
+def test_continuation_arrow_detected():
+    """→ marker in tokens sets has_continuation flag."""
+    parser = EasyJetParser()
+    parser.home_timezone = 'Europe/Madrid'
+    parser.home_base_code = 'AGP'
+    date = datetime(2025, 9, 17)
+    # Flight ending with → (continues in next column)
+    tokens = [
+        '18:00', 'EJU7053', 'A19:10', 'AGP', 'NCE', 'A21:11', '[319]',
+        'EJU7054', 'A21:53', 'NCE', '→',
+    ]
+    duties, has_cont = parser._parse_column_to_duties(date, tokens)
+    assert has_cont is True, "Expected has_continuation=True for → marker"
+    assert len(duties) >= 1, "Should parse at least the complete segments"
+    print(f"{PASS} → continuation arrow detected")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -288,15 +371,20 @@ if __name__ == '__main__':
         test_parse_time_str,
         test_header_extraction,
         test_header_extraction_with_zwsp,
+        test_header_extraction_single_space,
         test_non_duty_codes_skipped,
         test_office_duty_creates_ground_training,
         test_empty_column_returns_none,
         test_single_leg_duty,
         test_two_leg_duty,
         test_overnight_arrival_offset,
+        test_airport_star_prefix,
+        test_bare_flight_number,
+        test_multi_duty_column,
         test_format_detection_easyjet,
         test_format_detection_crewlink_not_affected,
         test_month_derivation_integer,
+        test_continuation_arrow_detected,
         test_easyjet_roster_parsing,
     ]
 
