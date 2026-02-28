@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { AlertTriangle, FileText, ChevronDown, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Chronogram } from '@/components/fatigue/Chronogram';
@@ -7,6 +7,7 @@ import { DutyDetailsDialog } from '@/components/fatigue/DutyDetailsDialog';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRosterHistory } from '@/hooks/useRosterHistory';
+import { useAnalyzeRoster } from '@/hooks/useAnalyzeRoster';
 import { getRoster } from '@/lib/api-client';
 import { transformAnalysisResult } from '@/lib/transform-analysis';
 import type { RosterSummary } from '@/lib/api-client';
@@ -39,6 +40,7 @@ export function DashboardContent() {
 
   const { isAuthenticated } = useAuth();
   const { rosters } = useRosterHistory();
+  const { rerunWithSettings, reanalyzeSaved, isRerunning } = useAnalyzeRoster();
 
   const [rosterDropdownOpen, setRosterDropdownOpen] = useState(false);
   const [loadingRosterId, setLoadingRosterId] = useState<string | null>(null);
@@ -51,6 +53,37 @@ export function DashboardContent() {
     drawerOpen,
     dutyCrewOverrides,
   } = state;
+
+  // ── Auto-reanalyze when preset or crew set changes ────────
+  const prevPreset = useRef(settings.configPreset);
+  const prevCrewSet = useRef(settings.crewSet);
+
+  useEffect(() => {
+    const presetChanged = prevPreset.current !== settings.configPreset;
+    const crewChanged = prevCrewSet.current !== settings.crewSet;
+
+    if (!presetChanged && !crewChanged) return;
+    if (!analysisResults) return;
+
+    prevPreset.current = settings.configPreset;
+    prevCrewSet.current = settings.crewSet;
+
+    // Path A: fresh upload still in memory → re-analyze file
+    if (state.actualFileObject) {
+      rerunWithSettings({ configPreset: settings.configPreset, crewSet: settings.crewSet });
+      return;
+    }
+
+    // Path B: saved roster loaded from DB → reanalyze by roster ID
+    if (analysisResults.rosterId) {
+      reanalyzeSaved({
+        rosterId: analysisResults.rosterId,
+        configPreset: settings.configPreset,
+        crewSet: settings.crewSet,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.configPreset, settings.crewSet]);
 
   const handleSelectRoster = async (roster: RosterSummary) => {
     if (!roster.analysis_id) return;
@@ -150,7 +183,13 @@ export function DashboardContent() {
         )}
 
         {analysisResults && (
-          <div className="space-y-4 md:space-y-6 animate-fade-in">
+          <div className={`space-y-4 md:space-y-6 animate-fade-in transition-opacity ${isRerunning ? 'opacity-50 pointer-events-none' : ''}`}>
+            {isRerunning && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                Re-analyzing with new parameters...
+              </div>
+            )}
             {/* ULR Violations Warning */}
             {analysisResults.statistics.ulrViolations.length > 0 && (
               <div className="flex items-start gap-3 rounded-lg border border-critical/50 bg-critical/10 p-4">
