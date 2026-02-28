@@ -113,7 +113,7 @@ export function SettingsProfileManager({ settings, onSettingsChange }: SettingsP
                     <div className="flex items-center justify-between w-full gap-2">
                       <span>{p.name}</span>
                       <span className="text-[10px] text-muted-foreground">
-                        {p.settings.configPreset || 'default'}
+                        {p.settings.configPreset || 'operational'}
                       </span>
                     </div>
                   </SelectItem>

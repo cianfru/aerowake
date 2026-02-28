@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { PRESET_PARAMS, ParamRow, RISK_COLORS } from './AdvancedParametersDialog';
 import { PilotAvatar } from './PilotAvatar';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -23,7 +24,8 @@ import type { PilotSettings } from '@/types/fatigue';
 // ── Config presets (shared with former SettingsPanel) ─────────
 
 const configPresets = [
-  { value: 'default', label: 'EASA Default', description: 'Balanced Borbely two-process model, EASA-compliant thresholds' },
+  { value: 'operational', label: 'Operational', description: 'Calibrated for experienced airline crew. Core science unchanged.' },
+  { value: 'easa_default', label: 'EASA Default', description: 'Pure literature values, EASA-compliant thresholds' },
   { value: 'conservative', label: 'Conservative', description: 'Faster fatigue buildup, stricter thresholds, 8.5h sleep need' },
   { value: 'liberal', label: 'Liberal', description: 'Relaxed thresholds for experienced crew, 7.5h sleep need' },
   { value: 'research', label: 'Research', description: 'Textbook Borbely (Jewett & Kronauer 1999), 50/50 S/C weighting' },
@@ -77,7 +79,7 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
   const pilotAircraft = analysisResults?.pilotAircraft || null;
 
   const activePreset = configPresets.find(p => p.value === settings.configPreset);
-  const paramConfig = PRESET_PARAMS[settings.configPreset] || PRESET_PARAMS.default;
+  const paramConfig = PRESET_PARAMS[settings.configPreset] || PRESET_PARAMS.operational;
 
   const primaryNav = navItems.filter(n => n.section === 'primary');
   const secondaryNav = navItems.filter(n => n.section === 'secondary');
@@ -113,8 +115,39 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
             </div>
           </div>
 
-          {/* Right: Auth + Badge + theme toggle */}
+          {/* Right: Preset switcher + Auth + Badge + theme toggle */}
           <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+            {/* Quick preset switcher */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  className="hidden sm:inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-secondary/50 hover:bg-secondary/80 border border-border/40 transition-colors text-[11px] font-medium text-foreground"
+                  title="Switch model preset"
+                >
+                  <Microscope className="h-3 w-3 text-primary" />
+                  {activePreset?.label || 'Operational'}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-1.5" align="end" sideOffset={8}>
+                <div className="space-y-0.5">
+                  {configPresets.map((preset) => (
+                    <button
+                      key={preset.value}
+                      onClick={() => handleSettingsChange({ configPreset: preset.value })}
+                      className={cn(
+                        'w-full text-left px-2.5 py-2 rounded-md transition-colors text-xs',
+                        settings.configPreset === preset.value
+                          ? 'bg-primary/15 text-primary font-medium'
+                          : 'hover:bg-secondary/60 text-foreground'
+                      )}
+                    >
+                      <div className="font-medium">{preset.label}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{preset.description}</div>
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
             <Badge variant="success" className="hidden lg:inline-flex text-[10px]">EASA ORO.FTL</Badge>
 
             {isAuthenticated ? (

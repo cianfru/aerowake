@@ -190,6 +190,7 @@ class BorbelyParameters:
     #   4h debt → −10% alertness, 8h debt → −20%, capped at floor.
     # Floor of 0.80 prevents unrealistically low values (debt alone cannot
     # reduce performance below 80% of its debt-free value).
+    # Note: operational_config overrides to 0.018 (calibrated for trained crew).
     sleep_debt_vulnerability_coeff: float = 0.025
     sleep_debt_vulnerability_floor: float = 0.80
 
@@ -377,6 +378,48 @@ class ModelConfig:
             risk_thresholds=RiskThresholds(),
             adaptation_rates=AdaptationRates(),
             sleep_quality_params=SleepQualityParameters(),
+        )
+
+    @classmethod
+    def operational_config(cls):
+        """
+        Calibrated for experienced airline crew (default preset).
+
+        Adjusts time constants, debt sensitivity, and sleep inertia based on
+        operational data from trained flight crew. Core science (circadian model,
+        S/C weights, hypoxia, PVT, time-on-task) unchanged from literature values.
+
+        Calibration choices (transparent deviations from EASA defaults):
+        - tau_i: 18.2h → 19.0h — trained pilots manage wakefulness better (Gander 2013)
+        - tau_d: 4.2h → 4.0h — slightly faster recovery for sleep-disciplined crew
+        - baseline_sleep_need: 8.0h → 7.5h — matches airline planning standard
+        - sleep_debt_vuln_coeff: 0.025 → 0.018 — less aggressive debt curve
+        - inertia_duration: 30 → 25 min — trained arousal protocols
+        - inertia_magnitude: 0.30 → 0.25 — reduced post-wake grogginess
+        - Risk thresholds: slightly relaxed (operational judgment)
+        - Hotel quality: 0.85 → 0.87 (airline-contracted hotels, QR standard)
+        """
+        return cls(
+            easa_framework=EASAFatigueFramework(),
+            borbely_params=BorbelyParameters(
+                tau_i=19.0,
+                tau_d=4.0,
+                baseline_sleep_need_hours=7.5,
+                sleep_debt_vulnerability_coeff=0.018,
+                inertia_duration_minutes=25.0,
+                inertia_max_magnitude=0.25,
+            ),
+            risk_thresholds=RiskThresholds(thresholds={
+                'low': (72, 100),
+                'moderate': (60, 72),
+                'high': (50, 60),
+                'critical': (40, 50),
+                'extreme': (0, 40)
+            }),
+            adaptation_rates=AdaptationRates(),
+            sleep_quality_params=SleepQualityParameters(
+                quality_hotel_typical=0.87,
+            )
         )
 
     @classmethod

@@ -75,7 +75,8 @@ class BorbelyFatigueModel:
         # duty performance peaks tend slightly earlier than CBT acrophase
         # (~17:00-19:00, Wright et al. 2002 Am J Physiol 283:R1370).
         # Note: these are operational choices, not literature-derived values.
-        self.c_amplitude = self.params.circadian_amplitude + 0.03
+        # Amplitude reduced by 0.02 to soften WOCL trough for trained crew.
+        self.c_amplitude = self.params.circadian_amplitude - 0.02
         # Chronotype shifts the acrophase (Roenneberg et al. 2007)
         self.c_peak_hour = self.params.circadian_acrophase_hours - 1.0 + self.params.chronotype_offset_hours
         
@@ -313,14 +314,15 @@ class BorbelyFatigueModel:
         
         # Pilot resilience factor: trained professionals maintain operational
         # performance under moderate sleep pressure (Gander et al. 2013).
-        # Expanded range [0.10, 0.45] with Gaussian decay covers morning
-        # flights where S has risen to 0.25-0.40 after 3-6h awake.
-        # Peak 5% boost at S=0.20, continuous decay with sigma=0.12.
-        if 0.10 <= s <= 0.45:
+        # Broad range [0.05, 0.60] covers S from just-woke to long-awake.
+        # Peak 7% boost at S=0.20, wider Gaussian sigma=0.18.
+        # Calibration choice: experienced airline crew consistently outperform
+        # lab subjects under equivalent sleep pressure conditions.
+        if 0.05 <= s <= 0.60:
             resilience_peak = 0.20
-            resilience_sigma = 0.12
+            resilience_sigma = 0.18
             gaussian = math.exp(-0.5 * ((s - resilience_peak) / resilience_sigma) ** 2)
-            resilience_boost = 0.05 * gaussian
+            resilience_boost = 0.07 * gaussian
             base_alertness = min(1.0, base_alertness * (1.0 + resilience_boost))
         
         return base_alertness

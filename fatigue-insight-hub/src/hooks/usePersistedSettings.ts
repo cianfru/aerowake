@@ -28,9 +28,10 @@ export function loadPersistedSettings(): Partial<PilotSettings> {
     if (parsed.configPreset) {
       // Migrate legacy preset values from before Phase 3
       const LEGACY_PRESET_MAP: Record<string, string> = {
-        'easa-default': 'default',
-        'faa-standard': 'default',
-        'custom': 'default',
+        'default': 'operational',
+        'easa-default': 'operational',
+        'faa-standard': 'operational',
+        'custom': 'operational',
       };
       result.configPreset = LEGACY_PRESET_MAP[parsed.configPreset] ?? parsed.configPreset;
     }
