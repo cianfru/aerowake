@@ -292,7 +292,7 @@ class Roster:
     pilot_aircraft: Optional[str] = None  # Aircraft type (e.g., "A320", "B777")
     
     # Initial conditions
-    initial_sleep_pressure: float = 0.3
+    initial_sleep_pressure: float = 0.15
     initial_sleep_debt: float = 0.0
     
     @property

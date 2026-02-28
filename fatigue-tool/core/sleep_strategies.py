@@ -111,7 +111,12 @@ class SleepStrategyMixin:
         )
 
         nap_end = report_local - timedelta(hours=self.MIN_WAKE_BEFORE_REPORT)
-        nap_start = nap_end - timedelta(hours=2.0)
+        # Adaptive nap duration: use available window between morning wake and
+        # MIN_WAKE_BEFORE_REPORT, capped at 2.5h (one full NREM-REM cycle + margin)
+        morning_wake_utc = morning_sleep_end.astimezone(pytz.utc)
+        available_for_nap = (nap_end.astimezone(pytz.utc) - morning_wake_utc).total_seconds() / 3600
+        nap_hours = min(2.5, max(1.0, available_for_nap - 2.0))
+        nap_start = nap_end - timedelta(hours=nap_hours)
 
         nap_start_utc, nap_end_utc, nap_warnings = self._validate_sleep_no_overlap(
             nap_start.astimezone(pytz.utc), nap_end.astimezone(pytz.utc), duty, previous_duty
@@ -186,7 +191,9 @@ class SleepStrategyMixin:
         report_local = duty.report_time_utc.astimezone(sleep_tz)
 
         report_hour = report_local.hour + report_local.minute / 60.0
-        sleep_duration = max(4.0, 6.6 - 0.25 * max(0, 9.0 - report_hour))
+        # Roach (2012) regression with raised floor: 5.0h minimum ensures
+        # pilots aren't predicted to sleep <5h before early reports.
+        sleep_duration = max(5.0, 6.6 - 0.25 * max(0, 9.0 - report_hour))
 
         wake_time = report_local - timedelta(hours=self.MIN_WAKE_BEFORE_REPORT)
         sleep_end = wake_time
@@ -227,18 +234,70 @@ class SleepStrategyMixin:
             sleep_end_hour=se_hour
         )
 
-        confidence = 0.55 if not sleep_warnings else 0.40
+        # A7b: Supplementary afternoon nap for early reports (04:00-06:00)
+        # Only when pilot is coming off a recent duty (10-24h rest window),
+        # meaning they flew recently and need recovery. If rest >24h, pilot
+        # is coming from days off and is well-rested — sleep onset latency
+        # would make a nap ineffective for a fully rested pilot.
+        blocks = [early_sleep]
+        quality_list = [sleep_quality]
+        all_warnings = sleep_warnings
+        nap_desc = ""
+
+        if previous_duty and 4.0 <= report_hour < 6.0:
+            rest_window_hours = (duty.report_time_utc - previous_duty.release_time_utc).total_seconds() / 3600
+            if 10.0 < rest_window_hours <= 24.0:
+                # Place nap at ~14:00-15:30 local (post-lunch dip, ~2h before earliest bedtime)
+                nap_start_local = report_local.replace(hour=14, minute=0) - timedelta(days=1)
+                nap_end_local = nap_start_local + timedelta(hours=1.5)
+
+                # Ensure nap doesn't overlap with previous duty
+                if previous_duty and nap_start_local.astimezone(pytz.utc) > previous_duty.release_time_utc + timedelta(hours=1):
+                    # Ensure nap ends well before bedtime (at least 2h gap)
+                    if nap_end_local < sleep_start - timedelta(hours=2):
+                        nap_s_utc, nap_e_utc, nap_w = self._validate_sleep_no_overlap(
+                            nap_start_local.astimezone(pytz.utc), nap_end_local.astimezone(pytz.utc), duty, previous_duty
+                        )
+                        nap_start_local = nap_s_utc.astimezone(sleep_tz)
+                        nap_end_local = nap_e_utc.astimezone(sleep_tz)
+
+                        nap_quality = self.calculate_sleep_quality(
+                            sleep_start=nap_start_local, sleep_end=nap_end_local,
+                            location=sleep_location,
+                            previous_duty_end=previous_duty.release_time_utc if previous_duty else None,
+                            next_event=report_local, location_timezone=sleep_tz.zone,
+                            biological_timezone=bio_tz, is_nap=True
+                        )
+
+                        ns_day, ns_hour = self._home_tz_day_hour(nap_start_local)
+                        ne_day, ne_hour = self._home_tz_day_hour(nap_end_local)
+                        nap_block = SleepBlock(
+                            start_utc=nap_s_utc, end_utc=nap_e_utc,
+                            location_timezone=sleep_tz.zone,
+                            duration_hours=nap_quality.actual_sleep_hours,
+                            quality_factor=nap_quality.sleep_efficiency,
+                            effective_sleep_hours=nap_quality.effective_sleep_hours,
+                            environment=sleep_location,
+                            sleep_start_day=ns_day, sleep_start_hour=ns_hour,
+                            sleep_end_day=ne_day, sleep_end_hour=ne_hour
+                        )
+                        blocks = [nap_block, early_sleep]
+                        quality_list = [nap_quality, sleep_quality]
+                        all_warnings = all_warnings or nap_w
+                        nap_desc = f" + 1.5h afternoon nap"
+
+        confidence = 0.55 if not all_warnings else 0.40
         if self.is_layover:
             confidence *= 0.90
 
         location_desc = f"{sleep_location} (layover)" if self.is_layover else sleep_location
         return SleepStrategy(
             strategy_type='early_bedtime',
-            sleep_blocks=[early_sleep],
+            sleep_blocks=blocks,
             confidence=confidence,
             explanation=f"Early report at {location_desc}: Constrained bedtime = {sleep_quality.effective_sleep_hours:.1f}h effective "
-                       f"(Roach 2012 regression: {sleep_duration:.1f}h predicted)",
-            quality_analysis=[sleep_quality]
+                       f"(Roach 2012 regression: {sleep_duration:.1f}h predicted){nap_desc}",
+            quality_analysis=quality_list
         )
 
     def _wocl_duty_strategy(

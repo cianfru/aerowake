@@ -11,7 +11,40 @@ interface AdvancedParametersDialogProps {
 
 // Mirrors fatigue-tool/core/parameters.py — each preset's key parameter values
 export const PRESET_PARAMS: Record<string, PresetConfig> = {
-  default: {
+  operational: {
+    label: 'Operational',
+    processS: {
+      tau_i: { value: 19.5, unit: 'h', label: 'Time constant (buildup)', citation: 'Calibration: Gander et al. 2013' },
+      tau_d: { value: 3.9, unit: 'h', label: 'Time constant (recovery)', citation: 'Calibration: sleep-disciplined crew' },
+      baseline_sleep_need: { value: 7.5, unit: 'h', label: 'Baseline sleep need', citation: 'Calibration: airline planning standard' },
+      inertia_duration: { value: 22, unit: 'min', label: 'Sleep inertia duration', citation: 'Calibration: trained arousal protocols' },
+      inertia_magnitude: { value: 0.25, unit: '', label: 'Sleep inertia max magnitude', citation: 'Calibration: reduced post-wake grogginess' },
+    },
+    processC: {
+      amplitude: { value: 0.25, unit: '', label: 'Circadian amplitude', citation: 'Czeisler et al. 1999' },
+      weight_circadian: { value: 0.45, unit: '', label: 'Circadian weight', citation: 'Borbely & Achermann 1999' },
+      weight_homeostatic: { value: 0.55, unit: '', label: 'Homeostatic weight', citation: 'Borbely & Achermann 1999' },
+      interaction_exponent: { value: 1.5, unit: '', label: 'S×C interaction exponent', citation: 'Model calibration' },
+    },
+    sleepQuality: {
+      quality_home: { value: 0.92, unit: '', label: 'Home sleep quality', citation: 'Pilcher & Huffcutt 1996' },
+      quality_hotel: { value: 0.87, unit: '', label: 'Hotel sleep quality', citation: 'Calibration: QR-contracted hotels' },
+      quality_hotel_airport: { value: 0.82, unit: '', label: 'Airport hotel quality', citation: 'Signal et al. 2013' },
+      quality_crew_rest: { value: 0.70, unit: '', label: 'Crew rest facility', citation: 'Signal et al. 2013 PSG: 70%' },
+    },
+    riskThresholds: {
+      low: { range: '72–100', label: 'Low Risk' },
+      moderate: { range: '60–72', label: 'Moderate Risk' },
+      high: { range: '50–60', label: 'High Risk' },
+      critical: { range: '40–50', label: 'Critical Risk' },
+      extreme: { range: '0–40', label: 'Extreme Risk' },
+    },
+    adaptation: {
+      westward: { value: 1.5, unit: 'h/day', label: 'Westward re-entrainment', citation: 'Waterhouse et al. 2007' },
+      eastward: { value: 1.0, unit: 'h/day', label: 'Eastward re-entrainment', citation: 'Waterhouse et al. 2007' },
+    },
+  },
+  easa_default: {
     label: 'EASA Default',
     processS: {
       tau_i: { value: 18.2, unit: 'h', label: 'Time constant (buildup)', citation: 'Jewett & Kronauer 1999' },
@@ -22,15 +55,15 @@ export const PRESET_PARAMS: Record<string, PresetConfig> = {
     },
     processC: {
       amplitude: { value: 0.25, unit: '', label: 'Circadian amplitude', citation: 'Czeisler et al. 1999' },
-      weight_circadian: { value: 0.4, unit: '', label: 'Circadian weight', citation: 'Borbely & Achermann 1999' },
-      weight_homeostatic: { value: 0.6, unit: '', label: 'Homeostatic weight', citation: 'Borbely & Achermann 1999' },
+      weight_circadian: { value: 0.45, unit: '', label: 'Circadian weight', citation: 'Borbely & Achermann 1999' },
+      weight_homeostatic: { value: 0.55, unit: '', label: 'Homeostatic weight', citation: 'Borbely & Achermann 1999' },
       interaction_exponent: { value: 1.5, unit: '', label: 'S×C interaction exponent', citation: 'Model calibration' },
     },
     sleepQuality: {
       quality_home: { value: 0.92, unit: '', label: 'Home sleep quality', citation: 'Pilcher & Huffcutt 1996' },
-      quality_hotel: { value: 0.80, unit: '', label: 'Hotel sleep quality', citation: 'Pilcher & Huffcutt 1996' },
-      quality_hotel_airport: { value: 0.75, unit: '', label: 'Airport hotel quality', citation: 'Pilcher & Huffcutt 1996' },
-      quality_crew_rest: { value: 0.65, unit: '', label: 'Crew rest facility', citation: 'Rosekind et al. 1994' },
+      quality_hotel: { value: 0.85, unit: '', label: 'Hotel sleep quality', citation: 'Signal et al. 2013' },
+      quality_hotel_airport: { value: 0.82, unit: '', label: 'Airport hotel quality', citation: 'Signal et al. 2013' },
+      quality_crew_rest: { value: 0.70, unit: '', label: 'Crew rest facility', citation: 'Signal et al. 2013 PSG: 70%' },
     },
     riskThresholds: {
       low: { range: '75–100', label: 'Low Risk' },
@@ -55,8 +88,8 @@ export const PRESET_PARAMS: Record<string, PresetConfig> = {
     },
     processC: {
       amplitude: { value: 0.25, unit: '', label: 'Circadian amplitude', citation: 'Czeisler et al. 1999' },
-      weight_circadian: { value: 0.4, unit: '', label: 'Circadian weight', citation: 'Borbely & Achermann 1999' },
-      weight_homeostatic: { value: 0.6, unit: '', label: 'Homeostatic weight', citation: 'Borbely & Achermann 1999' },
+      weight_circadian: { value: 0.45, unit: '', label: 'Circadian weight', citation: 'Borbely & Achermann 1999' },
+      weight_homeostatic: { value: 0.55, unit: '', label: 'Homeostatic weight', citation: 'Borbely & Achermann 1999' },
       interaction_exponent: { value: 1.5, unit: '', label: 'S×C interaction exponent', citation: 'Model calibration' },
     },
     sleepQuality: {
@@ -75,39 +108,6 @@ export const PRESET_PARAMS: Record<string, PresetConfig> = {
     adaptation: {
       westward: { value: 1.0, unit: 'h/day', label: 'Westward re-entrainment', citation: 'Conservative: slower' },
       eastward: { value: 0.7, unit: 'h/day', label: 'Eastward re-entrainment', citation: 'Conservative: slower' },
-    },
-  },
-  liberal: {
-    label: 'Liberal',
-    processS: {
-      tau_i: { value: 20.0, unit: 'h', label: 'Time constant (buildup)', citation: 'Experienced crew assumption' },
-      tau_d: { value: 3.8, unit: 'h', label: 'Time constant (recovery)', citation: 'Experienced crew assumption' },
-      baseline_sleep_need: { value: 7.5, unit: 'h', label: 'Baseline sleep need', citation: 'Lower individual need' },
-      inertia_duration: { value: 20, unit: 'min', label: 'Sleep inertia duration', citation: 'Reduced for experienced crew' },
-      inertia_magnitude: { value: 0.25, unit: '', label: 'Sleep inertia max magnitude', citation: 'Reduced for experienced crew' },
-    },
-    processC: {
-      amplitude: { value: 0.25, unit: '', label: 'Circadian amplitude', citation: 'Czeisler et al. 1999' },
-      weight_circadian: { value: 0.4, unit: '', label: 'Circadian weight', citation: 'Borbely & Achermann 1999' },
-      weight_homeostatic: { value: 0.6, unit: '', label: 'Homeostatic weight', citation: 'Borbely & Achermann 1999' },
-      interaction_exponent: { value: 1.5, unit: '', label: 'S×C interaction exponent', citation: 'Model calibration' },
-    },
-    sleepQuality: {
-      quality_home: { value: 0.92, unit: '', label: 'Home sleep quality', citation: 'Pilcher & Huffcutt 1996' },
-      quality_hotel: { value: 0.85, unit: '', label: 'Hotel sleep quality', citation: 'Optimistic estimate' },
-      quality_hotel_airport: { value: 0.80, unit: '', label: 'Airport hotel quality', citation: 'Optimistic estimate' },
-      quality_crew_rest: { value: 0.70, unit: '', label: 'Crew rest facility', citation: 'Optimistic estimate' },
-    },
-    riskThresholds: {
-      low: { range: '70–100', label: 'Low Risk' },
-      moderate: { range: '60–70', label: 'Moderate Risk' },
-      high: { range: '50–60', label: 'High Risk' },
-      critical: { range: '40–50', label: 'Critical Risk' },
-      extreme: { range: '0–40', label: 'Extreme Risk' },
-    },
-    adaptation: {
-      westward: { value: 1.8, unit: 'h/day', label: 'Westward re-entrainment', citation: 'Faster adaptation assumed' },
-      eastward: { value: 1.2, unit: 'h/day', label: 'Eastward re-entrainment', citation: 'Faster adaptation assumed' },
     },
   },
   research: {
@@ -189,7 +189,7 @@ export const RISK_COLORS: Record<string, string> = {
 };
 
 export function AdvancedParametersDialog({ preset, open, onOpenChange }: AdvancedParametersDialogProps) {
-  const config = PRESET_PARAMS[preset] || PRESET_PARAMS.default;
+  const config = PRESET_PARAMS[preset] || PRESET_PARAMS.operational;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

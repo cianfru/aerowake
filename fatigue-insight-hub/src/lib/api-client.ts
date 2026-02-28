@@ -331,7 +331,7 @@ export async function analyzeRoster(
   file: File,
   pilotId: string,
   homeBase: string,
-  configPreset: string = 'default',
+  configPreset: string = 'operational',
   crewSet: ULRCrewSet = 'crew_b',
   dutyCrewOverrides?: Map<string, ULRCrewSet>
 ): Promise<AnalysisResult> {
@@ -463,7 +463,7 @@ export async function deleteRoster(rosterId: string): Promise<void> {
 
 export async function reanalyzeRoster(
   rosterId: string,
-  configPreset: string = 'default',
+  configPreset: string = 'operational',
   crewSet: string = 'crew_b',
 ): Promise<AnalysisResult> {
   const formData = new FormData();

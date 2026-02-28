@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Plane, MapPin, Hash, Timer, FileText, Eye, ArrowRight, Upload, LogIn } from 'lucide-react';
+import logoDark from '@/assets/logo-dark.png';
 import { PilotAvatar } from './PilotAvatar';
 import { RouteNetworkMapbox } from './RouteNetworkMapbox';
 import { Card, CardContent } from '@/components/ui/card';
@@ -75,10 +76,9 @@ export function SummaryPage() {
         <div className="mx-auto max-w-4xl space-y-6 animate-fade-in">
           <Card variant="glass" className="p-8 md:p-12 text-center">
             <div className="space-y-4">
-              <span className="text-5xl md:text-6xl">✈️</span>
-              <h2 className="text-xl md:text-2xl font-semibold">Welcome to Aerowake</h2>
+              <img src={logoDark} alt="Aerowake" className="h-12 md:h-16 w-auto mx-auto object-contain" />
               <p className="text-sm md:text-base text-muted-foreground max-w-md mx-auto">
-                Biomathematical fatigue prediction for airline pilots.
+                Biomathematical Fatigue Prediction Model for airline pilots.
                 Upload a roster to get started, or sign in to access your saved analyses.
               </p>
               <div className="flex items-center justify-center gap-3 pt-2">

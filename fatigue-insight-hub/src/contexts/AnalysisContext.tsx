@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS: PilotSettings = {
   analysisType: 'single',
   selectedMonth: new Date(2026, 1, 1),
   theme: 'dark',
-  configPreset: 'default',
+  configPreset: 'operational',
   crewSet: 'crew_b',
 };
 
