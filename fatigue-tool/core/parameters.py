@@ -186,13 +186,17 @@ class BorbelyParameters:
     # even moderate nightly shortfalls compound into significant impairment.
     # Banks & Dinges (2007) Prog Brain Res 185:41-53 confirmed that
     # performance degrades proportionally to accumulated debt hours.
-    # The coefficient 0.025 per hour of debt means:
-    #   4h debt → −10% alertness, 8h debt → −20%, capped at floor.
-    # Floor of 0.80 prevents unrealistically low values (debt alone cannot
-    # reduce performance below 80% of its debt-free value).
-    # Note: operational_config overrides to 0.018 (calibrated for trained crew).
-    sleep_debt_vulnerability_coeff: float = 0.025
-    sleep_debt_vulnerability_floor: float = 0.80
+    #
+    # Calibrated for trained airline crew (Gander et al. 2013):
+    # Professional pilots maintain operational performance better than
+    # lab subjects under equivalent sleep restriction. 0.018 per hour:
+    #   4h debt → −7.2% alertness, 8h debt → −14.4%, capped at floor.
+    # Floor of 0.85 prevents unrealistically low values (debt alone cannot
+    # reduce performance below 85% of its debt-free value).
+    # Combined with the 15h debt cap in the simulation loop, this gives
+    # a maximum real-world penalty of −15% at ≥8.3h cumulative debt.
+    sleep_debt_vulnerability_coeff: float = 0.018
+    sleep_debt_vulnerability_floor: float = 0.85
 
     # Chronotype offset and individual vulnerability
     # Roenneberg et al. (2007) Curr Biol 17:R44-R45 — chronotype (morningness-
