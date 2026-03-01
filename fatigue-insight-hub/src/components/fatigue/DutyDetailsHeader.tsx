@@ -1,5 +1,6 @@
-import { Plane, Monitor, BookOpen } from 'lucide-react';
+import { Plane, Monitor, BookOpen, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { DutyAnalysis } from '@/types/fatigue';
 import { format } from 'date-fns';
 import { isTrainingDuty, getTrainingDutyLabel } from '@/lib/fatigue-utils';
@@ -7,6 +8,8 @@ import { cn } from '@/lib/utils';
 
 interface DutyDetailsHeaderProps {
   duty: DutyAnalysis;
+  onGenerateReport?: () => void;
+  reportMode?: boolean;
 }
 
 /** Risk badge for the header. */
@@ -25,7 +28,7 @@ function RiskBadge({ risk }: { risk: string }) {
  * Shows: icon, date, duty/block/sectors, min/avg/landing performance, risk badge.
  * Flight segments and FDP bar are now in the left column (DutyInfoColumn).
  */
-export function DutyDetailsHeader({ duty }: DutyDetailsHeaderProps) {
+export function DutyDetailsHeader({ duty, onGenerateReport, reportMode }: DutyDetailsHeaderProps) {
   const isTraining = isTrainingDuty(duty);
 
   return (
@@ -58,8 +61,16 @@ export function DutyDetailsHeader({ duty }: DutyDetailsHeaderProps) {
         {!isTraining && <StatPerf label="Ldg" value={duty.landingPerformance} />}
       </div>
 
-      {/* Right: risk badge */}
-      <RiskBadge risk={duty.overallRisk} />
+      {/* Right: report button + risk badge */}
+      <div className="flex items-center gap-2">
+        {onGenerateReport && !reportMode && (
+          <Button variant="outline" size="sm" onClick={onGenerateReport} className="gap-1.5 text-xs">
+            <FileText className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Report</span>
+          </Button>
+        )}
+        <RiskBadge risk={duty.overallRisk} />
+      </div>
     </div>
   );
 }

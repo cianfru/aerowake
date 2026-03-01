@@ -347,3 +347,74 @@
   33% { transform: translate(5vw, -6vh) scale(1.08); }
   66% { transform: translate(-7vw, 3vh) scale(0.97); }
 }
+
+/* ── Print Styles for Fatigue Report ─────────────────────────── */
+
+@media print {
+  /* Hide non-report UI */
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Make the dialog fill the page */
+  [data-radix-portal] [role="dialog"] {
+    position: static !important;
+    max-width: none !important;
+    max-height: none !important;
+    width: 100% !important;
+    height: auto !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: white !important;
+  }
+
+  /* Hide dialog overlay */
+  [data-radix-portal] [data-state] {
+    background: transparent !important;
+  }
+
+  /* Hide dialog close button */
+  [data-radix-portal] button[class*="absolute"][class*="right"] {
+    display: none !important;
+  }
+
+  /* Remove glassmorphism */
+  [class*="glass"],
+  [class*="backdrop-blur"] {
+    background: white !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Page breaks */
+  .report-section {
+    page-break-inside: avoid;
+  }
+  .report-section-break {
+    page-break-before: always;
+  }
+
+  /* Chart sizing */
+  .recharts-responsive-container {
+    height: 200px !important;
+  }
+
+  /* Reset card backgrounds */
+  [class*="card"] {
+    border-color: #d1d5db !important;
+  }
+
+  /* Badge print styles */
+  [class*="badge"] {
+    border: 1px solid #9ca3af !important;
+    color: #374151 !important;
+    background: #f3f4f6 !important;
+  }
+
+  /* Hide aurora background */
+  .aurora-container {
+    display: none !important;
+  }
+}
