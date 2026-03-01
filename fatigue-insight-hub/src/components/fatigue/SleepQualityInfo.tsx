@@ -114,7 +114,7 @@ export function SleepQualityInfo({
       <PopoverContent 
         side="right" 
         align="start" 
-        className="w-[380px] p-0 bg-card/95 backdrop-blur-xl border-border/50 shadow-2xl"
+        className="w-[min(380px,calc(100vw-2rem))] p-0 bg-card/95 backdrop-blur-xl border-border/50 shadow-2xl"
       >
         <ScrollArea className="max-h-[70vh]">
           <div className="p-4 space-y-4">

@@ -173,7 +173,7 @@ export function TimelineRenderer({
         style={{ maxHeight: isZoomed ? '80vh' : undefined }}
       >
         <div
-          className="min-w-[800px] transition-transform duration-100"
+          className="min-w-[600px] transition-transform duration-100"
           style={{
             transform: `translate(${zoom.panX}px, ${zoom.panY}px) scale(${zoom.scaleX}, ${zoom.scaleY})`,
             transformOrigin: 'top left',

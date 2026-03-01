@@ -65,10 +65,11 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       <CardContent className="space-y-4">
         {/* Tab selector for timeline type */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'homebase' | 'utc' | 'elapsed' | 'continuous')}>
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
             <TabsTrigger value="homebase" className="text-xs">
               <Home className="h-3 w-3 mr-1" />
-              Home-Base Timeline
+              <span className="hidden sm:inline">Home-Base Timeline</span>
+              <span className="sm:hidden">Home-Base</span>
             </TabsTrigger>
             <TabsTrigger value="utc" className="text-xs">
               <Globe className="h-3 w-3 mr-1" />
@@ -76,7 +77,8 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             </TabsTrigger>
             <TabsTrigger value="elapsed" className="text-xs">
               <Brain className="h-3 w-3 mr-1" />
-              Human Performance (Elapsed)
+              <span className="hidden sm:inline">Human Performance (Elapsed)</span>
+              <span className="sm:hidden">Performance</span>
             </TabsTrigger>
             <TabsTrigger value="continuous" className="text-xs">
               <Battery className="h-3 w-3 mr-1" />

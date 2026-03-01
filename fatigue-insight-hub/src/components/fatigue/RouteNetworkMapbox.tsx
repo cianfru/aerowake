@@ -483,14 +483,14 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
 
   return (
     <Card variant="glass">
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <CardTitle className="flex items-center gap-2">
           <Globe className="h-5 w-5 text-primary" />
           Route Network Analysis
         </CardTitle>
         <div className="flex items-center gap-2">
           {/* Region Presets */}
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {regionPresets.map((preset) => (
               <Button
                 key={preset.name}
@@ -521,7 +521,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
         <div className="relative overflow-hidden rounded-lg bg-secondary/20">
           {/* Map Container or Placeholder */}
           {tokenMissing ? (
-            <div className="h-[400px] w-full flex items-center justify-center bg-secondary/30">
+            <div className="h-[280px] md:h-[400px] w-full flex items-center justify-center bg-secondary/30">
               <div className="text-center space-y-3 p-6">
                 <Globe className="h-12 w-12 text-muted-foreground mx-auto" />
                 <div>
@@ -544,7 +544,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
               </div>
             </div>
           ) : (
-            <div ref={mapContainer} className="h-[400px] w-full relative">
+            <div ref={mapContainer} className="h-[280px] md:h-[400px] w-full relative">
               {/* Loading indicator for airport fetch */}
               {isLoadingAirports && (
                 <div className="absolute top-4 left-4 z-10 flex items-center gap-2 rounded-lg border border-border bg-card/95 px-3 py-2 shadow-lg backdrop-blur-sm">
