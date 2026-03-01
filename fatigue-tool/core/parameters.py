@@ -178,24 +178,26 @@ class BorbelyParameters:
     circadian_dampening_coeff: float = 0.25
     circadian_dampening_max_debt: float = 20.0
 
-    # Sleep debt vulnerability — chronic restriction amplification
+    # Sleep debt vulnerability — diminishing-returns model
     # Van Dongen et al. (2003) Sleep 26(2):117-126 showed that chronic
-    # sleep restriction (4-6h/night) produces cumulative cognitive deficits
-    # that grow linearly with each day of restriction and are NOT offset
-    # by circadian recovery.  The "dose-response" relationship means that
-    # even moderate nightly shortfalls compound into significant impairment.
-    # Banks & Dinges (2007) Prog Brain Res 185:41-53 confirmed that
-    # performance degrades proportionally to accumulated debt hours.
+    # sleep restriction produces cumulative cognitive deficits, but the
+    # marginal impact of each additional hour of debt decreases — deficits
+    # plateau under sustained restriction.
+    # Banks & Dinges (2007) Prog Brain Res 185:41-53 confirmed a
+    # dose-response relationship with ceiling effect.
+    # Gander et al. (2013): trained airline crew maintain operational
+    # performance better than lab subjects under equivalent restriction.
     #
-    # Calibrated for trained airline crew (Gander et al. 2013):
-    # Professional pilots maintain operational performance better than
-    # lab subjects under equivalent sleep restriction. 0.018 per hour:
-    #   4h debt → −7.2% alertness, 8h debt → −14.4%, capped at floor.
-    # Floor of 0.85 prevents unrealistically low values (debt alone cannot
-    # reduce performance below 85% of its debt-free value).
-    # Combined with the 15h debt cap in the simulation loop, this gives
-    # a maximum real-world penalty of −15% at ≥8.3h cumulative debt.
-    sleep_debt_vulnerability_coeff: float = 0.018
+    # Exponential model: penalty = floor + (1 - floor) × exp(-k × debt)
+    # k = 0.08 calibrated so that:
+    #   5h debt  → ~5% penalty     (one bad night)
+    #   10h debt → ~8% penalty     (several short nights)
+    #   20h debt → ~12% penalty    (chronic mild restriction)
+    #   50h debt → ~15% penalty    (severe chronic restriction)
+    #   90h debt → ~15% penalty    (extreme — near asymptote)
+    # No artificial cap on debt — the curve naturally asymptotes.
+    # Floor of 0.85 means debt alone cannot reduce alertness below 85%.
+    sleep_debt_vulnerability_coeff: float = 0.08
     sleep_debt_vulnerability_floor: float = 0.85
 
     # Chronotype offset and individual vulnerability
