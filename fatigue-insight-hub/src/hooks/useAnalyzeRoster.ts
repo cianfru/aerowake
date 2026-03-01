@@ -58,8 +58,8 @@ export function useAnalyzeRoster() {
       setAnalysisResults(transformed);
     },
     onError: (error: Error) => {
-      console.error('[Re-analysis] failed:', error.message);
-      toast.error('Re-analysis failed: ' + error.message);
+      // Silent fail — auto-triggered, don't spam toasts when API is offline
+      console.warn('[Re-analysis] failed:', error.message);
     },
   });
 
@@ -81,8 +81,8 @@ export function useAnalyzeRoster() {
       setAnalysisResults(transformed);
     },
     onError: (error: Error) => {
-      console.error('[Saved roster re-analysis] failed:', error.message);
-      toast.error('Re-analysis failed: ' + error.message);
+      // Silent fail — auto-triggered, don't spam toasts when API is offline
+      console.warn('[Saved roster re-analysis] failed:', error.message);
     },
   });
 

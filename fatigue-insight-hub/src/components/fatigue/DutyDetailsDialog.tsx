@@ -5,6 +5,7 @@ import { getDutyDetail } from '@/lib/api-client';
 import { DutyDetailsHeader } from './DutyDetailsHeader';
 import { DutyInfoColumn } from './DutyInfoColumn';
 import { PerformanceColumn } from './PerformanceColumn';
+import { FatigueReport } from './report/FatigueReport';
 import { format } from 'date-fns';
 
 interface DutyDetailsDialogProps {
@@ -39,6 +40,7 @@ export function DutyDetailsDialog({
   onCrewChange,
 }: DutyDetailsDialogProps) {
   const [detailedDuty, setDetailedDuty] = useState<DutyAnalysis | null>(null);
+  const [reportMode, setReportMode] = useState(false);
 
   const dutyKey = useMemo(() => {
     if (!analysisId || !duty?.dutyId) return null;
@@ -52,6 +54,7 @@ export function DutyDetailsDialog({
     async function run() {
       // Always start from the base duty passed in.
       setDetailedDuty(duty);
+      setReportMode(false);
 
       if (!open) return;
       if (!analysisId || !duty?.dutyId) return;
@@ -127,30 +130,45 @@ export function DutyDetailsDialog({
           Duty Details — {format(displayDuty.date, 'MMM dd, yyyy')}
         </DialogTitle>
 
-        {/* Compact header */}
-        <div className="flex-shrink-0 border-b border-border/50 bg-background/95 backdrop-blur-sm px-4 md:px-6 py-2.5 md:py-3">
-          <DutyDetailsHeader duty={displayDuty} />
-        </div>
+        {/* Compact header (hidden in report mode — report has its own toolbar) */}
+        {!reportMode && (
+          <div className="flex-shrink-0 border-b border-border/50 bg-background/95 backdrop-blur-sm px-4 md:px-6 py-2.5 md:py-3">
+            <DutyDetailsHeader
+              duty={displayDuty}
+              onGenerateReport={() => setReportMode(true)}
+              reportMode={reportMode}
+            />
+          </div>
+        )}
 
-        {/* Two-column content */}
-        <div className="flex-1 min-h-0 px-3 md:px-5 py-3 md:py-4">
-          <div className="h-full grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 overflow-y-auto md:overflow-hidden">
-            {/* Left: Duty Info */}
-            <div className="md:overflow-y-auto md:pr-1 space-y-3">
-              <DutyInfoColumn
-                duty={displayDuty}
-                globalCrewSet={globalCrewSet}
-                dutyCrewOverride={dutyCrewOverride}
-                onCrewChange={hasCrewContent ? onCrewChange : undefined}
-                hasCrewContent={!!hasCrewContent}
-              />
-            </div>
-            {/* Right: Performance */}
-            <div className="md:overflow-y-auto md:pl-1 space-y-3">
-              <PerformanceColumn duty={displayDuty} />
+        {reportMode ? (
+          /* Full-width fatigue report */
+          <FatigueReport
+            duty={displayDuty}
+            analysisId={analysisId}
+            onBack={() => setReportMode(false)}
+          />
+        ) : (
+          /* Two-column duty details */
+          <div className="flex-1 min-h-0 px-3 md:px-5 py-3 md:py-4">
+            <div className="h-full grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 overflow-y-auto md:overflow-hidden">
+              {/* Left: Duty Info */}
+              <div className="md:overflow-y-auto md:pr-1 space-y-3">
+                <DutyInfoColumn
+                  duty={displayDuty}
+                  globalCrewSet={globalCrewSet}
+                  dutyCrewOverride={dutyCrewOverride}
+                  onCrewChange={hasCrewContent ? onCrewChange : undefined}
+                  hasCrewContent={!!hasCrewContent}
+                />
+              </div>
+              {/* Right: Performance */}
+              <div className="md:overflow-y-auto md:pl-1 space-y-3">
+                <PerformanceColumn duty={displayDuty} />
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </DialogContent>
     </Dialog>
   );
