@@ -1,5 +1,6 @@
 import { useRef } from 'react';
-import { ChevronDown, BookOpen } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ChevronDown } from 'lucide-react';
 import { LandingGlobe } from './LandingGlobe';
 import { useScrollProgress } from './useScrollProgress';
 
@@ -8,101 +9,109 @@ interface HeroSectionProps {
 }
 
 export function HeroSection({ onScrollToContent }: HeroSectionProps) {
+  const navigate = useNavigate();
   const heroRef = useRef<HTMLElement>(null);
   const progress = useScrollProgress(heroRef);
 
-  // Fade out hero content as user scrolls past (progress ~0.5 = top of page)
   const scrollFade = Math.max(0, Math.min(1, (progress - 0.5) * 4));
   const contentOpacity = 1 - scrollFade;
   const contentTranslate = scrollFade * 60;
 
   return (
     <section ref={heroRef} className="relative h-screen overflow-hidden bg-[#000408]">
-      {/* Mapbox Globe Background — z-0 */}
+      {/* Mapbox Globe Background */}
       <LandingGlobe />
 
-      {/* Gradient overlays — z-[1], between globe and content */}
+      {/* Gradient overlays */}
       <div
         className="absolute inset-0 z-[1] pointer-events-none"
         style={{
-          background: 'linear-gradient(to right, rgba(0,4,8,0.88) 0%, rgba(0,4,8,0.4) 45%, rgba(0,4,8,0.1) 70%, rgba(0,4,8,0.2) 100%)',
+          background: `
+            linear-gradient(135deg, rgba(0,4,8,0.92) 0%, rgba(0,4,8,0.65) 40%, rgba(0,4,8,0.15) 65%, rgba(0,4,8,0.25) 100%)
+          `,
         }}
       />
       <div
         className="absolute inset-0 z-[1] pointer-events-none"
         style={{
-          background: 'linear-gradient(to bottom, rgba(0,4,8,0.3) 0%, transparent 15%, transparent 75%, #000408 100%)',
+          background: 'linear-gradient(to bottom, rgba(0,4,8,0.2) 0%, transparent 20%, transparent 70%, #000408 100%)',
         }}
       />
 
-      {/* Hero Content — centered, in front of globe */}
+      {/* Subtle grain texture overlay */}
       <div
-        className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center"
+        className="absolute inset-0 z-[2] pointer-events-none opacity-[0.03]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`,
+          backgroundSize: '128px 128px',
+        }}
+      />
+
+      {/* Hero Content — left-aligned editorial layout */}
+      <div
+        className="relative z-10 flex h-full items-end pb-32 md:items-center md:pb-0"
         style={{
           opacity: contentOpacity,
           transform: `translateY(${contentTranslate}px)`,
         }}
       >
-        <div className="max-w-3xl">
-          {/* Headline */}
-          <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">
-            Landing alertness,{' '}
-            <span className="bg-gradient-to-r from-[hsl(199,89%,48%)] to-[hsl(199,89%,68%)] bg-clip-text text-transparent">
-              predicted.
-            </span>
-          </h1>
-
-          {/* Subtitle */}
-          <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-white/45 md:text-lg">
-            Biomathematical fatigue modeling that quantifies pilot performance
-            from takeoff to touchdown.
-          </p>
-
-          {/* Science credibility */}
-          <div className="mx-auto mt-5 flex items-center justify-center gap-2.5">
-            <BookOpen className="h-3.5 w-3.5 text-[hsl(199,89%,48%)]/60" />
-            <span className="text-xs text-white/35 tracking-wide">
-              Built on <span className="text-white/55 font-medium">56 peer-reviewed studies</span> in sleep science and human performance
-            </span>
-          </div>
-
-          {/* CTAs */}
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={onScrollToContent}
-              className="rounded-lg bg-[hsl(199,89%,48%)] px-5 py-2.5 text-sm font-semibold text-white transition-all duration-300 hover:bg-[hsl(199,89%,42%)] hover:shadow-[0_0_30px_rgba(14,165,233,0.3)] active:scale-[0.98]"
-            >
-              Explore the Science
-            </button>
-            <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-medium tracking-wider text-white/40 uppercase backdrop-blur-sm">
-              EASA ORO.FTL Compliant
-            </span>
-          </div>
-        </div>
-
-        {/* Bottom feature bullets */}
-        <div className="absolute bottom-20 left-0 right-0 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 px-6">
-          {[
-            'Two-Process Model',
-            'Circadian Phase Tracking',
-            'Sleep Debt Analysis',
-            'SMS-Ready Reports',
-          ].map((feature) => (
-            <div key={feature} className="flex items-center gap-1.5">
-              <span className="h-1 w-1 rounded-full bg-[hsl(199,89%,48%)]/50" />
-              <span className="text-[11px] text-white/25 tracking-wide">{feature}</span>
+        <div className="mx-auto w-full max-w-7xl px-6 md:px-10 lg:px-16">
+          <div className="max-w-2xl">
+            {/* Overline */}
+            <div className="mb-6 flex items-center gap-3">
+              <div className="h-px w-8 bg-[hsl(199,89%,48%)]/40" />
+              <span className="text-[11px] font-medium tracking-[0.2em] uppercase text-[hsl(199,89%,48%)]/70">
+                Fatigue Risk Management
+              </span>
             </div>
-          ))}
+
+            {/* Headline — large, confident, clean */}
+            <h1 className="font-serif text-[clamp(2.5rem,6vw,4.5rem)] font-light leading-[1.05] tracking-[-0.02em] text-white">
+              Know your fatigue
+              <br />
+              <span className="text-white/65">before you fly.</span>
+            </h1>
+
+            {/* Body copy — warm, supportive, not confrontational */}
+            <p className="mt-6 max-w-md text-[15px] leading-[1.7] text-white/60 font-light">
+              Aerowake uses peer-reviewed sleep science to model your cognitive
+              performance across every duty. Understand your alertness patterns,
+              identify high-risk windows, to help you make informed decisions.
+            </p>
+
+            {/* CTAs */}
+            <div className="mt-10 flex items-center gap-4">
+              <button
+                onClick={() => navigate('/login')}
+                className="group relative overflow-hidden rounded-full bg-white px-7 py-3 text-[13px] font-semibold text-[#000408] tracking-wide transition-all duration-300 hover:shadow-[0_0_40px_rgba(255,255,255,0.15)]"
+              >
+                <span className="relative z-10">Get Started</span>
+                <div className="absolute inset-0 z-0 bg-gradient-to-r from-white to-white/80 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+              </button>
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/60" />
+                <span className="text-[12px] text-white/50 tracking-wide">
+                  EASA ORO.FTL compliant
+                </span>
+              </div>
+            </div>
+
+            {/* Understated science credential */}
+            <p className="mt-12 text-[11px] text-white/40 tracking-wide">
+              Built on the Borbély Two-Process Model &middot; 56 peer-reviewed references
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Scroll indicator */}
       <button
         onClick={onScrollToContent}
-        className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center gap-1 text-white/30 transition-colors hover:text-white/50"
+        className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center gap-1 text-white/30 transition-colors hover:text-white/50"
         style={{ opacity: contentOpacity }}
       >
-        <ChevronDown className="h-4 w-4 animate-bounce" />
+        <span className="text-[10px] tracking-[0.15em] uppercase">Scroll</span>
+        <ChevronDown className="h-3.5 w-3.5 animate-bounce" />
       </button>
     </section>
   );

@@ -2,34 +2,28 @@ import { APP_VERSION } from '@/lib/version';
 
 export function ScienceFooter() {
   return (
-    <footer className="relative bg-[#000408] border-t border-white/[0.05] py-10 md:py-12">
-      <div className="mx-auto max-w-5xl px-6">
-        <div className="flex flex-col items-center text-center">
-          <p className="text-xs text-white/25 font-mono uppercase tracking-wider">
-            Aerowake v{APP_VERSION}
-          </p>
-          <p className="mt-2 text-xs text-white/20 max-w-md leading-relaxed">
-            Biomathematical fatigue prediction for aviation professionals.
-            Educational tool only — not for operational go/no-go decisions.
-          </p>
+    <footer className="relative bg-[#000408] py-16 md:py-20">
+      <div className="mx-auto max-w-7xl px-6 md:px-10 lg:px-16">
+        {/* Top separator */}
+        <div className="h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent mb-12" />
 
-          {/* Science citations */}
-          <div className="mt-6 flex flex-wrap justify-center gap-x-4 gap-y-1">
-            {[
-              'Borbely & Achermann (1999)',
-              'EASA Moebus Report (2008-2013)',
-              'Gander et al. (1994)',
-              'Signal et al. (2009)',
-            ].map((cite) => (
-              <span key={cite} className="text-[10px] text-white/15 font-mono">
-                {cite}
-              </span>
-            ))}
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-8">
+          {/* Left — brand + description */}
+          <div className="max-w-sm">
+            <p className="text-[13px] font-medium text-white/60 tracking-wide mb-2">
+              Aerowake
+            </p>
+            <p className="text-[12px] text-white/35 leading-[1.7] font-light">
+              Biomathematical Fatigue Prediction Model for Aviation Professionals
+            </p>
           </div>
 
-          <p className="mt-6 text-[10px] text-white/10">
-            &copy; {new Date().getFullYear()} Aerowake. All rights reserved.
-          </p>
+          {/* Right — version */}
+          <div className="md:text-right">
+            <p className="text-[10px] text-white/20 font-mono">
+              v{APP_VERSION} &middot; &copy; {new Date().getFullYear()} Aerowake
+            </p>
+          </div>
         </div>
       </div>
     </footer>
