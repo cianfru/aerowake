@@ -205,7 +205,7 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
 
       {/* Navigation Sidebar */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SheetContent side="left" className="glass-strong border-r border-border/50 p-0 w-[280px] sm:max-w-[280px]">
+        <SheetContent side="left" className="glass-strong border-r border-border/50 p-0 w-[min(280px,85vw)] sm:w-[280px]">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <div className="flex flex-col h-full overflow-y-auto">
             {/* Pilot card */}
