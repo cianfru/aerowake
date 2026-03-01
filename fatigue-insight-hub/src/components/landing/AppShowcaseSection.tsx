@@ -96,12 +96,12 @@ export function AppShowcaseSection() {
               </span>
             </div>
             <h2 className="font-serif text-3xl font-light tracking-tight text-white md:text-4xl">
-              Your year at a glance.
+              Everything you need to see.
             </h2>
             <p className="mt-4 text-[15px] leading-[1.7] text-white/60 font-light">
-              Every roster you upload becomes part of your rolling fatigue
-              history. See patterns emerge across months, and drill into any
-              single duty for a full per-phase breakdown.
+              From roster-wide timelines to single-duty breakdowns, sleep debt
+              tracking to SMS-ready reports — every layer of your performance
+              analysis, in one place.
             </p>
           </div>
         </ScrollReveal>

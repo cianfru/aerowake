@@ -418,3 +418,68 @@
     display: none !important;
   }
 }
+
+/* Border-beam: rotating conic gradient for button hover */
+@keyframes border-beam-spin {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.border-beam-wrapper {
+  position: relative;
+  border-radius: 9999px;
+}
+
+/* Gold beam — masked to a 2px ring, only visible on hover */
+.border-beam-wrapper .beam-border {
+  position: absolute;
+  inset: -1px;
+  border-radius: 9999px;
+  padding: 2px;
+  overflow: hidden;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.border-beam-wrapper:hover .beam-border {
+  opacity: 1;
+}
+
+.border-beam-wrapper .beam-border .beam-gradient {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 300%;
+  height: 600%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    transparent 30%,
+    #c9975a 40%,
+    #e8c06a 48%,
+    #f0d080 52%,
+    #e8c06a 56%,
+    #c9975a 64%,
+    transparent 72%,
+    transparent 100%
+  );
+  animation: border-beam-spin 3s linear infinite;
+}
+
+.border-beam-wrapper .beam-inner {
+  position: relative;
+  z-index: 1;
+  border-radius: 9999px;
+  border: 1px solid rgba(91, 184, 232, 0.35);
+  transition: border-color 0.3s ease;
+}
+
+.border-beam-wrapper:hover .beam-inner {
+  border-color: transparent;
+}
