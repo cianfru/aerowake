@@ -83,10 +83,12 @@ export function HeroSection({ onScrollToContent }: HeroSectionProps) {
             <div className="mt-10 flex items-center gap-4">
               <button
                 onClick={() => navigate('/login')}
-                className="group relative overflow-hidden rounded-full bg-white px-7 py-3 text-[13px] font-semibold text-[#000408] tracking-wide transition-all duration-300 hover:shadow-[0_0_40px_rgba(255,255,255,0.15)]"
+                className="border-beam-wrapper cursor-pointer"
               >
-                <span className="relative z-10">Get Started</span>
-                <div className="absolute inset-0 z-0 bg-gradient-to-r from-white to-white/80 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                <div className="beam-border"><div className="beam-gradient" /></div>
+                <span className="beam-inner block bg-[#5bb8e8]/20 px-7 py-3 text-[13px] font-semibold text-white tracking-wide backdrop-blur-md">
+                  Get Started
+                </span>
               </button>
               <div className="flex items-center gap-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/60" />
@@ -96,10 +98,6 @@ export function HeroSection({ onScrollToContent }: HeroSectionProps) {
               </div>
             </div>
 
-            {/* Understated science credential */}
-            <p className="mt-12 text-[11px] text-white/40 tracking-wide">
-              Built on the Borbély Two-Process Model &middot; 56 peer-reviewed references
-            </p>
           </div>
         </div>
       </div>

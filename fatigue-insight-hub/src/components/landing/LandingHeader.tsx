@@ -140,11 +140,6 @@ export function LandingHeader({ onEnter }: LandingHeaderProps) {
 
         {/* Right — Buttons */}
         <div className="flex items-center gap-2">
-          {/* EASA badge */}
-          <span className="hidden md:inline text-[10px] font-mono text-white/20 tracking-wider uppercase mr-3">
-            EASA ORO.FTL
-          </span>
-
           {/* Admin button */}
           <div ref={adminRef} className="relative">
             <button
