@@ -1096,13 +1096,20 @@ class BorbelyFatigueModel:
             # Using duration_hours means the debt ledger tracks *actual time
             # in bed*.  Recovery inefficiency (÷1.30) is the sole penalty on
             # the repayment side, consistent with Banks et al. (2010, 2023).
+            # IMPORTANT: Use all_sleep (full roster), NOT relevant_sleep
+            # (48h window). relevant_sleep is for Process S (recent sleep
+            # pressure), but debt accounting must cover the ENTIRE gap
+            # between duties — which can be 5-7+ days for rest periods.
+            # Using the 48h window caused massive phantom deficits: 5 days
+            # of need (40h) vs 2 days of sleep (16h) = 24h false deficit.
             period_sleep_raw = sum(
-                s.duration_hours for s in relevant_sleep
+                s.duration_hours for s in all_sleep
                 if s.start_utc >= (
                     previous_duty.release_time_utc
                     if previous_duty
                     else duty.report_time_utc - timedelta(days=1)
                 )
+                and s.end_utc <= duty.report_time_utc
             )
             period_sleep = period_sleep_raw
 
