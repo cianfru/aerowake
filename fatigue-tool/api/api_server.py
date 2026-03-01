@@ -1149,7 +1149,7 @@ async def analyze_roster(
                 if prior_state and roster.duties:
                     # Calculate gap days for exponential decay
                     gap_days = max(0, (roster.duties[0].report_time_utc - prior_state.period_end_utc).days)
-                    decay = math.exp(-0.1 * gap_days)  # Matches sleep_debt_decay_rate
+                    decay = math.exp(-0.35 * gap_days)  # Matches sleep_debt_decay_rate
 
                     roster.initial_sleep_pressure = prior_state.final_process_s
                     roster.initial_sleep_debt = prior_state.final_sleep_debt * decay
@@ -1782,7 +1782,7 @@ async def reanalyze_roster(
         prior_state = prior_result.scalar_one_or_none()
         if prior_state and roster_obj.duties:
             gap_days = max(0, (roster_obj.duties[0].report_time_utc - prior_state.period_end_utc).days)
-            decay = math.exp(-0.1 * gap_days)
+            decay = math.exp(-0.35 * gap_days)  # Matches sleep_debt_decay_rate
 
             roster_obj.initial_sleep_pressure = prior_state.final_process_s
             roster_obj.initial_sleep_debt = prior_state.final_sleep_debt * decay

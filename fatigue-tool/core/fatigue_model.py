@@ -379,14 +379,22 @@ class BorbelyFatigueModel:
         )
         alertness_after_tot = max(0.0, alertness_with_inertia - tot_penalty)
 
-        # Sleep debt vulnerability: chronic restriction amplification
-        # Van Dongen et al. (2003) showed cumulative cognitive deficits
-        # grow linearly with accumulated sleep debt hours.
-        # Banks & Dinges (2007) confirmed dose-response relationship.
-        # 4h debt → −10%, 8h debt → −20%, capped at floor (0.80).
-        debt_penalty = max(
-            self.params.sleep_debt_vulnerability_floor,
-            1.0 - self.params.sleep_debt_vulnerability_coeff * cumulative_sleep_debt
+        # Sleep debt vulnerability: diminishing-returns model.
+        # Van Dongen et al. (2003): performance degrades with accumulated
+        # debt but the marginal impact of each additional hour decreases.
+        # Banks & Dinges (2007): dose-response with ceiling effect.
+        # Gander et al. (2013): trained crew more resilient than lab subjects.
+        #
+        # Formula: penalty = floor + (1 - floor) × exp(-k × debt)
+        # This gives rapid initial degradation that asymptotes toward floor:
+        #   5h debt → ~5% penalty, 10h → ~8%, 20h → ~12%, 50h → ~15%
+        # A pilot with 90h debt IS more impaired than one with 20h, but
+        # the difference is small — consistent with the science showing
+        # deficits plateau under chronic restriction.
+        debt_penalty = (
+            self.params.sleep_debt_vulnerability_floor
+            + (1.0 - self.params.sleep_debt_vulnerability_floor)
+            * math.exp(-self.params.sleep_debt_vulnerability_coeff * cumulative_sleep_debt)
         )
         alertness_after_debt = alertness_after_tot * debt_penalty
 
@@ -770,7 +778,7 @@ class BorbelyFatigueModel:
                 min_performance=default_performance,
                 average_performance=default_performance,
                 landing_performance=default_performance,
-                prior_sleep_hours=sum(s.duration_hours for s in sleep_history[-3:] if s.end_utc <= duty.report_time_utc),
+                prior_sleep_hours=self._last_sleep_episode_hours(sleep_history, duty.report_time_utc),
                 wocl_encroachment_hours=self.validator.is_disruptive_duty(duty).get('wocl_hours', 0.0)
             )
         
@@ -782,8 +790,7 @@ class BorbelyFatigueModel:
         landing_perf = min(p.raw_performance for p in landing_points) if landing_points else None
         landing_time = landing_points[-1].timestamp_utc if landing_points else None
         
-        recent_sleep = [s for s in sleep_history if s.end_utc <= duty.report_time_utc][-3:]
-        total_prior_sleep = sum(s.duration_hours for s in recent_sleep)
+        total_prior_sleep = self._last_sleep_episode_hours(sleep_history, duty.report_time_utc)
         
         disruption = self.validator.is_disruptive_duty(duty)
         pinch_events = self._detect_pinch_events(timeline)
@@ -804,6 +811,33 @@ class BorbelyFatigueModel:
             circadian_phase_shift=phase_shift
         )
     
+    def _last_sleep_episode_hours(self, sleep_history: list, before_utc: datetime) -> float:
+        """Return the duration of the last consolidated sleep episode.
+
+        A sleep "episode" is one or more contiguous blocks separated by
+        ≤ 1 h of wakefulness (brief awakenings within a sleep period).
+        Blocks separated by longer gaps are distinct episodes — only the
+        most recent one is returned.
+
+        Science: maximum single-episode sleep is ~10 h due to the
+        circadian wake gate (Dijk & Czeisler 1995; Banks et al. 2010).
+        Summing separate blocks (e.g. a daytime nap + subsequent night
+        sleep) would inflate the reported value beyond physiological
+        plausibility.
+        """
+        pre_duty = [s for s in sleep_history if s.end_utc <= before_utc]
+        if not pre_duty:
+            return 0.0
+        # Walk backwards, merging blocks within ≤ 1 h gap.
+        episode = [pre_duty[-1]]
+        for blk in reversed(pre_duty[:-1]):
+            gap_h = (episode[-1].start_utc - blk.end_utc).total_seconds() / 3600
+            if gap_h <= 1.0:
+                episode.append(blk)
+            else:
+                break
+        return sum(b.duration_hours for b in episode)
+
     def _detect_pinch_events(self, timeline: List[PerformancePoint]) -> List[PinchEvent]:
         """
         Detect high-risk moments (high sleep pressure + low circadian during critical phases)
@@ -1062,13 +1096,20 @@ class BorbelyFatigueModel:
             # Using duration_hours means the debt ledger tracks *actual time
             # in bed*.  Recovery inefficiency (÷1.30) is the sole penalty on
             # the repayment side, consistent with Banks et al. (2010, 2023).
+            # IMPORTANT: Use all_sleep (full roster), NOT relevant_sleep
+            # (48h window). relevant_sleep is for Process S (recent sleep
+            # pressure), but debt accounting must cover the ENTIRE gap
+            # between duties — which can be 5-7+ days for rest periods.
+            # Using the 48h window caused massive phantom deficits: 5 days
+            # of need (40h) vs 2 days of sleep (16h) = 24h false deficit.
             period_sleep_raw = sum(
-                s.duration_hours for s in relevant_sleep
+                s.duration_hours for s in all_sleep
                 if s.start_utc >= (
                     previous_duty.release_time_utc
                     if previous_duty
                     else duty.report_time_utc - timedelta(days=1)
                 )
+                and s.end_utc <= duty.report_time_utc
             )
             period_sleep = period_sleep_raw
 
@@ -1084,14 +1125,15 @@ class BorbelyFatigueModel:
                 cumulative_sleep_debt += abs(sleep_balance)
             elif sleep_balance > 0 and cumulative_sleep_debt > 0:
                 # Surplus: actively reduce existing debt with recovery inefficiency.
-                # Banks et al. (2010, 2023) show recovery is significantly less
-                # efficient than 1:1 — 1 h of debt requires ~1.3 h of recovery
-                # sleep. This aligns with the finding that one night of 10 h TIB
-                # was insufficient to restore baseline after chronic restriction.
-                debt_reduction = sleep_balance / 1.30
+                # Banks et al. (2010, 2023) show recovery is less efficient than
+                # 1:1 but trained crew show better recovery than lab subjects.
+                # 1.15× aligns with operational data from professional pilots
+                # who get consolidated, quality recovery sleep.
+                debt_reduction = sleep_balance / 1.15
                 cumulative_sleep_debt = max(
                     0.0, cumulative_sleep_debt - debt_reduction
                 )
+
 
             timeline_obj.cumulative_sleep_debt = cumulative_sleep_debt
             
@@ -1333,7 +1375,7 @@ class BorbelyFatigueModel:
                 if balance < 0:
                     running_debt_estimate += abs(balance)
                 elif balance > 0 and running_debt_estimate > 0:
-                    running_debt_estimate = max(0, running_debt_estimate - balance / 1.30)
+                    running_debt_estimate = max(0, running_debt_estimate - balance / 1.15)
                 # Exponential decay
                 running_debt_estimate *= math.exp(-self.params.sleep_debt_decay_rate * days_gap)
 
@@ -1672,6 +1714,78 @@ class BorbelyFatigueModel:
                     candidate_bedtime = rest_tz.localize(
                         datetime.combine(candidate_date, time(23, 0))
                     )
+
+                # ── Pre-duty nap for late-night reports ──────────────
+                # When a multi-day gap ends with a late report (≥20:00 local),
+                # the last recovery block (23:00-07:00) leaves the pilot awake
+                # 13-17h before duty — unrealistic. Pilots universally nap
+                # before night flights (Signal et al. 2014: 54% of crew nap
+                # before evening departures; Gander et al. 2014: ~7.8h total
+                # pre-trip sleep including naps).
+                #
+                # Add a 1.5-2h pre-duty nap ending MIN_WAKE_BEFORE_REPORT
+                # hours before report. This mirrors the nap generated by
+                # _night_departure_strategy() for standard inter-duty gaps.
+                report_local_for_nap = duty.report_time_utc.astimezone(rest_tz)
+                report_hour_local = report_local_for_nap.hour + report_local_for_nap.minute / 60.0
+
+                # Only add nap if: late report AND the last sleep block
+                # ended ≥10h before report (pilot would be awake too long)
+                last_generated_end = max(
+                    (b.end_utc for b in sleep_blocks
+                     if b.end_utc <= duty.report_time_utc),
+                    default=None
+                )
+                if last_generated_end:
+                    hours_awake_without_nap = (
+                        duty.report_time_utc - last_generated_end
+                    ).total_seconds() / 3600
+                else:
+                    hours_awake_without_nap = 0
+
+                if (report_hour_local >= 20 or report_hour_local < 4) and hours_awake_without_nap >= 10:
+                    nap_end_utc = duty.report_time_utc - timedelta(
+                        hours=self.sleep_calculator.MIN_WAKE_BEFORE_REPORT
+                    )
+                    # Adaptive nap: 1.5-2.5h depending on available window
+                    # Cap so nap doesn't start before ~12:00 local (unrealistic)
+                    available_window = (nap_end_utc - last_generated_end).total_seconds() / 3600
+                    nap_hours = min(2.5, max(1.5, available_window - 6.0))
+                    nap_start_utc = nap_end_utc - timedelta(hours=nap_hours)
+
+                    # Ensure nap doesn't overlap existing sleep
+                    if nap_start_utc > last_generated_end + timedelta(hours=1):
+                        nap_start_local = nap_start_utc.astimezone(rest_tz)
+                        nap_end_local = nap_end_utc.astimezone(rest_tz)
+
+                        nap_quality = self.sleep_calculator.calculate_sleep_quality(
+                            sleep_start=nap_start_local,
+                            sleep_end=nap_end_local,
+                            location=rest_env,
+                            previous_duty_end=last_generated_end,
+                            next_event=report_local_for_nap,
+                            is_nap=True,
+                            location_timezone=rest_tz.zone
+                        )
+
+                        nap_block = SleepBlock(
+                            start_utc=nap_start_utc,
+                            end_utc=nap_end_utc,
+                            location_timezone=rest_tz.zone,
+                            duration_hours=nap_quality.actual_sleep_hours,
+                            quality_factor=nap_quality.sleep_efficiency,
+                            effective_sleep_hours=nap_quality.effective_sleep_hours,
+                            is_anchor_sleep=False,
+                            environment=rest_env
+                        )
+                        sleep_blocks.append(nap_block)
+
+                        logger.info(
+                            f"[GAP-FILL] pre-duty nap for late report: "
+                            f"{nap_start_local.strftime('%H:%M')}-{nap_end_local.strftime('%H:%M')} local "
+                            f"({nap_quality.actual_sleep_hours:.1f}h, "
+                            f"duty reports {report_local_for_nap.strftime('%H:%M')} local)"
+                        )
 
         # Resolve overlapping sleep blocks with SWS-aware truncation.
         # First hours of sleep contain disproportionate SWS recovery
