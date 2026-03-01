@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { LandingHeader } from './LandingHeader';
 import { HeroSection } from './HeroSection';
 import { LiveMetricsStrip } from './LiveMetricsStrip';
-import { DataShowcaseSection } from './DataShowcaseSection';
+import { AppShowcaseSection } from './AppShowcaseSection';
 import { ProblemSolutionSection } from './ProblemSolutionSection';
 import { HowItWorksSection } from './HowItWorksSection';
 import { ScienceFooter } from './ScienceFooter';
@@ -25,7 +25,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
       <div ref={contentRef}>
         <LiveMetricsStrip />
       </div>
-      <DataShowcaseSection />
+      <AppShowcaseSection />
       <ProblemSolutionSection />
       <HowItWorksSection />
       <ScienceFooter />

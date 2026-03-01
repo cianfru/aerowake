@@ -1,58 +1,64 @@
-import { FileText, Brain, Zap, BarChart3, Eye } from 'lucide-react';
 import { ScrollReveal } from './ScrollReveal';
 
 const steps = [
-  { icon: FileText, label: 'Upload Roster', desc: 'Import your monthly duty schedule' },
-  { icon: Brain, label: 'Sleep Estimation', desc: 'AI models your sleep opportunities' },
-  { icon: Zap, label: 'Bio-Math Engine', desc: 'Two-process model calculates fatigue' },
-  { icon: BarChart3, label: 'Performance Scores', desc: 'Minute-by-minute cognitive scores' },
-  { icon: Eye, label: 'Visual Insights', desc: 'Timelines, heatmaps, and reports' },
+  {
+    num: '01',
+    title: 'Upload your roster',
+    desc: 'Import your monthly duty schedule as a PDF. The parser extracts duties, sectors, and rest periods automatically.',
+  },
+  {
+    num: '02',
+    title: 'Sleep is estimated',
+    desc: 'Based on your duty times, rest opportunities, and environment, the model generates realistic sleep estimates.',
+  },
+  {
+    num: '03',
+    title: 'Fatigue is modeled',
+    desc: 'The Two-Process Model runs minute-by-minute, computing sleep pressure, circadian drive, and their interaction.',
+  },
+  {
+    num: '04',
+    title: 'Results are visualised',
+    desc: 'Interactive chronograms, performance timelines, and per-flight-phase scores — everything at a glance.',
+  },
 ];
 
 export function HowItWorksSection() {
   return (
-    <section className="relative bg-[#000408] py-20 md:py-28">
-      <div className="mx-auto max-w-6xl px-6">
+    <section className="relative bg-[#000408] py-24 md:py-32">
+      <div className="mx-auto max-w-7xl px-6 md:px-10 lg:px-16">
         <ScrollReveal>
-          <div className="mb-12 text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-white md:text-4xl">
-              How It Works
+          <div className="mb-16 max-w-xl">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="h-px w-8 bg-white/10" />
+              <span className="text-[11px] tracking-[0.2em] uppercase text-white/40">Workflow</span>
+            </div>
+            <h2 className="font-serif text-3xl font-light tracking-tight text-white md:text-4xl">
+              Roster to insight in seconds.
             </h2>
-            <p className="mt-3 text-sm text-white/40">
-              From roster upload to actionable fatigue insights in five steps.
-            </p>
           </div>
         </ScrollReveal>
 
-        <div className="flex flex-col md:flex-row items-stretch gap-4">
-          {steps.map((step, i) => {
-            const Icon = step.icon;
-            return (
-              <ScrollReveal key={i} delay={i * 100} className="flex-1">
-                <div className="group relative flex flex-col items-center rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 text-center transition-all duration-300 hover:border-white/15 hover:bg-white/[0.04] h-full">
-                  {/* Step number */}
-                  <span className="absolute -top-2.5 left-4 rounded-full bg-[#000408] px-2 text-[10px] font-mono text-white/25 border border-white/[0.08]">
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
+        {/* Steps — numbered editorial layout */}
+        <div className="grid gap-0 md:grid-cols-4">
+          {steps.map((step, i) => (
+            <ScrollReveal key={i} delay={i * 120}>
+              <div className="group relative border-l border-white/[0.06] pl-6 py-6 md:py-0 md:pb-0">
+                {/* Active dot on the border */}
+                <div className="absolute left-[-3px] top-8 md:top-0 h-1.5 w-1.5 rounded-full bg-white/10 transition-colors duration-300 group-hover:bg-[hsl(199,89%,48%)]/50" />
 
-                  <div className="mt-2 flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.05]">
-                    <Icon className="h-5 w-5 text-[hsl(199,89%,48%)]" />
-                  </div>
-                  <h4 className="mt-3 text-sm font-semibold text-white">{step.label}</h4>
-                  <p className="mt-1.5 text-xs leading-relaxed text-white/35">{step.desc}</p>
-
-                  {/* Connector arrow (hidden on mobile, hidden on last) */}
-                  {i < steps.length - 1 && (
-                    <div className="absolute -right-3 top-1/2 hidden -translate-y-1/2 text-white/15 md:block">
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                        <path d="M2 6H10M10 6L7 3M10 6L7 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                  )}
-                </div>
-              </ScrollReveal>
-            );
-          })}
+                <span className="text-[10px] font-mono text-white/30 tracking-wider mb-3 block">
+                  {step.num}
+                </span>
+                <h3 className="text-[14px] font-medium text-white/80 mb-2 tracking-wide">
+                  {step.title}
+                </h3>
+                <p className="text-[12px] leading-[1.7] text-white/45 font-light pr-4">
+                  {step.desc}
+                </p>
+              </div>
+            </ScrollReveal>
+          ))}
         </div>
       </div>
     </section>
