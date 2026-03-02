@@ -33,7 +33,7 @@ class WorkloadParameters:
         FlightPhase.APPROACH: 1.5,
         FlightPhase.LANDING: 2.0,
         FlightPhase.TAXI_IN: 1.0,
-        FlightPhase.GROUND_TURNAROUND: 1.2,
+        FlightPhase.GROUND_TURNAROUND: 1.1,  # light workload: walkaround, briefing, boarding
     })
 
     SECTOR_PENALTY_RATE: float = 0.15  # 15% per additional sector
