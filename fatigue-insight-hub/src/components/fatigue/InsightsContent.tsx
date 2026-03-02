@@ -49,10 +49,10 @@ export function InsightsContent() {
                 <AlertTriangle className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0 text-critical" />
                 <div>
                   <p className="font-medium text-critical text-sm md:text-base">
-                    CRITICAL: {analysisResults.statistics.criticalRiskDuties} duties with critical risk
+                    {analysisResults.statistics.criticalRiskDuties} {analysisResults.statistics.criticalRiskDuties === 1 ? 'duty' : 'duties'} with critical fatigue risk
                   </p>
                   <p className="text-xs md:text-sm text-muted-foreground">
-                    SMS reporting required per EASA ORO.FTL.120
+                    Consider documenting through your FRMS
                   </p>
                 </div>
               </div>

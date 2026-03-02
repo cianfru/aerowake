@@ -312,6 +312,7 @@ export function transformAnalysisResult(
           | 'HIGH'
           | 'CRITICAL',
         smsReportable: duty.is_reportable,
+        riskAdvisory: (duty.risk_advisory as 'routine' | 'monitor' | 'consider_reporting' | 'report_recommended') ?? (duty.is_reportable ? 'report_recommended' : 'routine'),
         maxFdpHours: duty.max_fdp_hours,
         extendedFdpHours: duty.extended_fdp_hours,
         actualFdpHours: duty.actual_fdp_hours ?? undefined,

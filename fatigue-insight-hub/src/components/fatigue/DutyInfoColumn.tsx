@@ -202,11 +202,17 @@ export function DutyInfoColumn({ duty, dutyCrewOverride, onCrewChange, onCrewRes
         </CardContent>
       </Card>
 
-      {/* SMS Reportable */}
-      {duty.smsReportable && (
+      {/* Fatigue Advisory */}
+      {duty.riskAdvisory === 'report_recommended' && (
+        <div className="flex items-center gap-2 rounded-md border border-critical/50 bg-critical/10 px-3 py-1.5 text-xs text-critical">
+          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+          <span className="font-medium">Consider filing a fatigue report through your FRMS</span>
+        </div>
+      )}
+      {duty.riskAdvisory === 'consider_reporting' && (
         <div className="flex items-center gap-2 rounded-md border border-warning/50 bg-warning/10 px-3 py-1.5 text-xs text-warning">
           <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-          <span className="font-medium">SMS Reportable — File fatigue report per EASA ORO.FTL.120</span>
+          <span className="font-medium">Elevated fatigue risk — active countermeasures recommended</span>
         </div>
       )}
 

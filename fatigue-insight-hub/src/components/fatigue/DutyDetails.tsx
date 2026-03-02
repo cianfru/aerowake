@@ -600,14 +600,25 @@ export function DutyDetails({ duty, dutyCrewOverride, onCrewChange, onCrewReset 
             )}
           </div>
 
-          {/* SMS Reportable Warning */}
-          {duty.smsReportable && (
+          {/* Fatigue Advisory */}
+          {duty.riskAdvisory === 'report_recommended' && (
+            <div className="flex items-start gap-3 rounded-lg border border-critical/50 bg-critical/10 p-3">
+              <AlertTriangle className="h-5 w-5 flex-shrink-0 text-critical" />
+              <div>
+                <p className="font-medium text-critical text-sm">Fatigue Report Recommended</p>
+                <p className="text-xs text-muted-foreground">
+                  Consider documenting this duty through your FRMS
+                </p>
+              </div>
+            </div>
+          )}
+          {duty.riskAdvisory === 'consider_reporting' && (
             <div className="flex items-start gap-3 rounded-lg border border-warning/50 bg-warning/10 p-3">
               <AlertTriangle className="h-5 w-5 flex-shrink-0 text-warning" />
               <div>
-                <p className="font-medium text-warning text-sm">SMS Reportable</p>
+                <p className="font-medium text-warning text-sm">Elevated Fatigue Risk</p>
                 <p className="text-xs text-muted-foreground">
-                  File fatigue report per EASA ORO.FTL.120
+                  Active countermeasures recommended for this duty pattern
                 </p>
               </div>
             </div>
@@ -646,7 +657,7 @@ export function DutyDetails({ duty, dutyCrewOverride, onCrewChange, onCrewReset 
                   <>
                     <li>Consider controlled rest if operationally feasible</li>
                     <li>Enhanced crew monitoring during critical phases</li>
-                    <li>File SMS fatigue report</li>
+                    <li>Consider filing a fatigue report through your FRMS</li>
                   </>
                 )}
                 {duty.overallRisk === 'HIGH' && (
