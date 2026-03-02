@@ -350,7 +350,6 @@ export async function analyzeRoster(
   pilotId: string,
   homeBase: string,
   configPreset: string = 'operational',
-  crewSet: ULRCrewSet = 'crew_b',
   dutyCrewOverrides?: Map<string, ULRCrewSet>
 ): Promise<AnalysisResult> {
 
@@ -359,9 +358,8 @@ export async function analyzeRoster(
   formData.append('pilot_id', pilotId);
   formData.append('home_base', homeBase);
   formData.append('config_preset', configPreset);
-  formData.append('crew_set', crewSet);
 
-  // Serialize per-duty overrides to JSON
+  // Per-duty crew set overrides (parser auto-detection provides defaults)
   if (dutyCrewOverrides && dutyCrewOverrides.size > 0) {
     const overridesObj = Object.fromEntries(dutyCrewOverrides);
     formData.append('duty_crew_overrides', JSON.stringify(overridesObj));
@@ -482,11 +480,9 @@ export async function deleteRoster(rosterId: string): Promise<void> {
 export async function reanalyzeRoster(
   rosterId: string,
   configPreset: string = 'operational',
-  crewSet: string = 'crew_b',
 ): Promise<AnalysisResult> {
   const formData = new FormData();
   formData.append('config_preset', configPreset);
-  formData.append('crew_set', crewSet);
 
   const response = await fetch(`${API_BASE_URL}/api/rosters/${rosterId}/reanalyze`, {
     method: 'POST',

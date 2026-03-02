@@ -23,7 +23,6 @@ const DEFAULT_SETTINGS: PilotSettings = {
   selectedMonth: new Date(2026, 1, 1),
   theme: 'dark',
   configPreset: 'operational',
-  crewSet: 'crew_b',
 };
 
 function buildInitialState(): AnalysisState {
@@ -54,6 +53,7 @@ type AnalysisAction =
   | { type: 'TOGGLE_DRAWER'; payload?: boolean }
   | { type: 'SET_ACTIVE_TAB'; payload: string }
   | { type: 'SET_CREW_OVERRIDE'; payload: { dutyId: string; crewSet: 'crew_a' | 'crew_b' } }
+  | { type: 'CLEAR_CREW_OVERRIDE'; payload: { dutyId: string } }
   | { type: 'REMOVE_FILE' }
   | { type: 'SET_SHOW_LANDING'; payload: boolean }
   | { type: 'LOAD_ANALYSIS'; payload: AnalysisResults }
@@ -92,11 +92,13 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
 
     case 'SET_CREW_OVERRIDE': {
       const updated = new Map(state.dutyCrewOverrides);
-      if (action.payload.crewSet === state.settings.crewSet) {
-        updated.delete(action.payload.dutyId);
-      } else {
-        updated.set(action.payload.dutyId, action.payload.crewSet);
-      }
+      updated.set(action.payload.dutyId, action.payload.crewSet);
+      return { ...state, dutyCrewOverrides: updated };
+    }
+
+    case 'CLEAR_CREW_OVERRIDE': {
+      const updated = new Map(state.dutyCrewOverrides);
+      updated.delete(action.payload.dutyId);
       return { ...state, dutyCrewOverrides: updated };
     }
 
@@ -149,6 +151,7 @@ interface AnalysisContextValue {
   setDrawerOpen: (open: boolean) => void;
   setActiveTab: (tab: string) => void;
   setCrewOverride: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
+  clearCrewOverride: (dutyId: string) => void;
   removeFile: () => void;
   setShowLanding: (show: boolean) => void;
   loadAnalysis: (r: AnalysisResults) => void;
@@ -176,6 +179,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setActiveTab: (tab) => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab }),
     setCrewOverride: (dutyId, crewSet) =>
       dispatch({ type: 'SET_CREW_OVERRIDE', payload: { dutyId, crewSet } }),
+    clearCrewOverride: (dutyId) =>
+      dispatch({ type: 'CLEAR_CREW_OVERRIDE', payload: { dutyId } }),
     removeFile: () => dispatch({ type: 'REMOVE_FILE' }),
     setShowLanding: (show) => dispatch({ type: 'SET_SHOW_LANDING', payload: show }),
     loadAnalysis: (r) => dispatch({ type: 'LOAD_ANALYSIS', payload: r }),

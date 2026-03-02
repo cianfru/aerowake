@@ -10,12 +10,12 @@ interface DutyDetailsDrawerProps {
   analysisId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  globalCrewSet?: 'crew_a' | 'crew_b';
   dutyCrewOverride?: 'crew_a' | 'crew_b';
   onCrewChange?: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
+  onCrewReset?: (dutyId: string) => void;
 }
 
-export function DutyDetailsDrawer({ duty, analysisId, open, onOpenChange, globalCrewSet, dutyCrewOverride, onCrewChange }: DutyDetailsDrawerProps) {
+export function DutyDetailsDrawer({ duty, analysisId, open, onOpenChange, dutyCrewOverride, onCrewChange, onCrewReset }: DutyDetailsDrawerProps) {
   const [detailedDuty, setDetailedDuty] = useState<DutyAnalysis | null>(null);
 
   const dutyKey = useMemo(() => {
@@ -93,9 +93,9 @@ export function DutyDetailsDrawer({ duty, analysisId, open, onOpenChange, global
         {/* All content is now consolidated in DutyDetails */}
         <DutyDetails
           duty={displayDuty}
-          globalCrewSet={globalCrewSet}
           dutyCrewOverride={dutyCrewOverride}
           onCrewChange={onCrewChange}
+          onCrewReset={onCrewReset}
         />
       </SheetContent>
     </Sheet>

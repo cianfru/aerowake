@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { AlertTriangle, Clock, Moon, Zap, Mountain, Users, Globe, RefreshCw, ChevronDown } from 'lucide-react';
+import { AlertTriangle, Clock, Moon, Zap, Mountain, Users, Globe, ChevronDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DutyAnalysis } from '@/types/fatigue';
 import { isTrainingDuty, getTrainingDutyLabel, formatAircraftType } from '@/lib/fatigue-utils';
@@ -16,16 +14,16 @@ import { toast } from 'sonner';
 
 interface DutyInfoColumnProps {
   duty: DutyAnalysis;
-  globalCrewSet?: 'crew_a' | 'crew_b';
   dutyCrewOverride?: 'crew_a' | 'crew_b';
   onCrewChange?: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
+  onCrewReset?: (dutyId: string) => void;
   hasCrewContent: boolean;
 }
 
 /**
  * Left column of the DutyDetailsDialog — duty context, FDP, sleep, risk, crew.
  */
-export function DutyInfoColumn({ duty, globalCrewSet, dutyCrewOverride, onCrewChange, hasCrewContent }: DutyInfoColumnProps) {
+export function DutyInfoColumn({ duty, dutyCrewOverride, onCrewChange, onCrewReset, hasCrewContent }: DutyInfoColumnProps) {
   const isTraining = isTrainingDuty(duty);
   const [crewOpen, setCrewOpen] = useState(false);
 
@@ -228,31 +226,57 @@ export function DutyInfoColumn({ duty, globalCrewSet, dutyCrewOverride, onCrewCh
             <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', crewOpen && 'rotate-180')} />
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-2 space-y-2">
-            {/* Crew toggle */}
-            {onCrewChange && duty.crewComposition === 'augmented_4' && (
-              <Card variant="glass">
-                <CardContent className="py-2.5 px-3 space-y-2">
-                  <Label className="text-[10px] text-muted-foreground">Crew Set</Label>
-                  <div className="flex gap-2">
-                    {(['crew_a', 'crew_b'] as const).map(cs => (
-                      <Button
-                        key={cs}
-                        variant={(dutyCrewOverride || globalCrewSet || 'crew_b') === cs ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => {
-                          onCrewChange(duty.dutyId || '', cs);
-                          toast.info(`Crew set to ${cs === 'crew_a' ? 'A' : 'B'}`, { icon: <RefreshCw className="h-4 w-4" /> });
-                        }}
-                        className="flex-1 text-[10px] h-7"
-                      >
-                        <Users className="h-3 w-3 mr-1" />
-                        {cs === 'crew_a' ? 'A (Operating)' : 'B (Relief)'}
-                      </Button>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            {/* Crew toggle — compact A/B switch */}
+            {onCrewChange && duty.crewComposition === 'augmented_4' && (() => {
+              const autoDetected = duty.ulrCrewSet || 'crew_b';
+              const effective = dutyCrewOverride || autoDetected;
+              const hasOvr = !!dutyCrewOverride;
+              return (
+                <Card variant="glass">
+                  <CardContent className="py-2.5 px-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground">Crew</span>
+                      <div className="inline-flex rounded bg-secondary/60 p-0.5">
+                        {(['crew_a', 'crew_b'] as const).map(cs => (
+                          <button
+                            key={cs}
+                            onClick={() => {
+                              onCrewChange(duty.dutyId || '', cs);
+                              toast.info(`Crew ${cs === 'crew_a' ? 'A' : 'B'} — re-run to update`);
+                            }}
+                            className={`px-2 py-0.5 text-[10px] font-medium rounded transition-all ${
+                              effective === cs
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            {cs === 'crew_a' ? 'A' : 'B'}
+                          </button>
+                        ))}
+                      </div>
+                      {hasOvr ? (
+                        <div className="flex items-center gap-1">
+                          <Badge variant="outline" className="text-[8px] px-1 py-0">OVERRIDE</Badge>
+                          {onCrewReset && (
+                            <button
+                              onClick={() => {
+                                onCrewReset(duty.dutyId || '');
+                                toast.info(`Reset to auto: Crew ${autoDetected === 'crew_a' ? 'A' : 'B'}`);
+                              }}
+                              className="text-[9px] text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[9px] text-muted-foreground">Auto</span>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             {/* ULR compliance */}
             {duty.isUlr && duty.ulrCompliance && (
