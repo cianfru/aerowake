@@ -20,6 +20,7 @@ const riskColors: Record<string, string> = {
   MODERATE: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
   HIGH: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
   CRITICAL: 'bg-red-500/15 text-red-400 border-red-500/30',
+  EXTREME: 'bg-red-500/15 text-red-300 border-red-500/30',
 };
 
 function getRoute(duty: DutyAnalysis): string {
@@ -29,8 +30,8 @@ function getRoute(duty: DutyAnalysis): string {
     if (duty.dutyType === 'ground_training') return duty.trainingCode ?? 'Ground Training';
     return 'Duty';
   }
-  const origin = segs[0]?.origin ?? '';
-  const dest = segs[segs.length - 1]?.destination ?? '';
+  const origin = segs[0]?.departure ?? '';
+  const dest = segs[segs.length - 1]?.arrival ?? '';
   if (segs.length === 1) return `${origin} → ${dest}`;
   return `${origin} → ${dest} (${segs.length} sectors)`;
 }
