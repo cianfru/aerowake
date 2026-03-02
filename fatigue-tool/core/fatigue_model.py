@@ -443,12 +443,15 @@ class BorbelyFatigueModel:
           Landing     5 min  (arr-5 → arr)    — short final, flare, rollout
           Taxi in    15 min  (arr → arr+15)
         """
-        for segment in segments:
+        for idx, segment in enumerate(segments):
             dep = segment.scheduled_departure_utc
             arr = segment.scheduled_arrival_utc
 
             if current_time < dep - timedelta(minutes=30):
-                return FlightPhase.PREFLIGHT
+                # Before this segment's taxi-out window — if a previous
+                # segment has already been flown, this is turnaround
+                # (walkaround, security, briefing, boarding), not preflight.
+                return FlightPhase.GROUND_TURNAROUND if idx > 0 else FlightPhase.PREFLIGHT
             elif current_time < dep:
                 return FlightPhase.TAXI_OUT          # 30 min
             elif current_time < dep + timedelta(minutes=5):
