@@ -591,17 +591,27 @@ export function generateMitigations(
     });
   }
 
-  // 8. General SMS recommendation for critical risk
-  if (duty.smsReportable || worstPerf < 55) {
+  // 8. FRMS documentation recommendation for high/critical risk
+  if (duty.riskAdvisory === 'report_recommended') {
     mitigations.push({
       priority: priority++,
       category: 'GENERAL',
-      title: 'Safety Management System Review',
-      text: `This duty pattern meets the threshold for SMS fatigue reporting. The predicted performance nadir of ` +
-        `${worstPerf.toFixed(0)}% indicates a substantive safety risk that should be documented and reviewed ` +
-        `within the operator's Fatigue Risk Management System (FRMS). Consider whether systemic scheduling ` +
-        `changes could reduce recurrence of this risk pattern.`,
+      title: 'FRMS Documentation Recommended',
+      text: `This duty pattern shows a predicted performance nadir of ${worstPerf.toFixed(0)}%, indicating ` +
+        `a substantive fatigue risk. Consider documenting this duty through your operator's Fatigue Risk ` +
+        `Management System (FRMS) and reviewing whether systemic scheduling changes could reduce recurrence ` +
+        `of this risk pattern.`,
       reference: 'ICAO Doc 9966; EASA AMC1 ORO.FTL.120',
+    });
+  } else if (duty.riskAdvisory === 'consider_reporting') {
+    mitigations.push({
+      priority: priority++,
+      category: 'GENERAL',
+      title: 'Fatigue Risk Awareness',
+      text: `This duty pattern shows a predicted performance nadir of ${worstPerf.toFixed(0)}%. While this ` +
+        `falls within operational limits, active fatigue countermeasures are recommended. If you experience ` +
+        `symptoms of significant fatigue, consider documenting through your operator's FRMS.`,
+      reference: 'ICAO Doc 9966',
     });
   }
 

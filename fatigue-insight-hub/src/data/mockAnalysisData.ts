@@ -38,6 +38,7 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'LOW',
       landingRisk: 'LOW',
       smsReportable: false,
+      riskAdvisory: 'routine',
       circadianPhaseShift: 0,
       sleepQuality: 'excellent',
       sleepEnvironment: 'home',
@@ -72,6 +73,7 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'HIGH',
       landingRisk: 'MODERATE',
       smsReportable: false,
+      riskAdvisory: 'consider_reporting',
       circadianPhaseShift: 0,
       sleepQuality: 'fair',
       sleepEnvironment: 'home',
@@ -100,6 +102,7 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'MODERATE',
       landingRisk: 'MODERATE',
       smsReportable: false,
+      riskAdvisory: 'monitor',
       flightSegments: [
         { flightNumber: 'QR632', departure: 'DOH', arrival: 'BOM', departureTime: '22:30', arrivalTime: '04:15', blockHours: 5.75, performance: 70.5 }
       ],
@@ -121,6 +124,7 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'HIGH',
       landingRisk: 'HIGH',
       smsReportable: false,
+      riskAdvisory: 'consider_reporting',
       flightSegments: [
         { flightNumber: 'QR633', departure: 'BOM', arrival: 'DOH', departureTime: '05:30', arrivalTime: '08:00', blockHours: 2.5, performance: 61.8 },
         { flightNumber: 'QR174', departure: 'DOH', arrival: 'JFK', departureTime: '10:15', arrivalTime: '17:45', blockHours: 5.5, performance: 57.3 }
@@ -152,6 +156,7 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'CRITICAL',
       landingRisk: 'CRITICAL',
       smsReportable: true,
+      riskAdvisory: 'report_recommended',
       circadianPhaseShift: -8,
       sleepQuality: 'poor',
       sleepEnvironment: 'layover',
@@ -189,6 +194,7 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'CRITICAL',
       landingRisk: 'CRITICAL',
       smsReportable: true,
+      riskAdvisory: 'report_recommended',
       circadianPhaseShift: 5,
       sleepQuality: 'poor',
       sleepEnvironment: 'home',
@@ -218,6 +224,7 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'HIGH',
       landingRisk: 'HIGH',
       smsReportable: false,
+      riskAdvisory: 'consider_reporting',
       flightSegments: [
         { flightNumber: 'QR224', departure: 'DOH', arrival: 'CDG', departureTime: '03:45', arrivalTime: '09:00', blockHours: 4.25, performance: 54.2 }
       ],
@@ -239,6 +246,7 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'CRITICAL',
       landingRisk: 'CRITICAL',
       smsReportable: true,
+      riskAdvisory: 'report_recommended',
       circadianPhaseShift: 1,
       sleepQuality: 'poor',
       sleepEnvironment: 'layover',
@@ -268,6 +276,7 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'CRITICAL',
       landingRisk: 'CRITICAL',
       smsReportable: true,
+      riskAdvisory: 'report_recommended',
       circadianPhaseShift: 4,
       sleepQuality: 'poor',
       sleepEnvironment: 'layover',
@@ -296,6 +305,7 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'LOW',
       landingRisk: 'LOW',
       smsReportable: false,
+      riskAdvisory: 'routine',
       flightSegments: [
         { flightNumber: 'QR068', departure: 'DOH', arrival: 'IST', departureTime: '08:00', arrivalTime: '12:30', blockHours: 3.5, performance: 76.8 },
         { flightNumber: 'QR069', departure: 'IST', arrival: 'DOH', departureTime: '14:00', arrivalTime: '18:30', blockHours: 3.0, performance: 74.2 }
@@ -318,6 +328,7 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'MODERATE',
       landingRisk: 'MODERATE',
       smsReportable: false,
+      riskAdvisory: 'monitor',
       flightSegments: [
         { flightNumber: 'QR752', departure: 'DOH', arrival: 'SYD', departureTime: '19:30', arrivalTime: '16:00', blockHours: 8.5, performance: 70.2 }
       ],
@@ -339,6 +350,7 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'CRITICAL',
       landingRisk: 'CRITICAL',
       smsReportable: true,
+      riskAdvisory: 'report_recommended',
       circadianPhaseShift: 7,
       sleepQuality: 'poor',
       sleepEnvironment: 'layover',
@@ -367,6 +379,7 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'MODERATE',
       landingRisk: 'MODERATE',
       smsReportable: false,
+      riskAdvisory: 'monitor',
       circadianPhaseShift: 6,
       sleepQuality: 'fair',
       sleepEnvironment: 'home',
@@ -391,6 +404,7 @@ const generateMockDuties = (): DutyAnalysis[] => {
       minPerformanceRisk: 'CRITICAL',
       landingRisk: 'CRITICAL',
       smsReportable: true,
+      riskAdvisory: 'report_recommended',
       circadianPhaseShift: 6,
       sleepQuality: 'poor',
       sleepEnvironment: 'layover',

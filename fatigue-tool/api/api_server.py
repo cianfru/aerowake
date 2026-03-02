@@ -34,7 +34,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Import your fatigue model
-from core import BorbelyFatigueModel, ModelConfig
+from core import BorbelyFatigueModel, ModelConfig, RiskThresholds
 from parsers.roster_parser import PDFRosterParser, CSVRosterParser, AirportDatabase
 from models.data_models import MonthlyAnalysis, DutyTimeline
 
@@ -335,7 +335,8 @@ class DutyResponse(BaseModel):
     
     # Risk
     risk_level: str  # "low", "moderate", "high", "critical", "extreme"
-    is_reportable: bool
+    is_reportable: bool  # Deprecated — use risk_advisory instead
+    risk_advisory: str = "monitor"  # "routine", "monitor", "consider_reporting", "report_recommended"
     pinch_events: int
     
     # EASA FDP limits
@@ -787,6 +788,7 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
         pre_duty_awake_hours=duty_timeline.pre_duty_awake_hours,
         risk_level=risk,
         is_reportable=(risk in ["critical", "extreme"]),
+        risk_advisory=RiskThresholds.risk_advisory(risk),
         pinch_events=len(duty_timeline.pinch_events),
         max_fdp_hours=duty.max_fdp_hours,
         extended_fdp_hours=duty.extended_fdp_hours,

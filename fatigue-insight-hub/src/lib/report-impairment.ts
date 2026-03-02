@@ -315,26 +315,26 @@ export function describeRiskLevel(risk: string): {
     case 'LOW':
       return {
         label: 'Low Risk',
-        description: 'Predicted performance remains above 77% throughout the duty period.',
+        description: 'Predicted performance remains above 72% throughout the duty period.',
         implication: 'Fatigue is not expected to be a significant factor. Standard operating procedures are sufficient.',
       };
     case 'MODERATE':
       return {
         label: 'Moderate Risk',
-        description: 'Predicted performance dips below 77% during some phases, indicating onset of cognitive fatigue.',
-        implication: 'Enhanced monitoring recommended. Crew should be aware of potential performance degradation during critical phases.',
+        description: 'Predicted performance dips below 72% during some phases, indicating onset of cognitive fatigue.',
+        implication: 'Self-monitoring recommended. Be mindful of fatigue symptoms, especially during critical flight phases.',
       };
     case 'HIGH':
       return {
         label: 'High Risk',
-        description: 'Predicted performance drops below 65% at some point during the duty, indicating significant cognitive impairment.',
-        implication: 'Active fatigue countermeasures recommended. Crew resource management practices should be heightened. Consider controlled rest if operationally feasible.',
+        description: 'Predicted performance drops below 60% at some point during the duty, indicating elevated cognitive fatigue.',
+        implication: 'Active fatigue countermeasures recommended. Consider strategic caffeine use and controlled rest if operationally feasible.',
       };
     case 'CRITICAL':
       return {
         label: 'Critical Risk',
-        description: 'Predicted performance drops below 55% — equivalent to severe sleep deprivation. SMS reportable event.',
-        implication: 'This duty pattern presents a significant safety risk. Fatigue is likely to materially affect the ability to safely operate the aircraft. Duty scheduling review strongly recommended.',
+        description: 'Predicted performance drops below 50%, indicating significant cognitive impairment.',
+        implication: 'This duty pattern presents a substantive fatigue risk. Consider documenting through your FRMS and reviewing whether scheduling changes could reduce this risk pattern.',
       };
     default:
       return {

@@ -176,6 +176,7 @@ export function createRestDayPseudoDuty(restDay: RestDaySleep): DutyAnalysis {
     minPerformanceRisk: 'LOW',
     landingRisk: 'LOW',
     smsReportable: false,
+    riskAdvisory: 'routine',
     flightSegments: [],
     crewComposition: 'standard',
     restFacilityClass: null,

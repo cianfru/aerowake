@@ -192,6 +192,7 @@ export interface Duty {
   
   risk_level: 'low' | 'moderate' | 'high' | 'critical' | 'extreme' | 'unknown';
   is_reportable: boolean;
+  risk_advisory?: 'routine' | 'monitor' | 'consider_reporting' | 'report_recommended';
   pinch_events: number;
   max_fdp_hours?: number;
   extended_fdp_hours?: number;

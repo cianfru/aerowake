@@ -233,7 +233,7 @@ export function ReportsPage() {
               <>
                 <h2 className="text-xl font-semibold mb-2">No Reports Yet</h2>
                 <p className="text-sm text-muted-foreground max-w-md mb-6">
-                  Upload a roster to generate SMS-ready fatigue reports for every duty.
+                  Upload a roster to generate fatigue reports for every duty.
                   Each report includes risk assessment, impairment equivalences, and mitigation recommendations.
                 </p>
                 <Button
@@ -259,7 +259,7 @@ export function ReportsPage() {
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
-            SMS Reports
+            Fatigue Reports
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {duties.length} fatigue {duties.length === 1 ? 'report' : 'reports'} available

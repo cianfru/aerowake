@@ -33,9 +33,14 @@ export function ReportExecutiveSummary({ data }: Props) {
             <Badge variant={riskConfig.badge} className="text-xs">
               {risk} RISK
             </Badge>
-            {duty.smsReportable && (
+            {duty.riskAdvisory === 'report_recommended' && (
               <Badge variant="critical" className="text-xs">
-                SMS REPORTABLE
+                REPORT RECOMMENDED
+              </Badge>
+            )}
+            {duty.riskAdvisory === 'consider_reporting' && (
+              <Badge variant="warning" className="text-xs">
+                ELEVATED RISK
               </Badge>
             )}
             <span className="text-xs text-muted-foreground print:text-gray-600">

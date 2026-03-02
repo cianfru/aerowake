@@ -355,6 +355,26 @@ class RiskThresholds:
     def get_action(self, risk_level: str) -> Dict[str, str]:
         return self.actions.get(risk_level, self.actions['extreme'])
 
+    @staticmethod
+    def risk_advisory(risk_level: str) -> str:
+        """
+        Graduated advisory tier based on risk level.
+
+        Returns one of:
+          'routine'            — LOW: no action needed
+          'monitor'            — MODERATE: pilot self-awareness
+          'consider_reporting' — HIGH: suggest FRMS report
+          'report_recommended' — CRITICAL/EXTREME: strongly recommend reporting
+        """
+        mapping = {
+            'low': 'routine',
+            'moderate': 'monitor',
+            'high': 'consider_reporting',
+            'critical': 'report_recommended',
+            'extreme': 'report_recommended',
+        }
+        return mapping.get(risk_level, 'monitor')
+
 
 @dataclass
 class ModelConfig:
@@ -402,6 +422,7 @@ class ModelConfig:
         - sleep_debt_vuln_coeff: 0.025 → 0.018 — less aggressive debt curve
         - inertia_duration: 30 → 22 min — trained arousal protocols
         - inertia_magnitude: 0.30 → 0.25 — reduced post-wake grogginess
+        - second_harmonic: 0.08 → 0.06 — softer evening circadian cliff
         - Risk thresholds: relaxed (operational judgment)
         - Hotel quality: 0.85 → 0.87 (airline-contracted hotels, QR standard)
         """
@@ -414,14 +435,28 @@ class ModelConfig:
                 sleep_debt_vulnerability_coeff=0.018,
                 inertia_duration_minutes=22.0,
                 inertia_max_magnitude=0.25,
+                # Soften the WMZ → nadir cliff: Dijk & Czeisler (1994) range
+                # for A2/A1 is 0.20-0.35; 0.06/0.25 = 0.24 (low end).
+                # Reduces evening-to-night performance drop by ~3-4pp while
+                # preserving the bimodal circadian structure.
+                circadian_second_harmonic_amplitude=0.06,
             ),
-            risk_thresholds=RiskThresholds(thresholds={
-                'low': (72, 100),
-                'moderate': (60, 72),
-                'high': (50, 60),
-                'critical': (40, 50),
-                'extreme': (0, 40)
-            }),
+            risk_thresholds=RiskThresholds(
+                thresholds={
+                    'low': (72, 100),
+                    'moderate': (60, 72),
+                    'high': (50, 60),
+                    'critical': (40, 50),
+                    'extreme': (0, 40)
+                },
+                actions={
+                    'low': {'action': 'None required', 'description': 'Well-rested state'},
+                    'moderate': {'action': 'Self-monitor', 'description': 'Be mindful of fatigue symptoms'},
+                    'high': {'action': 'Active countermeasures', 'description': 'Consider controlled rest and strategic caffeine use'},
+                    'critical': {'action': 'Fatigue report recommended', 'description': 'Consider reporting through FRMS'},
+                    'extreme': {'action': 'Fatigue report recommended', 'description': 'Significant safety concern — report through FRMS'}
+                },
+            ),
             adaptation_rates=AdaptationRates(),
             sleep_quality_params=SleepQualityParameters(
                 quality_hotel_typical=0.87,

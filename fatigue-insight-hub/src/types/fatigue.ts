@@ -98,7 +98,8 @@ export interface DutyAnalysis {
   overallRisk: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
   minPerformanceRisk: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
   landingRisk: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
-  smsReportable: boolean;
+  smsReportable: boolean; // Deprecated — use riskAdvisory
+  riskAdvisory: 'routine' | 'monitor' | 'consider_reporting' | 'report_recommended';
   flightSegments: FlightSegment[];
   // EASA ORO.FTL fields
   maxFdpHours?: number; // Base FDP limit from ORO.FTL.205
