@@ -117,14 +117,14 @@ export function DutyDetailsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={`
+        hideClose={reportMode}
+        className="
           max-w-[95vw] w-full max-h-[92vh] h-full p-0
           flex flex-col gap-0
           sm:rounded-xl
           overflow-hidden
           data-[state=open]:duration-300
-          ${reportMode ? '[&>button:last-child]:hidden' : ''}
-        `}
+        "
       >
         {/* Accessible title (visually hidden since header has its own) */}
         <DialogTitle className="sr-only">
