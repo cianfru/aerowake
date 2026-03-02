@@ -309,23 +309,6 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
                 )}
               </div>
 
-              {/* Crew set */}
-              <div className="space-y-1">
-                <Label className="text-[10px] text-muted-foreground">Crew Set</Label>
-                <Select
-                  value={settings.crewSet}
-                  onValueChange={(value) => handleSettingsChange({ crewSet: value as 'crew_a' | 'crew_b' })}
-                >
-                  <SelectTrigger className="h-8 bg-secondary/50 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover border-border">
-                    <SelectItem value="crew_a" className="text-xs">Crew A (In-seat)</SelectItem>
-                    <SelectItem value="crew_b" className="text-xs">Crew B (In-bunk)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
               {/* Inline model parameters (collapsed accordions) */}
               <Accordion type="multiple" className="w-full">
                 <AccordionItem value="processS" className="border-border/30">

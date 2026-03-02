@@ -321,6 +321,7 @@ export function transformAnalysisResult(
         sleepQuality,
         sleepEstimate: sleep ? transformSleepEstimate(sleep) : undefined,
         crewComposition: duty.crew_composition || 'standard',
+        ulrCrewSet: duty.ulr_crew_set || null,
         restFacilityClass: duty.rest_facility_class || null,
         isUlr: duty.is_ulr || false,
         acclimatizationState: duty.acclimatization_state || 'acclimatized',

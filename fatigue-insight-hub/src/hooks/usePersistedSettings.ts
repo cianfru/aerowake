@@ -7,7 +7,6 @@ interface PersistedFields {
   pilotId?: string;
   homeBase?: string;
   configPreset?: string;
-  crewSet?: 'crew_a' | 'crew_b';
   analysisType?: 'single' | 'range';
   selectedMonth?: string; // ISO string
 }
@@ -36,7 +35,6 @@ export function loadPersistedSettings(): Partial<PilotSettings> {
       };
       result.configPreset = LEGACY_PRESET_MAP[parsed.configPreset] ?? parsed.configPreset;
     }
-    if (parsed.crewSet) result.crewSet = parsed.crewSet;
     if (parsed.analysisType) result.analysisType = parsed.analysisType;
     if (parsed.selectedMonth) {
       const d = new Date(parsed.selectedMonth);
@@ -58,7 +56,6 @@ export function savePersistedSettings(settings: PilotSettings): void {
       pilotId: settings.pilotId,
       homeBase: settings.homeBase,
       configPreset: settings.configPreset,
-      crewSet: settings.crewSet,
       analysisType: settings.analysisType,
       selectedMonth: settings.selectedMonth.toISOString(),
     };

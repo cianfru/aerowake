@@ -23,7 +23,6 @@ export function useAnalyzeRoster() {
         state.settings.pilotId,
         state.settings.homeBase,
         state.settings.configPreset,
-        state.settings.crewSet,
         state.dutyCrewOverrides,
       );
     },
@@ -40,7 +39,7 @@ export function useAnalyzeRoster() {
 
   // Re-analyze uploaded file with different settings (no toast — silent refresh)
   const rerunMutation = useMutation({
-    mutationFn: async (overrides: { configPreset?: string; crewSet?: string }) => {
+    mutationFn: async (overrides: { configPreset?: string }) => {
       if (!state.actualFileObject) {
         throw new Error('No file in memory');
       }
@@ -49,7 +48,6 @@ export function useAnalyzeRoster() {
         state.settings.pilotId,
         state.settings.homeBase,
         overrides.configPreset ?? state.settings.configPreset,
-        overrides.crewSet ?? state.settings.crewSet,
         state.dutyCrewOverrides,
       );
     },
@@ -65,15 +63,13 @@ export function useAnalyzeRoster() {
 
   // Re-analyze a saved roster by ID with different settings
   const reanalyzeSavedMutation = useMutation({
-    mutationFn: async ({ rosterId, configPreset, crewSet }: {
+    mutationFn: async ({ rosterId, configPreset }: {
       rosterId: string;
       configPreset?: string;
-      crewSet?: string;
     }) => {
       return reanalyzeRoster(
         rosterId,
         configPreset ?? state.settings.configPreset,
-        crewSet ?? state.settings.crewSet,
       );
     },
     onSuccess: (result) => {

@@ -364,6 +364,7 @@ class DutyResponse(BaseModel):
     crew_composition: str = "standard"
     rest_facility_class: Optional[str] = None
     is_ulr: bool = False
+    ulr_crew_set: Optional[str] = None  # "crew_a" | "crew_b" — parser-detected or overridden
     acclimatization_state: str = "acclimatized"
     ulr_compliance: Optional[dict] = None
     inflight_rest_blocks: List[dict] = []
@@ -806,6 +807,7 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
         crew_composition=duty.crew_composition.value if hasattr(duty.crew_composition, 'value') else str(getattr(duty, 'crew_composition', 'standard')),
         rest_facility_class=duty.rest_facility_class.value if getattr(duty, 'rest_facility_class', None) else None,
         is_ulr=getattr(duty_timeline, 'is_ulr', False),
+        ulr_crew_set=duty.ulr_crew_set.value if getattr(duty, 'ulr_crew_set', None) else None,
         acclimatization_state=duty_timeline.acclimatization_state.value if hasattr(getattr(duty_timeline, 'acclimatization_state', None), 'value') else str(getattr(duty_timeline, 'acclimatization_state', 'acclimatized')),
         ulr_compliance=ulr_compliance_dict,
         inflight_rest_blocks=inflight_blocks,
@@ -1058,24 +1060,24 @@ async def analyze_roster(
         if not roster.duties:
             raise HTTPException(status_code=400, detail="No duties found in roster")
 
-        # Set crew set for ULR duties (Crew A or Crew B) with per-duty override support
+        # Apply per-duty crew set overrides (parser auto-detection is preserved as default)
         from models.data_models import ULRCrewSet
 
-        # Parse per-duty crew overrides
         overrides_dict = {}
         try:
             overrides_dict = json.loads(duty_crew_overrides) if duty_crew_overrides else {}
         except (json.JSONDecodeError, TypeError):
-            logger.warning("Invalid duty_crew_overrides JSON, using global setting")
+            logger.warning("Invalid duty_crew_overrides JSON, ignoring")
 
-        # Apply crew set to each duty (with per-duty override support)
+        # Only override duties that have an explicit per-duty override;
+        # parser-detected defaults (from auto_detect_crew_augmentation) are preserved.
         valid_crew_sets = {'crew_a': ULRCrewSet.CREW_A, 'crew_b': ULRCrewSet.CREW_B}
 
         for d in roster.duties:
-            if hasattr(d, 'ulr_crew_set'):
-                # Priority: duty-specific override > global setting
-                crew_set_key = overrides_dict.get(d.duty_id, crew_set.lower())
-                d.ulr_crew_set = valid_crew_sets.get(crew_set_key, ULRCrewSet.CREW_B)
+            if hasattr(d, 'ulr_crew_set') and d.duty_id in overrides_dict:
+                override_val = valid_crew_sets.get(overrides_dict[d.duty_id])
+                if override_val:
+                    d.ulr_crew_set = override_val
         
         # ── Company detection & fleet/role extraction ──────────────────
         # Only run airline detection if user has no company yet
@@ -1748,12 +1750,9 @@ async def reanalyze_roster(
     except Exception as e:
         logger.warning(f"Fleet/role extraction on reanalyze failed: {e}")
 
-    # Apply crew set
-    from models.data_models import ULRCrewSet
-    valid_crew = {"crew_a": ULRCrewSet.CREW_A, "crew_b": ULRCrewSet.CREW_B}
-    for d in roster_obj.duties:
-        if hasattr(d, "ulr_crew_set"):
-            d.ulr_crew_set = valid_crew.get(crew_set.lower(), ULRCrewSet.CREW_B)
+    # Parser auto-detection provides crew set defaults — no global override needed.
+    # Per-duty overrides could be added here in the future if the reanalyze
+    # endpoint accepts duty_crew_overrides (currently it does not).
 
     # Run analysis
     config_map = {

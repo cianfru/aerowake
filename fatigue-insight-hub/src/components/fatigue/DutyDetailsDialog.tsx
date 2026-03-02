@@ -13,9 +13,9 @@ interface DutyDetailsDialogProps {
   analysisId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  globalCrewSet?: 'crew_a' | 'crew_b';
   dutyCrewOverride?: 'crew_a' | 'crew_b';
   onCrewChange?: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
+  onCrewReset?: (dutyId: string) => void;
 }
 
 /**
@@ -35,9 +35,9 @@ export function DutyDetailsDialog({
   analysisId,
   open,
   onOpenChange,
-  globalCrewSet,
   dutyCrewOverride,
   onCrewChange,
+  onCrewReset,
 }: DutyDetailsDialogProps) {
   const [detailedDuty, setDetailedDuty] = useState<DutyAnalysis | null>(null);
   const [reportMode, setReportMode] = useState(false);
@@ -156,9 +156,9 @@ export function DutyDetailsDialog({
               <div className="md:overflow-y-auto md:pr-1 space-y-3">
                 <DutyInfoColumn
                   duty={displayDuty}
-                  globalCrewSet={globalCrewSet}
                   dutyCrewOverride={dutyCrewOverride}
                   onCrewChange={hasCrewContent ? onCrewChange : undefined}
+                  onCrewReset={hasCrewContent ? onCrewReset : undefined}
                   hasCrewContent={!!hasCrewContent}
                 />
               </div>

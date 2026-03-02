@@ -7,7 +7,6 @@ export interface PilotSettings {
   endDate?: Date;
   theme: 'dark' | 'light';
   configPreset: string;
-  crewSet: 'crew_a' | 'crew_b';
 }
 
 export interface UploadedFile {
@@ -180,6 +179,7 @@ export interface DutyAnalysis {
 
   // ULR / Augmented crew fields
   crewComposition: 'standard' | 'augmented_3' | 'augmented_4';
+  ulrCrewSet: 'crew_a' | 'crew_b' | null;
   restFacilityClass: 'class_1' | 'class_2' | 'class_3' | null;
   isUlr: boolean;
   acclimatizationState: 'acclimatized' | 'unknown' | 'departed';

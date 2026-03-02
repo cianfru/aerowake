@@ -34,6 +34,7 @@ export function DashboardContent() {
     selectDuty,
     setDrawerOpen,
     setCrewOverride,
+    clearCrewOverride,
     setActiveTab,
     loadAnalysis,
   } = useAnalysis();
@@ -54,23 +55,18 @@ export function DashboardContent() {
     dutyCrewOverrides,
   } = state;
 
-  // ── Auto-reanalyze when preset or crew set changes ────────
+  // ── Auto-reanalyze when config preset changes ─────────────
   const prevPreset = useRef(settings.configPreset);
-  const prevCrewSet = useRef(settings.crewSet);
 
   useEffect(() => {
-    const presetChanged = prevPreset.current !== settings.configPreset;
-    const crewChanged = prevCrewSet.current !== settings.crewSet;
-
-    if (!presetChanged && !crewChanged) return;
+    if (prevPreset.current === settings.configPreset) return;
     if (!analysisResults) return;
 
     prevPreset.current = settings.configPreset;
-    prevCrewSet.current = settings.crewSet;
 
     // Path A: fresh upload still in memory → re-analyze file
     if (state.actualFileObject) {
-      rerunWithSettings({ configPreset: settings.configPreset, crewSet: settings.crewSet });
+      rerunWithSettings({ configPreset: settings.configPreset });
       return;
     }
 
@@ -79,11 +75,10 @@ export function DashboardContent() {
       reanalyzeSaved({
         rosterId: analysisResults.rosterId,
         configPreset: settings.configPreset,
-        crewSet: settings.crewSet,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.configPreset, settings.crewSet]);
+  }, [settings.configPreset]);
 
   const handleSelectRoster = async (roster: RosterSummary) => {
     if (!roster.analysis_id) return;
@@ -265,9 +260,9 @@ export function DashboardContent() {
         analysisId={analysisResults?.analysisId}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
-        globalCrewSet={settings.crewSet}
         dutyCrewOverride={dutyCrewOverrides.get(selectedDuty?.dutyId || '')}
         onCrewChange={setCrewOverride}
+        onCrewReset={clearCrewOverride}
       />
     </div>
   );
