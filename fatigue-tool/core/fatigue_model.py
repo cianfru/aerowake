@@ -431,31 +431,55 @@ class BorbelyFatigueModel:
     # ========================================================================
     
     def get_flight_phase(self, segments: List[FlightSegment], current_time: datetime) -> FlightPhase:
-        """Determine flight phase from segment schedule"""
-        for segment in segments:
-            dep = segment.scheduled_departure_utc
-            arr = segment.scheduled_arrival_utc
-            
-            if current_time < dep - timedelta(minutes=30):
+        """Determine flight phase from segment schedule.
+
+        dep = off-blocks, arr = on-blocks (block times from roster).
+        All flight phases fit WITHIN block time (dep → arr).
+        Time between segments (arr_prev → dep_next) = turnaround.
+
+        Phase layout within block time:
+          Taxi out   15 min  (dep → dep+15)    — push-back, start, taxi to runway
+          Takeoff     5 min  (dep+15 → dep+20) — lineup, takeoff roll, initial climb
+          Climb      25 min  (dep+20 → dep+45) — to cruise level (~FL350)
+          Cruise     variable
+          Descent    20 min  (arr-40 → arr-20)
+          Approach   10 min  (arr-20 → arr-10) — procedure turn to short final
+          Landing     5 min  (arr-10 → arr-5)  — short final, flare, rollout
+          Taxi in     5 min  (arr-5 → arr)     — vacate runway, taxi to gate
+
+        Min block time for cruise: ~85 min. Shorter flights skip cruise
+        gracefully (sequential checks resolve overlapping windows).
+        """
+        for idx, segment in enumerate(segments):
+            dep = segment.scheduled_departure_utc  # off-blocks
+            arr = segment.scheduled_arrival_utc    # on-blocks
+
+            # ── Before this segment's off-blocks ──
+            if current_time < dep:
+                if idx > 0:
+                    return FlightPhase.GROUND_TURNAROUND
                 return FlightPhase.PREFLIGHT
-            elif current_time < dep:
-                return FlightPhase.TAXI_OUT
-            elif current_time < dep + timedelta(minutes=15):
-                return FlightPhase.TAKEOFF
-            elif current_time < dep + timedelta(minutes=30):
-                return FlightPhase.CLIMB
+
+            # ── Within block time (dep → arr) ──
+            if current_time < dep + timedelta(minutes=15):
+                return FlightPhase.TAXI_OUT          # 15 min
+            elif current_time < dep + timedelta(minutes=20):
+                return FlightPhase.TAKEOFF           #  5 min
+            elif current_time < dep + timedelta(minutes=45):
+                return FlightPhase.CLIMB             # 25 min
             elif current_time < arr - timedelta(minutes=40):
                 return FlightPhase.CRUISE
             elif current_time < arr - timedelta(minutes=20):
-                return FlightPhase.DESCENT
+                return FlightPhase.DESCENT           # 20 min
             elif current_time < arr - timedelta(minutes=10):
-                return FlightPhase.APPROACH
-            elif current_time <= arr + timedelta(minutes=5):
-                return FlightPhase.LANDING
-            elif current_time <= arr + timedelta(minutes=15):
-                return FlightPhase.TAXI_IN
-        
-        return FlightPhase.CRUISE
+                return FlightPhase.APPROACH          # 10 min
+            elif current_time < arr - timedelta(minutes=5):
+                return FlightPhase.LANDING           #  5 min
+            elif current_time <= arr:
+                return FlightPhase.TAXI_IN           #  5 min
+
+        # After last segment's on-blocks — duty winding down
+        return FlightPhase.TAXI_IN
     
     # ========================================================================
     # DUTY SIMULATION

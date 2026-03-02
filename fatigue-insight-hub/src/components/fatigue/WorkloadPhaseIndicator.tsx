@@ -25,7 +25,7 @@ const PHASE_WORKLOAD: Record<string, { multiplier: number; color: string; short:
   approach:           { multiplier: 1.5, color: 'hsl(40, 95%, 50%)', short: 'APP' },
   landing:            { multiplier: 2.0, color: 'hsl(0, 80%, 55%)', short: 'LDG' },
   taxi_in:            { multiplier: 1.0, color: 'hsl(160, 60%, 45%)', short: 'TXI' },
-  ground_turnaround:  { multiplier: 1.2, color: 'hsl(var(--muted-foreground))', short: 'GND' },
+  ground_turnaround:  { multiplier: 1.1, color: 'hsl(var(--muted-foreground))', short: 'GND' },
 };
 
 interface PhaseSegment {
