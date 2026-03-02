@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Menu, Moon, Sun, LogIn, LogOut, Shield,
   Home, FolderOpen, BarChart3, Activity, CalendarRange, Users,
-  BookOpen, Info, Microscope, Settings2, Globe, ShieldAlert,
+  BookOpen, Info, Microscope, Settings2, Globe, ShieldAlert, FileText,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +37,7 @@ const navItems = [
   { id: 'rosters',  icon: FolderOpen,    label: 'Rosters',   section: 'primary' },
   { id: 'analysis', icon: BarChart3,     label: 'Analysis',  section: 'primary' },
   { id: 'insights', icon: Activity,      label: 'Insights',  section: 'primary' },
+  { id: 'reports',  icon: FileText,     label: 'Reports',   section: 'primary' },
   { id: 'yearly',   icon: CalendarRange, label: '12-Month',  section: 'primary', requiresAuth: true },
   { id: 'compare',  icon: Users,         label: 'Compare',   section: 'primary', requiresAuth: true },
   { id: 'learn',    icon: BookOpen,      label: 'Learn',     section: 'secondary' },
