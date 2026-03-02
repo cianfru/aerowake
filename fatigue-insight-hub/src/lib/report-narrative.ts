@@ -396,18 +396,41 @@ export function analyzeCriticalPhases(
 
   if (!duty.flightSegments || duty.flightSegments.length === 0) return results;
 
-  // For each sector, find the timeline points closest to landing
+  // ── Pre-compute per-sector landing clusters ──────────────────────
+  // The backend assigns flight phases per-segment timing, so landing/approach/
+  // descent points for each sector are separated by turnaround gaps (>30 min).
+  // Group consecutive critical-phase points into clusters by hours_on_duty
+  // proximity, then assign cluster[i] to segment[i].
+  const criticalPhases = ['descent', 'landing', 'approach'];
+
+  const allCriticalPts = timeline.filter(pt =>
+    pt.flight_phase && criticalPhases.includes(pt.flight_phase) && pt.is_critical,
+  );
+
+  const clusters: TimelinePoint[][] = [];
+  let curCluster: TimelinePoint[] = [];
+  for (const pt of allCriticalPts) {
+    if (
+      curCluster.length > 0 &&
+      pt.hours_on_duty - curCluster[curCluster.length - 1].hours_on_duty > 0.5
+    ) {
+      clusters.push(curCluster);
+      curCluster = [];
+    }
+    curCluster.push(pt);
+  }
+  if (curCluster.length > 0) clusters.push(curCluster);
+
+  // ── Iterate sectors, matching each to its landing cluster ────────
+  let clusterIdx = 0;
+
   duty.flightSegments.forEach((segment, idx) => {
     // Skip deadhead and inflight rest segments
     if (segment.isDeadhead || segment.activityCode === 'DH' || segment.activityCode === 'IR') return;
 
-    // Find timeline points for critical phases of this sector
-    const criticalPhases = ['descent', 'landing', 'approach'];
-
-    // Use landing performance from the segment if available, otherwise from timeline
-    const landingPoints = timeline.filter(pt =>
-      pt.flight_phase && criticalPhases.includes(pt.flight_phase) && pt.is_critical,
-    );
+    // Per-sector critical phase points (or empty if no matching cluster)
+    const landingPoints = clusters[clusterIdx] ?? [];
+    clusterIdx++;
 
     // Take the worst critical-phase point for this sector (or segment performance)
     const perfValue = segment.performance ?? duty.landingPerformance ?? duty.minPerformance ?? 100;
