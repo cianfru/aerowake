@@ -25,7 +25,7 @@ class WorkloadParameters:
 
     WORKLOAD_MULTIPLIERS: Dict[FlightPhase, float] = field(default_factory=lambda: {
         FlightPhase.PREFLIGHT: 1.1,
-        FlightPhase.TAXI_OUT: 1.0,
+        FlightPhase.TAXI_OUT: 1.2,  # ATC comms, checklists, ground manoeuvring
         FlightPhase.TAKEOFF: 1.8,
         FlightPhase.CLIMB: 1.3,
         FlightPhase.CRUISE: 0.8,

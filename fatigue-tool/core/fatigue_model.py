@@ -466,7 +466,8 @@ class BorbelyFatigueModel:
             elif current_time <= arr + timedelta(minutes=15):
                 return FlightPhase.TAXI_IN           # 15 min (was 10)
 
-        return FlightPhase.CRUISE
+        # After the last segment's taxi-in window — pilot is on the ground
+        return FlightPhase.TAXI_IN
     
     # ========================================================================
     # DUTY SIMULATION
