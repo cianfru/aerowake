@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
-  FileText, ChevronRight, AlertTriangle,
+  FileText, ChevronRight, ChevronLeft, AlertTriangle,
   Plane, Clock, Shield, Loader2, Upload, Play,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -60,26 +60,41 @@ export function ReportsPage() {
   const analysisId = state.analysisResults?.analysisId;
   const hasFile = !!state.uploadedFile;
 
-  // Group duties by month
-  const grouped = useMemo(() => {
-    const sorted = [...duties].sort(
+  // Sorted flat list for prev/next navigation
+  const sortedDuties = useMemo(() =>
+    [...duties].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-    );
-    return groupByMonth(sorted);
-  }, [duties]);
+    ),
+  [duties]);
+
+  // Group duties by month
+  const grouped = useMemo(() => groupByMonth(sortedDuties), [sortedDuties]);
+
+  // Current index in sorted list
+  const selectedIndex = useMemo(() => {
+    if (!selectedDuty) return -1;
+    return sortedDuties.findIndex((d) => d.dutyId === selectedDuty.dutyId);
+  }, [selectedDuty, sortedDuties]);
+
+  // Select a duty — set both states synchronously to avoid race conditions
+  const selectDuty = useCallback((duty: DutyAnalysis | null) => {
+    setSelectedDuty(duty);
+    setDetailedDuty(duty); // immediate — useEffect will enrich with timeline
+  }, []);
+
+  const goToPrev = useCallback(() => {
+    if (selectedIndex > 0) selectDuty(sortedDuties[selectedIndex - 1]);
+  }, [selectedIndex, sortedDuties, selectDuty]);
+
+  const goToNext = useCallback(() => {
+    if (selectedIndex < sortedDuties.length - 1) selectDuty(sortedDuties[selectedIndex + 1]);
+  }, [selectedIndex, sortedDuties, selectDuty]);
 
   // Fetch timeline data when a duty is selected
   useEffect(() => {
-    if (!selectedDuty) {
-      setDetailedDuty(null);
-      return;
-    }
+    if (!selectedDuty || !analysisId || !selectedDuty.dutyId) return;
 
     let cancelled = false;
-    setDetailedDuty(selectedDuty);
-
-    if (!analysisId || !selectedDuty.dutyId) return;
-
     setLoading(true);
 
     getDutyDetail(analysisId, selectedDuty.dutyId)
@@ -122,7 +137,10 @@ export function ReportsPage() {
   }, [selectedDuty, analysisId]);
 
   // ── Report view ────────────────────────────────────────────
-  if (detailedDuty && selectedDuty) {
+  if (selectedDuty) {
+    const hasPrev = selectedIndex > 0;
+    const hasNext = selectedIndex < sortedDuties.length - 1;
+
     return (
       <div className="flex-1 overflow-y-auto">
         {loading && (
@@ -132,10 +150,45 @@ export function ReportsPage() {
           </div>
         )}
         <FatigueReport
-          duty={detailedDuty}
+          duty={detailedDuty ?? selectedDuty}
           analysisId={analysisId}
-          onBack={() => setSelectedDuty(null)}
+          onBack={() => selectDuty(null)}
         />
+
+        {/* Prev / Next navigation */}
+        {sortedDuties.length > 1 && (
+          <div className="sticky bottom-0 border-t border-border/50 bg-background/80 backdrop-blur-sm px-4 py-3">
+            <div className="mx-auto max-w-4xl flex items-center justify-between">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!hasPrev}
+                onClick={goToPrev}
+                className="gap-1.5"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                <span className="hidden sm:inline">Previous Duty</span>
+                <span className="sm:hidden">Prev</span>
+              </Button>
+
+              <span className="text-xs text-muted-foreground">
+                {selectedIndex + 1} / {sortedDuties.length}
+              </span>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!hasNext}
+                onClick={goToNext}
+                className="gap-1.5"
+              >
+                <span className="hidden sm:inline">Next Duty</span>
+                <span className="sm:hidden">Next</span>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -222,7 +275,7 @@ export function ReportsPage() {
                   key={duty.dutyId ?? `${duty.dateString}-${i}`}
                   variant="glass"
                   className="cursor-pointer transition-all duration-200 hover:bg-secondary/40 hover:border-primary/20"
-                  onClick={() => setSelectedDuty(duty)}
+                  onClick={() => selectDuty(duty)}
                 >
                   <CardContent className="p-3 sm:p-4">
                     <div className="flex items-center gap-3">
