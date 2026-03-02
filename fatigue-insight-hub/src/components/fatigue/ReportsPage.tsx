@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  FileText, ArrowLeft, ChevronRight, AlertTriangle,
-  Plane, Clock, Shield, Loader2,
+  FileText, ChevronRight, AlertTriangle,
+  Plane, Clock, Shield, Loader2, Upload, Play,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAnalysis } from '@/contexts/AnalysisContext';
+import { useAnalyzeRoster } from '@/hooks/useAnalyzeRoster';
 import { getDutyDetail } from '@/lib/api-client';
 import { FatigueReport } from './report/FatigueReport';
 import { format } from 'date-fns';
@@ -48,13 +49,15 @@ function groupByMonth(duties: DutyAnalysis[]): Map<string, DutyAnalysis[]> {
 // ── Component ───────────────────────────────────────────────
 
 export function ReportsPage() {
-  const { state } = useAnalysis();
+  const { state, setActiveTab } = useAnalysis();
+  const { runAnalysis, isAnalyzing } = useAnalyzeRoster();
   const [selectedDuty, setSelectedDuty] = useState<DutyAnalysis | null>(null);
   const [detailedDuty, setDetailedDuty] = useState<DutyAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
 
   const duties = state.analysisResults?.duties ?? [];
   const analysisId = state.analysisResults?.analysisId;
+  const hasFile = !!state.uploadedFile;
 
   // Group duties by month
   const grouped = useMemo(() => {
@@ -145,11 +148,43 @@ export function ReportsPage() {
             <div className="rounded-2xl bg-secondary/30 p-6 mb-6">
               <FileText className="h-12 w-12 text-muted-foreground" />
             </div>
-            <h2 className="text-xl font-semibold mb-2">No Reports Yet</h2>
-            <p className="text-sm text-muted-foreground max-w-md">
-              Upload a roster to generate SMS-ready fatigue reports for every duty.
-              Each report includes risk assessment, impairment equivalences, and mitigation recommendations.
-            </p>
+            {hasFile && !state.analysisResults ? (
+              /* File uploaded but not yet analyzed */
+              <>
+                <h2 className="text-xl font-semibold mb-2">Ready to Analyze</h2>
+                <p className="text-sm text-muted-foreground max-w-md mb-6">
+                  Your roster is uploaded. Run the analysis to generate fatigue reports for every duty.
+                </p>
+                <Button
+                  variant="glow"
+                  size="sm"
+                  onClick={() => runAnalysis()}
+                  disabled={isAnalyzing}
+                >
+                  {isAnalyzing ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Analyzing…</>
+                  ) : (
+                    <><Play className="h-4 w-4 mr-2" /> Run Analysis</>
+                  )}
+                </Button>
+              </>
+            ) : (
+              /* No file uploaded */
+              <>
+                <h2 className="text-xl font-semibold mb-2">No Reports Yet</h2>
+                <p className="text-sm text-muted-foreground max-w-md mb-6">
+                  Upload a roster to generate SMS-ready fatigue reports for every duty.
+                  Each report includes risk assessment, impairment equivalences, and mitigation recommendations.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab('rosters')}
+                >
+                  <Upload className="h-4 w-4 mr-2" /> Go to Rosters
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>
