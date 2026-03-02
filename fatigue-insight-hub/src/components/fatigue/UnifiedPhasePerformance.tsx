@@ -33,14 +33,14 @@ const phaseConfig: Record<string, { label: string; icon: string; critical: boole
 /** Workload multipliers (from backend WorkloadModel). */
 const PHASE_WORKLOAD: Record<string, { multiplier: number; color: string; short: string }> = {
   preflight:         { multiplier: 1.1, color: 'hsl(var(--muted-foreground))', short: 'PRE' },
-  taxi_out:          { multiplier: 1.0, color: 'hsl(160, 60%, 45%)',          short: 'TXO' },
+  taxi_out:          { multiplier: 1.2, color: 'hsl(160, 60%, 45%)',          short: 'TXO' },
   takeoff:           { multiplier: 1.8, color: 'hsl(30, 95%, 55%)',           short: 'T/O' },
   climb:             { multiplier: 1.3, color: 'hsl(200, 70%, 55%)',          short: 'CLB' },
   cruise:            { multiplier: 0.8, color: 'hsl(220, 60%, 55%)',          short: 'CRZ' },
   descent:           { multiplier: 1.2, color: 'hsl(200, 70%, 55%)',          short: 'DES' },
   approach:          { multiplier: 1.5, color: 'hsl(40, 95%, 50%)',           short: 'APP' },
   landing:           { multiplier: 2.0, color: 'hsl(0, 80%, 55%)',            short: 'LDG' },
-  taxi_in:           { multiplier: 1.0, color: 'hsl(160, 60%, 45%)',          short: 'TXI' },
+  taxi_in:           { multiplier: 1.1, color: 'hsl(160, 60%, 45%)',          short: 'TXI' },
   ground_turnaround: { multiplier: 1.1, color: 'hsl(var(--muted-foreground))', short: 'GND' },
 };
 
