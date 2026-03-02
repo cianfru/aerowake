@@ -32,7 +32,7 @@ class WorkloadParameters:
         FlightPhase.DESCENT: 1.2,
         FlightPhase.APPROACH: 1.5,
         FlightPhase.LANDING: 2.0,
-        FlightPhase.TAXI_IN: 1.0,
+        FlightPhase.TAXI_IN: 1.1,  # ATC comms, ground manoeuvring on apron
         FlightPhase.GROUND_TURNAROUND: 1.1,  # light workload: walkaround, briefing, boarding
     })
 

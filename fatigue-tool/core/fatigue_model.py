@@ -478,8 +478,8 @@ class BorbelyFatigueModel:
             elif current_time <= arr:
                 return FlightPhase.TAXI_IN           #  5 min
 
-        # After last segment's on-blocks — duty winding down
-        return FlightPhase.TAXI_IN
+        # After last segment's on-blocks — post-flight (paperwork, debrief)
+        return FlightPhase.PREFLIGHT
     
     # ========================================================================
     # DUTY SIMULATION
