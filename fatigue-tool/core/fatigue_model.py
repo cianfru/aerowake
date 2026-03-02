@@ -431,30 +431,41 @@ class BorbelyFatigueModel:
     # ========================================================================
     
     def get_flight_phase(self, segments: List[FlightSegment], current_time: datetime) -> FlightPhase:
-        """Determine flight phase from segment schedule"""
+        """Determine flight phase from segment schedule.
+
+        Phase durations are operationally conservative estimates:
+          Taxi out   30 min  (dep-30 → dep)
+          Takeoff     5 min  (dep → dep+5)   — thrust set to initial climb
+          Climb      25 min  (dep+5 → dep+30) — to cruise level (~FL350)
+          Cruise     variable
+          Descent    20 min  (arr-40 → arr-20)
+          Approach   15 min  (arr-20 → arr-5) — procedure turn to short final
+          Landing     5 min  (arr-5 → arr)    — short final, flare, rollout
+          Taxi in    15 min  (arr → arr+15)
+        """
         for segment in segments:
             dep = segment.scheduled_departure_utc
             arr = segment.scheduled_arrival_utc
-            
+
             if current_time < dep - timedelta(minutes=30):
                 return FlightPhase.PREFLIGHT
             elif current_time < dep:
-                return FlightPhase.TAXI_OUT
-            elif current_time < dep + timedelta(minutes=15):
-                return FlightPhase.TAKEOFF
+                return FlightPhase.TAXI_OUT          # 30 min
+            elif current_time < dep + timedelta(minutes=5):
+                return FlightPhase.TAKEOFF           #  5 min (was 15)
             elif current_time < dep + timedelta(minutes=30):
-                return FlightPhase.CLIMB
+                return FlightPhase.CLIMB             # 25 min (was 15)
             elif current_time < arr - timedelta(minutes=40):
                 return FlightPhase.CRUISE
             elif current_time < arr - timedelta(minutes=20):
-                return FlightPhase.DESCENT
-            elif current_time < arr - timedelta(minutes=10):
-                return FlightPhase.APPROACH
-            elif current_time <= arr + timedelta(minutes=5):
-                return FlightPhase.LANDING
+                return FlightPhase.DESCENT           # 20 min
+            elif current_time < arr - timedelta(minutes=5):
+                return FlightPhase.APPROACH          # 15 min (was 10)
+            elif current_time <= arr:
+                return FlightPhase.LANDING           #  5 min (was 15)
             elif current_time <= arr + timedelta(minutes=15):
-                return FlightPhase.TAXI_IN
-        
+                return FlightPhase.TAXI_IN           # 15 min (was 10)
+
         return FlightPhase.CRUISE
     
     # ========================================================================
