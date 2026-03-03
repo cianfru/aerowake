@@ -11,8 +11,8 @@
 // FHA — Fatigue Hazard Area
 // ---------------------------------------------------------------------------
 
-/** Threshold below which time-minutes are counted as hazardous. */
-const FHA_THRESHOLD = 77;
+/** Threshold below which time-minutes are counted as hazardous (aligned with operational "moderate" risk boundary). */
+const FHA_THRESHOLD = 72;
 
 /** Resolution of the timeline data in minutes. */
 const TIMELINE_RESOLUTION_MIN = 5;
@@ -27,14 +27,14 @@ interface TimelineDataPoint {
  * FHA = Σ max(0, threshold − P(t)) × Δt / 60
  *
  * This is the trapezoidal integration of the area under the moderate-risk
- * threshold (77%) across all timeline points, converted from %-minutes
+ * threshold (72%, aligned with operational risk classification) across all timeline points, converted from %-minutes
  * to %-hours for intuitive display. Higher values indicate greater
  * cumulative fatigue exposure.
  *
  * Reference: Dawson & McCulloch, 2005.
  *
  * @param points Array of timeline data points with performance values.
- * @param threshold Performance threshold (default 77%).
+ * @param threshold Performance threshold (default 72%).
  * @param resolutionMin Time step in minutes (default 5).
  * @returns FHA value in %-hours.
  */
