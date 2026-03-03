@@ -14,6 +14,7 @@ import { PRESET_PARAMS, ParamRow, RISK_COLORS } from './AdvancedParametersDialog
 import { PilotAvatar } from './PilotAvatar';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { SettingsProfileManager } from './SettingsProfileManager';
+import { AuthSheet } from '@/components/auth/AuthSheet';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { useTheme } from '@/hooks/useTheme';
@@ -56,6 +57,7 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
   const { state, setSettings, setActiveTab } = useAnalysis();
   const { setTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [authSheetOpen, setAuthSheetOpen] = useState(false);
 
   const { settings, analysisResults } = state;
 
@@ -174,13 +176,13 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
                 </button>
               </div>
             ) : (
-              <a
-                href="/login"
+              <button
+                onClick={() => setAuthSheetOpen(true)}
                 className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
               >
                 <LogIn className="h-3.5 w-3.5" />
                 <span className="hidden md:inline">Sign In</span>
-              </a>
+              </button>
             )}
 
             <button
@@ -408,6 +410,11 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Auth slide-over (sign in / register from within the app) */}
+      {!isAuthenticated && (
+        <AuthSheet open={authSheetOpen} onOpenChange={setAuthSheetOpen} />
+      )}
     </>
   );
 }
