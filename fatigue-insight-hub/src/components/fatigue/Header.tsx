@@ -87,7 +87,7 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
 
   return (
     <>
-      <header className="border-b border-border/50 glass-strong relative z-20">
+      <header className="sticky top-0 border-b border-border/50 glass-strong relative z-20">
         <div className="flex items-center justify-between px-4 py-2 md:px-6 md:py-2.5">
           {/* Left: Hamburger + Logo */}
           <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
