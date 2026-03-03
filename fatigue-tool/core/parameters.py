@@ -93,6 +93,16 @@ class BorbelyParameters:
     weight_homeostatic: float = 0.55
     interaction_exponent: float = 1.5
 
+    # Pilot resilience factor — Gander et al. (2013) operational fatigue
+    # management: trained airline crew maintain performance better than
+    # lab subjects under equivalent sleep pressure. Modelled as a Gaussian
+    # boost centred on moderate S (just-woke to moderately fatigued).
+    # Formula: boost = magnitude × exp(-0.5×((S-peak)/sigma)²)
+    # Applied when S ∈ [0.05, 0.70].
+    resilience_boost_magnitude: float = 0.07   # 7% max boost (default/research)
+    resilience_boost_peak_s: float = 0.20      # Peak at S=0.20 (recently woken)
+    resilience_boost_sigma: float = 0.18       # Gaussian width
+
     # Sleep inertia (Tassi & Muzet 2000)
     inertia_duration_minutes: float = 30.0
     inertia_max_magnitude: float = 0.30
@@ -422,7 +432,13 @@ class ModelConfig:
         - sleep_debt_vuln_coeff: 0.025 → 0.018 — less aggressive debt curve
         - inertia_duration: 30 → 22 min — trained arousal protocols
         - inertia_magnitude: 0.30 → 0.25 — reduced post-wake grogginess
+        - S/C weights: 55/45 → 60/40 — trained crew handle circadian lows
+          better than pure model predicts (Gander et al. 2013)
+        - circadian_amplitude: 0.25 → 0.22 — within Dijk & Czeisler (1994)
+          range (0.20-0.30), softens WOCL cliff by ~1pp
         - second_harmonic: 0.08 → 0.06 — softer evening circadian cliff
+        - resilience: 7%→12% peak, sigma 0.18→0.25 — wider Gaussian covers
+          more of the S range, stronger trained-pilot boost (Gander 2013)
         - tot_inflection: 8.0h → 10.5h — ULR buffer, shifts fatigue cliff
         - tot_quadratic: 0.0005 → 0.00025 — halved non-linear degradation
         - pinch_sleep_pressure: 0.70 → 0.78 — genuine impairment only (>17h awake)
@@ -438,11 +454,29 @@ class ModelConfig:
                 sleep_debt_vulnerability_coeff=0.018,
                 inertia_duration_minutes=22.0,
                 inertia_max_magnitude=0.25,
+                # S/C weights: shift toward homeostatic (60/40). Trained crew
+                # manage circadian lows better than the model predicts — "how
+                # well you slept" matters more than "what time it is" for
+                # experienced pilots (Gander et al. 2013). +2-3pp at WOCL,
+                # near-neutral during daytime.
+                weight_homeostatic=0.60,
+                weight_circadian=0.40,
+                # Circadian amplitude: 0.25 → 0.22. Dijk & Czeisler (1994)
+                # range is 0.20-0.30. Softens the WOCL nadir by ~1pp without
+                # eliminating the circadian signal. Combined with reduced 2nd
+                # harmonic, this reduces the evening→night cliff.
+                circadian_amplitude=0.22,
                 # Soften the WMZ → nadir cliff: Dijk & Czeisler (1994) range
                 # for A2/A1 is 0.20-0.35; 0.06/0.25 = 0.24 (low end).
                 # Reduces evening-to-night performance drop by ~3-4pp while
                 # preserving the bimodal circadian structure.
                 circadian_second_harmonic_amplitude=0.06,
+                # Pilot resilience: 12% peak (was 7%), sigma 0.25 (was 0.18).
+                # Wider Gaussian covers S ∈ [0.05, 0.70] — from just-woke to
+                # significantly fatigued. Gander et al. (2013): trained crew
+                # consistently outperform lab subjects. +2pp across scenarios.
+                resilience_boost_magnitude=0.12,
+                resilience_boost_sigma=0.25,
                 # ULR buffer: shift fatigue cliff past mid-point of 14h FDP
                 tot_inflection_hours=10.5,
                 # Halved non-linear degradation (was 0.0005)

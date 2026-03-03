@@ -314,15 +314,15 @@ class BorbelyFatigueModel:
         
         # Pilot resilience factor: trained professionals maintain operational
         # performance under moderate sleep pressure (Gander et al. 2013).
-        # Broad range [0.05, 0.60] covers S from just-woke to long-awake.
-        # Peak 7% boost at S=0.20, wider Gaussian sigma=0.18.
-        # Calibration choice: experienced airline crew consistently outperform
-        # lab subjects under equivalent sleep pressure conditions.
-        if 0.05 <= s <= 0.60:
-            resilience_peak = 0.20
-            resilience_sigma = 0.18
-            gaussian = math.exp(-0.5 * ((s - resilience_peak) / resilience_sigma) ** 2)
-            resilience_boost = 0.07 * gaussian
+        # Gaussian boost centred on moderate S — magnitude, peak, and sigma
+        # are configurable per preset (see parameters.py BorbelyParameters).
+        # Default: 7% peak at S=0.20, sigma=0.18.
+        # Operational: 12% peak, sigma=0.25 (wider coverage, stronger boost).
+        if 0.05 <= s <= 0.70 and self.params.resilience_boost_magnitude > 0:
+            peak_s = self.params.resilience_boost_peak_s
+            sigma = self.params.resilience_boost_sigma
+            gaussian = math.exp(-0.5 * ((s - peak_s) / sigma) ** 2)
+            resilience_boost = self.params.resilience_boost_magnitude * gaussian
             base_alertness = min(1.0, base_alertness * (1.0 + resilience_boost))
         
         return base_alertness
