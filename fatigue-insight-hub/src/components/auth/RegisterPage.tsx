@@ -64,7 +64,7 @@ export function RegisterPage() {
 
       {/* Overlay — click outside card dismisses back to landing */}
       <div
-        className="relative z-10 min-h-screen flex items-center justify-center p-4 bg-black/50 backdrop-blur-[2px]"
+        className="relative z-10 min-h-screen flex items-center justify-center p-4 bg-black/30 backdrop-blur-[1px]"
         onClick={() => navigate(-1)}
       >
       <Card variant="glass" className="relative w-full max-w-md" onClick={(e) => e.stopPropagation()}>
