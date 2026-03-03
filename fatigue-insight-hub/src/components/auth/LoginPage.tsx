@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAnalysis } from '@/contexts/AnalysisContext';
+import { LandingPage } from '@/components/landing/LandingPage';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -40,7 +41,14 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+    <div className="relative min-h-screen overflow-hidden">
+      {/* Landing page as visual backdrop */}
+      <div className="fixed inset-0 pointer-events-none" aria-hidden="true">
+        <LandingPage onEnter={() => {}} />
+      </div>
+
+      {/* Overlay + centered card */}
+      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 bg-black/50 backdrop-blur-[2px]">
       <Card variant="glass" className="w-full max-w-md">
         <CardHeader className="text-center space-y-2">
           <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -123,6 +131,7 @@ export function LoginPage() {
           </form>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }
