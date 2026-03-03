@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { UserPlus, Mail, Lock, User, MapPin, AlertCircle } from 'lucide-react';
+import { UserPlus, Mail, Lock, User, MapPin, AlertCircle, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,9 +62,20 @@ export function RegisterPage() {
         <LandingPage onEnter={() => {}} />
       </div>
 
-      {/* Overlay + centered card */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 bg-black/50 backdrop-blur-[2px]">
-      <Card variant="glass" className="w-full max-w-md">
+      {/* Overlay — click outside card dismisses back to landing */}
+      <div
+        className="relative z-10 min-h-screen flex items-center justify-center p-4 bg-black/50 backdrop-blur-[2px]"
+        onClick={() => navigate(-1)}
+      >
+      <Card variant="glass" className="relative w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        {/* Close button */}
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="absolute right-4 top-4 rounded-full p-1 text-muted-foreground/60 transition-colors hover:text-foreground hover:bg-white/5"
+        >
+          <X className="h-4 w-4" />
+        </button>
         <CardHeader className="text-center space-y-2">
           <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
             <UserPlus className="h-6 w-6 text-primary" />
