@@ -416,21 +416,24 @@ class ModelConfig:
         S/C weights, hypoxia, PVT, time-on-task) unchanged from literature values.
 
         Calibration choices (transparent deviations from EASA defaults):
-        - tau_i: 18.2h → 19.5h — trained pilots manage wakefulness better (Gander 2013)
-        - tau_d: 4.2h → 3.9h — faster recovery for sleep-disciplined crew
+        - tau_i: 18.2h → 21.0h — trained crew stamina (Gander et al. 2013)
+        - tau_d: 4.2h → 3.8h — faster recovery during consolidated sleep
         - baseline_sleep_need: 8.0h → 7.5h — matches airline planning standard
         - sleep_debt_vuln_coeff: 0.025 → 0.018 — less aggressive debt curve
         - inertia_duration: 30 → 22 min — trained arousal protocols
         - inertia_magnitude: 0.30 → 0.25 — reduced post-wake grogginess
         - second_harmonic: 0.08 → 0.06 — softer evening circadian cliff
+        - tot_inflection: 8.0h → 10.5h — ULR buffer, shifts fatigue cliff
+        - tot_quadratic: 0.0005 → 0.00025 — halved non-linear degradation
+        - pinch_sleep_pressure: 0.70 → 0.78 — genuine impairment only (>17h awake)
         - Risk thresholds: relaxed (operational judgment)
         - Hotel quality: 0.85 → 0.87 (airline-contracted hotels, QR standard)
         """
         return cls(
             easa_framework=EASAFatigueFramework(),
             borbely_params=BorbelyParameters(
-                tau_i=19.5,
-                tau_d=3.9,
+                tau_i=21.0,   # Stamina: Gander et al. (2013), trained crew
+                tau_d=3.8,    # Faster recovery during consolidated sleep
                 baseline_sleep_need_hours=7.5,
                 sleep_debt_vulnerability_coeff=0.018,
                 inertia_duration_minutes=22.0,
@@ -440,6 +443,12 @@ class ModelConfig:
                 # Reduces evening-to-night performance drop by ~3-4pp while
                 # preserving the bimodal circadian structure.
                 circadian_second_harmonic_amplitude=0.06,
+                # ULR buffer: shift fatigue cliff past mid-point of 14h FDP
+                tot_inflection_hours=10.5,
+                # Halved non-linear degradation (was 0.0005)
+                tot_quadratic_coeff=0.00025,
+                # Pinch events only at genuine impairment (>17h awake)
+                pinch_sleep_pressure_threshold=0.78,
             ),
             risk_thresholds=RiskThresholds(
                 thresholds={
