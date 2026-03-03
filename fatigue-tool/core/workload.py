@@ -36,7 +36,8 @@ class WorkloadParameters:
         FlightPhase.GROUND_TURNAROUND: 1.1,  # light workload: walkaround, briefing, boarding
     })
 
-    SECTOR_PENALTY_RATE: float = 0.15  # 15% per additional sector
+    SECTOR_PENALTY_RATE: float = 0.07   # 7% per additional sector (was 15%)
+    SECTOR_MULTIPLIER_CAP: float = 1.25  # Caps sector component, preserves phase peaks
     RECOVERY_THRESHOLD_HOURS: float = 2.0
     TURNAROUND_RECOVERY_RATE: float = 0.3
 
@@ -70,7 +71,8 @@ class WorkloadModel:
         return self.params.WORKLOAD_MULTIPLIERS.get(phase, 1.0)
 
     def get_sector_multiplier(self, sector_number: int) -> float:
-        return 1.0 + (sector_number - 1) * self.params.SECTOR_PENALTY_RATE
+        raw = 1.0 + (sector_number - 1) * self.params.SECTOR_PENALTY_RATE
+        return min(self.params.SECTOR_MULTIPLIER_CAP, raw)
 
     def get_combined_multiplier(self, phase: FlightPhase, sector_number: int) -> float:
         return self.get_phase_multiplier(phase) * self.get_sector_multiplier(sector_number)
