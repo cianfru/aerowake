@@ -6,11 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAnalysis } from '@/contexts/AnalysisContext';
 
 export function LoginPage() {
   const navigate = useNavigate();
   const { login, isAuthenticated } = useAuth();
+  const { setShowLanding } = useAnalysis();
   const [email, setEmail] = useState('');
+
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -109,9 +112,13 @@ export function LoginPage() {
             </p>
 
             <p className="text-center text-xs text-muted-foreground">
-              <Link to="/" className="hover:text-muted-foreground">
+              <button
+                type="button"
+                onClick={() => { setShowLanding(false); navigate('/'); }}
+                className="hover:text-muted-foreground"
+              >
                 Continue without account
-              </Link>
+              </button>
             </p>
           </form>
         </CardContent>
