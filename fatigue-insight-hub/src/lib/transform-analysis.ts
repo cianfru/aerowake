@@ -272,7 +272,9 @@ export function transformAnalysisResult(
     duties: result.duties.map((duty) => {
       const segmentPerformances = calculateSegmentPerformances(duty);
       const sleep = duty.sleep_quality ?? duty.sleep_estimate;
-      const sleepEnvironment = duty.sleep_environment ?? sleep?.sleep_environment;
+      // Derive sleep environment from the first sleep block (backend sets 'home' or 'hotel')
+      const blockEnv = sleep?.sleep_blocks?.[0]?.environment;
+      const sleepEnvironment = duty.sleep_environment ?? blockEnv ?? undefined;
       const sleepQuality = duty.sleep_quality_label ?? sleep?.sleep_quality_label;
 
       return {
