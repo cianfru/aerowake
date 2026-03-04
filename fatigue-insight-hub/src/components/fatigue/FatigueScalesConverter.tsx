@@ -55,7 +55,7 @@ export function FatigueScalesConverter({
           infoKey="samnPerelli"
         />
         <ScaleChip
-          label="PVT"
+          label="RT"
           value={`${rt}ms`}
           sublabel={rtInfo.label}
           variant={rtInfo.variant}
@@ -130,12 +130,12 @@ export function FatigueScalesConverter({
             <p className="text-[10px] text-muted-foreground">{spInfo.label}</p>
           </div>
 
-          {/* PVT Reaction Time */}
+          {/* Reaction Time */}
           <div className="rounded-xl border border-border/50 bg-secondary/30 p-3 space-y-1.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <Timer className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs font-medium">PVT RT</span>
+                <span className="text-xs font-medium">RT</span>
                 <InfoTooltip entry={FATIGUE_INFO.reactionTime} />
               </div>
               <Badge variant={rtInfo.variant} className="text-[10px]">

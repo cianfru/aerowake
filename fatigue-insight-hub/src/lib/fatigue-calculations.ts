@@ -180,22 +180,24 @@ export function getSamnPerelliLabel(sp: number): {
 }
 
 /**
- * Convert model performance (20-100) to estimated PVT mean reaction time (ms).
+ * Convert model performance (20-100) to estimated mean reaction time (ms).
  *
- * Calibrated against Basner & Dinges (2011) dose-response curves.
- * Well-rested baseline: ~250ms. Severe impairment: ~500ms+.
+ * Calibrated for trained crew (Gander et al., 2013) against Basner & Dinges
+ * (2011) dose-response curves. Reduced slope and baseline reflect operational
+ * pilot performance vs. lab-subject data.
  *
- *   P = 100 → ~220ms (optimal)
- *   P = 77  → ~280ms (normal range)
- *   P = 55  → ~350ms (impaired)
- *   P = 35  → ~420ms (severely impaired)
- *   P = 20  → ~500ms (extreme impairment)
+ *   P = 100 → ~210ms (optimal)
+ *   P = 77  → ~274ms (normal range)
+ *   P = 72  → ~288ms (operational low-risk boundary)
+ *   P = 55  → ~336ms (mildly impaired)
+ *   P = 35  → ~392ms (significantly impaired)
+ *   P = 20  → ~434ms (severe impairment)
  */
 export function performanceToReactionTime(performance: number): number {
   const p = Math.max(20, Math.min(100, performance));
   // Inverse linear mapping: lower performance → higher reaction time
-  // RT = 220 + (100 - P) × 3.5
-  const rt = 220 + (100 - p) * 3.5;
+  // RT = 210 + (100 - P) × 2.8
+  const rt = 210 + (100 - p) * 2.8;
   return Math.round(rt);
 }
 
@@ -206,9 +208,9 @@ export function getReactionTimeLabel(rtMs: number): {
   label: string;
   variant: 'success' | 'warning' | 'critical';
 } {
-  if (rtMs <= 280) return { label: 'Normal', variant: 'success' };
-  if (rtMs <= 350) return { label: 'Mildly impaired', variant: 'warning' };
-  if (rtMs <= 420) return { label: 'Significantly impaired', variant: 'critical' };
+  if (rtMs <= 300) return { label: 'Normal', variant: 'success' };
+  if (rtMs <= 370) return { label: 'Mildly impaired', variant: 'warning' };
+  if (rtMs <= 440) return { label: 'Significantly impaired', variant: 'critical' };
   return { label: 'Severely impaired', variant: 'critical' };
 }
 
