@@ -147,10 +147,10 @@ export function DutyInfoColumn({ duty, dutyCrewOverride, onCrewChange, onCrewRes
                 <span className="font-medium">{duty.priorSleep.toFixed(0)}h sleep</span>
               </div>
               <span className="flex items-center gap-1 text-muted-foreground">
-                {duty.sleepEnvironment === 'home' || (!duty.sleepEnvironment && duty.priorSleep >= 8) ? (
-                  <><Home className="h-3 w-3" /> Home</>
-                ) : (
+                {duty.sleepEnvironment === 'hotel' || duty.sleepEnvironment === 'layover' ? (
                   <><Building2 className="h-3 w-3" /> Layover</>
+                ) : (
+                  <><Home className="h-3 w-3" /> Home</>
                 )}
               </span>
               {(duty.preDutyAwakeHours ?? 0) > 0 && (
