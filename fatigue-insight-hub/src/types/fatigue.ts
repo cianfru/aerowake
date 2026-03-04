@@ -115,7 +115,7 @@ export interface DutyAnalysis {
   circadianPhaseShiftValue?: number; // Backend circadian_phase_shift: hours offset from home-base body clock
   phasePerformance?: FlightPhasePerformance[];
   sleepQuality?: 'poor' | 'fair' | 'good' | 'excellent';
-  sleepEnvironment?: 'home' | 'layover';
+  sleepEnvironment?: 'home' | 'hotel' | 'layover';
   
   // Strategic sleep estimator fields
   sleepEstimate?: {
