@@ -28,6 +28,38 @@ const STRATEGY_LABELS: Record<string, string> = {
   post_duty_recovery: 'Post-Duty Recovery',
 };
 
+/** Scientific rationale explaining why each sleep strategy is applied. */
+const STRATEGY_RATIONALE: Record<string, string> = {
+  normal:
+    'Standard habitual sleep pattern. Signal et al. (2009) and Gander et al. (2013) found pilots on daytime schedules maintain a consistent ~23:00 bedtime. For early reports (before 09:00), bedtime advances by up to 1.5h — Arsintescu et al. (2022) showed pilots advance bedtime by 1–2h, constrained by the Wake Maintenance Zone (Dijk & Czeisler, 1994).',
+  anchor:
+    'Applied when timezone shift ≥3h from home base. Minors & Waterhouse (1981, 1983) demonstrated that maintaining a sleep window anchored to home-base time preserves circadian alignment during transmeridian operations, reducing jet-lag effects on alertness.',
+  split:
+    'Applied when rest period is 9–10h — too short for a single consolidated sleep block. Jackson et al. (2014) and Kosmadopoulos et al. (2017) found that split sleep schedules preserve cognitive performance comparably to consolidated sleep when total duration is matched.',
+  early_bedtime:
+    'Applied for reports before 06:00 local. Roach et al. (2012) found that early-start duties restrict prior sleep duration; the model uses their regression to estimate achievable sleep, with a 21:30 bedtime floor reflecting WMZ constraints (Arsintescu et al., 2022).',
+  restricted:
+    'Applied when rest period is under 9h — sleep is physically constrained by schedule. Van Dongen et al. (2003) and Belenky et al. (2003) showed cumulative performance degradation under chronic sleep restriction, even with partial recovery opportunities.',
+  extended:
+    'Applied when rest period exceeds 14h, allowing recovery sleep. Banks et al. (2010) demonstrated that extended sleep opportunities (8.5–9.5h) after restriction support partial neurobehavioral recovery, with diminishing returns beyond ~9h (Kitamura et al., 2016).',
+  recovery:
+    'Home-base recovery with no duty constraints. Banks et al. (2010) showed recovery from sleep debt follows an exponential pattern over multiple nights, with the greatest restoration in the first recovery sleep period.',
+  nap:
+    'Applied for night departures (report ≥20:00). The model predicts a standard previous-night sleep plus a pre-duty nap. Dinges et al. (1987) showed strategic nap placement improves subsequent alertness; Signal et al. (2014) confirmed this pattern in airline pilot operations.',
+  afternoon_nap:
+    'Applied for late reports (14:00–20:00). Signal et al. (2014) found that approximately 54% of crew nap before evening departures. The model estimates a 1.5h afternoon nap following the post-lunch circadian dip (Dinges et al., 1987).',
+  augmented_4_sleep:
+    'Applied for ultra-long-range 4-pilot operations. Signal et al. (2014) established that a 48h pre-duty protocol with two normal nights maximises pre-departure sleep reserves for flights exceeding 12h FDP.',
+  augmented_3:
+    'Applied for 3-pilot augmented crew operations. Enhanced pre-duty night sleep (22:00 bedtime, 1h earlier) plus optional pre-duty nap for night departures, based on Signal et al. (2014) and Gander et al. (2013).',
+  wocl_duty:
+    'Applied for duties crossing the Window of Circadian Low (02:00–06:00) with >6h duration. Consolidated sleep is placed before the duty to maximise alertness during the WOCL crossing, when circadian drive for sleep peaks (Dijk & Czeisler, 1995).',
+  inter_duty_recovery:
+    'Single recovery block between consecutive duties. Sleep onset is determined by biological release time and homeostatic pressure (Signal et al., 2013; Banks et al., 2010). Duration scales with prior wakefulness, capped by circadian wake gate.',
+  post_duty_recovery:
+    'Post-duty recovery sleep estimated using circadian-gated wake timing. WOCL alignment is evaluated against the pilot\'s biological clock (home-base time), not local time (Signal et al., 2013; Roach et al., 2025).',
+};
+
 interface DutyInfoColumnProps {
   duty: DutyAnalysis;
   dutyCrewOverride?: 'crew_a' | 'crew_b';
@@ -205,14 +237,21 @@ export function DutyInfoColumn({ duty, dutyCrewOverride, onCrewChange, onCrewRes
               <div className="space-y-1.5">
                 <div className="flex items-start gap-1.5">
                   <Tag className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    <span className="font-medium text-foreground">
-                      {STRATEGY_LABELS[duty.sleepEstimate.sleepStrategy] ?? duty.sleepEstimate.sleepStrategy}
-                    </span>
-                    {duty.sleepEstimate.explanation && (
-                      <> — {duty.sleepEstimate.explanation}</>
+                  <div className="space-y-1">
+                    <p className="text-[11px] leading-relaxed">
+                      <span className="font-medium text-foreground">
+                        {STRATEGY_LABELS[duty.sleepEstimate.sleepStrategy] ?? duty.sleepEstimate.sleepStrategy}
+                      </span>
+                      {duty.sleepEstimate.explanation && (
+                        <span className="text-muted-foreground"> — {duty.sleepEstimate.explanation}</span>
+                      )}
+                    </p>
+                    {STRATEGY_RATIONALE[duty.sleepEstimate.sleepStrategy] && (
+                      <p className="text-[10px] text-muted-foreground/80 leading-relaxed">
+                        {STRATEGY_RATIONALE[duty.sleepEstimate.sleepStrategy]}
+                      </p>
                     )}
-                  </p>
+                  </div>
                 </div>
                 <SleepQualityInfo
                   variant="badge"

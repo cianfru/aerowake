@@ -111,9 +111,11 @@ export function SleepQualityInfo({
           </button>
         )}
       </PopoverTrigger>
-      <PopoverContent 
-        side="right" 
-        align="start" 
+      <PopoverContent
+        side="right"
+        align="start"
+        collisionPadding={16}
+        sideOffset={8}
         className="w-[min(380px,calc(100vw-2rem))] p-0 bg-card/95 backdrop-blur-xl border-border/50 shadow-2xl"
       >
         <ScrollArea className="max-h-[70vh]">
