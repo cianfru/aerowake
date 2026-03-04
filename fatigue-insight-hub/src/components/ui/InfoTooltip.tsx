@@ -210,10 +210,10 @@ export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
   },
   reactionTime: {
     description:
-      'Psychomotor Vigilance Task (PVT) mean reaction time estimate. Derived from the performance model. Values above 350ms indicate significant impairment.',
-    reference: 'Basner & Dinges, 2011',
-    threshold: '\u2264280ms normal, 280-350ms mild, >350ms impaired',
-    actionTip: 'Reaction time above 350ms is comparable to 0.05% BAC impairment.',
+      'Estimated mean reaction time derived from the performance model. Calibrated for trained crew against Basner & Dinges (2011) dose-response data.',
+    reference: 'Basner & Dinges, 2011; Gander et al., 2013',
+    threshold: '\u2264300ms normal, 300-370ms mild, >370ms impaired',
+    actionTip: 'Reaction time above 370ms is comparable to 0.05% BAC impairment.',
   },
   fdpUtilization: {
     description:
