@@ -242,8 +242,8 @@ class BorbelyFatigueModel:
         
         return inertia
 
-    @staticmethod
     def compute_pvt_lapses(
+        self,
         cumulative_sleep_debt: float,
         hours_awake: float
     ) -> float:
@@ -253,17 +253,16 @@ class BorbelyFatigueModel:
         Based on Van Dongen et al. (2003) Sleep 26(2):117-126 dose-response
         curves and Basner & Dinges (2011) Sleep 34(5):581-591.
 
-        Formula: lapses = 1.5 + 0.4 × debt + 1.2 × max(0, hours_awake − 16)
+        Formula: lapses = baseline + debt_coeff × debt + wake_coeff × max(0, awake − threshold)
 
-        Well-rested baseline: ~1.5 lapses/10min (normal variability).
-        Each hour of sleep debt adds ~0.4 lapses.
-        Extended wakefulness beyond 16h contributes 1.2 lapses/h
-        (equivalent to ~0.05% BAC per additional hour, Dawson & Reid 1997).
+        Coefficients are configurable per preset (see BorbelyParameters).
+        Default values calibrated for lab subjects; operational preset
+        reduces by ~30% for trained crew (Gander et al. 2013).
         """
         lapses = (
-            1.5
-            + 0.4 * cumulative_sleep_debt
-            + 1.2 * max(0.0, hours_awake - 16.0)
+            self.params.pvt_baseline_lapses
+            + self.params.pvt_debt_coefficient * cumulative_sleep_debt
+            + self.params.pvt_wake_coefficient * max(0.0, hours_awake - self.params.pvt_wake_threshold_hours)
         )
         return max(0.0, round(lapses, 1))
 

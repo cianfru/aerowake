@@ -103,6 +103,18 @@ class BorbelyParameters:
     resilience_boost_peak_s: float = 0.20      # Peak at S=0.20 (recently woken)
     resilience_boost_sigma: float = 0.18       # Gaussian width
 
+    # PVT (Psychomotor Vigilance Task) prediction coefficients
+    # Van Dongen et al. (2003) Sleep 26(2):117-126 dose-response curves.
+    # Basner & Dinges (2011) Sleep 34(5):581-591.
+    # Formula: lapses = baseline + debt_coeff × debt + wake_coeff × max(0, awake − threshold)
+    # Default values calibrated for unselected lab subjects.
+    # Operational preset reduces coefficients ~30% for trained crew
+    # (Gander et al. 2013: pilots maintain vigilance better).
+    pvt_baseline_lapses: float = 1.5          # Well-rested baseline lapses/10min
+    pvt_debt_coefficient: float = 0.4         # Lapses per hour of cumulative debt
+    pvt_wake_coefficient: float = 1.2         # Lapses per hour awake beyond threshold
+    pvt_wake_threshold_hours: float = 16.0    # Extended wakefulness onset
+
     # Sleep inertia (Tassi & Muzet 2000)
     inertia_duration_minutes: float = 30.0
     inertia_max_magnitude: float = 0.30
@@ -442,6 +454,8 @@ class ModelConfig:
         - tot_inflection: 8.0h → 10.5h — ULR buffer, shifts fatigue cliff
         - tot_quadratic: 0.0005 → 0.00025 — halved non-linear degradation
         - pinch_sleep_pressure: 0.70 → 0.78 — genuine impairment only (>17h awake)
+        - PVT: baseline 1.5→1.0, debt 0.4→0.25, wake 1.2→0.8, threshold
+          16→17h — trained crew ~30% fewer lapses (Gander et al. 2013)
         - Risk thresholds: relaxed (operational judgment)
         - Hotel quality: 0.85 → 0.87 (airline-contracted hotels, QR standard)
         """
@@ -483,6 +497,13 @@ class ModelConfig:
                 tot_quadratic_coeff=0.00025,
                 # Pinch events only at genuine impairment (>17h awake)
                 pinch_sleep_pressure_threshold=0.78,
+                # PVT: trained crew show ~30% fewer lapses than lab subjects
+                # (Gander et al. 2013). Reduces "Severe" false positives
+                # for duties the model scores as mildly impaired.
+                pvt_baseline_lapses=1.0,       # Was 1.5 (trained crew, less variability)
+                pvt_debt_coefficient=0.25,     # Was 0.4 (manage moderate debt better)
+                pvt_wake_coefficient=0.8,      # Was 1.2 (less wakefulness sensitivity)
+                pvt_wake_threshold_hours=17.0, # Was 16h (vigilance maintained ~1h longer)
             ),
             risk_thresholds=RiskThresholds(
                 thresholds={
