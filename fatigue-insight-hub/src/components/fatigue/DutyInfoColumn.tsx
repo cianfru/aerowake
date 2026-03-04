@@ -1,13 +1,11 @@
 import { useState } from 'react';
-import { AlertTriangle, Clock, Moon, Zap, Mountain, Users, Globe, ChevronDown } from 'lucide-react';
+import { AlertTriangle, Clock, Moon, Zap, Mountain, Users, Globe, ChevronDown, BedDouble, Home, Building2, Sun } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DutyAnalysis } from '@/types/fatigue';
 import { isTrainingDuty, getTrainingDutyLabel, formatAircraftType } from '@/lib/fatigue-utils';
 import { FDPUtilizationBar } from './FDPUtilizationBar';
-import { PriorSleepIndicator } from './PriorSleepIndicator';
-import { SleepRecoveryIndicator } from './SleepRecoveryIndicator';
 import { CrewRestTimeline } from './CrewRestTimeline';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -135,86 +133,114 @@ export function DutyInfoColumn({ duty, dutyCrewOverride, onCrewChange, onCrewRes
       {/* 3. Sleep & Risk Panel */}
       <Card variant="glass">
         <CardContent className="py-3 px-4 space-y-3">
-          {/* Sleep indicators row */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <p className="text-[10px] font-medium text-muted-foreground">Prior Sleep</p>
-              <PriorSleepIndicator duty={duty} variant="compact" />
-            </div>
-            {duty.sleepEstimate && (
-              <div className="space-y-1">
-                <p className="text-[10px] font-medium text-muted-foreground">Recovery</p>
-                <SleepRecoveryIndicator duty={duty} variant="compact" />
+          {/* Pre-Duty Rest */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Pre-Duty Rest</p>
+            <div className="flex items-center gap-3 text-xs">
+              <div className={cn(
+                'flex items-center gap-1.5 px-2 py-1 rounded-md',
+                duty.priorSleep >= 7 ? 'bg-success/10 text-success' :
+                duty.priorSleep >= 5 ? 'bg-warning/10 text-warning' :
+                'bg-critical/10 text-critical',
+              )}>
+                <BedDouble className="h-3 w-3" />
+                <span className="font-medium">{duty.priorSleep.toFixed(0)}h sleep</span>
               </div>
-            )}
+              <span className="flex items-center gap-1 text-muted-foreground">
+                {duty.sleepEnvironment === 'home' || (!duty.sleepEnvironment && duty.priorSleep >= 8) ? (
+                  <><Home className="h-3 w-3" /> Home</>
+                ) : (
+                  <><Building2 className="h-3 w-3" /> Layover</>
+                )}
+              </span>
+              {(duty.preDutyAwakeHours ?? 0) > 0 && (
+                <span className={cn(
+                  'flex items-center gap-1',
+                  (duty.preDutyAwakeHours ?? 0) > 17 ? 'text-critical' :
+                  (duty.preDutyAwakeHours ?? 0) > 14 ? 'text-warning' :
+                  'text-muted-foreground',
+                )}>
+                  <Sun className="h-3 w-3" />
+                  {(duty.preDutyAwakeHours ?? 0).toFixed(1)}h awake
+                </span>
+              )}
+            </div>
+            {/* Sleep bar */}
+            <div className="space-y-0.5">
+              <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-all',
+                    duty.priorSleep >= 7 ? 'bg-success' :
+                    duty.priorSleep >= 5 ? 'bg-warning' :
+                    'bg-critical',
+                  )}
+                  style={{ width: `${Math.min(100, (duty.priorSleep / 8) * 100)}%` }}
+                />
+              </div>
+              <p className="text-[9px] text-muted-foreground">
+                {duty.priorSleep.toFixed(0)}h / 8h recommended
+              </p>
+            </div>
           </div>
 
-          {/* Risk grid */}
-          <div className="border-t border-border/50 pt-2">
-            <div className="flex items-center gap-2 mb-2">
-              {getRiskBadge(duty.overallRisk)}
-              {getRiskBadge(duty.minPerformanceRisk)}
-              {getRiskBadge(duty.landingRisk)}
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-              <div className="flex items-center gap-1.5">
-                <Clock className="h-3 w-3 text-muted-foreground" />
-                <span className="text-muted-foreground">Sleep Debt</span>
-                <span className={cn('font-medium ml-auto',
-                  (duty.sleepDebt ?? 0) > 5 ? 'text-critical' : (duty.sleepDebt ?? 0) > 3 ? 'text-warning' : 'text-foreground'
-                )}>
-                  {(duty.sleepDebt ?? 0).toFixed(1)}h
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Moon className="h-3 w-3 text-muted-foreground" />
-                <span className="text-muted-foreground">WOCL</span>
-                <span className={cn('font-medium ml-auto',
-                  (duty.woclExposure ?? 0) > 2 ? 'text-critical' : (duty.woclExposure ?? 0) > 1 ? 'text-warning' : 'text-foreground'
-                )}>
-                  {(duty.woclExposure ?? 0).toFixed(1)}h
-                </span>
-              </div>
-              {(duty.preDutyAwakeHours ?? 0) > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <Clock className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-muted-foreground">Awake</span>
-                  <span className={cn('font-medium ml-auto',
-                    (duty.preDutyAwakeHours ?? 0) > 17 ? 'text-critical' : (duty.preDutyAwakeHours ?? 0) > 14 ? 'text-warning' : 'text-foreground'
-                  )}>
-                    {(duty.preDutyAwakeHours ?? 0).toFixed(1)}h
-                  </span>
-                </div>
-              )}
+          {/* Fatigue Factors */}
+          <div className="border-t border-border/50 pt-2 space-y-2">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Fatigue Factors</p>
+            <div className="space-y-1.5">
+              <FactorBar
+                icon={<Clock className="h-3 w-3" />}
+                label="Sleep Debt"
+                value={duty.sleepDebt ?? 0}
+                unit="h"
+                max={8}
+                warnAt={3}
+                critAt={5}
+              />
+              <FactorBar
+                icon={<Moon className="h-3 w-3" />}
+                label="WOCL Exposure"
+                value={duty.woclExposure ?? 0}
+                unit="h"
+                max={4}
+                warnAt={1}
+                critAt={2}
+              />
               {duty.returnToDeckPerformance != null && (
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 text-xs">
                   <Zap className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-muted-foreground">RTD</span>
-                  <span className={cn('font-medium ml-auto',
-                    (duty.returnToDeckPerformance ?? 0) < 60 ? 'text-critical' : (duty.returnToDeckPerformance ?? 0) < 70 ? 'text-warning' : 'text-foreground'
+                  <span className="text-muted-foreground">RTD Perf</span>
+                  <span className={cn('font-medium font-mono ml-auto',
+                    duty.returnToDeckPerformance < 60 ? 'text-critical' :
+                    duty.returnToDeckPerformance < 70 ? 'text-warning' : 'text-foreground'
                   )}>
-                    {(duty.returnToDeckPerformance ?? 0).toFixed(1)}%
+                    {duty.returnToDeckPerformance.toFixed(1)}%
                   </span>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Risk Assessment */}
+          <div className="border-t border-border/50 pt-2 space-y-1.5">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Risk Assessment</p>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-center space-y-0.5">
+                <p className="text-[9px] text-muted-foreground">Overall</p>
+                {getRiskBadge(duty.overallRisk)}
+              </div>
+              <div className="text-center space-y-0.5">
+                <p className="text-[9px] text-muted-foreground">Min Perf</p>
+                {getRiskBadge(duty.minPerformanceRisk)}
+              </div>
+              <div className="text-center space-y-0.5">
+                <p className="text-[9px] text-muted-foreground">Landing</p>
+                {getRiskBadge(duty.landingRisk)}
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
-
-      {/* Fatigue Advisory */}
-      {duty.riskAdvisory === 'report_recommended' && (
-        <div className="flex items-center gap-2 rounded-md border border-critical/50 bg-critical/10 px-3 py-1.5 text-xs text-critical">
-          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-          <span className="font-medium">Consider filing a fatigue report through your FRMS</span>
-        </div>
-      )}
-      {duty.riskAdvisory === 'consider_reporting' && (
-        <div className="flex items-center gap-2 rounded-md border border-warning/50 bg-warning/10 px-3 py-1.5 text-xs text-warning">
-          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-          <span className="font-medium">Elevated fatigue risk — active countermeasures recommended</span>
-        </div>
-      )}
 
       {/* 4. Crew & Compliance (collapsible) */}
       {hasCrewContent && (
@@ -349,6 +375,55 @@ export function DutyInfoColumn({ duty, dutyCrewOverride, onCrewChange, onCrewRes
           </CollapsibleContent>
         </Collapsible>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FactorBar — mini progress bar for fatigue factors
+// ---------------------------------------------------------------------------
+
+function FactorBar({
+  icon,
+  label,
+  value,
+  unit,
+  max,
+  warnAt,
+  critAt,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  unit: string;
+  max: number;
+  warnAt: number;
+  critAt: number;
+}) {
+  const color = value >= critAt ? 'critical' : value >= warnAt ? 'warning' : 'success';
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="text-muted-foreground">{icon}</span>
+      <span className="text-muted-foreground w-20 truncate">{label}</span>
+      <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
+        <div
+          className={cn(
+            'h-full rounded-full transition-all',
+            color === 'success' && 'bg-success',
+            color === 'warning' && 'bg-warning',
+            color === 'critical' && 'bg-critical',
+          )}
+          style={{ width: `${Math.min(100, (value / max) * 100)}%` }}
+        />
+      </div>
+      <span className={cn(
+        'font-mono font-medium w-10 text-right',
+        color === 'critical' && 'text-critical',
+        color === 'warning' && 'text-warning',
+        color === 'success' && 'text-foreground',
+      )}>
+        {value.toFixed(1)}{unit}
+      </span>
     </div>
   );
 }
