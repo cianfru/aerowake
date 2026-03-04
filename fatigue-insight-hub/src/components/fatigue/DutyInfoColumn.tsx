@@ -1,14 +1,32 @@
 import { useState } from 'react';
-import { AlertTriangle, Clock, Moon, Zap, Mountain, Users, Globe, ChevronDown, BedDouble, Home, Building2, Sun } from 'lucide-react';
+import { AlertTriangle, Clock, Moon, Zap, Mountain, Users, Globe, ChevronDown, BedDouble, Home, Building2, Sun, Tag } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DutyAnalysis } from '@/types/fatigue';
 import { isTrainingDuty, getTrainingDutyLabel, formatAircraftType } from '@/lib/fatigue-utils';
 import { FDPUtilizationBar } from './FDPUtilizationBar';
+import { SleepQualityInfo } from './SleepQualityInfo';
 import { CrewRestTimeline } from './CrewRestTimeline';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+
+const STRATEGY_LABELS: Record<string, string> = {
+  normal: 'Normal',
+  anchor: 'Anchor Sleep',
+  split: 'Split Sleep',
+  early_bedtime: 'Early Bedtime',
+  restricted: 'Restricted',
+  extended: 'Extended',
+  recovery: 'Recovery',
+  nap: 'Night Departure',
+  afternoon_nap: 'Afternoon Nap',
+  augmented_4_sleep: 'ULR (4-Crew)',
+  augmented_3: 'Augmented (3-Crew)',
+  wocl_duty: 'WOCL Duty',
+  inter_duty_recovery: 'Inter-Duty Recovery',
+  post_duty_recovery: 'Post-Duty Recovery',
+};
 
 interface DutyInfoColumnProps {
   duty: DutyAnalysis;
@@ -182,6 +200,30 @@ export function DutyInfoColumn({ duty, dutyCrewOverride, onCrewChange, onCrewRes
                 {duty.priorSleep.toFixed(0)}h / 8h recommended
               </p>
             </div>
+            {/* Strategy explanation */}
+            {duty.sleepEstimate && (
+              <div className="space-y-1.5">
+                <div className="flex items-start gap-1.5">
+                  <Tag className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <span className="font-medium text-foreground">
+                      {STRATEGY_LABELS[duty.sleepEstimate.sleepStrategy] ?? duty.sleepEstimate.sleepStrategy}
+                    </span>
+                    {duty.sleepEstimate.explanation && (
+                      <> — {duty.sleepEstimate.explanation}</>
+                    )}
+                  </p>
+                </div>
+                <SleepQualityInfo
+                  variant="badge"
+                  explanation={duty.sleepEstimate.explanation}
+                  confidence={duty.sleepEstimate.confidence}
+                  confidenceBasis={duty.sleepEstimate.confidenceBasis}
+                  qualityFactors={duty.sleepEstimate.qualityFactors}
+                  references={duty.sleepEstimate.references}
+                />
+              </div>
+            )}
           </div>
 
           {/* Fatigue Factors */}
