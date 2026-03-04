@@ -126,6 +126,11 @@ export function ProcessBreakdownChart({
 
   const tickInterval = Math.max(1, Math.floor(chartData.length / 10));
 
+  // Dynamic Y-axis floor: round down to nearest 10 below min performance, with 10pp padding
+  const minPerf = Math.min(...chartData.map(d => d.performance));
+  const yFloor = Math.max(0, Math.floor((minPerf - 10) / 10) * 10);
+  const yTicks = Array.from({ length: Math.floor((100 - yFloor) / 10) + 1 }, (_, i) => yFloor + i * 10);
+
   return (
     <Card variant="glass">
       <CardHeader className="pb-2 md:pb-3">
@@ -191,8 +196,8 @@ export function ProcessBreakdownChart({
                 }}
               />
               <YAxis
-                domain={[0, 100]}
-                ticks={[0, 20, 40, 60, 80, 100]}
+                domain={[yFloor, 100]}
+                ticks={yTicks}
                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                 tickFormatter={(v: number) => `${v}%`}
                 stroke="hsl(var(--border))"
