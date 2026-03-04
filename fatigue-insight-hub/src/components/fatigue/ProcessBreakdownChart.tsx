@@ -8,7 +8,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
   ReferenceLine,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,30 +31,42 @@ interface ChartDataPoint {
   timestampMs: number;
   label: string;
   hoursOnDuty: number;
+  /** Actual performance score (20-100). Also used as base stacked area. */
   performance: number;
-  /** Scaled to 0-100 for consistent Y-axis */
+  /** Deficit contribution: pp of performance lost to Process S. */
   sleepPressure: number;
+  /** Deficit contribution: pp of performance lost to Process C. */
   circadian: number;
+  /** Deficit contribution: pp of performance lost to Process W. */
   sleepInertia: number;
+  /** Deficit contribution: pp of performance lost to Time-on-Task. */
   timeOnTask: number;
   flightPhase: string | null;
   isCritical: boolean;
 }
 
 const COLORS = {
-  sleepPressure: 'hsl(0, 80%, 60%)',      // Red — Process S
-  circadian: 'hsl(220, 80%, 60%)',         // Blue — Process C
-  sleepInertia: 'hsl(30, 90%, 55%)',       // Orange — Process W
-  timeOnTask: 'hsl(var(--muted-foreground))', // Gray — ToT
-  performance: 'hsl(var(--primary))',       // Cyan — Performance line
+  sleepPressure: 'hsl(0, 80%, 60%)',       // Red — Process S
+  circadian: 'hsl(220, 80%, 60%)',          // Blue — Process C
+  sleepInertia: 'hsl(30, 90%, 55%)',        // Orange — Process W
+  timeOnTask: 'hsl(220, 10%, 50%)',         // Gray — ToT
+  performance: 'hsl(195, 100%, 50%)',       // Cyan — Performance line
 };
+
+const SERIES_META = {
+  sleepPressure: { label: 'Sleep Pressure (S)', color: COLORS.sleepPressure, bg: 'hsla(0,80%,60%,0.15)' },
+  circadian: { label: 'Circadian (C)', color: COLORS.circadian, bg: 'hsla(220,80%,60%,0.15)' },
+  sleepInertia: { label: 'Sleep Inertia (W)', color: COLORS.sleepInertia, bg: 'hsla(30,90%,55%,0.15)' },
+  timeOnTask: { label: 'Time-on-Task', color: COLORS.timeOnTask, bg: 'hsla(220,10%,50%,0.15)' },
+  performance: { label: 'Performance', color: COLORS.performance, bg: 'hsla(195,100%,50%,0.15)' },
+} as const;
 
 /**
  * S/C/W Process Breakdown Chart — shows how each fatigue factor
  * contributes to performance degradation over time during a duty.
  *
- * Renders as a stacked area chart (S=red, C=blue, W=orange) with
- * a performance line overlay.
+ * Uses proportional deficit decomposition: performance is the base area,
+ * and deficit contributions (S, C, W, ToT) stack on top to fill up to 100%.
  */
 export function ProcessBreakdownChart({
   timeline,
@@ -73,18 +84,36 @@ export function ProcessBreakdownChart({
   const chartData = useMemo<ChartDataPoint[]>(() => {
     if (!timeline?.timeline?.length) return [];
 
-    return timeline.timeline.map(pt => ({
-      timestampMs: new Date(pt.timestamp).getTime(),
-      label: format(new Date(pt.timestamp_local || pt.timestamp), 'HH:mm'),
-      hoursOnDuty: pt.hours_on_duty,
-      performance: pt.performance,
-      sleepPressure: pt.sleep_pressure * 100,
-      circadian: pt.circadian * 100,
-      sleepInertia: pt.sleep_inertia * 100,
-      timeOnTask: pt.time_on_task_penalty * 100,
-      flightPhase: pt.flight_phase,
-      isCritical: pt.is_critical,
-    }));
+    return timeline.timeline.map(pt => {
+      // Proportional deficit decomposition (same logic as decomposePerformance)
+      const S_def = pt.sleep_pressure;              // already deficit form
+      const C_def = 1 - pt.circadian;               // invert alertness → deficit
+      const W_def = 1 - pt.sleep_inertia;           // invert alertness → deficit
+      const ToT_def = 1 - pt.time_on_task_penalty;  // invert alertness → deficit
+      const rawTotal = S_def + C_def + W_def + ToT_def;
+      const totalDeficit = Math.max(0, 100 - pt.performance);
+
+      let sC = 0, cC = 0, wC = 0, tC = 0;
+      if (rawTotal > 0 && totalDeficit > 0) {
+        sC = (S_def / rawTotal) * totalDeficit;
+        cC = (C_def / rawTotal) * totalDeficit;
+        wC = (W_def / rawTotal) * totalDeficit;
+        tC = (ToT_def / rawTotal) * totalDeficit;
+      }
+
+      return {
+        timestampMs: new Date(pt.timestamp_local || pt.timestamp).getTime(),
+        label: format(new Date(pt.timestamp_local || pt.timestamp), 'HH:mm'),
+        hoursOnDuty: pt.hours_on_duty,
+        performance: pt.performance,
+        sleepPressure: Math.round(sC * 10) / 10,
+        circadian: Math.round(cC * 10) / 10,
+        sleepInertia: Math.round(wC * 10) / 10,
+        timeOnTask: Math.round(tC * 10) / 10,
+        flightPhase: pt.flight_phase,
+        isCritical: pt.is_critical,
+      };
+    });
   }, [timeline]);
 
   const toggleSeries = useCallback((key: keyof typeof visibleSeries) => {
@@ -94,6 +123,13 @@ export function ProcessBreakdownChart({
   if (chartData.length === 0) {
     return null;
   }
+
+  const tickInterval = Math.max(1, Math.floor(chartData.length / 10));
+
+  // Dynamic Y-axis floor: round down to nearest 10 below min performance, with 10pp padding
+  const minPerf = Math.min(...chartData.map(d => d.performance));
+  const yFloor = Math.max(0, Math.floor((minPerf - 10) / 10) * 10);
+  const yTicks = Array.from({ length: Math.floor((100 - yFloor) / 10) + 1 }, (_, i) => yFloor + i * 10);
 
   return (
     <Card variant="glass">
@@ -105,7 +141,7 @@ export function ProcessBreakdownChart({
             <InfoTooltip entry={FATIGUE_INFO.performance} />
           </CardTitle>
           <Badge variant="outline" className="text-[10px] font-mono">
-            {chartData.length} pts &middot; 5min
+            {chartData[0].label} &ndash; {chartData[chartData.length - 1].label}
           </Badge>
         </div>
       </CardHeader>
@@ -113,50 +149,46 @@ export function ProcessBreakdownChart({
         {/* Series toggles */}
         <div className="flex flex-wrap gap-1.5 mb-3">
           {(Object.entries(SERIES_META) as [keyof typeof SERIES_META, typeof SERIES_META[keyof typeof SERIES_META]][]).map(
-            ([key, meta]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => toggleSeries(key as keyof typeof visibleSeries)}
-                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border transition-colors"
-                style={{
-                  borderColor: visibleSeries[key as keyof typeof visibleSeries]
-                    ? meta.color
-                    : 'hsl(var(--border))',
-                  backgroundColor: visibleSeries[key as keyof typeof visibleSeries]
-                    ? `${meta.color.replace(')', ', 0.15)')}`
-                    : 'transparent',
-                  color: visibleSeries[key as keyof typeof visibleSeries]
-                    ? meta.color
-                    : 'hsl(var(--muted-foreground))',
-                }}
-              >
-                {visibleSeries[key as keyof typeof visibleSeries] ? (
-                  <Eye className="h-2.5 w-2.5" />
-                ) : (
-                  <EyeOff className="h-2.5 w-2.5" />
-                )}
-                {meta.label}
-              </button>
-            ),
+            ([key, meta]) => {
+              const visible = visibleSeries[key as keyof typeof visibleSeries];
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => toggleSeries(key as keyof typeof visibleSeries)}
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border transition-colors"
+                  style={{
+                    borderColor: visible ? meta.color : 'hsl(var(--border))',
+                    backgroundColor: visible ? meta.bg : 'transparent',
+                    color: visible ? meta.color : 'hsl(var(--muted-foreground))',
+                  }}
+                >
+                  {visible ? <Eye className="h-2.5 w-2.5" /> : <EyeOff className="h-2.5 w-2.5" />}
+                  {meta.label}
+                </button>
+              );
+            },
           )}
         </div>
 
         <div style={{ width: '100%', height }}>
           <ResponsiveContainer>
-            <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+            <ComposedChart data={chartData} margin={{ top: 5, right: 30, left: -10, bottom: 5 }}>
               <CartesianGrid
                 strokeDasharray="3 3"
                 stroke="hsl(var(--border))"
                 opacity={0.3}
               />
               <XAxis
-                dataKey="hoursOnDuty"
+                dataKey="timestampMs"
+                type="number"
+                domain={['dataMin', 'dataMax']}
                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                tickFormatter={(v: number) => `${v.toFixed(0)}h`}
+                tickFormatter={(ms: number) => format(new Date(ms), 'HH:mm')}
+                interval={tickInterval}
                 stroke="hsl(var(--border))"
                 label={{
-                  value: 'Hours on Duty',
+                  value: 'Local Time',
                   position: 'insideBottom',
                   offset: -2,
                   fontSize: 10,
@@ -164,24 +196,36 @@ export function ProcessBreakdownChart({
                 }}
               />
               <YAxis
-                domain={[0, 100]}
+                domain={[yFloor, 100]}
+                ticks={yTicks}
                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                 tickFormatter={(v: number) => `${v}%`}
                 stroke="hsl(var(--border))"
               />
               <Tooltip content={<CustomTooltip />} />
 
-              {/* Stacked areas — S, C, W, ToT */}
+              {/* Performance base area (stacked bottom) */}
+              <Area
+                type="monotone"
+                dataKey="performance"
+                name="Performance"
+                stackId="full"
+                fill="hsla(195, 100%, 50%, 0.08)"
+                stroke="none"
+                isAnimationActive={false}
+              />
+
+              {/* Deficit contributions stacked on top of performance */}
               {visibleSeries.sleepPressure && (
                 <Area
                   type="monotone"
                   dataKey="sleepPressure"
                   name="Sleep Pressure (S)"
-                  stackId="factors"
+                  stackId="full"
                   fill={COLORS.sleepPressure}
-                  fillOpacity={0.25}
+                  fillOpacity={0.3}
                   stroke={COLORS.sleepPressure}
-                  strokeWidth={1.5}
+                  strokeWidth={1}
                   isAnimationActive={false}
                 />
               )}
@@ -190,11 +234,11 @@ export function ProcessBreakdownChart({
                   type="monotone"
                   dataKey="circadian"
                   name="Circadian (C)"
-                  stackId="factors"
+                  stackId="full"
                   fill={COLORS.circadian}
-                  fillOpacity={0.25}
+                  fillOpacity={0.3}
                   stroke={COLORS.circadian}
-                  strokeWidth={1.5}
+                  strokeWidth={1}
                   isAnimationActive={false}
                 />
               )}
@@ -203,11 +247,11 @@ export function ProcessBreakdownChart({
                   type="monotone"
                   dataKey="sleepInertia"
                   name="Sleep Inertia (W)"
-                  stackId="factors"
+                  stackId="full"
                   fill={COLORS.sleepInertia}
-                  fillOpacity={0.25}
+                  fillOpacity={0.3}
                   stroke={COLORS.sleepInertia}
-                  strokeWidth={1.5}
+                  strokeWidth={1}
                   isAnimationActive={false}
                 />
               )}
@@ -216,16 +260,16 @@ export function ProcessBreakdownChart({
                   type="monotone"
                   dataKey="timeOnTask"
                   name="Time-on-Task"
-                  stackId="factors"
-                  fill="hsl(220, 10%, 50%)"
-                  fillOpacity={0.15}
-                  stroke="hsl(220, 10%, 50%)"
-                  strokeWidth={1.5}
+                  stackId="full"
+                  fill={COLORS.timeOnTask}
+                  fillOpacity={0.2}
+                  stroke={COLORS.timeOnTask}
+                  strokeWidth={1}
                   isAnimationActive={false}
                 />
               )}
 
-              {/* Performance line overlay */}
+              {/* Performance line overlay (not stacked) */}
               {visibleSeries.performance && (
                 <Line
                   type="monotone"
@@ -245,7 +289,7 @@ export function ProcessBreakdownChart({
                 strokeDasharray="4 4"
                 strokeOpacity={0.6}
                 label={{
-                  value: '77% Moderate',
+                  value: '77%',
                   position: 'right',
                   fontSize: 9,
                   fill: 'hsl(var(--warning))',
@@ -257,7 +301,7 @@ export function ProcessBreakdownChart({
                 strokeDasharray="4 4"
                 strokeOpacity={0.6}
                 label={{
-                  value: '55% Critical',
+                  value: '55%',
                   position: 'right',
                   fontSize: 9,
                   fill: 'hsl(var(--destructive))',
@@ -270,18 +314,6 @@ export function ProcessBreakdownChart({
     </Card>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Series metadata
-// ---------------------------------------------------------------------------
-
-const SERIES_META = {
-  sleepPressure: { label: 'Sleep Pressure (S)', color: COLORS.sleepPressure },
-  circadian: { label: 'Circadian (C)', color: COLORS.circadian },
-  sleepInertia: { label: 'Sleep Inertia (W)', color: COLORS.sleepInertia },
-  timeOnTask: { label: 'Time-on-Task', color: 'hsl(220, 10%, 50%)' },
-  performance: { label: 'Performance', color: COLORS.performance },
-} as const;
 
 // ---------------------------------------------------------------------------
 // Custom tooltip
@@ -302,10 +334,11 @@ function CustomTooltip({ active, payload }: any) {
       </p>
       <div className="space-y-1">
         <TooltipRow label="Performance" value={`${d.performance.toFixed(1)}%`} color={COLORS.performance} />
-        <TooltipRow label="Sleep Pressure" value={`${d.sleepPressure.toFixed(1)}%`} color={COLORS.sleepPressure} />
-        <TooltipRow label="Circadian" value={`${d.circadian.toFixed(1)}%`} color={COLORS.circadian} />
-        <TooltipRow label="Sleep Inertia" value={`${d.sleepInertia.toFixed(1)}%`} color={COLORS.sleepInertia} />
-        <TooltipRow label="Time-on-Task" value={`${d.timeOnTask.toFixed(1)}%`} color="hsl(220, 10%, 50%)" />
+        <div className="border-t border-border/50 my-1" />
+        <TooltipRow label="Sleep Pressure" value={`\u2212${d.sleepPressure.toFixed(1)} pp`} color={COLORS.sleepPressure} />
+        <TooltipRow label="Circadian" value={`\u2212${d.circadian.toFixed(1)} pp`} color={COLORS.circadian} />
+        <TooltipRow label="Sleep Inertia" value={`\u2212${d.sleepInertia.toFixed(1)} pp`} color={COLORS.sleepInertia} />
+        <TooltipRow label="Time-on-Task" value={`\u2212${d.timeOnTask.toFixed(1)} pp`} color={COLORS.timeOnTask} />
       </div>
     </div>
   );
