@@ -220,7 +220,7 @@ export function PerformanceSummaryCard({ duty }: PerformanceSummaryCardProps) {
             />
             <ScaleBadge
               icon={<Timer className="h-3 w-3" />}
-              label="PVT"
+              label="RT"
               value={`${rt}ms`}
               sublabel={rtInfo.label}
               variant={rtInfo.variant}
