@@ -89,8 +89,8 @@ const Index = () => {
               <AboutPage />
             </div>
           )}
-          <Footer />
         </main>
+        <Footer />
       </div>
     </div>
   );
