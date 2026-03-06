@@ -121,7 +121,7 @@ export function DutyDetailsDialog({
         className="
           max-w-[95vw] w-full max-h-[92vh] h-full p-0
           flex flex-col gap-0
-          sm:rounded-xl
+          sm:rounded-2xl
           overflow-hidden
           data-[state=open]:duration-300
         "
@@ -131,9 +131,9 @@ export function DutyDetailsDialog({
           Duty Details — {format(displayDuty.date, 'MMM dd, yyyy')}
         </DialogTitle>
 
-        {/* Compact header (hidden in report mode — report has its own toolbar) */}
+        {/* Compact header */}
         {!reportMode && (
-          <div className="flex-shrink-0 border-b border-border/50 bg-background/95 backdrop-blur-sm px-4 md:px-6 py-2.5 md:py-3">
+          <div className="flex-shrink-0 border-b border-border/30 bg-background/90 backdrop-blur-xl px-5 md:px-7 py-3 md:py-3.5">
             <DutyDetailsHeader
               duty={displayDuty}
               onGenerateReport={() => setReportMode(true)}
@@ -151,10 +151,10 @@ export function DutyDetailsDialog({
           />
         ) : (
           /* Two-column duty details */
-          <div className="flex-1 min-h-0 px-3 md:px-5 py-3 md:py-4">
-            <div className="h-full grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 overflow-y-auto md:overflow-hidden">
+          <div className="flex-1 min-h-0 px-4 md:px-6 py-4 md:py-5">
+            <div className="h-full grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 overflow-y-auto md:overflow-hidden">
               {/* Left: Duty Info */}
-              <div className="md:overflow-y-auto md:pr-1 space-y-3">
+              <div className="md:overflow-y-auto md:pr-2 space-y-3 scrollbar-thin">
                 <DutyInfoColumn
                   duty={displayDuty}
                   dutyCrewOverride={dutyCrewOverride}
@@ -164,7 +164,7 @@ export function DutyDetailsDialog({
                 />
               </div>
               {/* Right: Performance */}
-              <div className="md:overflow-y-auto md:pl-1 space-y-3">
+              <div className="md:overflow-y-auto md:pl-2 space-y-3 scrollbar-thin">
                 <PerformanceColumn duty={displayDuty} />
               </div>
             </div>

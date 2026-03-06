@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
-import { Moon, Sun, Clock, Zap, Brain, Activity, Gauge, Timer, AlertTriangle, TrendingDown, Mountain, Eye } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Moon, Sun, Clock, Zap, Activity, Gauge, Timer, AlertTriangle, TrendingDown, Mountain, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { InfoTooltip, FATIGUE_INFO } from '@/components/ui/InfoTooltip';
 import { DutyAnalysis, TimelinePoint } from '@/types/fatigue';
@@ -78,18 +77,13 @@ export function PerformanceSummaryCard({ duty }: PerformanceSummaryCardProps) {
       : null;
 
   // Body clock time at worst point — estimate from circadian phase
-  // circadian is 0-1 where low = circadian trough. We don't have the exact body clock time
-  // from the frontend, so we use hours_on_duty + report time to approximate
   const bodyClockInfo = useMemo(() => {
     if (!worstPoint) return null;
-    // If circadian < 0.3, pilot is near their circadian trough (02:00-06:00 body clock)
     const circadianLevel = worstPoint.circadian;
-    if (circadianLevel >= 0.5) return null; // Don't highlight if not a major factor
+    if (circadianLevel >= 0.5) return null;
 
-    // Try to compute approximate body clock time from report time
     if (duty.reportTimeUtc && worstPoint.hours_on_duty != null) {
       try {
-        // Parse report UTC and add hours_on_duty to get approximate time
         const reportDate = duty.reportTimeLocal
           ? new Date(`2000-01-01T${duty.reportTimeLocal}:00`)
           : null;
@@ -113,7 +107,6 @@ export function PerformanceSummaryCard({ duty }: PerformanceSummaryCardProps) {
     const perf = worstPoint.performance ?? 0;
     const factors: string[] = [];
 
-    // Sort contributing factors by size
     const contributions = [
       { name: 'sleep pressure', value: decomp.sContribution, detail: `you slept ${(duty.priorSleep ?? 0).toFixed(1)}h prior` },
       { name: 'circadian phase', value: decomp.cContribution, detail: bodyClockInfo || 'near your body clock low point' },
@@ -137,226 +130,276 @@ export function PerformanceSummaryCard({ duty }: PerformanceSummaryCardProps) {
     return `Performance dropped to ${perf.toFixed(0)}% primarily due to ${factors.join(connector)}.`;
   }, [decomp, worstPoint, duty.priorSleep, bodyClockInfo]);
 
+  // Determine risk color for the radial gauge ring
+  const ringColor = worstPerf >= 77
+    ? 'hsl(var(--success))'
+    : worstPerf >= 55
+      ? 'hsl(var(--warning))'
+      : 'hsl(var(--critical))';
+
   // If no timeline data, show minimal card with just the scores
   if (!worstPoint || !decomp) {
     return (
-      <Card variant="glass">
-        <CardContent className="py-4 px-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span
-                className="text-3xl font-bold font-mono leading-none"
-                style={{ color: getPerformanceColor(worstPerf) }}
-              >
-                {worstPerf.toFixed(0)}%
-              </span>
-              <div>
-                <p className="text-xs text-muted-foreground">Worst Performance</p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <Badge variant={kssInfo.variant} className="text-[10px]">
-                    KSS {kss.toFixed(1)}
-                  </Badge>
-                </div>
-              </div>
-            </div>
+      <div className="rounded-2xl glass-strong p-5">
+        <div className="flex items-center gap-4">
+          <RadialScore value={worstPerf} color={ringColor} size={64} />
+          <div className="space-y-1">
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-medium">Worst Performance</p>
+            <Badge variant={kssInfo.variant} className="text-[10px]">
+              KSS {kss.toFixed(1)}
+            </Badge>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card variant="glass">
-      <CardHeader className="pb-2 md:pb-3">
-        <CardTitle className="flex items-center gap-2 text-sm md:text-base">
-          <Activity className="h-3.5 w-3.5 md:h-4 md:w-4 text-primary" />
-          Performance Summary
-          {worstTimestamp && (
-            <span className="text-xs text-muted-foreground font-normal font-mono">
-              worst at {worstTimestamp}
-            </span>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Top row: Big score + fatigue scale badges */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          {/* Left: Large score */}
-          <div className="flex items-center gap-3 sm:min-w-[140px]">
-            <span
-              className="text-4xl font-bold font-mono leading-none"
-              style={{ color: getPerformanceColor(worstPerf) }}
-            >
-              {worstPerf.toFixed(0)}
-            </span>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground leading-none">/ 100</span>
+    <div className="rounded-2xl glass-strong overflow-hidden">
+      {/* Hero section — score + status */}
+      <div className="relative px-5 pt-5 pb-4">
+        {/* Subtle glow behind the score based on risk */}
+        <div
+          className="absolute top-0 left-0 w-40 h-40 rounded-full blur-[80px] opacity-20 pointer-events-none"
+          style={{ background: ringColor }}
+        />
+
+        <div className="relative flex items-start justify-between gap-4">
+          {/* Left: Radial gauge + labels */}
+          <div className="flex items-center gap-4">
+            <RadialScore value={worstPerf} color={ringColor} size={72} />
+            <div className="space-y-1.5">
               <Badge
                 variant={worstPerf >= 70 ? 'success' : worstPerf >= 50 ? 'warning' : 'critical'}
-                className="text-[10px] w-fit"
+                className="text-[10px]"
               >
                 {worstPerf >= 77 ? 'ADEQUATE' : worstPerf >= 55 ? 'REDUCED' : 'IMPAIRED'}
               </Badge>
+              {worstTimestamp && (
+                <p className="text-[11px] text-muted-foreground font-mono">
+                  worst at {worstTimestamp}
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Right: Fatigue scale badges in a compact grid */}
-          <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <ScaleBadge
-              icon={<Gauge className="h-3 w-3" />}
-              label="KSS"
-              value={kss.toFixed(1)}
-              sublabel={kssInfo.label}
-              variant={kssInfo.variant}
-              infoKey="kss"
-            />
-            <ScaleBadge
-              icon={<Activity className="h-3 w-3" />}
-              label="S-P"
-              value={sp.toFixed(1)}
-              sublabel={spInfo.label}
-              variant={spInfo.variant}
-              infoKey="samnPerelli"
-            />
-            <ScaleBadge
-              icon={<Timer className="h-3 w-3" />}
-              label="RT"
-              value={`${rt}ms`}
-              sublabel={rtInfo.label}
-              variant={rtInfo.variant}
-              infoKey="reactionTime"
-            />
-            {fha != null && fha > 0 && fhaSeverity && (
-              <ScaleBadge
-                icon={<AlertTriangle className="h-3 w-3" />}
-                label="FHA"
-                value={`${fha}`}
-                sublabel={`${fhaSeverity.label} (%-hrs)`}
-                variant={fhaSeverity.variant}
-                infoKey="fha"
-              />
-            )}
-            {/* PVT Lapses badge — from model deepening (Van Dongen 2003) */}
-            {worstPoint?.pvt_lapses != null && (
-              <ScaleBadge
-                icon={<Eye className="h-3 w-3" />}
-                label="PVT"
-                value={worstPoint.pvt_lapses.toFixed(1)}
-                sublabel={worstPoint.pvt_lapses <= 2 ? 'Normal' : worstPoint.pvt_lapses <= 5 ? 'Impaired' : 'Severe'}
-                variant={worstPoint.pvt_lapses <= 2 ? 'success' : worstPoint.pvt_lapses <= 5 ? 'warning' : 'critical'}
-                infoKey="pvtLapses"
-              />
-            )}
-            {/* Microsleep probability badge — from model deepening (Åkerstedt 2010) */}
-            {worstPoint?.microsleep_probability != null && worstPoint.microsleep_probability > 0.01 && (
-              <ScaleBadge
-                icon={<Zap className="h-3 w-3" />}
-                label="Microsleep"
-                value={`${(worstPoint.microsleep_probability * 100).toFixed(1)}%`}
-                sublabel={worstPoint.microsleep_probability < 0.02 ? 'Low risk' : worstPoint.microsleep_probability < 0.05 ? 'Moderate' : 'High risk'}
-                variant={worstPoint.microsleep_probability < 0.02 ? 'success' : worstPoint.microsleep_probability < 0.05 ? 'warning' : 'critical'}
-                infoKey="microsleepProbability"
-              />
-            )}
+          {/* Right: Section label */}
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Activity className="h-3.5 w-3.5" />
+            <span className="text-[10px] uppercase tracking-widest font-medium">Performance</span>
           </div>
         </div>
+      </div>
 
-        {/* Contributing factors — horizontal mini-bars */}
-        <div className="space-y-2">
-          <h5 className="text-xs font-medium text-muted-foreground">Contributing Factors</h5>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <FactorBar
-              icon={<Moon className="h-3.5 w-3.5 text-red-400" />}
-              label="Sleep Pressure"
-              tag="S"
-              rawValue={decomp.sleepPressure}
-              contribution={decomp.sContribution}
-              barColor="hsl(0, 80%, 60%)"
-              detail={`${(duty.priorSleep ?? 0).toFixed(1)}h prior sleep`}
-              infoKey="sleepPressure"
+      {/* Fatigue scale instruments */}
+      <div className="px-5 pb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <ScaleBadge
+            icon={<Gauge className="h-3 w-3" />}
+            label="KSS"
+            value={kss.toFixed(1)}
+            sublabel={kssInfo.label}
+            variant={kssInfo.variant}
+            infoKey="kss"
+          />
+          <ScaleBadge
+            icon={<Activity className="h-3 w-3" />}
+            label="Samn-Perelli"
+            value={sp.toFixed(1)}
+            sublabel={spInfo.label}
+            variant={spInfo.variant}
+            infoKey="samnPerelli"
+          />
+          <ScaleBadge
+            icon={<Timer className="h-3 w-3" />}
+            label="Reaction"
+            value={`${rt}ms`}
+            sublabel={rtInfo.label}
+            variant={rtInfo.variant}
+            infoKey="reactionTime"
+          />
+          {fha != null && fha > 0 && fhaSeverity && (
+            <ScaleBadge
+              icon={<AlertTriangle className="h-3 w-3" />}
+              label="FHA"
+              value={`${fha}`}
+              sublabel={`${fhaSeverity.label} (%-hrs)`}
+              variant={fhaSeverity.variant}
+              infoKey="fha"
             />
-            <FactorBar
-              icon={<Sun className="h-3.5 w-3.5 text-blue-400" />}
-              label="Circadian"
-              tag="C"
-              rawValue={decomp.circadian}
-              contribution={decomp.cContribution}
-              barColor="hsl(220, 80%, 60%)"
-              detail={bodyClockInfo || `${(duty.woclExposure ?? 0).toFixed(1)}h WOCL`}
-              infoKey="circadian"
+          )}
+          {worstPoint?.pvt_lapses != null && (
+            <ScaleBadge
+              icon={<Eye className="h-3 w-3" />}
+              label="PVT Lapses"
+              value={worstPoint.pvt_lapses.toFixed(1)}
+              sublabel={worstPoint.pvt_lapses <= 2 ? 'Normal' : worstPoint.pvt_lapses <= 5 ? 'Impaired' : 'Severe'}
+              variant={worstPoint.pvt_lapses <= 2 ? 'success' : worstPoint.pvt_lapses <= 5 ? 'warning' : 'critical'}
+              infoKey="pvtLapses"
             />
-            <FactorBar
-              icon={<Clock className="h-3.5 w-3.5 text-amber-400" />}
-              label="Time on Duty"
-              tag="ToT"
-              rawValue={decomp.timeOnTaskPenalty}
-              contribution={decomp.totContribution}
-              barColor="hsl(40, 90%, 55%)"
-              detail={`${decomp.hoursOnDuty.toFixed(1)}h on duty`}
-              infoKey="timeOnTask"
+          )}
+          {worstPoint?.microsleep_probability != null && worstPoint.microsleep_probability > 0.01 && (
+            <ScaleBadge
+              icon={<Zap className="h-3 w-3" />}
+              label="Microsleep"
+              value={`${(worstPoint.microsleep_probability * 100).toFixed(1)}%`}
+              sublabel={worstPoint.microsleep_probability < 0.02 ? 'Low risk' : worstPoint.microsleep_probability < 0.05 ? 'Moderate' : 'High risk'}
+              variant={worstPoint.microsleep_probability < 0.02 ? 'success' : worstPoint.microsleep_probability < 0.05 ? 'warning' : 'critical'}
+              infoKey="microsleepProbability"
             />
-            {decomp.wContribution > 0.5 && (
-              <FactorBar
-                icon={<Zap className="h-3.5 w-3.5 text-orange-400" />}
-                label="Sleep Inertia"
-                tag="W"
-                rawValue={decomp.sleepInertia}
-                contribution={decomp.wContribution}
-                barColor="hsl(30, 90%, 55%)"
-                detail="Post-awakening"
-                infoKey="sleepInertia"
-              />
-            )}
-            {/* Chronic Debt factor — Van Dongen (2003) */}
-            {worstPoint?.debt_penalty != null && worstPoint.debt_penalty < 0.99 && (
-              <FactorBar
-                icon={<TrendingDown className="h-3.5 w-3.5 text-amber-500" />}
-                label="Chronic Debt"
-                tag="D"
-                rawValue={worstPoint.debt_penalty}
-                contribution={Number(((1 - worstPoint.debt_penalty) * 100).toFixed(1))}
-                barColor="hsl(var(--warning))"
-                detail={`${duty.sleepDebt.toFixed(1)}h cumulative debt`}
-                infoKey="sleepDebt"
-              />
-            )}
-            {/* Cabin altitude hypoxia — Nesthus (2007) */}
-            {worstPoint?.hypoxia_factor != null && worstPoint.hypoxia_factor < 0.99 && (
-              <FactorBar
-                icon={<Mountain className="h-3.5 w-3.5 text-blue-400" />}
-                label="Cabin Altitude"
-                tag="Hx"
-                rawValue={worstPoint.hypoxia_factor}
-                contribution={Number(((1 - worstPoint.hypoxia_factor) * 100).toFixed(1))}
-                barColor="hsl(220, 70%, 60%)"
-                detail={duty.cabinAltitudeFt ? `${duty.cabinAltitudeFt.toLocaleString()} ft cabin` : 'Mild hypoxia'}
-                infoKey="cabinAltitude"
-              />
-            )}
-          </div>
+          )}
         </div>
+      </div>
 
-        {/* Stacked contribution bar */}
+      {/* Contributing factors */}
+      <div className="px-5 pb-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="h-px flex-1 bg-border/40" />
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">Contributing Factors</span>
+          <div className="h-px flex-1 bg-border/40" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <FactorBar
+            icon={<Moon className="h-3.5 w-3.5" />}
+            label="Sleep Pressure"
+            tag="S"
+            rawValue={decomp.sleepPressure}
+            contribution={decomp.sContribution}
+            barColor="hsl(0, 80%, 60%)"
+            detail={`${(duty.priorSleep ?? 0).toFixed(1)}h prior sleep`}
+            infoKey="sleepPressure"
+          />
+          <FactorBar
+            icon={<Sun className="h-3.5 w-3.5" />}
+            label="Circadian"
+            tag="C"
+            rawValue={decomp.circadian}
+            contribution={decomp.cContribution}
+            barColor="hsl(220, 80%, 60%)"
+            detail={bodyClockInfo || `${(duty.woclExposure ?? 0).toFixed(1)}h WOCL`}
+            infoKey="circadian"
+          />
+          <FactorBar
+            icon={<Clock className="h-3.5 w-3.5" />}
+            label="Time on Duty"
+            tag="ToT"
+            rawValue={decomp.timeOnTaskPenalty}
+            contribution={decomp.totContribution}
+            barColor="hsl(40, 90%, 55%)"
+            detail={`${decomp.hoursOnDuty.toFixed(1)}h on duty`}
+            infoKey="timeOnTask"
+          />
+          {decomp.wContribution > 0.5 && (
+            <FactorBar
+              icon={<Zap className="h-3.5 w-3.5" />}
+              label="Sleep Inertia"
+              tag="W"
+              rawValue={decomp.sleepInertia}
+              contribution={decomp.wContribution}
+              barColor="hsl(30, 90%, 55%)"
+              detail="Post-awakening"
+              infoKey="sleepInertia"
+            />
+          )}
+          {worstPoint?.debt_penalty != null && worstPoint.debt_penalty < 0.99 && (
+            <FactorBar
+              icon={<TrendingDown className="h-3.5 w-3.5" />}
+              label="Chronic Debt"
+              tag="D"
+              rawValue={worstPoint.debt_penalty}
+              contribution={Number(((1 - worstPoint.debt_penalty) * 100).toFixed(1))}
+              barColor="hsl(var(--warning))"
+              detail={`${duty.sleepDebt.toFixed(1)}h cumulative debt`}
+              infoKey="sleepDebt"
+            />
+          )}
+          {worstPoint?.hypoxia_factor != null && worstPoint.hypoxia_factor < 0.99 && (
+            <FactorBar
+              icon={<Mountain className="h-3.5 w-3.5" />}
+              label="Cabin Altitude"
+              tag="Hx"
+              rawValue={worstPoint.hypoxia_factor}
+              contribution={Number(((1 - worstPoint.hypoxia_factor) * 100).toFixed(1))}
+              barColor="hsl(220, 70%, 60%)"
+              detail={duty.cabinAltitudeFt ? `${duty.cabinAltitudeFt.toLocaleString()} ft cabin` : 'Mild hypoxia'}
+              infoKey="cabinAltitude"
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Stacked contribution bar */}
+      <div className="px-5 pb-4">
         <ContributionBar
           decomp={decomp}
           debtPenalty={worstPoint?.debt_penalty}
           hypoxiaFactor={worstPoint?.hypoxia_factor}
         />
+      </div>
 
-        {/* Natural language explanation */}
-        {explanation && (
-          <p className="text-xs text-muted-foreground leading-relaxed border-t border-border/50 pt-3">
+      {/* Natural language explanation */}
+      {explanation && (
+        <div className="px-5 pb-5">
+          <p className="text-[11px] text-muted-foreground leading-relaxed border-t border-border/30 pt-3">
             {explanation}
           </p>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+/** SVG radial gauge — the hero element. */
+function RadialScore({ value, color, size }: { value: number; color: string; size: number }) {
+  const strokeWidth = 4;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progress = Math.max(0, Math.min(100, value)) / 100;
+  const dashOffset = circumference * (1 - progress);
+
+  return (
+    <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="transform -rotate-90">
+        {/* Track */}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="hsl(var(--border) / 0.3)"
+          strokeWidth={strokeWidth}
+        />
+        {/* Progress */}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          strokeLinecap="round"
+          className="transition-all duration-700 ease-out"
+        />
+      </svg>
+      {/* Center label */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span
+          className="text-2xl font-bold font-mono leading-none"
+          style={{ color }}
+        >
+          {value.toFixed(0)}
+        </span>
+        <span className="text-[9px] text-muted-foreground mt-0.5">/ 100</span>
+      </div>
+    </div>
+  );
+}
 
 function ScaleBadge({
   icon,
@@ -375,14 +418,14 @@ function ScaleBadge({
 }) {
   const info = FATIGUE_INFO[infoKey];
   return (
-    <div className="rounded-lg bg-secondary/30 border border-border/50 px-2.5 py-2 min-w-0">
-      <div className="flex items-center gap-1 mb-0.5">
+    <div className="rounded-xl bg-secondary/20 border border-border/30 px-3 py-2.5 min-w-0 hover:bg-secondary/30 transition-colors">
+      <div className="flex items-center gap-1.5 mb-1">
         <span className="text-muted-foreground">{icon}</span>
-        <span className="text-[10px] text-muted-foreground font-medium">{label}</span>
+        <span className="text-[10px] text-muted-foreground font-medium tracking-wide">{label}</span>
         {info && <InfoTooltip entry={info} size="sm" />}
       </div>
       <span className={cn(
-        'text-sm font-mono font-semibold leading-tight',
+        'text-sm font-mono font-bold leading-tight',
         variant === 'success' ? 'text-success' :
         variant === 'warning' ? 'text-warning' : 'text-critical',
       )}>
@@ -413,33 +456,32 @@ function FactorBar({
   infoKey: string;
 }) {
   const info = FATIGUE_INFO[infoKey];
-  // Bar width: contribution as % of 80 (max theoretical deficit)
   const barWidth = Math.min(100, (contribution / 40) * 100);
 
   return (
-    <div className="rounded-lg bg-secondary/20 border border-border/50 px-3 py-2 space-y-1.5">
+    <div className="rounded-xl bg-secondary/15 border border-border/25 px-3 py-2.5 space-y-2 hover:bg-secondary/25 transition-colors">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          {icon}
+          <span style={{ color: barColor }}>{icon}</span>
           <span className="text-xs font-medium">{label}</span>
-          <span className="text-[10px] font-mono text-muted-foreground">({tag})</span>
+          <span className="text-[9px] font-mono text-muted-foreground/70">({tag})</span>
           {info && <InfoTooltip entry={info} size="sm" />}
         </div>
         <span
-          className="text-xs font-mono font-semibold"
+          className="text-xs font-mono font-bold tabular-nums"
           style={{ color: barColor }}
         >
           -{contribution.toFixed(1)}%
         </span>
       </div>
-      {/* Mini progress bar */}
-      <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+      {/* Progress bar with rounded track */}
+      <div className="h-1.5 rounded-full bg-secondary/60 overflow-hidden">
         <div
-          className="h-full rounded-full transition-all"
+          className="h-full rounded-full transition-all duration-500 ease-out"
           style={{ width: `${barWidth}%`, backgroundColor: barColor }}
         />
       </div>
-      <p className="text-[10px] text-muted-foreground">{detail}</p>
+      <p className="text-[10px] text-muted-foreground/80">{detail}</p>
     </div>
   );
 }
@@ -465,31 +507,31 @@ function ContributionBar({ decomp, debtPenalty, hypoxiaFactor }: {
   ].filter(s => s.width > 0.5);
 
   return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-0.5 h-2.5 rounded-full overflow-hidden bg-secondary">
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-[2px] h-2.5 rounded-full overflow-hidden bg-secondary/40">
         {segments.map((seg, i) => (
           <div
             key={i}
-            className="h-full transition-all"
+            className="h-full first:rounded-l-full last:rounded-r-full transition-all duration-500"
             style={{ width: `${seg.width}%`, backgroundColor: seg.color }}
             title={`${seg.label}: ${seg.width.toFixed(1)}%`}
           />
         ))}
       </div>
-      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-        <span>0%</span>
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between text-[9px] text-muted-foreground/70">
+        <span className="font-mono">0%</span>
+        <div className="flex items-center gap-2.5">
           {segments.map((seg, i) => (
-            <span key={i} className="flex items-center gap-0.5">
+            <span key={i} className="flex items-center gap-1">
               <span
                 className="inline-block h-1.5 w-1.5 rounded-full"
                 style={{ backgroundColor: seg.color }}
               />
-              {seg.label}
+              <span className="font-medium">{seg.label}</span>
             </span>
           ))}
         </div>
-        <span>100%</span>
+        <span className="font-mono">100%</span>
       </div>
     </div>
   );
