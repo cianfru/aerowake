@@ -90,53 +90,63 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 199 89% 48%;
+    --primary: 199 89% 42%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96%;
+    --secondary: 214 25% 91%;
     --secondary-foreground: 222 47% 11%;
 
-    --muted: 210 40% 94%;
-    --muted-foreground: 215 16% 43%;
+    --muted: 210 30% 92%;
+    --muted-foreground: 215 20% 35%;
 
-    --accent: 199 89% 48%;
+    --accent: 199 89% 42%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
 
-    --success: 142 76% 36%;
+    --success: 142 76% 32%;
     --success-foreground: 210 40% 98%;
 
-    --high: 25 95% 53%;
-    --high-foreground: 222 47% 6%;
+    --high: 25 95% 46%;
+    --high-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
+    --warning: 38 92% 42%;
     --warning-foreground: 222 47% 6%;
 
-    --critical: 0 84% 60%;
+    --critical: 0 84% 55%;
     --critical-foreground: 210 40% 98%;
 
-    --wocl: 280 60% 80%;
+    --wocl: 280 60% 70%;
     --wocl-foreground: 222 47% 11%;
 
-    --simulator: 185 60% 40%;
-    --simulator-foreground: 222 47% 11%;
-    --ground-training: 215 25% 45%;
-    --ground-training-foreground: 222 47% 11%;
+    --simulator: 185 60% 35%;
+    --simulator-foreground: 0 0% 100%;
+    --ground-training: 215 30% 40%;
+    --ground-training-foreground: 0 0% 100%;
 
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 199 89% 48%;
+    --border: 214 25% 83%;
+    --input: 214 25% 87%;
+    --ring: 199 89% 42%;
 
-    --sidebar-background: 0 0% 98%;
+    --sidebar-background: 0 0% 99%;
     --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 199 89% 48%;
+    --sidebar-primary: 199 89% 40%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent: 214 25% 93%;
     --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 214 32% 91%;
-    --sidebar-ring: 199 89% 48%;
+    --sidebar-border: 214 25% 85%;
+    --sidebar-ring: 199 89% 42%;
+
+    /* Light-mode shadows */
+    --shadow-glow: 0 0 30px hsl(199 89% 48% / 0.1);
+    --shadow-card: 0 2px 12px hsl(220 20% 30% / 0.08);
+    --shadow-elevated: 0 4px 20px hsl(220 20% 30% / 0.12);
+
+    /* Light-mode gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(199 89% 42%), hsl(199 89% 35%));
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(210 40% 97%));
+    --gradient-glow: radial-gradient(ellipse at center, hsl(199 89% 48% / 0.08), transparent 70%);
   }
 }
 
@@ -184,6 +194,33 @@
       0 0 0 1px hsl(var(--border) / 0.2),
       0 16px 48px hsl(var(--background) / 0.5),
       inset 0 1px 0 hsl(var(--foreground) / 0.08);
+  }
+
+  /* Light-mode glass overrides: higher card opacity + real shadows */
+  .light .glass {
+    @apply bg-card/70 border-border/60;
+    box-shadow:
+      0 0 0 1px hsl(var(--border) / 0.3),
+      0 4px 16px hsl(220 20% 30% / 0.07),
+      inset 0 1px 0 hsl(0 0% 100% / 0.7);
+  }
+
+  .light .glass-subtle {
+    @apply bg-card/50 border-border/45;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.6);
+  }
+
+  .light .glass-strong {
+    @apply bg-card/85 border-border/70;
+    box-shadow:
+      0 0 0 1px hsl(var(--border) / 0.35),
+      0 8px 24px hsl(220 20% 30% / 0.08),
+      inset 0 1px 0 hsl(0 0% 100% / 0.8);
+  }
+
+  /* Logo: darken for light backgrounds */
+  .light .logo-themed {
+    filter: brightness(0.35) contrast(1.4) saturate(1.2);
   }
 
   .glow-primary {
@@ -275,7 +312,7 @@
 }
 
 .light .aurora-bg {
-  opacity: 0.7;
+  opacity: 0.5;
 }
 
 .aurora-blob {
@@ -319,15 +356,15 @@
 }
 
 .light .aurora-blob-1 {
-  background: radial-gradient(circle, hsl(var(--primary) / 0.35) 0%, transparent 65%);
+  background: radial-gradient(circle, hsl(var(--primary) / 0.12) 0%, transparent 65%);
 }
 
 .light .aurora-blob-2 {
-  background: radial-gradient(circle, hsl(280 65% 70% / 0.28) 0%, transparent 65%);
+  background: radial-gradient(circle, hsl(280 65% 70% / 0.10) 0%, transparent 65%);
 }
 
 .light .aurora-blob-3 {
-  background: radial-gradient(circle, hsl(160 70% 50% / 0.22) 0%, transparent 65%);
+  background: radial-gradient(circle, hsl(160 70% 50% / 0.08) 0%, transparent 65%);
 }
 
 @keyframes aurora-drift-1 {
