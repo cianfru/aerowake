@@ -32,17 +32,19 @@ export function DutyDetailsHeader({ duty, onGenerateReport, reportMode }: DutyDe
   const isTraining = isTrainingDuty(duty);
 
   return (
-    <div className="flex items-center justify-between gap-3 flex-wrap">
+    <div className="flex items-center justify-between gap-4 flex-wrap">
       {/* Left: icon + title + training badge */}
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="text-primary flex-shrink-0">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-primary/10 text-primary flex-shrink-0">
           {isTraining
-            ? (duty.dutyType === 'simulator' ? <Monitor className="h-4 w-4" /> : <BookOpen className="h-4 w-4" />)
-            : <Plane className="h-4 w-4" />}
-        </span>
-        <h2 className="text-sm md:text-base font-semibold truncate">
-          Duty — {duty.dayOfWeek}, {format(duty.date, 'MMM dd')}
-        </h2>
+            ? (duty.dutyType === 'simulator' ? <Monitor className="h-3.5 w-3.5" /> : <BookOpen className="h-3.5 w-3.5" />)
+            : <Plane className="h-3.5 w-3.5" />}
+        </div>
+        <div className="min-w-0">
+          <h2 className="text-sm md:text-base font-semibold truncate tracking-tight">
+            {duty.dayOfWeek}, {format(duty.date, 'MMM dd')}
+          </h2>
+        </div>
         {isTraining && (
           <Badge variant="info" className="text-[10px] flex-shrink-0">
             {getTrainingDutyLabel(duty.dutyType!)}
@@ -50,21 +52,21 @@ export function DutyDetailsHeader({ duty, onGenerateReport, reportMode }: DutyDe
         )}
       </div>
 
-      {/* Center: stats */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <Stat label="Duty" value={`${(duty.dutyHours ?? 0).toFixed(1)}h`} />
-        <Stat label="Block" value={`${Math.max(0, duty.blockHours ?? 0).toFixed(1)}h`} />
-        {!isTraining && <Stat label="Sectors" value={String(duty.sectors)} />}
-        <span className="text-border hidden sm:inline">|</span>
-        <StatPerf label="Min" value={duty.minPerformance} />
-        <StatPerf label="Avg" value={duty.avgPerformance} />
-        {!isTraining && <StatPerf label="Ldg" value={duty.landingPerformance} />}
+      {/* Center: stats as subtle chips */}
+      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <StatChip label="Duty" value={`${(duty.dutyHours ?? 0).toFixed(1)}h`} />
+        <StatChip label="Block" value={`${Math.max(0, duty.blockHours ?? 0).toFixed(1)}h`} />
+        {!isTraining && <StatChip label="Sectors" value={String(duty.sectors)} />}
+        <div className="w-px h-4 bg-border/30 mx-1 hidden sm:block" />
+        <StatPerfChip label="Min" value={duty.minPerformance} />
+        <StatPerfChip label="Avg" value={duty.avgPerformance} />
+        {!isTraining && <StatPerfChip label="Ldg" value={duty.landingPerformance} />}
       </div>
 
       {/* Right: report button + risk badge */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2.5">
         {onGenerateReport && !reportMode && (
-          <Button variant="outline" size="sm" onClick={onGenerateReport} className="gap-1.5 text-xs">
+          <Button variant="outline" size="sm" onClick={onGenerateReport} className="gap-1.5 text-xs rounded-lg h-8">
             <FileText className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Report</span>
           </Button>
@@ -77,22 +79,22 @@ export function DutyDetailsHeader({ duty, onGenerateReport, reportMode }: DutyDe
 
 /* ── tiny helper sub-components ─────────────────────────────── */
 
-function Stat({ label, value }: { label: string; value: string }) {
+function StatChip({ label, value }: { label: string; value: string }) {
   return (
-    <span>
-      <span className="text-muted-foreground">{label}</span>{' '}
-      <span className="font-medium text-foreground">{value}</span>
+    <span className="inline-flex items-center gap-1 rounded-md bg-secondary/40 px-2 py-0.5">
+      <span className="text-[10px] text-muted-foreground">{label}</span>
+      <span className="text-[11px] font-medium font-mono text-foreground">{value}</span>
     </span>
   );
 }
 
-function StatPerf({ label, value }: { label: string; value: number }) {
+function StatPerfChip({ label, value }: { label: string; value: number }) {
   const v = value ?? 0;
   const color = v < 50 ? 'text-critical' : v < 60 ? 'text-warning' : 'text-foreground';
   return (
-    <span>
-      <span className="text-muted-foreground">{label}</span>{' '}
-      <span className={cn('font-medium', color)}>{v.toFixed(0)}%</span>
+    <span className="inline-flex items-center gap-1 rounded-md bg-secondary/40 px-2 py-0.5">
+      <span className="text-[10px] text-muted-foreground">{label}</span>
+      <span className={cn('text-[11px] font-medium font-mono', color)}>{v.toFixed(0)}%</span>
     </span>
   );
 }
