@@ -275,6 +275,16 @@
     animation: glowPulse 3s ease-in-out infinite;
   }
 
+  /* When fade-in-up + glow-pulse are combined, run both animations */
+  .animate-fade-in-up.glow-pulse {
+    animation: fadeInUp 0.5s ease-out forwards, glowPulse 3s ease-in-out 0.6s infinite;
+  }
+  .animate-fade-in-up.glow-pulse.stagger-1 { animation-delay: 0.05s, 0.55s; }
+  .animate-fade-in-up.glow-pulse.stagger-2 { animation-delay: 0.10s, 0.60s; }
+  .animate-fade-in-up.glow-pulse.stagger-3 { animation-delay: 0.15s, 0.65s; }
+  .animate-fade-in-up.glow-pulse.stagger-4 { animation-delay: 0.20s, 0.70s; }
+  .animate-fade-in-up.glow-pulse.stagger-5 { animation-delay: 0.25s, 0.75s; }
+
   @keyframes glowPulse {
     0%, 100% { box-shadow: 0 0 20px hsl(var(--primary) / 0.12); }
     50% { box-shadow: 0 0 35px hsl(var(--primary) / 0.25); }
