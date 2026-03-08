@@ -134,12 +134,12 @@ export function SummaryPage() {
           )}
         </div>
 
-        {/* Navigation — matches sidebar order (minus Summary = this page) */}
+        {/* Navigation — ordered by workflow priority */}
         <div className="space-y-2">
-          <NavRow tabId="rosters"  icon={FolderOpen}    title="Rosters"           description="Upload and manage your crew rosters"                    setActiveTab={setActiveTab} />
-          <NavRow tabId="analysis" icon={BarChart3}     title="Analysis"          description="Chronogram with duty bars, sleep blocks, and performance" setActiveTab={setActiveTab} />
           <NavRow tabId="insights" icon={Activity}      title="Insights"          description="Performance trends, sleep debt, and body clock drift"    setActiveTab={setActiveTab} />
+          <NavRow tabId="analysis" icon={BarChart3}     title="Analysis"          description="Chronogram with duty bars, sleep blocks, and performance" setActiveTab={setActiveTab} />
           <NavRow tabId="reports"  icon={FileText}      title="Reports"           description="Generate PDF fatigue reports for each duty"              setActiveTab={setActiveTab} />
+          <NavRow tabId="rosters"  icon={FolderOpen}    title="Rosters"           description="Upload and manage your crew rosters"                    setActiveTab={setActiveTab} />
           <NavRow tabId="yearly"   icon={CalendarRange} title="12-Month Dashboard" description="Long-term fatigue trends and seasonal patterns"        setActiveTab={setActiveTab} />
           <NavRow tabId="compare"  icon={Users}         title="Compare"           description="Compare your fatigue metrics against fleet percentiles"  setActiveTab={setActiveTab} />
         </div>
