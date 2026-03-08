@@ -104,7 +104,9 @@ export function SummaryPage() {
         {/* Welcome Header */}
         <div className="text-center space-y-2 pt-4 md:pt-8">
           <h1 className="text-2xl md:text-3xl font-semibold text-foreground">
-            {pilotName ? `Welcome back, ${pilotName}` : 'Welcome Back'}
+            {pilotName
+              ? `Welcome back, ${pilotName.split(' ').pop()?.charAt(0)}${pilotName.split(' ').pop()?.slice(1).toLowerCase()}`
+              : 'Welcome Back'}
           </h1>
           {hasPilotInfo && (
             <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
