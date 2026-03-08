@@ -57,6 +57,7 @@ type AnalysisAction =
   | { type: 'REMOVE_FILE' }
   | { type: 'SET_SHOW_LANDING'; payload: boolean }
   | { type: 'LOAD_ANALYSIS'; payload: AnalysisResults }
+  | { type: 'LOAD_ANALYSIS_TO_SUMMARY'; payload: AnalysisResults }
   | { type: 'RESET' };
 
 // ── Reducer ──────────────────────────────────────────────────
@@ -129,6 +130,17 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
         showLanding: false,
       };
 
+    case 'LOAD_ANALYSIS_TO_SUMMARY':
+      localStorage.setItem('aerowake_landing_dismissed', 'true');
+      return {
+        ...state,
+        analysisResults: action.payload,
+        selectedDuty: null,
+        drawerOpen: false,
+        activeTab: 'summary',
+        showLanding: false,
+      };
+
     case 'RESET':
       return { ...buildInitialState(), settings: state.settings };
 
@@ -155,6 +167,7 @@ interface AnalysisContextValue {
   removeFile: () => void;
   setShowLanding: (show: boolean) => void;
   loadAnalysis: (r: AnalysisResults) => void;
+  loadAnalysisToSummary: (r: AnalysisResults) => void;
 }
 
 const AnalysisContext = createContext<AnalysisContextValue | null>(null);
@@ -184,6 +197,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     removeFile: () => dispatch({ type: 'REMOVE_FILE' }),
     setShowLanding: (show) => dispatch({ type: 'SET_SHOW_LANDING', payload: show }),
     loadAnalysis: (r) => dispatch({ type: 'LOAD_ANALYSIS', payload: r }),
+    loadAnalysisToSummary: (r) => dispatch({ type: 'LOAD_ANALYSIS_TO_SUMMARY', payload: r }),
   };
 
   return <AnalysisContext.Provider value={value}>{children}</AnalysisContext.Provider>;
