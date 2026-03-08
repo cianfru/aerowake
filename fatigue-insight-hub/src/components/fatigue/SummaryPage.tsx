@@ -27,27 +27,27 @@ function NavRow({ tabId, icon: Icon, title, description, setActiveTab }: NavRowP
       className={cn(
         'group flex items-center gap-4 w-full text-left',
         'rounded-xl px-5 py-4',
-        'bg-card/80 border border-border/60',
+        'bg-card border border-border',
         'transition-all duration-200',
-        'hover:bg-accent hover:border-primary/50',
-        'hover:shadow-md hover:shadow-primary/5',
+        'hover:bg-primary/10 hover:border-primary/60',
+        'hover:shadow-lg hover:shadow-primary/10',
       )}
     >
       <div className={cn(
         'h-10 w-10 shrink-0 rounded-lg flex items-center justify-center',
-        'bg-muted/80 border border-border/40',
-        'group-hover:bg-primary/15 group-hover:border-primary/30',
+        'bg-muted border border-border/60',
+        'group-hover:bg-primary/20 group-hover:border-primary/40',
         'transition-colors duration-200',
       )}>
-        <Icon className="h-5 w-5 text-foreground/70 group-hover:text-primary transition-colors duration-200" />
+        <Icon className="h-5 w-5 text-foreground group-hover:text-primary transition-colors duration-200" />
       </div>
 
       <div className="flex-1 min-w-0">
-        <h4 className="text-sm font-semibold text-foreground">{title}</h4>
-        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+        <h4 className="text-sm font-bold text-foreground">{title}</h4>
+        <p className="text-xs text-foreground/60 group-hover:text-foreground/80 mt-0.5 transition-colors duration-200">{description}</p>
       </div>
 
-      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all duration-200" />
+      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all duration-200" />
     </button>
   );
 }
