@@ -1,6 +1,7 @@
 import {
-  MapPin, Hash, ArrowRight, Upload, LogIn, Plane, LayoutDashboard,
+  MapPin, Hash, ArrowRight, Upload, LogIn, Plane,
   BarChart3, Activity, FileText, FolderOpen, Users, CalendarRange,
+  BookOpen, Info,
 } from 'lucide-react';
 import logoDark from '@/assets/logo-dark.png';
 import { Card } from '@/components/ui/card';
@@ -27,16 +28,16 @@ function NavRow({ tabId, icon: Icon, title, description, setActiveTab }: NavRowP
       className={cn(
         'group flex items-center gap-4 w-full text-left',
         'rounded-xl px-5 py-4',
-        'bg-card border border-border',
+        'bg-card border-2 border-border',
         'transition-all duration-200',
-        'hover:bg-primary/10 hover:border-primary/60',
-        'hover:shadow-lg hover:shadow-primary/10',
+        'hover:bg-primary/15 hover:border-primary',
+        'hover:shadow-lg hover:shadow-primary/15',
       )}
     >
       <div className={cn(
         'h-10 w-10 shrink-0 rounded-lg flex items-center justify-center',
-        'bg-muted border border-border/60',
-        'group-hover:bg-primary/20 group-hover:border-primary/40',
+        'bg-muted border border-border',
+        'group-hover:bg-primary/25 group-hover:border-primary/50',
         'transition-colors duration-200',
       )}>
         <Icon className="h-5 w-5 text-foreground group-hover:text-primary transition-colors duration-200" />
@@ -44,10 +45,10 @@ function NavRow({ tabId, icon: Icon, title, description, setActiveTab }: NavRowP
 
       <div className="flex-1 min-w-0">
         <h4 className="text-sm font-bold text-foreground">{title}</h4>
-        <p className="text-xs text-foreground/60 group-hover:text-foreground/80 mt-0.5 transition-colors duration-200">{description}</p>
+        <p className="text-[13px] text-foreground/70 group-hover:text-foreground/90 mt-0.5 transition-colors duration-200">{description}</p>
       </div>
 
-      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all duration-200" />
+      <ArrowRight className="h-4 w-4 shrink-0 text-foreground/30 group-hover:text-primary group-hover:translate-x-1 transition-all duration-200" />
     </button>
   );
 }
@@ -97,6 +98,7 @@ export function SummaryPage() {
   }
 
   // ── Navigation Hub ────────────────────────────────────────
+  // Cards match sidebar items exactly (minus "Summary" which is THIS page)
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -109,7 +111,7 @@ export function SummaryPage() {
               : 'Welcome Back'}
           </h1>
           {hasPilotInfo && (
-            <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
+            <div className="flex items-center justify-center gap-3 text-sm text-foreground/60">
               {pilotBase && (
                 <span className="flex items-center gap-1">
                   <MapPin className="h-3.5 w-3.5" />
@@ -132,22 +134,27 @@ export function SummaryPage() {
           )}
         </div>
 
-        {/* Navigation Cards — stacked */}
+        {/* Navigation — matches sidebar order (minus Summary = this page) */}
         <div className="space-y-2">
-          <NavRow tabId="rosters" icon={FolderOpen} title="Rosters" description="Upload and manage your crew rosters" setActiveTab={setActiveTab} />
-          <NavRow tabId="summary" icon={LayoutDashboard} title="Summary" description="Roster overview with key statistics and route map" setActiveTab={setActiveTab} />
-          <NavRow tabId="analysis" icon={BarChart3} title="Analysis" description="Chronogram with duty bars, sleep blocks, and performance" setActiveTab={setActiveTab} />
-          <NavRow tabId="insights" icon={Activity} title="Insights" description="Performance trends, sleep debt, and body clock drift" setActiveTab={setActiveTab} />
-          <NavRow tabId="reports" icon={FileText} title="Reports" description="Generate PDF fatigue reports for each duty" setActiveTab={setActiveTab} />
-          <NavRow tabId="compare" icon={Users} title="Compare" description="Compare your fatigue metrics against fleet percentiles" setActiveTab={setActiveTab} />
-          <NavRow tabId="yearly" icon={CalendarRange} title="12-Month Dashboard" description="Long-term fatigue trends and seasonal patterns" setActiveTab={setActiveTab} />
+          <NavRow tabId="rosters"  icon={FolderOpen}    title="Rosters"           description="Upload and manage your crew rosters"                    setActiveTab={setActiveTab} />
+          <NavRow tabId="analysis" icon={BarChart3}     title="Analysis"          description="Chronogram with duty bars, sleep blocks, and performance" setActiveTab={setActiveTab} />
+          <NavRow tabId="insights" icon={Activity}      title="Insights"          description="Performance trends, sleep debt, and body clock drift"    setActiveTab={setActiveTab} />
+          <NavRow tabId="reports"  icon={FileText}      title="Reports"           description="Generate PDF fatigue reports for each duty"              setActiveTab={setActiveTab} />
+          <NavRow tabId="yearly"   icon={CalendarRange} title="12-Month Dashboard" description="Long-term fatigue trends and seasonal patterns"        setActiveTab={setActiveTab} />
+          <NavRow tabId="compare"  icon={Users}         title="Compare"           description="Compare your fatigue metrics against fleet percentiles"  setActiveTab={setActiveTab} />
+        </div>
+
+        {/* Secondary — Learn & About */}
+        <div className="space-y-2 pt-2">
+          <NavRow tabId="learn" icon={BookOpen} title="Learn"  description="How fatigue modelling works and the science behind it" setActiveTab={setActiveTab} />
+          <NavRow tabId="about" icon={Info}     title="About"  description="About Aerowake and contact information"                setActiveTab={setActiveTab} />
         </div>
 
         {/* Sign-in prompt for guests */}
         {!isAuthenticated && (
-          <div className="rounded-xl border border-border/60 bg-card/80 p-5 text-center space-y-3">
-            <h3 className="text-sm font-semibold text-foreground">Sign In for Full Access</h3>
-            <p className="text-xs text-muted-foreground">
+          <div className="rounded-xl border-2 border-border bg-card p-5 text-center space-y-3">
+            <h3 className="text-sm font-bold text-foreground">Sign In for Full Access</h3>
+            <p className="text-[13px] text-foreground/60">
               Save rosters, compare metrics, and access the 12-month dashboard.
             </p>
             <Button variant="outline" size="sm" onClick={() => window.location.href = '/login'}>

@@ -39,8 +39,8 @@ const navItems = [
   { id: 'analysis', icon: BarChart3,     label: 'Analysis',  section: 'primary' },
   { id: 'insights', icon: Activity,      label: 'Insights',  section: 'primary' },
   { id: 'reports',  icon: FileText,     label: 'Reports',   section: 'primary' },
-  { id: 'yearly',   icon: CalendarRange, label: '12-Month',  section: 'primary', requiresAuth: true },
-  { id: 'compare',  icon: Users,         label: 'Compare',   section: 'primary', requiresAuth: true },
+  { id: 'yearly',   icon: CalendarRange, label: '12-Month',  section: 'primary' },
+  { id: 'compare',  icon: Users,         label: 'Compare',   section: 'primary' },
   { id: 'learn',    icon: BookOpen,      label: 'Learn',     section: 'secondary' },
   { id: 'about',    icon: Info,          label: 'About',     section: 'secondary' },
 ];
