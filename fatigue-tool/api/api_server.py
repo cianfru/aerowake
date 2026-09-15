@@ -66,6 +66,8 @@ app = FastAPI(
 )
 
 # Include auth + admin + company + metrics routes
+from study.routes import router as pilot_study_router
+app.include_router(pilot_study_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(company_router)
