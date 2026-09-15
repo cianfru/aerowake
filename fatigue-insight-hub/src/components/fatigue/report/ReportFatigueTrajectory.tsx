@@ -24,7 +24,7 @@ export function ReportFatigueTrajectory({ data }: Props) {
   const chartData = useMemo(() => {
     return timeline.map(pt => ({
       hoursOnDuty: Number(pt.hours_on_duty.toFixed(2)),
-      performance: pt.performance ?? null,
+      performance: pt.is_in_rest ? null : pt.performance ?? null,
       sleepPressure: (pt.sleep_pressure ?? 0) * 100,
       circadian: (pt.circadian ?? 0) * 100,
       sleepInertia: pt.sleep_inertia != null ? (1 - pt.sleep_inertia) * 100 : 0,
@@ -80,12 +80,13 @@ export function ReportFatigueTrajectory({ data }: Props) {
                 <YAxis
                   domain={[0, 100]}
                   tick={{ fontSize: 10 }}
-                  label={{ value: 'Performance %', angle: -90, position: 'insideLeft', fontSize: 10, offset: 10 }}
+                  label={{ value: 'Predicted alertness index', angle: -90, position: 'insideLeft', fontSize: 10, offset: 10 }}
                 />
 
                 {/* Risk thresholds */}
-                <ReferenceLine y={77} stroke="hsl(var(--warning))" strokeDasharray="6 3" strokeOpacity={0.6} />
-                <ReferenceLine y={55} stroke="hsl(var(--critical))" strokeDasharray="6 3" strokeOpacity={0.6} />
+                {Object.entries(data.duty.riskThresholds ?? {}).filter(([name]) => name !== 'extreme').map(([name, range]) => (
+                  <ReferenceLine key={name} y={range[0]} label={name} stroke="currentColor" strokeDasharray="6 3" strokeOpacity={0.4} />
+                ))}
 
                 {/* Performance area */}
                 <defs>
@@ -101,7 +102,7 @@ export function ReportFatigueTrajectory({ data }: Props) {
                   stroke="hsl(var(--primary))"
                   strokeWidth={2}
                   dot={false}
-                  connectNulls
+                  connectNulls={false}
                 />
 
                 <Tooltip
@@ -134,14 +135,7 @@ export function ReportFatigueTrajectory({ data }: Props) {
               <span className="inline-block w-3 h-0.5 bg-[hsl(var(--primary))]" />
               Performance
             </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-3 h-0.5 border-t border-dashed border-[hsl(var(--warning))]" />
-              77% Threshold
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-3 h-0.5 border-t border-dashed border-[hsl(var(--critical))]" />
-              55% Threshold
-            </span>
+            <span>Thresholds: {data.duty.riskThresholds ? 'active model policy' : 'unavailable for legacy result'}</span>
           </div>
 
           {/* Threshold crossings callout */}

@@ -93,7 +93,7 @@ export function HeroSection({ onScrollToContent }: HeroSectionProps) {
               <div className="flex items-center gap-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/60" />
                 <span className="text-[12px] text-white/50 tracking-wide">
-                  EASA ORO.FTL compliant
+                  Includes EASA FTL checks
                 </span>
               </div>
             </div>

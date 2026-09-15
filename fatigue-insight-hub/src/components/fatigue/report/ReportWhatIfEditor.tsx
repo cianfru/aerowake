@@ -129,6 +129,7 @@ export function ReportWhatIfEditor({ duty, analysisId, onResult, onReset, isModi
         console.warn('[WhatIf] Timeline fetch failed, using base duty data');
       }
 
+      updatedDuty.reportScenario = { analysisId: result.analysis_id, changes: { duty: request.modifications, sleep: request.sleep_modifications } };
       onResult(updatedDuty);
     } catch (err) {
       console.error('[WhatIf] Recalculation failed:', err);

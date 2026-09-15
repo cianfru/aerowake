@@ -334,6 +334,10 @@ class DutyResponse(BaseModel):
     pre_duty_awake_hours: float = 0.0  # hours awake before report
     
     # Risk
+    risk_thresholds: Optional[dict] = None
+    model_version: Optional[str] = None
+    model_parameters: Optional[dict] = None
+    risk_basis: str = "landing_or_minimum"
     risk_level: str  # "low", "moderate", "high", "critical", "extreme"
     is_reportable: bool  # Deprecated — use risk_advisory instead
     risk_advisory: str = "monitor"  # "routine", "monitor", "consider_reporting", "report_recommended"
@@ -459,20 +463,8 @@ analysis_store = {}  # analysis_id -> (MonthlyAnalysis, Roster)
 # HELPER FUNCTIONS
 # ============================================================================
 
-def classify_risk(performance: Optional[float]) -> str:
-    """Classify risk level based on performance score"""
-    if performance is None:
-        return "unknown"
-    if performance >= 75:
-        return "low"
-    elif performance >= 65:
-        return "moderate"
-    elif performance >= 55:
-        return "high"
-    elif performance >= 45:
-        return "critical"
-    else:
-        return "extreme"
+def classify_risk(performance: Optional[float], thresholds=None) -> str:
+    return RiskThresholds(thresholds=thresholds).classify(performance) if thresholds else RiskThresholds().classify(performance)
 
 
 def _build_segments(duty, home_tz) -> list:
@@ -696,7 +688,7 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
     risk_score = duty_timeline.landing_performance
     if risk_score is None:
         risk_score = duty_timeline.min_performance
-    risk = classify_risk(risk_score)
+    risk = classify_risk(risk_score, getattr(duty_timeline, "risk_thresholds", None))
     home_tz = pytz.timezone(duty.home_base_timezone)
 
     segments = _build_segments(duty, home_tz)
@@ -787,6 +779,9 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
         prior_sleep=duty_timeline.prior_sleep_hours,
         pre_duty_awake_hours=duty_timeline.pre_duty_awake_hours,
         risk_level=risk,
+        risk_thresholds=getattr(duty_timeline, "risk_thresholds", None) or None,
+        model_version=getattr(duty_timeline, "model_version", None),
+        model_parameters=getattr(duty_timeline, "model_parameters", None),
         is_reportable=(risk in ["critical", "extreme"]),
         risk_advisory=RiskThresholds.risk_advisory(risk),
         pinch_events=len(duty_timeline.pinch_events),

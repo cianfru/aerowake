@@ -25,10 +25,10 @@ import type { PilotSettings } from '@/types/fatigue';
 // ── Config presets (shared with former SettingsPanel) ─────────
 
 const configPresets = [
-  { value: 'operational', label: 'Operational', description: 'Calibrated for experienced airline crew. Core science unchanged.' },
+  { value: 'operational', label: 'Operational', description: 'Experimental aviation adjustments. Operational validation pending.' },
   { value: 'easa_default', label: 'EASA Default', description: 'Pure literature values, EASA-compliant thresholds' },
   { value: 'conservative', label: 'Conservative', description: 'Faster fatigue buildup, stricter thresholds, 8.5h sleep need' },
-  { value: 'research', label: 'Research', description: 'Textbook Borbely (Jewett & Kronauer 1999), 50/50 S/C weighting' },
+  { value: 'research', label: 'Research', description: 'Two-process research core; experimental 50/50 output index' },
 ];
 
 // ── Nav items ────────────────────────────────────────────────

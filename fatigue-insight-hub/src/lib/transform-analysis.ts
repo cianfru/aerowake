@@ -297,6 +297,9 @@ export function transformAnalysisResult(
         landingPerformance: duty.landing_performance ?? duty.min_performance ?? 0,
         sleepDebt: duty.sleep_debt ?? 0,
         woclExposure: duty.wocl_hours ?? 0,
+        riskThresholds: duty.risk_thresholds,
+        modelVersion: duty.model_version,
+        modelParameters: duty.model_parameters,
         priorSleep: duty.prior_sleep ?? 0,
         overallRisk: (duty.risk_level ?? 'unknown').toUpperCase() as
           | 'LOW'

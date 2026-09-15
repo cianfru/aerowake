@@ -751,6 +751,10 @@ class DutyTimeline:
     duty_date: datetime
     timeline: List[PerformancePoint]
     
+    risk_thresholds: Dict[str, Tuple[float, float]] = field(default_factory=dict)
+    model_version: Optional[str] = None
+    model_parameters: Dict[str, Any] = field(default_factory=dict)
+
     # Summary statistics
     min_performance: float = 0.0
     min_performance_time: Optional[datetime] = None
@@ -778,6 +782,7 @@ class DutyTimeline:
     # OPTIMIZATION: Cache final state to avoid recomputation in next duty
     final_circadian_state: Optional['CircadianState'] = None
     final_process_s: float = 0.0
+    final_wake_time: Optional[datetime] = None
     
     # Enhanced sleep quality (from strategic estimator)
     sleep_strategy_type: Optional[str] = None

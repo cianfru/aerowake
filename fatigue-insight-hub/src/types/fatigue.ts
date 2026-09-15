@@ -78,6 +78,11 @@ export interface FlightPhasePerformance {
 }
 
 export interface DutyAnalysis {
+  riskThresholds?: Record<string, [number, number]>;
+  modelVersion?: string;
+  reportScenario?: { analysisId?: string; changes: unknown };
+  modelParameters?: Record<string, unknown>;
+
   dutyId?: string; // Backend duty_id (used for fetching detailed duty breakdown)
   date: Date;
   dateString?: string; // Raw YYYY-MM-DD from backend for timezone-safe day extraction
