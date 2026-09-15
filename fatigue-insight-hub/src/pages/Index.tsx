@@ -1,3 +1,4 @@
+import { PilotStudyPage } from '@/components/fatigue/PilotStudyPage';
 import { Header } from '@/components/fatigue/Header';
 import { Footer } from '@/components/fatigue/Footer';
 import { RostersPage } from '@/components/fatigue/RostersPage';
@@ -60,6 +61,7 @@ const Index = () => {
 
         {/* Main content (full-width) */}
         <main className="flex-1">
+          {state.activeTab === 'pilot-study' && <PilotStudyPage />}
           {state.activeTab === 'summary' && <SummaryPage />}
           {state.activeTab === 'rosters' && <RostersPage />}
           {state.activeTab === 'analysis' && <DashboardContent />}

@@ -34,6 +34,7 @@ const configPresets = [
 // ── Nav items ────────────────────────────────────────────────
 
 const navItems = [
+  { id: 'pilot-study', icon: Activity, label: 'Pilot study', section: 'primary' },
   { id: 'summary',  icon: Home,          label: 'Summary',   section: 'primary' },
   { id: 'rosters',  icon: FolderOpen,    label: 'Rosters',   section: 'primary' },
   { id: 'analysis', icon: BarChart3,     label: 'Analysis',  section: 'primary' },
