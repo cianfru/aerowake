@@ -162,6 +162,10 @@ export interface SleepEstimate {
 }
 
 export interface Duty {
+  risk_thresholds?: Record<string, [number, number]>;
+  model_version?: string;
+  model_parameters?: Record<string, unknown>;
+
   duty_id: string;
   date: string;
   report_time_utc: string;

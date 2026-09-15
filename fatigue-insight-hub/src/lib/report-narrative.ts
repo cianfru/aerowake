@@ -83,7 +83,8 @@ export interface ThresholdCrossing {
 // ---------------------------------------------------------------------------
 
 export function findWorstPoint(timeline: TimelinePoint[]): TimelinePoint | null {
-  if (!timeline || timeline.length === 0) return null;
+  timeline = (timeline ?? []).filter(p => !p.is_in_rest && Number.isFinite(p.performance));
+  if (timeline.length === 0) return null;
   return timeline.reduce((worst, pt) =>
     (pt.performance ?? 100) < (worst.performance ?? 100) ? pt : worst,
     timeline[0],
@@ -108,82 +109,15 @@ export function generateExecutiveSummary(
   worstPoint: TimelinePoint | null,
   decomp: PerformanceDecomposition | null,
 ): string {
-  const perf = worstPoint?.performance ?? duty.minPerformance ?? 100;
-
-  if (perf >= 77) {
-    return `Predicted cognitive performance remains above the 77% adequate threshold throughout this duty period. ` +
-      `No significant fatigue-related impairment is expected. Standard operating procedures and crew resource management practices are sufficient.`;
-  }
-
-  // Compute impairment equivalences
-  const equivHours = performanceToEquivalentAwakeHours(perf);
-  const bac = hoursAwakeToBAC(equivHours);
-  const kss = performanceToKSS(perf);
-  const kssInfo = getKSSLabel(kss);
-
-  // Determine worst point timing
-  const worstTime = worstPoint?.timestamp_local
-    ? new Date(worstPoint.timestamp_local).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })
-    : worstPoint
-      ? `${worstPoint.hours_on_duty.toFixed(1)} hours into duty`
-      : 'during the duty period';
-
-  // Determine flight phase at worst point
-  const phase = worstPoint?.flight_phase
-    ? worstPoint.flight_phase.replace(/_/g, ' ')
-    : null;
-
-  // Determine dominant cause
-  const factors = decomp ? [
-    { name: 'circadian trough exposure', contrib: decomp.cContribution },
-    { name: 'accumulated sleep pressure', contrib: decomp.sContribution },
-    { name: 'extended time on duty', contrib: decomp.totContribution },
-    { name: 'post-rest sleep inertia', contrib: decomp.wContribution },
-  ].filter(f => f.contrib > 2).sort((a, b) => b.contrib - a.contrib) : [];
-
-  const primary = factors[0];
-  const secondary = factors.length > 1 && factors[1].contrib > (primary?.contrib ?? 0) * 0.3 ? factors[1] : null;
-
-  // Build the summary
-  let summary = '';
-
-  if (perf >= 55) {
-    summary += `The pilot is predicted to experience significant fatigue`;
-  } else {
-    summary += `The pilot is predicted to experience severe fatigue`;
-  }
-
-  if (phase) {
-    summary += ` during the ${phase} phase`;
-  }
-
-  summary += ` at approximately ${worstTime}, `;
-  summary += `with cognitive performance equivalent to ${equivHours.toFixed(1)} hours of continuous wakefulness`;
-
-  if (bac >= 0.02) {
-    summary += ` (comparable to ${(bac * 100).toFixed(2)}% BAC per Dawson & Reid, 1997)`;
-  }
-
-  summary += `. `;
-
-  // KSS context
-  summary += `At this point, subjective sleepiness corresponds to KSS ${kss.toFixed(1)} — "${kssInfo.label}". `;
-
-  // Primary cause
-  if (primary) {
-    summary += `The primary contributing factor is ${primary.name}`;
-    if (secondary) {
-      summary += ` combined with ${secondary.name}`;
-    }
-
-    // Add prior sleep context if relevant
-    if (duty.priorSleep != null && duty.priorSleep < 7) {
-      summary += ` (${duty.priorSleep.toFixed(1)}h prior sleep vs. 8h recommended)`;
-    }
-    summary += '.';
-  }
-
-  return summary;
+  const perf = worstPoint?.performance ?? duty.minPerformance;
+  if (perf == null || !Number.isFinite(perf)) return 'Prediction unavailable. Review the inputs before generating a report.';
+  const landing = duty.landingPerformance;
+  return `Lowest operating alertness estimate: ${perf.toFixed(1)}/100. ` +
+    (landing != null ? `Landing estimate: ${landing.toFixed(1)}/100. ` : '') +
+    `Duty classification: ${(duty.overallRisk ?? 'unknown').toLowerCase()}, based on landing where available, otherwise the duty minimum. ` +
+    `This is a model prediction, not a measured fatigue state or a probability of error. Sleep inputs must be reviewed. ` +
+    (duty.modelVersion ? `Model: ${duty.modelVersion}. Independent operational validation is pending.` :
+      'Legacy result: model version and thresholds may be unavailable. Recalculate before comparison.');
 }
 
 // ---------------------------------------------------------------------------
@@ -198,7 +132,7 @@ export function generatePreDutyNarrative(duty: DutyAnalysis): string {
 
   // Time awake
   if (duty.preDutyAwakeHours != null) {
-    const awakeImpairment = describeAwakeHoursImpairment(duty.preDutyAwakeHours);
+    const awakeImpairment = {description: 'Wake duration is estimated from the sleep inputs; verify actual sleep and naps.'};
     parts.push(
       `The pilot had been awake for approximately ${duty.preDutyAwakeHours.toFixed(1)} hours at the start of duty. ` +
       `${awakeImpairment.description}`,
@@ -247,119 +181,28 @@ export function generateTrajectoryNarrative(
   duty: DutyAnalysis,
   timeline: TimelinePoint[],
 ): string {
-  if (!timeline || timeline.length < 2) {
-    return 'Insufficient timeline data to generate a detailed trajectory narrative.';
-  }
-
-  const first = timeline[0];
-  const last = timeline[timeline.length - 1];
-  const worst = findWorstPoint(timeline)!;
-  const startPerf = first.performance ?? 100;
-  const endPerf = last.performance ?? 100;
-  const worstPerf = worst.performance ?? 100;
-
-  // Find threshold crossings
-  const crossings = findThresholdCrossings(timeline);
-
-  // Decompose worst point
-  const decomp = decomposePerformance({
-    performance: worst.performance ?? 0,
-    sleep_pressure: worst.sleep_pressure,
-    circadian: worst.circadian,
-    sleep_inertia: worst.sleep_inertia,
-    time_on_task_penalty: worst.time_on_task_penalty,
-    hours_on_duty: worst.hours_on_duty,
-  });
-
-  const totalDrop = startPerf - worstPerf;
-
-  // Compute factor attribution at worst point
-  const factors = [
-    { name: 'circadian factors', pct: decomp.cContribution },
-    { name: 'sleep pressure', pct: decomp.sContribution },
-    { name: 'time on task', pct: decomp.totContribution },
-    { name: 'sleep inertia', pct: decomp.wContribution },
-  ].filter(f => f.pct > 1).sort((a, b) => b.pct - a.pct);
-
-  const totalFactors = factors.reduce((sum, f) => sum + f.pct, 0);
-
-  // Build narrative
-  let text = `Performance entered this duty at ${startPerf.toFixed(0)}%`;
-  if (startPerf >= 77) {
-    text += ' (adequate)';
-  } else {
-    text += ' (already below the 77% threshold)';
-  }
-  text += '. ';
-
-  // Describe evolution
-  if (totalDrop < 5) {
-    text += `Performance remained relatively stable throughout, with a total variation of only ${totalDrop.toFixed(0)} percentage points. `;
-  } else {
-    // Find when decline started
-    const declineStart = timeline.find(pt => (pt.performance ?? 100) < startPerf - 3);
-    if (declineStart) {
-      text += `Over the first ${declineStart.hours_on_duty.toFixed(1)} hours, performance remained near initial levels. `;
-    }
-
-    // Describe the decline
-    if (crossings.length > 0) {
-      const first77 = crossings.find(c => c.threshold === 77);
-      if (first77) {
-        text += `At approximately ${first77.crossedAt.toFixed(1)} hours into duty`;
-        if (first77.timestamp) {
-          const time = new Date(first77.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-          text += ` (${time} local)`;
-        }
-        text += `, performance dropped below the 77% moderate-risk threshold. `;
-      }
-
-      const first55 = crossings.find(c => c.threshold === 55);
-      if (first55) {
-        text += `Performance continued declining, crossing the 55% high-risk threshold at ${first55.crossedAt.toFixed(1)} hours into duty. `;
-      }
-    }
-
-    // Worst point description
-    const worstTime = worst.timestamp_local
-      ? new Date(worst.timestamp_local).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-      : `${worst.hours_on_duty.toFixed(1)}h into duty`;
-
-    text += `Performance reached its nadir of ${worstPerf.toFixed(0)}% at ${worstTime}`;
-
-    if (worst.flight_phase) {
-      text += `, coinciding with the ${worst.flight_phase.replace(/_/g, ' ')} phase`;
-    }
-    text += `. `;
-
-    // Factor attribution
-    text += `This represents a ${totalDrop.toFixed(0)}-percentage-point degradation from duty start`;
-    if (factors.length > 0 && totalFactors > 0) {
-      const topFactors = factors.slice(0, 2).map(f =>
-        `${Math.round((f.pct / totalFactors) * 100)}% attributable to ${f.name}`,
-      );
-      text += `, with ${topFactors.join(' and ')}`;
-    }
-    text += '.';
-  }
-
-  return text;
+  const operating = timeline.filter(p => !p.is_in_rest && Number.isFinite(p.performance));
+  if (operating.length < 2) return 'Insufficient operating timeline data.';
+  const worst = findWorstPoint(operating)!;
+  return `Operating alertness starts at ${operating[0].performance.toFixed(1)}/100 and reaches a minimum of ` +
+    `${worst.performance.toFixed(1)}/100 at ${worst.hours_on_duty.toFixed(1)} hours after report` +
+    (worst.flight_phase ? ` (${worst.flight_phase.replace(/_/g, ' ')})` : '') +
+    '. Sleep/rest intervals are excluded from operating performance. The score is an experimental index, not a measured percentage of cognitive ability.';
 }
 
 // ---------------------------------------------------------------------------
 // Threshold Crossings
 // ---------------------------------------------------------------------------
 
-export function findThresholdCrossings(timeline: TimelinePoint[]): ThresholdCrossing[] {
-  const thresholds = [
-    { value: 77, label: 'Moderate risk threshold' },
-    { value: 55, label: 'High risk threshold' },
-  ];
+export function findThresholdCrossings(timeline: TimelinePoint[], policy?: Record<string, [number, number]>): ThresholdCrossing[] {
+  const thresholds = policy ? Object.entries(policy).filter(([name]) => name !== 'extreme')
+    .map(([name, range]) => ({value: range[0], label: `${name} band lower boundary`})) : [];
 
   const crossings: ThresholdCrossing[] = [];
 
   for (const t of thresholds) {
     for (let i = 1; i < timeline.length; i++) {
+      if (timeline[i - 1].is_in_rest || timeline[i].is_in_rest) continue;
       const prev = timeline[i - 1].performance ?? 100;
       const curr = timeline[i].performance ?? 100;
 
@@ -534,8 +377,7 @@ export function generateMitigations(
       priority: priority++,
       category: 'SLEEP',
       title: 'Address Cumulative Sleep Debt',
-      text: `Cumulative sleep debt of ${duty.sleepDebt.toFixed(1)}h represents ${duty.sleepDebt > 6 ? 'severe' : 'significant'} chronic restriction. ` +
-        `Recovery requires ${duty.sleepDebt > 6 ? '3+' : '2+'} consecutive nights of unrestricted sleep (9-10h opportunity per night). ` +
+      text: `The model estimates ${duty.sleepDebt.toFixed(1)}h of sleep deficit. Verify sleep history and plan adequate recovery. ` +
         `Subjective alertness often fails to reflect the true magnitude of cumulative debt — the pilot may feel "fine" while performance is objectively impaired.`,
       reference: 'Kitamura et al., 2016; Van Dongen et al., 2003',
     });
@@ -689,6 +531,6 @@ export function computeReportData(
     preDutyNarrative: generatePreDutyNarrative(duty),
     mitigations: generateMitigations(duty, timeline),
     criticalPhaseAnalysis: analyzeCriticalPhases(duty, timeline),
-    thresholdCrossings: findThresholdCrossings(timeline),
+    thresholdCrossings: findThresholdCrossings(timeline, duty.riskThresholds),
   };
 }

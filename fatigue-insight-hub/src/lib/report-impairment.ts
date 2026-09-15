@@ -37,10 +37,10 @@ export function hoursAwakeToBAC(hoursAwake: number): number {
  */
 export function formatBAC(bac: number): string {
   if (bac <= 0) return 'No measurable impairment equivalence';
-  if (bac < 0.02) return `~${(bac * 100).toFixed(2)}% BAC (sub-threshold)`;
-  if (bac < 0.05) return `~${(bac * 100).toFixed(2)}% BAC (mild impairment range)`;
-  if (bac < 0.08) return `~${(bac * 100).toFixed(2)}% BAC (moderate impairment range)`;
-  return `~${(bac * 100).toFixed(2)}% BAC (above legal driving limit in most jurisdictions)`;
+  if (bac < 0.02) return `~${bac.toFixed(2)}% BAC (sub-threshold)`;
+  if (bac < 0.05) return `~${bac.toFixed(2)}% BAC (mild impairment range)`;
+  if (bac < 0.08) return `~${bac.toFixed(2)}% BAC (moderate impairment range)`;
+  return `~${bac.toFixed(2)}% BAC (above legal driving limit in most jurisdictions)`;
 }
 
 // ---------------------------------------------------------------------------
@@ -116,20 +116,20 @@ export function describeAwakeHoursImpairment(hours: number): {
     return {
       severity: 'moderate',
       label: 'Moderate impairment',
-      description: `Cognitive performance equivalent to approximately ${(hoursAwakeToBAC(hours) * 100).toFixed(2)}% BAC. Reaction time, decision-making, and situational awareness are measurably degraded.`,
+      description: `Cognitive performance equivalent to approximately ${hoursAwakeToBAC(hours).toFixed(2)}% BAC. Reaction time, decision-making, and situational awareness are measurably degraded.`,
     };
   }
   if (hours <= 20) {
     return {
       severity: 'significant',
       label: 'Significant impairment',
-      description: `Cognitive performance equivalent to ${(hoursAwakeToBAC(hours) * 100).toFixed(2)}% BAC. Risk of attention lapses significantly elevated. Performance on complex tasks substantially degraded.`,
+      description: `Cognitive performance equivalent to ${hoursAwakeToBAC(hours).toFixed(2)}% BAC. Risk of attention lapses significantly elevated. Performance on complex tasks substantially degraded.`,
     };
   }
   return {
     severity: 'severe',
     label: 'Severe impairment',
-    description: `Cognitive performance equivalent to ${(hoursAwakeToBAC(hours) * 100).toFixed(2)}% BAC, exceeding the legal driving limit in most jurisdictions. High risk of microsleeps and gross performance errors.`,
+    description: `Cognitive performance equivalent to ${hoursAwakeToBAC(hours).toFixed(2)}% BAC, exceeding the legal driving limit in most jurisdictions. High risk of microsleeps and gross performance errors.`,
   };
 }
 
@@ -154,35 +154,11 @@ export function sleepDebtSeverity(debtHours: number): {
   description: string;
   reference: string;
 } {
-  if (debtHours <= 2) {
-    return {
-      severity: 'minimal',
-      label: 'Minimal sleep debt',
-      description: 'Sleep debt within normal variation. No significant impact on baseline cognitive performance.',
-      reference: 'Van Dongen et al., 2003',
-    };
-  }
-  if (debtHours <= 4) {
-    return {
-      severity: 'moderate',
-      label: 'Moderate sleep debt',
-      description: `Cumulative deficit of ${debtHours.toFixed(1)}h increases vulnerability to attention lapses by approximately 15-25%. The pilot may not subjectively perceive this impairment (Van Dongen et al., 2003).`,
-      reference: 'Van Dongen et al., 2003',
-    };
-  }
-  if (debtHours <= 6) {
-    return {
-      severity: 'significant',
-      label: 'Significant sleep debt',
-      description: `Cumulative deficit of ${debtHours.toFixed(1)}h substantially increases vulnerability to performance errors. Attention lapses may increase by 40-60%. Subjective sleepiness ratings often plateau, masking true impairment.`,
-      reference: 'Van Dongen et al., 2003; Belenky et al., 2003',
-    };
-  }
   return {
-    severity: 'severe',
-    label: 'Severe sleep debt',
-    description: `Cumulative deficit of ${debtHours.toFixed(1)}h represents severe chronic sleep restriction. Cognitive performance approaches levels seen after 24-48h of total sleep deprivation. Recovery requires 2-3 nights of unrestricted sleep (Kitamura et al., 2016).`,
-    reference: 'Van Dongen et al., 2003; Kitamura et al., 2016',
+    severity: debtHours <= 2 ? 'minimal' : debtHours <= 4 ? 'moderate' : debtHours <= 6 ? 'significant' : 'severe',
+    label: 'Estimated sleep deficit',
+    description: `${debtHours.toFixed(1)}h in the model's sleep ledger. This is an estimate based on sleep assumptions; it does not establish an equivalent period of total sleep deprivation or an individual impairment level.`,
+    reference: 'Model estimate; individual validation pending',
   };
 }
 
@@ -293,7 +269,7 @@ export function describeTimeAwakeAtPhase(
   text += ` (${preDutyAwakeHours.toFixed(1)}h pre-duty + ${hoursOnDuty.toFixed(1)}h on duty).`;
 
   if (bac > 0.01) {
-    text += ` This level of wakefulness is associated with cognitive impairment equivalent to approximately ${(bac * 100).toFixed(2)}% BAC (Dawson & Reid, 1997).`;
+    text += ` This level of wakefulness is associated with cognitive impairment equivalent to approximately ${bac.toFixed(2)}% BAC (Dawson & Reid, 1997).`;
   }
 
   return text;

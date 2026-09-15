@@ -8,7 +8,8 @@ interface Props {
 }
 
 export function ReportRegulatoryContext({ duty }: Props) {
-  const fdpCompliant = !(duty.fdpExceedance && duty.fdpExceedance > 0);
+  const fdpCompliant = duty.actualFdpHours != null && duty.maxFdpHours != null
+    ? duty.actualFdpHours <= duty.maxFdpHours : null;
   const ulr = duty.ulrCompliance;
 
   return (
@@ -43,7 +44,7 @@ export function ReportRegulatoryContext({ duty }: Props) {
             <ComplianceRow
               label="Commander Discretion"
               regulation="ORO.FTL.205(f)"
-              compliant={true}
+              compliant={null}
               detail={duty.usedDiscretion
                 ? `Used — extended to ${duty.extendedFdpHours?.toFixed(1) ?? '—'}h`
                 : 'Not used'}
@@ -125,13 +126,13 @@ export function ReportRegulatoryContext({ duty }: Props) {
 function ComplianceRow({ label, regulation, compliant, detail, isInfo }: {
   label: string;
   regulation: string;
-  compliant: boolean;
+  compliant: boolean | null;
   detail: string;
   isInfo?: boolean;
 }) {
   return (
     <div className="flex items-center gap-3 rounded-lg bg-secondary/15 border border-border/20 px-3 py-2.5 print:bg-gray-50">
-      {isInfo ? (
+      {isInfo || compliant == null ? (
         <div className="w-4 h-4 flex-shrink-0" />
       ) : compliant ? (
         <CheckCircle className="h-4 w-4 text-success flex-shrink-0" />
@@ -146,8 +147,8 @@ function ComplianceRow({ label, regulation, compliant, detail, isInfo }: {
         <p className="text-[10px] text-muted-foreground print:text-gray-500 truncate">{detail}</p>
       </div>
       {!isInfo && (
-        <Badge variant={compliant ? 'success' : 'critical'} className="text-[9px] flex-shrink-0">
-          {compliant ? 'COMPLIANT' : 'NON-COMPLIANT'}
+        <Badge variant={compliant == null ? 'secondary' : compliant ? 'success' : 'critical'} className="text-[9px] flex-shrink-0">
+          {compliant == null ? 'NOT ASSESSED' : compliant ? 'WITHIN LIMIT' : 'EXCEEDS LIMIT'}
         </Badge>
       )}
     </div>

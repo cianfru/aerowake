@@ -560,3 +560,22 @@
 .border-beam-wrapper:hover .beam-inner {
   border-color: transparent;
 }
+
+/* Document surface: stable contrast independent of the application's theme. */
+.fatigue-report {
+  --background: 0 0% 100%;
+  --foreground: 222 35% 16%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 35% 16%;
+  --secondary: 215 25% 95%;
+  --muted: 215 25% 95%;
+  --muted-foreground: 215 18% 38%;
+  --border: 215 22% 82%;
+  --primary: 207 85% 35%;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+}
+.fatigue-report .text-muted-foreground { opacity: 1; }
+@media print {
+  .report-appendix:not([open]) { display: none; }
+}

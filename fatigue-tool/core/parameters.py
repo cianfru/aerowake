@@ -55,6 +55,7 @@ class BorbelyParameters:
     """
 
     # Process S bounds
+    workload_enabled: bool = True
     S_max: float = 1.0
     S_min: float = 0.0
 
@@ -367,10 +368,10 @@ class RiskThresholds:
     })
 
     def classify(self, performance: float) -> str:
-        if performance is None:
+        if performance is None or not 0 <= performance <= 100:
             return 'unknown'
         for level, (low, high) in self.thresholds.items():
-            if low <= performance < high:
+            if low <= performance < high or (performance == 100 and high == 100):
                 return level
         return 'extreme'
 
@@ -431,7 +432,7 @@ class ModelConfig:
     @classmethod
     def operational_config(cls):
         """
-        Calibrated for experienced airline crew (default preset).
+        Experimental aviation adjustments (default preset; not operationally validated).
 
         Adjusts time constants, debt sensitivity, and sleep inertia based on
         operational data from trained flight crew. Core science (circadian model,
@@ -568,13 +569,24 @@ class ModelConfig:
     @classmethod
     def research_config(cls):
         """
-        Textbook Borbély two-process parameters for academic comparison.
+        Reproducible two-process core for research comparisons.
         Uses values from Jewett & Kronauer (1999) and Van Dongen (2003)
-        without operational adjustments.
+        without workload, resilience, debt, altitude or inertia adjustments.
+        The 20–100 output mapping and thresholds remain experimental; this
+        preset is not a reproduction of BAM or a validated sleepiness scale.
         """
         return cls(
             easa_framework=EASAFatigueFramework(),
             borbely_params=BorbelyParameters(
+                workload_enabled=False,
+                resilience_boost_magnitude=0.0,
+                circadian_second_harmonic_amplitude=0.0,
+                inertia_max_magnitude=0.0,
+                tot_log_coeff=0.0,
+                tot_quadratic_coeff=0.0,
+                sleep_debt_vulnerability_floor=1.0,
+                circadian_dampening_coeff=0.0,
+                hypoxia_coeff=0.0,
                 tau_i=18.2,
                 tau_d=4.2,
                 circadian_amplitude=0.30,

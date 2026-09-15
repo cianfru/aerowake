@@ -124,8 +124,8 @@ export function getKSSLabel(kss: number): {
   if (kss <= 3) return { label: 'Alert', variant: 'success' };
   if (kss <= 5) return { label: 'Neither alert nor sleepy', variant: 'success' };
   if (kss <= 6) return { label: 'Some signs of sleepiness', variant: 'warning' };
-  if (kss <= 7) return { label: 'Sleepy, effort to stay awake', variant: 'warning' };
-  if (kss <= 8) return { label: 'Sleepy, great effort', variant: 'critical' };
+  if (kss <= 7) return { label: 'Sleepy, no effort to stay awake', variant: 'warning' };
+  if (kss <= 8) return { label: 'Sleepy, some effort to stay awake', variant: 'critical' };
   return { label: 'Extremely sleepy', variant: 'critical' };
 }
 
