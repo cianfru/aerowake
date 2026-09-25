@@ -209,7 +209,7 @@ export function DashboardContent() {
               <p className="text-sm md:text-base text-muted-foreground">
                 Go to the{' '}
                 <button
-                  onClick={() => setActiveTab('rosters')}
+                  onClick={() => setActiveTab('roster')}
                   className="text-primary hover:underline font-medium"
                 >
                   Rosters page

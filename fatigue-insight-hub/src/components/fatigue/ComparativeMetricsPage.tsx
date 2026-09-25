@@ -114,7 +114,7 @@ export function ComparativeMetricsPage() {
               Upload and analyze a roster first. Your airline will be detected automatically
               so we can compare you with your peers.
             </p>
-            <Button variant="glow" size="sm" onClick={() => setActiveTab('rosters')}>
+            <Button variant="glow" size="sm" onClick={() => setActiveTab('roster')}>
               Upload Roster
             </Button>
           </Card>

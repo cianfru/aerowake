@@ -14,14 +14,20 @@ export function useAnalyzeRoster() {
   const { state, setAnalysisResults } = useAnalysis();
 
   const mutation = useMutation({
-    mutationFn: async () => {
+    // `homeBase` lets the caller pass the base the pilot just confirmed
+    // (settings updates are async, so we don't read them back here).
+    mutationFn: async (vars?: { homeBase?: string } | void) => {
       if (!state.uploadedFile || !state.actualFileObject) {
         throw new Error('Please upload a roster file first');
+      }
+      const homeBase = ((vars && vars.homeBase) || state.settings.homeBase || '').trim().toUpperCase();
+      if (!homeBase) {
+        throw new Error('Please enter your home base (IATA code) first');
       }
       return analyzeRoster(
         state.actualFileObject,
         state.settings.pilotId,
-        state.settings.homeBase,
+        homeBase,
         state.dutyCrewOverrides,
       );
     },

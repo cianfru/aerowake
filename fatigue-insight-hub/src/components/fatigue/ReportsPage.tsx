@@ -224,7 +224,7 @@ export function ReportsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setActiveTab('rosters')}
+                  onClick={() => setActiveTab('roster')}
                 >
                   <Upload className="h-4 w-4 mr-2" /> Go to Rosters
                 </Button>

@@ -1,16 +1,9 @@
-import { PilotStudyPage } from '@/components/fatigue/PilotStudyPage';
 import { Header } from '@/components/fatigue/Header';
 import { Footer } from '@/components/fatigue/Footer';
-import { RostersPage } from '@/components/fatigue/RostersPage';
-import { DashboardContent } from '@/components/fatigue/DashboardContent';
-import { InsightsContent } from '@/components/fatigue/InsightsContent';
-import { ReportsPage } from '@/components/fatigue/ReportsPage';
-import { LearnPage } from '@/components/fatigue/LearnPage';
-import { AboutPage } from '@/components/fatigue/AboutPage';
-import { YearlyDashboardPage } from '@/components/fatigue/YearlyDashboardPage';
-import { ComparativeMetricsPage } from '@/components/fatigue/ComparativeMetricsPage';
-import { SummaryPage } from '@/components/fatigue/SummaryPage';
+import { RosterPage } from '@/components/fatigue/roster/RosterPage';
 import { FatigueReportPage } from '@/components/fatigue/fatigue-report/FatigueReportPage';
+import { HistoryPage } from '@/components/fatigue/hubs/HistoryPage';
+import { LearnHubPage } from '@/components/fatigue/hubs/LearnHubPage';
 
 import { LandingPage } from '@/components/landing/LandingPage';
 import { AuroraBackground } from '@/components/ui/aurora-background';
@@ -61,38 +54,11 @@ const Index = () => {
         />
 
         {/* Main content (full-width) */}
-        <main className="flex-1">
-          {state.activeTab === 'pilot-study' && <PilotStudyPage />}
-          {state.activeTab === 'summary' && <SummaryPage />}
+        <main className="flex-1 min-w-0">
+          {state.activeTab === 'roster' && <RosterPage />}
           {state.activeTab === 'fatigue-report' && <FatigueReportPage />}
-          {state.activeTab === 'rosters' && <RostersPage />}
-          {state.activeTab === 'analysis' && <DashboardContent />}
-          {state.activeTab === 'reports' && <ReportsPage />}
-          {state.activeTab === 'insights' && (
-            <div className="flex-1">
-              <InsightsContent />
-            </div>
-          )}
-          {state.activeTab === 'yearly' && (
-            <div className="flex-1">
-              <YearlyDashboardPage />
-            </div>
-          )}
-          {state.activeTab === 'compare' && (
-            <div className="flex-1">
-              <ComparativeMetricsPage />
-            </div>
-          )}
-          {state.activeTab === 'learn' && (
-            <div className="flex-1">
-              <LearnPage />
-            </div>
-          )}
-          {state.activeTab === 'about' && (
-            <div className="flex-1">
-              <AboutPage />
-            </div>
-          )}
+          {state.activeTab === 'history' && <HistoryPage />}
+          {state.activeTab === 'learn' && <LearnHubPage />}
         </main>
         <Footer />
       </div>

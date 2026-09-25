@@ -103,7 +103,7 @@ export function YearlyDashboardPage() {
               Upload your monthly roster PDFs to start tracking fatigue trends.
               Charts will appear once you have analyzed rosters.
             </p>
-            <Button variant="glow" size="sm" onClick={() => setActiveTab('analysis')}>
+            <Button variant="glow" size="sm" onClick={() => setActiveTab('roster')}>
               Upload Roster
             </Button>
           </Card>

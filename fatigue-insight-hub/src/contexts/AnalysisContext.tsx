@@ -24,7 +24,7 @@ export interface AnalysisState {
 
 const DEFAULT_SETTINGS: PilotSettings = {
   pilotId: 'P12345',
-  homeBase: 'DOH',
+  homeBase: '', // never assume a base — the pilot confirms it before analysis
   analysisType: 'single',
   selectedMonth: new Date(2026, 1, 1),
   theme: 'dark',

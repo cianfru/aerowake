@@ -17,6 +17,8 @@ interface DutyDetailsDialogProps {
   dutyCrewOverride?: 'crew_a' | 'crew_b';
   onCrewChange?: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
   onCrewReset?: (dutyId: string) => void;
+  /** Optional: start a fatigue report pre-filled for this duty. */
+  onReportFatigue?: (duty: DutyAnalysis) => void;
 }
 
 /**
@@ -39,6 +41,7 @@ export function DutyDetailsDialog({
   dutyCrewOverride,
   onCrewChange,
   onCrewReset,
+  onReportFatigue,
 }: DutyDetailsDialogProps) {
   const [detailedDuty, setDetailedDuty] = useState<DutyAnalysis | null>(null);
   const [reportMode, setReportMode] = useState(false);
@@ -120,6 +123,7 @@ export function DutyDetailsDialog({
             <DutyDetailsHeader
               duty={displayDuty}
               onGenerateReport={() => setReportMode(true)}
+              onReportFatigue={onReportFatigue ? () => onReportFatigue(displayDuty) : undefined}
               reportMode={reportMode}
             />
           </div>
