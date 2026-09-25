@@ -335,6 +335,14 @@ class DutyResponse(BaseModel):
     prior_sleep: float
     pre_duty_awake_hours: float = 0.0  # hours awake before report
     
+    # KSS-anchored alertness (engine aerowake-4.0-kss)
+    max_kss: Optional[float] = None               # worst predicted KSS on deck
+    landing_kss: Optional[float] = None
+    max_kss_90: Optional[float] = None            # 90th-percentile pilot
+    max_p_severe_sleepiness: Optional[float] = None  # P(KSS >= 7)
+    max_hours_awake: Optional[float] = None
+    sleep_deficit_7d: Optional[dict] = None       # rolling cumulative restriction ledger
+
     # Risk
     risk_thresholds: Optional[dict] = None
     model_version: Optional[str] = None
@@ -681,6 +689,10 @@ def _build_ulr_data(duty_timeline, duty) -> tuple:
     return ulr_compliance_dict, inflight_blocks
 
 
+def _round_opt(value, digits=2):
+    return None if value is None else round(value, digits)
+
+
 def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
     """Shared serialization for a single duty — used by both POST and GET endpoints."""
     import pytz
@@ -734,7 +746,8 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
     # Extract worst-point S/C/W decomposition for immediate frontend rendering
     worst_point_dict = None
     if duty_timeline.timeline:
-        worst_pt = min(duty_timeline.timeline, key=lambda p: p.raw_performance)
+        worst_pt = min((p for p in duty_timeline.timeline if not p.is_in_rest),
+                       key=lambda p: p.raw_performance, default=duty_timeline.timeline[0])
         worst_point_dict = {
             "performance": worst_pt.raw_performance,
             "sleep_pressure": worst_pt.homeostatic_component,
@@ -745,6 +758,10 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
             "hypoxia_factor": worst_pt.hypoxia_factor,
             "pvt_lapses": worst_pt.pvt_lapses,
             "microsleep_probability": worst_pt.microsleep_probability,
+            "kss": worst_pt.kss,
+            "kss_90": worst_pt.kss_90,
+            "p_severe_sleepiness": worst_pt.p_severe_sleepiness,
+            "hours_awake": worst_pt.hours_awake,
             "hours_on_duty": worst_pt.hours_on_duty,
             "timestamp": worst_pt.timestamp_utc.isoformat(),
             "timestamp_local": worst_pt.timestamp_local.isoformat(),
@@ -781,6 +798,12 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
         prior_sleep=duty_timeline.prior_sleep_hours,
         pre_duty_awake_hours=duty_timeline.pre_duty_awake_hours,
         risk_level=risk,
+        max_kss=_round_opt(duty_timeline.max_kss),
+        landing_kss=_round_opt(duty_timeline.landing_kss),
+        max_kss_90=_round_opt(duty_timeline.max_kss_90),
+        max_p_severe_sleepiness=_round_opt(duty_timeline.max_p_severe_sleepiness, 3),
+        max_hours_awake=_round_opt(duty_timeline.max_hours_awake),
+        sleep_deficit_7d=getattr(duty_timeline, "sleep_deficit_7d", None),
         risk_thresholds=getattr(duty_timeline, "risk_thresholds", None) or None,
         model_version=getattr(duty_timeline, "model_version", None),
         model_parameters=getattr(duty_timeline, "model_parameters", None),
@@ -1494,6 +1517,10 @@ async def get_duty_detail(analysis_id: str, duty_id: str, db=Depends(get_db)):
             "hypoxia_factor": point.hypoxia_factor,
             "pvt_lapses": point.pvt_lapses,
             "microsleep_probability": point.microsleep_probability,
+            "kss": point.kss,
+            "kss_90": point.kss_90,
+            "p_severe_sleepiness": point.p_severe_sleepiness,
+            "hours_awake": point.hours_awake,
             "flight_phase": point.current_flight_phase.value if point.current_flight_phase else None,
             "is_critical": point.is_critical_phase,
             "is_in_rest": getattr(point, 'is_in_rest', False),

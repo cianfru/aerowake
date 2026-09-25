@@ -36,6 +36,7 @@ from core.extended_operations import (
     AugmentedCrewRestPlanner, ULRRestPlanner, ULRComplianceValidator
 )
 from core.strategy_references import get_confidence_basis, get_strategy_references
+from core import alertness as aw
 
 class BorbelyFatigueModel:
     """
@@ -127,12 +128,10 @@ class BorbelyFatigueModel:
         current_offset = current_tz.localize(naive_time).utcoffset().total_seconds() / 3600
         
         target_shift = current_offset - home_offset
-        diff = target_shift - last_state.current_phase_shift_hours
-        rate = self.adaptation_rates.get_rate(diff)
-        adjustment = math.copysign(min(abs(diff), rate * elapsed_days), diff)
-        new_shift = last_state.current_phase_shift_hours + adjustment
-        new_shift = max(-12, min(12, new_shift))
-        
+        # Process A, Ingre et al. (2014) eq. 1.10: each day the body clock
+        # closes ~30 % of the remaining gap to local time.
+        new_shift = aw.acclimatize(last_state.current_phase_shift_hours, target_shift, elapsed_days)
+
         return CircadianState(
             current_phase_shift_hours=new_shift,
             last_update_utc=current_utc,
@@ -487,277 +486,156 @@ class BorbelyFatigueModel:
         state_time: Optional[datetime] = None,
         previous_wake_time: Optional[datetime] = None,
     ) -> DutyTimeline:
-        """Simulate single duty with high-resolution timeline"""
-        
+        """Simulate a single duty with the KSS-anchored alertness core.
+
+        Sleep pressure is carried in normalised 0–1 form between duties
+        (``cached_s`` / ``final_process_s``) and integrated internally in
+        native Three Process Model units (core/alertness.py). Every sleep
+        block — including naps and in-flight bunk rest — updates the state.
+
+        ``cumulative_sleep_debt`` and ``cabin_altitude_ft`` are accepted for
+        API compatibility; they feed the separate debt ledger and PVT
+        estimate, not the KSS prediction (see core/alertness.py docstring).
+        """
         timeline = []
-        duty_duration = (duty.release_time_utc - duty.report_time_utc).total_seconds() / 3600
-        
-        # Integrate every sleep/wake interval; a nap must not replace a night.
-        sleeps = sorted((b for b in sleep_history if b.end_utc <= duty.report_time_utc),
-                        key=lambda b: b.start_utc)
-        cursor = state_time or (sleeps[0].start_utc if sleeps else
-                                duty.report_time_utc - timedelta(hours=8))
-        pressure = cached_s if cached_s is not None else initial_s
-        wake_time = previous_wake_time or cursor
-        for block in sleeps:
-            if block.end_utc <= cursor:
-                continue
-            start = max(cursor, block.start_utc)
-            awake = max(0.0, (start - cursor).total_seconds() / 3600)
-            pressure = self.params.S_max - (self.params.S_max - pressure) * math.exp(-awake / self.tau_i)
-            hours = (block.end_utc - start).total_seconds() / 3600
-            quality = max(0.0, min(1.0, block.quality_factor))
-            pressure = self.params.S_min + (pressure - self.params.S_min) * math.exp(-hours * quality / self.tau_d)
-            cursor = block.end_utc
-            wake_time = cursor
-        # The duty loop advances from this most recent physiological state.
-        s_at_wake = max(self.params.S_min, min(self.params.S_max, pressure))
 
-        def get_current_sector(current_time: datetime) -> int:
-            sector = 1
-            for seg in duty.segments:
-                if current_time >= seg.scheduled_departure_utc:
-                    if seg == duty.segments[0]:
-                        sector = 1
-                    else:
-                        prev_seg = duty.segments[duty.segments.index(seg) - 1]
-                        if seg.scheduled_departure_utc > prev_seg.scheduled_arrival_utc:
-                            sector += 1
-            return sector
-        
-        # Initialize with pre-duty wakefulness so that hours already awake
-        # before report contribute to homeostatic pressure at duty start.
-        # Without this, S resets to s_at_wake regardless of how long the
-        # pilot has been awake before report — a significant underestimate.
-        # Reference: Dawson & Reid (1997) Nature 388:235 — 17 h awake ≈ 0.05 % BAC.
-        pre_duty_awake_hours = (duty.report_time_utc - wake_time).total_seconds() / 3600
-        pre_duty_awake_hours = max(0.0, pre_duty_awake_hours)
-        effective_wake_hours = max(0.0, (duty.report_time_utc - cursor).total_seconds() / 3600)
-        s_current = self.params.S_max - (self.params.S_max - s_at_wake) * \
-                    math.exp(-effective_wake_hours / self.params.tau_i)
-        s_current = max(self.params.S_min, min(self.params.S_max, s_current))
-        current_time = duty.report_time_utc
-
-        # Ensure minimum duty length
-        if duty_duration <= 0:
+        if (duty.release_time_utc - duty.report_time_utc).total_seconds() <= 0:
             logger.warning(f"[{duty.duty_id}] Invalid time range. Using 8-hour minimum.")
             duty.release_time_utc = duty.report_time_utc + timedelta(hours=8)
 
-        # In-flight rest plan (for augmented crew / ULR operations)
+        home_tz = duty.home_base_timezone
+        sleeps = sorted((b for b in sleep_history if b.end_utc <= duty.report_time_utc),
+                        key=lambda b: b.start_utc)
+        intervals = [aw.SleepInterval(b.start_utc, b.end_utc, self._sleep_efficiency(b)) for b in sleeps]
+
+        if cached_s is not None and state_time is not None:
+            state = aw.AlertnessState(aw.s_from_pressure(cached_s), state_time, previous_wake_time)
+        elif intervals and cached_s is None:
+            # Ingre et al. (2014): S + C + U = 8.38 at the first sleep onset.
+            state = aw.AlertnessState.from_history(intervals, home_tz, lambda t: circadian_phase_shift)
+        else:
+            start = state_time or (duty.report_time_utc - timedelta(hours=8))
+            pressure = cached_s if cached_s is not None else initial_s
+            state = aw.AlertnessState(aw.s_from_pressure(pressure), start, previous_wake_time)
+        state.apply_sleeps(intervals)
+        state.advance_awake(duty.report_time_utc)
+        pre_duty_awake_hours = state.hours_awake(duty.report_time_utc)
+
+        def get_current_sector(current_time: datetime) -> int:
+            sector = 1
+            for idx, seg in enumerate(duty.segments):
+                if idx and current_time >= seg.scheduled_departure_utc and \
+                        seg.scheduled_departure_utc > duty.segments[idx - 1].scheduled_arrival_utc:
+                    sector += 1
+            return sector
+
         rest_plan = duty.inflight_rest_plan if hasattr(duty, 'inflight_rest_plan') else None
-        in_rest = False
-        rest_entry_s = s_at_wake
+        rest_quality = rest_plan.rest_facility_quality if rest_plan else 0.70  # Signal et al. (2013)
         last_rest_end = None
         inflight_rest_blocks = []
         return_to_deck_perf = None
-
-        # Get rest facility quality for sleep recovery efficiency
-        rest_quality = 0.70  # Default: Class 1 bunk (Signal et al. 2013)
-        if rest_plan:
-            rest_quality = rest_plan.rest_facility_quality
-
-        tz = pytz.timezone(duty.home_base_timezone)
-
-        # Pre-compute whether this is a training duty (no flight phases)
+        tz = pytz.timezone(home_tz)
         is_training_duty = duty.duty_type != DutyType.FLIGHT if hasattr(duty, 'duty_type') else False
-        if is_training_duty:
-            training_workload = self.workload_model.get_training_multiplier(duty.duty_type.value)
+        step = timedelta(minutes=resolution_minutes)
+        current_time = duty.report_time_utc
 
         while current_time <= duty.release_time_utc:
-            step_duration_hours = resolution_minutes / 60.0
             hours_on_duty = (current_time - duty.report_time_utc).total_seconds() / 3600
-
+            active_rest = None if is_training_duty else self._is_in_rest_period(current_time, rest_plan)
             if is_training_duty:
-                # === TRAINING DUTY (SIM or GROUND) ===
-                # Same S/C/W model as flight (BAM-aligned), but:
-                # - Flat workload multiplier (no flight phases)
-                # - No in-flight rest periods
-                # - No deadhead detection
-                # - No critical phase pinch events
-                workload_multiplier = training_workload
-                effective_step_duration = step_duration_hours * (workload_multiplier if self.params.workload_enabled else 1.0)
-                effective_wake_hours += effective_step_duration
+                phase = FlightPhase.CRUISE  # placeholder — no flight phases
+            else:
+                phase = self.get_flight_phase(duty.segments, current_time)
 
-                s_current = self.params.S_max - (self.params.S_max - s_at_wake) * \
-                            math.exp(-effective_wake_hours / self.params.tau_i)
-                s_current = max(self.params.S_min, min(self.params.S_max, s_current))
-
-                c = self.compute_process_c(current_time, duty.home_base_timezone, circadian_phase_shift, cumulative_sleep_debt)
-
-                # Sleep inertia from pre-duty wake
-                time_since_wake = current_time - wake_time
-                w = self.compute_sleep_inertia(time_since_wake)
-
-                tot_penalty = self.time_on_task_penalty(hours_on_duty)
-                performance, dp, hf = self.integrate_performance(c, s_current, w, hours_on_duty, cumulative_sleep_debt, cabin_altitude_ft)
-
-                # Derived safety metrics
-                total_awake = max(0.0, (current_time - wake_time).total_seconds() / 3600)
-                pvt = self.compute_pvt_lapses(cumulative_sleep_debt, total_awake)
-                msp = self.compute_microsleep_probability(s_current, c)
-
+            if active_rest:
+                # In the crew rest facility: S recovers at bunk sleep efficiency.
+                state.apply_sleep(aw.SleepInterval(current_time, current_time + step, rest_quality))
+                c, _ = aw.circadian_terms(current_time, home_tz, circadian_phase_shift)
                 point = PerformancePoint(
                     timestamp_utc=current_time,
                     timestamp_local=current_time.astimezone(tz),
-                    circadian_component=c,
-                    homeostatic_component=s_current,
-                    sleep_inertia_component=w,
+                    circadian_component=aw.circadian_normalised(c),
+                    homeostatic_component=aw.pressure_from_s(state.s),
+                    sleep_inertia_component=0.0,
+                    raw_performance=100.0,  # Not on deck — legacy sentinel, see is_in_rest
+                    hours_on_duty=hours_on_duty,
+                    current_flight_phase=FlightPhase.CRUISE,
+                    is_critical_phase=False,
+                    is_in_rest=True,
+                )
+                last_rest_end = current_time + step
+            else:
+                state.advance_awake(current_time)
+                awake = state.hours_awake(current_time)
+                ap = aw.predict_point(current_time, state.s, home_tz, circadian_phase_shift, awake)
+                performance = ap.index
+                if last_rest_end and return_to_deck_perf is None and current_time >= last_rest_end:
+                    return_to_deck_perf = performance
+                point = PerformancePoint(
+                    timestamp_utc=current_time,
+                    timestamp_local=current_time.astimezone(tz),
+                    circadian_component=aw.circadian_normalised(ap.c),
+                    homeostatic_component=aw.pressure_from_s(ap.s),
+                    sleep_inertia_component=0.0,
                     raw_performance=performance,
                     hours_on_duty=hours_on_duty,
-                    time_on_task_penalty=tot_penalty,
-                    debt_penalty=dp,
-                    hypoxia_factor=hf,
-                    pvt_lapses=pvt,
-                    microsleep_probability=msp,
-                    current_flight_phase=FlightPhase.CRUISE,  # Placeholder — no flight phases
-                    is_critical_phase=False
+                    pvt_lapses=self.compute_pvt_lapses(cumulative_sleep_debt, awake),
+                    microsleep_probability=round(aw.prob_kss_above(ap.alertness_score, 8), 4),
+                    current_flight_phase=phase,
+                    is_critical_phase=(not is_training_duty and phase in
+                                       [FlightPhase.TAKEOFF, FlightPhase.LANDING, FlightPhase.APPROACH]),
+                    risk_level=ap.risk_level,
+                    kss=round(ap.kss, 2),
+                    kss_90=round(ap.kss_90, 2),
+                    p_severe_sleepiness=round(ap.p_severe, 4),
+                    hours_awake=round(awake, 2),
                 )
-            else:
-                # === FLIGHT DUTY ===
-                current_sector = get_current_sector(current_time)
-                phase = self.get_flight_phase(duty.segments, current_time)
-
-                # Check if pilot is in an in-flight rest period
-                active_rest = self._is_in_rest_period(current_time, rest_plan)
-
-                if active_rest:
-                    # === PILOT IS IN CREW REST FACILITY ===
-                    if not in_rest:
-                        # Transition: entering rest
-                        in_rest = True
-                        rest_entry_s = s_current
-                        rest_duration_hours = 0.0
-
-                    rest_duration_hours += step_duration_hours
-
-                    # Process S DECAYS during sleep (recovery equation)
-                    # Reduced efficiency in bunk: effective tau_d = tau_d / rest_quality
-                    # Signal et al. (2013) Sleep 36(1):109-118: ~70% efficiency in bunk
-                    # SWA diminishing returns (Borbély & Achermann 1999):
-                    # Later hours of sleep are less restorative.
-                    swa_factor = 1.0 + self.params.swa_diminishing_coeff * rest_duration_hours / 8.0
-                    effective_tau_d = (self.params.tau_d * swa_factor) / rest_quality
-                    s_current = self.params.S_min + (rest_entry_s - self.params.S_min) * \
-                        math.exp(-step_duration_hours / effective_tau_d)
-                    # Update rest_entry_s for next step (progressive decay)
-                    rest_entry_s = s_current
-                    s_current = max(self.params.S_min, min(self.params.S_max, s_current))
-
-                    c = self.compute_process_c(current_time, duty.home_base_timezone, circadian_phase_shift, cumulative_sleep_debt)
-
-                    # Pilot not on deck — record rest status in timeline
-                    point = PerformancePoint(
-                        timestamp_utc=current_time,
-                        timestamp_local=current_time.astimezone(tz),
-                        circadian_component=c,
-                        homeostatic_component=s_current,
-                        sleep_inertia_component=0.0,
-                        raw_performance=100.0,  # Not on deck — no performance relevance
-                        hours_on_duty=hours_on_duty,
-                        time_on_task_penalty=0.0,
-                        current_flight_phase=FlightPhase.CRUISE,
-                        is_critical_phase=False,
-                        is_in_rest=True
-                    )
-                else:
-                    # === PILOT IS ON FLIGHT DECK ===
-                    if in_rest:
-                        # Transition: waking from in-flight rest
-                        in_rest = False
-                        last_rest_end = current_time
-                        # Reset effective wake hours after rest
-                        s_at_wake = s_current
-                        effective_wake_hours = 0.0
-                        wake_time = current_time
-
-                    # Check if pilot is on a deadhead segment (passenger, no cockpit tasks).
-                    # DH counts toward time awake but at reduced workload — no monitoring,
-                    # no decision-making, just passive travel fatigue.
-                    is_on_deadhead = self._is_on_deadhead_segment(duty.segments, current_time)
-                    if is_on_deadhead:
-                        workload_multiplier = 0.3  # Passive travel fatigue only
-                    else:
-                        workload_multiplier = self.workload_model.get_combined_multiplier(phase, current_sector)
-                    effective_step_duration = step_duration_hours * (workload_multiplier if self.params.workload_enabled else 1.0)
-                    effective_wake_hours += effective_step_duration
-
-                    s_current = self.params.S_max - (self.params.S_max - s_at_wake) * \
-                                math.exp(-effective_wake_hours / self.params.tau_i)
-                    s_current = max(self.params.S_min, min(self.params.S_max, s_current))
-
-                    c = self.compute_process_c(current_time, duty.home_base_timezone, circadian_phase_shift, cumulative_sleep_debt)
-
-                    # Sleep inertia: from last rest wake or from pre-duty wake
-                    if last_rest_end:
-                        time_since_wake = current_time - last_rest_end
-                    else:
-                        time_since_wake = current_time - wake_time
-                    w = self.compute_sleep_inertia(time_since_wake)
-
-                    tot_penalty = self.time_on_task_penalty(hours_on_duty)
-                    performance, dp, hf = self.integrate_performance(c, s_current, w, hours_on_duty, cumulative_sleep_debt, cabin_altitude_ft)
-
-                    # Track return-to-deck performance (first point after rest)
-                    if last_rest_end and return_to_deck_perf is None:
-                        return_to_deck_perf = performance
-
-                    # Derived safety metrics
-                    total_awake = max(0.0, (current_time - wake_time).total_seconds() / 3600)
-                    pvt = self.compute_pvt_lapses(cumulative_sleep_debt, total_awake)
-                    msp = self.compute_microsleep_probability(s_current, c)
-
-                    point = PerformancePoint(
-                        timestamp_utc=current_time,
-                        timestamp_local=current_time.astimezone(tz),
-                        circadian_component=c,
-                        homeostatic_component=s_current,
-                        sleep_inertia_component=w,
-                        raw_performance=performance,
-                        hours_on_duty=hours_on_duty,
-                        time_on_task_penalty=tot_penalty,
-                        debt_penalty=dp,
-                        hypoxia_factor=hf,
-                        pvt_lapses=pvt,
-                        microsleep_probability=msp,
-                        current_flight_phase=phase,
-                        is_critical_phase=(phase in [FlightPhase.TAKEOFF, FlightPhase.LANDING, FlightPhase.APPROACH])
-                    )
-
             timeline.append(point)
-            current_time += timedelta(minutes=resolution_minutes)
+            current_time += step
 
         duty_timeline = self._build_duty_timeline(duty, timeline, sleep_history, circadian_phase_shift)
         duty_timeline.risk_thresholds = dict(self.config.risk_thresholds.thresholds)
-        duty_timeline.model_version = "aerowake-3.2-stateful"
-        duty_timeline.model_parameters = dict(vars(self.params))
-        duty_timeline.final_wake_time = wake_time
-        duty_timeline.final_process_s = s_current
+        duty_timeline.model_version = aw.ENGINE_VERSION
+        duty_timeline.model_parameters = dict(aw.P, acclimatization_daily_rate=aw.ACCLIMATIZATION_DAILY_RATE,
+                                              kss_cut_points=list(aw.KSS_CUT_POINTS))
+        duty_timeline.final_wake_time = state.last_wake_utc
+        duty_timeline.final_process_s = aw.pressure_from_s(state.s)
+        duty_timeline.final_state_time = state.time_utc
         duty_timeline.pre_duty_awake_hours = pre_duty_awake_hours
 
-        # Attach augmented crew / ULR metadata
         if rest_plan:
             duty_timeline.is_ulr = getattr(duty, 'is_ulr', False)
             duty_timeline.crew_composition = getattr(duty, 'crew_composition', CrewComposition.STANDARD)
             duty_timeline.return_to_deck_performance = return_to_deck_perf
-            # Build inflight rest SleepBlocks for the timeline
             for period in rest_plan.rest_periods:
                 if period.start_utc and period.end_utc:
                     duration = period.duration_hours
-                    inflight_block = SleepBlock(
+                    inflight_rest_blocks.append(SleepBlock(
                         start_utc=period.start_utc,
                         end_utc=period.end_utc,
-                        location_timezone=duty.home_base_timezone,
+                        location_timezone=home_tz,
                         duration_hours=duration,
                         quality_factor=rest_quality,
                         effective_sleep_hours=duration * rest_quality,
                         is_inflight_rest=True,
                         environment='crew_rest',
-                    )
-                    inflight_rest_blocks.append(inflight_block)
+                    ))
             duty_timeline.inflight_rest_blocks = inflight_rest_blocks
 
         return duty_timeline
-    
+
+    @staticmethod
+    def _sleep_efficiency(block: SleepBlock) -> float:
+        """Fraction of a sleep block credited as actual sleep.
+
+        Uses the block's quality factor (environment, timing), bounded to
+        a physiologically plausible sleep-efficiency range. Signal et al.
+        (2013) measured ~88 % in hotels and ~70 % in bunks; values below 0.6
+        for a whole block are not supported by field PSG/actigraphy data.
+        """
+        q = block.quality_factor if block.quality_factor is not None else 0.9
+        return max(0.6, min(1.0, q))
+
     def _build_duty_timeline(
         self,
         duty: Duty,
@@ -816,7 +694,15 @@ class BorbelyFatigueModel:
         disruption = self.validator.is_disruptive_duty(duty)
         pinch_events = self._detect_pinch_events(timeline)
         
+        kss_points = [p for p in operating if p.kss is not None]
+        landing_kss = min((p for p in landing_points if p.kss is not None),
+                          key=lambda p: p.raw_performance, default=None)
         return DutyTimeline(
+            max_kss=max((p.kss for p in kss_points), default=None),
+            landing_kss=landing_kss.kss if landing_kss else None,
+            max_kss_90=max((p.kss_90 for p in kss_points), default=None),
+            max_p_severe_sleepiness=max((p.p_severe_sleepiness for p in kss_points), default=None),
+            max_hours_awake=max((p.hours_awake for p in kss_points), default=None),
             duty_id=duty.duty_id,
             duty_date=duty.date,
             timeline=timeline,
@@ -880,17 +766,23 @@ class BorbelyFatigueModel:
         """
         pinch_events = []
 
-        # Thresholds are configurable per airline/preset via parameters.py
-        CIRCADIAN_THRESHOLD = self.params.pinch_circadian_threshold
-        SLEEP_PRESSURE_THRESHOLD = self.params.pinch_sleep_pressure_threshold
-        
+        # A pinch is a critical flight phase (take-off, approach, landing)
+        # flown at predicted KSS >= 7 ("sleepy") — the level associated with
+        # physiological sleepiness and impaired waking function
+        # (Akerstedt et al. 2014). Points without a KSS use legacy S/C rules.
+        def is_pinch(point):
+            if point.kss is not None:
+                return point.kss >= 7.0
+            return (point.circadian_component < self.params.pinch_circadian_threshold and
+                    point.homeostatic_component > self.params.pinch_sleep_pressure_threshold)
+
         current_critical_phase = None
         current_phase_worst_point = None
         
         for point in timeline:
             if point.is_critical_phase:
                 # Check if conditions are met for a pinch event
-                if point.circadian_component < CIRCADIAN_THRESHOLD and point.homeostatic_component > SLEEP_PRESSURE_THRESHOLD:
+                if is_pinch(point):
                     # If this is a new critical phase, start tracking it
                     if current_critical_phase != point.current_flight_phase:
                         # Save the previous phase's worst point if any
@@ -926,12 +818,8 @@ class BorbelyFatigueModel:
     def _create_pinch_event(self, point: PerformancePoint) -> PinchEvent:
         """Helper to create a PinchEvent from a PerformancePoint"""
         # Severity based on performance score
-        if point.raw_performance < 45:
-            severity = 'critical'
-        elif point.raw_performance < 55:
-            severity = 'high'
-        else:
-            severity = 'moderate'
+        level = self.config.risk_thresholds.classify(point.raw_performance)
+        severity = 'critical' if level in ('critical', 'extreme') else 'high' if level == 'high' else 'moderate'
         
         return PinchEvent(
             time_utc=point.timestamp_utc,
@@ -1078,7 +966,7 @@ class BorbelyFatigueModel:
                 cached_s=cached_s_value,
                 cumulative_sleep_debt=cumulative_sleep_debt,
                 cabin_altitude_ft=cabin_alt,
-                state_time=previous_duty.release_time_utc if previous_duty else None,
+                state_time=(previous_timeline.final_state_time or previous_duty.release_time_utc) if previous_duty else None,
                 previous_wake_time=previous_timeline.final_wake_time if previous_timeline else None,
             )
             previous_timeline = timeline_obj
@@ -1107,6 +995,9 @@ class BorbelyFatigueModel:
                 timeline_obj.ulr_compliance = ulr_result
             
             timeline_obj.cumulative_sleep_debt = cumulative_sleep_debt
+            timeline_obj.sleep_deficit_7d = aw.cumulative_deficit(
+                [aw.SleepInterval(b.start_utc, b.end_utc) for b in all_sleep if b.start_utc < duty.report_time_utc],
+                duty.report_time_utc)
             
             # Attach sleep strategy data
             if duty.duty_id in sleep_strategies:

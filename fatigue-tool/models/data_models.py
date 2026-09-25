@@ -671,6 +671,12 @@ class PerformancePoint:
     risk_level: str = "unknown"
     is_in_rest: bool = False  # True when pilot is in crew rest facility
 
+    # KSS-anchored alertness (engine aerowake-4.0-kss; core/alertness.py)
+    kss: Optional[float] = None               # predicted KSS, group average (1-9)
+    kss_90: Optional[float] = None            # 90th-percentile pilot (Ingre 2014 eq. 1.16)
+    p_severe_sleepiness: Optional[float] = None  # P(KSS >= 7), eq. 1.17
+    hours_awake: Optional[float] = None
+
     def __post_init__(self):
         """Validation"""
         assert 0 <= self.circadian_component <= 1, f"C out of range: {self.circadian_component}"
@@ -782,6 +788,7 @@ class DutyTimeline:
     # OPTIMIZATION: Cache final state to avoid recomputation in next duty
     final_circadian_state: Optional['CircadianState'] = None
     final_process_s: float = 0.0
+    final_state_time: Optional[datetime] = None
     final_wake_time: Optional[datetime] = None
     
     # Enhanced sleep quality (from strategic estimator)
@@ -796,6 +803,14 @@ class DutyTimeline:
     ulr_compliance: Optional[ULRComplianceResult] = None
     return_to_deck_performance: Optional[float] = None  # Performance at wake from last rest
     acclimatization_state: AcclimatizationState = AcclimatizationState.ACCLIMATIZED
+
+    # KSS summary (engine aerowake-4.0-kss)
+    max_kss: Optional[float] = None
+    landing_kss: Optional[float] = None
+    max_kss_90: Optional[float] = None
+    max_p_severe_sleepiness: Optional[float] = None
+    max_hours_awake: Optional[float] = None
+    sleep_deficit_7d: Optional[Dict[str, Any]] = None
 
 
 @dataclass

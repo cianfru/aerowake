@@ -347,25 +347,45 @@ class AdaptationRates:
         return self.westward_hours_per_day if timezone_shift_hours < 0 else self.eastward_hours_per_day
 
 
+# KSS-anchored bands on the 20–100 index (index = 110 − 10·KSS; see
+# core/alertness.py). Band edges are the midpoints between KSS verbal
+# anchors: 5.5 / 6.5 / 7.5 / 8.5 → index 55 / 45 / 35 / 25.
+KSS_INDEX_THRESHOLDS = {
+    'low': (55, 100),       # KSS < 5.5  alert … neither alert nor sleepy
+    'moderate': (45, 55),   # KSS 5.5–6.5 some signs of sleepiness
+    'high': (35, 45),       # KSS 6.5–7.5 sleepy, no effort to stay awake
+    'critical': (25, 35),   # KSS 7.5–8.5 sleepy, some effort to stay awake
+    'extreme': (0, 25),     # KSS ≥ 8.5  fighting sleep
+}
+
+KSS_RISK_ACTIONS = {
+    'low': {'action': 'None required',
+            'description': 'Predicted KSS below 5.5: alert to neither alert nor sleepy'},
+    'moderate': {'action': 'Self-monitor',
+                 'description': 'Predicted KSS ≈ 6: some signs of sleepiness'},
+    'high': {'action': 'Active countermeasures',
+             'description': 'Predicted KSS ≈ 7: sleepy — consider controlled rest, caffeine timing, crew cross-check'},
+    'critical': {'action': 'Fatigue report recommended',
+                 'description': 'Predicted KSS ≈ 8: sleepy with effort to stay awake — lapses become likely'},
+    'extreme': {'action': 'Fatigue report recommended',
+                'description': 'Predicted KSS ≥ 8.5: fighting sleep — serious safety concern'},
+}
+
+
 @dataclass
 class RiskThresholds:
-    """Performance score thresholds with EASA references"""
+    """Risk bands on the KSS-anchored 20–100 alertness index.
 
-    thresholds: Dict[str, Tuple[float, float]] = field(default_factory=lambda: {
-        'low': (75, 100),
-        'moderate': (65, 75),
-        'high': (55, 65),
-        'critical': (45, 55),
-        'extreme': (0, 45)
-    })
+    References: Åkerstedt & Gillberg (1990) KSS; Åkerstedt et al. (2014)
+    J Sleep Res 23:240-252 (KSS ≥ 7 and impaired waking function);
+    Ingre et al. (2014) PLoS ONE e108679 (model 5c transfer function).
+    """
 
-    actions: Dict[str, Dict[str, str]] = field(default_factory=lambda: {
-        'low': {'action': 'None required', 'description': 'Well-rested state'},
-        'moderate': {'action': 'Enhanced monitoring', 'description': 'Equivalent to ~6h sleep'},
-        'high': {'action': 'Mitigation required', 'description': 'Equivalent to ~5h sleep'},
-        'critical': {'action': 'MANDATORY roster modification', 'description': 'Equivalent to ~4h sleep'},
-        'extreme': {'action': 'UNSAFE - Do not fly', 'description': 'Severe impairment'}
-    })
+    thresholds: Dict[str, Tuple[float, float]] = field(
+        default_factory=lambda: dict(KSS_INDEX_THRESHOLDS))
+
+    actions: Dict[str, Dict[str, str]] = field(
+        default_factory=lambda: {k: dict(v) for k, v in KSS_RISK_ACTIONS.items()})
 
     def classify(self, performance: float) -> str:
         if performance is None or not 0 <= performance <= 100:
@@ -506,22 +526,7 @@ class ModelConfig:
                 pvt_wake_coefficient=0.8,      # Was 1.2 (less wakefulness sensitivity)
                 pvt_wake_threshold_hours=17.0, # Was 16h (vigilance maintained ~1h longer)
             ),
-            risk_thresholds=RiskThresholds(
-                thresholds={
-                    'low': (72, 100),
-                    'moderate': (60, 72),
-                    'high': (50, 60),
-                    'critical': (40, 50),
-                    'extreme': (0, 40)
-                },
-                actions={
-                    'low': {'action': 'None required', 'description': 'Well-rested state'},
-                    'moderate': {'action': 'Self-monitor', 'description': 'Be mindful of fatigue symptoms'},
-                    'high': {'action': 'Active countermeasures', 'description': 'Consider controlled rest and strategic caffeine use'},
-                    'critical': {'action': 'Fatigue report recommended', 'description': 'Consider reporting through FRMS'},
-                    'extreme': {'action': 'Fatigue report recommended', 'description': 'Significant safety concern — report through FRMS'}
-                },
-            ),
+            risk_thresholds=RiskThresholds(),
             adaptation_rates=AdaptationRates(),
             sleep_quality_params=SleepQualityParameters(
                 quality_hotel_typical=0.87,
@@ -547,12 +552,14 @@ class ModelConfig:
                 inertia_duration_minutes=40.0,
                 inertia_max_magnitude=0.35,
             ),
+            # Bands shifted by 0.5 KSS (≈ the 75th-percentile offset of
+            # 0.57, Ingre et al. 2014 eq. 1.16) toward earlier warning.
             risk_thresholds=RiskThresholds(thresholds={
-                'low': (80, 100),
-                'moderate': (70, 80),
-                'high': (60, 70),
-                'critical': (50, 60),
-                'extreme': (0, 50)
+                'low': (60, 100),
+                'moderate': (50, 60),
+                'high': (40, 50),
+                'critical': (30, 40),
+                'extreme': (0, 30)
             }),
             adaptation_rates=AdaptationRates(
                 westward_hours_per_day=1.0,
