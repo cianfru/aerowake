@@ -92,6 +92,9 @@ ALLOWED_ORIGINS += [
     "http://127.0.0.1:5173",
 ]
 
+from api.hardening import RateLimitMiddleware as _RateLimit
+app.add_middleware(_RateLimit)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -476,7 +479,9 @@ class AnalysisResponse(BaseModel):
 # IN-MEMORY STORAGE (Replace with database in production)
 # ============================================================================
 
-analysis_store = {}  # analysis_id -> (MonthlyAnalysis, Roster)
+from api.hardening import BoundedStore, RateLimitMiddleware, validate_upload
+
+analysis_store = BoundedStore()  # analysis_id -> (MonthlyAnalysis, Roster, strategies); LRU-bounded
 
 
 # ============================================================================
@@ -1132,8 +1137,9 @@ async def analyze_roster(
         if suffix not in ['.pdf', '.csv']:
             raise HTTPException(status_code=400, detail="Unsupported file format. Use PDF or CSV.")
         
+        content = await file.read()
+        validate_upload(content, suffix)
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            content = await file.read()
             tmp.write(content)
             tmp_path = tmp.name
         

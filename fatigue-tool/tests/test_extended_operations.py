@@ -618,45 +618,41 @@ class TestBackwardCompatibility:
 class TestAutoDetection:
     """Test roster_parser auto_detect_crew_augmentation logic."""
 
-    def test_ulr_duty_auto_detected(self):
-        """FDP > 18h → AUGMENTED_4, is_ulr=True."""
+    def test_long_duty_without_ir_code_stays_standard(self):
+        """Policy: no crew composition is inferred from duty length alone.
+
+        CrewLink has no code for 3-pilot crews, and FDP-based guesses applied
+        wrong FDP limits. Long duties stay STANDARD unless an IR code or a
+        user override says otherwise (see auto_detect_crew_augmentation).
+        """
         from parsers.roster_parser import auto_detect_crew_augmentation
-        duty = make_ulr_duty(fdp_hours=19.0, crew_set=None)
-        # Reset to standard to test auto-detection
-        duty.crew_composition = CrewComposition.STANDARD
-        duty.rest_facility_class = None
-        duty.is_ulr = False
+        for duty in (make_ulr_duty(fdp_hours=19.0, crew_set=None),
+                     make_long_haul_duty(fdp_hours=14.5, block_hours=12.5)):
+            duty.crew_composition = CrewComposition.STANDARD
+            duty.rest_facility_class = None
+            duty.is_ulr = False
+            roster = Roster(roster_id='test_roster', pilot_id='TEST001', month='2025-06',
+                            duties=[duty], home_base_timezone=HOME_TZ, pilot_base='DOH')
+            auto_detect_crew_augmentation(roster)
+            assert duty.crew_composition == CrewComposition.STANDARD
 
-        roster = Roster(
-            roster_id='test_roster',
-            pilot_id='TEST001',
-            month='2025-06',
-            duties=[duty],
-            home_base_timezone=HOME_TZ,
-        )
-        auto_detect_crew_augmentation(roster)
-        assert duty.is_ulr is True
-        assert duty.crew_composition == CrewComposition.AUGMENTED_4
-        assert duty.rest_facility_class == RestFacilityClass.CLASS_1
-
-    def test_long_haul_augmented_3_auto_detected(self):
-        """FDP > 13h with single segment >9h → AUGMENTED_3."""
+    def test_ir_code_marks_duty_and_paired_leg_augmented_4(self):
+        """An IR (in-flight rest) sector is the reliable 4-pilot signal."""
         from parsers.roster_parser import auto_detect_crew_augmentation
-        # Need block_hours > 12h so fdp_hours = block + 1.5h > 13h
-        duty = make_long_haul_duty(fdp_hours=14.5, block_hours=12.5)
-        duty.crew_composition = CrewComposition.STANDARD
-        duty.rest_facility_class = None
-
-        roster = Roster(
-            roster_id='test_roster',
-            pilot_id='TEST001',
-            month='2025-06',
-            duties=[duty],
-            home_base_timezone=HOME_TZ,
-        )
+        base = datetime(2025, 6, 15, tzinfo=UTC)
+        out_dep = base.replace(hour=20)
+        outbound = make_duty('out', base, out_dep - timedelta(hours=1), out_dep + timedelta(hours=17),
+                             [make_segment('QR920', DOH, AKL, out_dep, out_dep + timedelta(hours=16))])
+        ret_dep = out_dep + timedelta(days=2)
+        ir_seg = make_segment('QR921', AKL, DOH, ret_dep, ret_dep + timedelta(hours=17))
+        ir_seg.activity_code = 'IR'
+        inbound = make_duty('ret', base + timedelta(days=2), ret_dep - timedelta(hours=1),
+                            ret_dep + timedelta(hours=18), [ir_seg])
+        roster = Roster(roster_id='t', pilot_id='p', month='2025-06', duties=[outbound, inbound],
+                        home_base_timezone=HOME_TZ, pilot_base='DOH')
         auto_detect_crew_augmentation(roster)
-        assert duty.crew_composition == CrewComposition.AUGMENTED_3
-        assert duty.rest_facility_class == RestFacilityClass.CLASS_1
+        assert inbound.crew_composition == CrewComposition.AUGMENTED_4
+        assert outbound.crew_composition == CrewComposition.AUGMENTED_4
 
     def test_short_haul_stays_standard(self):
         """Short-haul duty remains STANDARD after auto-detection."""

@@ -1,0 +1,2 @@
+pytest>=8
+httpx2  # required by starlette>=1.x TestClient
