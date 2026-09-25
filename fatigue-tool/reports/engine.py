@@ -717,7 +717,10 @@ def _narrative(r: Dict, inp: ReportInput) -> List[Dict]:
 
     a = r['assessment']
     if a:
-        text = (f"Using the sleep provided, predicted sleepiness is KSS {a['kss_at_start']:.1f} at the start and "
+        aff = next((d for d in inp.duties if d.id == inp.affected_duty_id), None)
+        hypothetical = aff is not None and aff.status in ('cancelled_fatigue', 'not_operated', 'planned')
+        lead = 'Had the duty been operated, predicted' if hypothetical else 'Using the sleep provided, predicted'
+        text = (f"{lead} sleepiness is KSS {a['kss_at_start']:.1f} at the start and "
                 f"peaks at KSS {a['kss_max']:.1f} (“{a['kss_label']}”) at {a['kss_max_time_local']}")
         if a['kss_at_landing'] is not None:
             text += f"; KSS {a['kss_at_landing']:.1f} at the final landing"
