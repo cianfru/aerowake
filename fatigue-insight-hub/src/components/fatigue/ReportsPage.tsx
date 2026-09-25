@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import { mapTimelinePoints } from '@/lib/transform-analysis';
 import {
   FileText, ChevronRight, ChevronLeft, AlertTriangle,
   Plane, Clock, Shield, Loader2, Upload, Play,
@@ -12,6 +13,7 @@ import { getDutyDetail } from '@/lib/api-client';
 import { FatigueReport } from './report/FatigueReport';
 import { format } from 'date-fns';
 import type { DutyAnalysis } from '@/types/fatigue';
+import { indexToKss, resolveKss } from '@/lib/risk-scale';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -108,24 +110,7 @@ export function ReportsPage() {
         if (cancelled) return;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rawTimeline = detail?.timeline ?? detail?.timeline_points ?? detail?.timelinePoints;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const timelinePoints = Array.isArray(rawTimeline) ? rawTimeline.map((pt: any) => ({
-          hours_on_duty: pt.hours_on_duty ?? 0,
-          time_on_task_penalty: pt.time_on_task_penalty ?? 0,
-          sleep_inertia: pt.sleep_inertia ?? 0,
-          sleep_pressure: pt.sleep_pressure ?? 0,
-          circadian: pt.circadian ?? 0,
-          performance: pt.performance,
-          is_in_rest: pt.is_in_rest ?? false,
-          flight_phase: pt.flight_phase ?? null,
-          is_critical: pt.is_critical ?? false,
-          timestamp: pt.timestamp,
-          timestamp_local: pt.timestamp_local,
-          debt_penalty: pt.debt_penalty,
-          hypoxia_factor: pt.hypoxia_factor,
-          pvt_lapses: pt.pvt_lapses,
-          microsleep_probability: pt.microsleep_probability,
-        })) : undefined;
+        const timelinePoints = mapTimelinePoints(rawTimeline);
 
         setDetailedDuty({
           ...selectedDuty,
@@ -339,9 +324,9 @@ export function ReportsPage() {
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <div className="text-right hidden sm:block">
                             <div className="text-sm font-mono font-semibold">
-                              {Math.round(duty.minPerformance)}%
+                              {(resolveKss(duty.maxKss, duty.minPerformance) ?? 0).toFixed(1)}
                             </div>
-                            <div className="text-[10px] text-muted-foreground">min perf</div>
+                            <div className="text-[10px] text-muted-foreground">peak KSS</div>
                           </div>
                           <Badge
                             variant="outline"
@@ -378,7 +363,7 @@ export function ReportsPage() {
                                 {seg.departure} → {seg.arrival}
                               </span>
                               <span className="text-xs font-mono flex-shrink-0">
-                                {Math.round(seg.performance)}%
+                                KSS {indexToKss(seg.performance).toFixed(1)}
                               </span>
                               <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                             </div>

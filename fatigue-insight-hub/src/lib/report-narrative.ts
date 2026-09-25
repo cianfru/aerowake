@@ -9,21 +9,25 @@
 import type { DutyAnalysis, TimelinePoint } from '@/types/fatigue';
 import {
   decomposePerformance,
-  performanceToKSS,
   getKSSLabel,
-  performanceToSamnPerelli,
-  getSamnPerelliLabel,
-  performanceToReactionTime,
+  DECOMPOSITION_FACTOR_LABELS,
   type PerformanceDecomposition,
 } from '@/lib/fatigue-calculations';
 import {
-  performanceToEquivalentAwakeHours,
-  hoursAwakeToBAC,
-  describeAwakeHoursImpairment,
   assessPriorSleep,
   sleepDebtSeverity,
   assessWOCLExposure,
 } from '@/lib/report-impairment';
+import {
+  DEFAULT_RISK_THRESHOLDS,
+  classifyPerformance,
+  formatKssWithLabel,
+  indexToKss,
+  isElevatedRisk,
+  kssLabel,
+  resolveKss,
+  resolveThresholds,
+} from '@/lib/risk-scale';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,10 +63,11 @@ export interface CriticalPhaseData {
   performance: number;
   kss: number;
   kssLabel: string;
-  samnPerelli: number;
-  spLabel: string;
-  reactionTimeMs: number;
-  rtLabel: string;
+  /** Predicted KSS for the 90th-percentile pilot (backend), if available. */
+  kss90: number | null;
+  /** P(KSS ≥ 7), 0–1 (backend), if available. */
+  pSevere: number | null;
+  hoursAwake: number | null;
   pvtLapses: number | null;
   microsleepProbability: number | null;
   hoursOnDuty: number;
@@ -111,12 +116,16 @@ export function generateExecutiveSummary(
 ): string {
   const perf = worstPoint?.performance ?? duty.minPerformance;
   if (perf == null || !Number.isFinite(perf)) return 'Prediction unavailable. Review the inputs before generating a report.';
+  const worstKss = resolveKss(worstPoint?.kss ?? duty.maxKss, perf) ?? indexToKss(perf);
   const landing = duty.landingPerformance;
-  return `Lowest operating alertness estimate: ${perf.toFixed(1)}/100. ` +
-    (landing != null ? `Landing estimate: ${landing.toFixed(1)}/100. ` : '') +
+  const landingKss = landing != null && Number.isFinite(landing) ? resolveKss(duty.landingKss, landing) : null;
+  return `Highest predicted sleepiness while operating: ${formatKssWithLabel(worstKss)} (index ${perf.toFixed(0)}). ` +
+    (landingKss != null ? `At landing: ${formatKssWithLabel(landingKss)}. ` : '') +
+    (duty.maxKss90 != null ? `90th-percentile pilot: KSS ${duty.maxKss90.toFixed(1)}. ` : '') +
+    (decomp ? `Main driver at the worst point: ${DECOMPOSITION_FACTOR_LABELS[decomp.dominantFactor].toLowerCase()}. ` : '') +
     `Duty classification: ${(duty.overallRisk ?? 'unknown').toLowerCase()}, based on landing where available, otherwise the duty minimum. ` +
-    `This is a model prediction, not a measured fatigue state or a probability of error. Sleep inputs must be reviewed. ` +
-    (duty.modelVersion ? `Model: ${duty.modelVersion}. Independent operational validation is pending.` :
+    `This is a group-average model prediction (typical error ±1.4 KSS), not a measured fatigue state, a probability of error or a fitness-to-fly determination. Sleep inputs must be reviewed. ` +
+    (duty.modelVersion ? `Model: ${duty.modelVersion} (Three Process Model, Ingre et al. 2014). Independent validation of this implementation is pending.` :
       'Legacy result: model version and thresholds may be unavailable. Recalculate before comparison.');
 }
 
@@ -163,7 +172,7 @@ export function generatePreDutyNarrative(duty: DutyAnalysis): string {
   if (duty.acclimatizationState && duty.acclimatizationState !== 'acclimatized') {
     parts.push(
       `The pilot's acclimatization state is "${duty.acclimatizationState}", indicating the body clock ` +
-      `may not be aligned with the local time zone. This can amplify circadian effects on performance.`,
+      `may not be aligned with the local time zone. This can amplify circadian effects on alertness.`,
     );
   }
 
@@ -184,10 +193,13 @@ export function generateTrajectoryNarrative(
   const operating = timeline.filter(p => !p.is_in_rest && Number.isFinite(p.performance));
   if (operating.length < 2) return 'Insufficient operating timeline data.';
   const worst = findWorstPoint(operating)!;
-  return `Operating alertness starts at ${operating[0].performance.toFixed(1)}/100 and reaches a minimum of ` +
-    `${worst.performance.toFixed(1)}/100 at ${worst.hours_on_duty.toFixed(1)} hours after report` +
+  const startKss = resolveKss(operating[0].kss, operating[0].performance)!;
+  const worstKss = resolveKss(worst.kss, worst.performance)!;
+  return `Predicted sleepiness starts at KSS ${startKss.toFixed(1)} (${kssLabel(startKss).toLowerCase()}) and peaks at ` +
+    `KSS ${worstKss.toFixed(1)} (${kssLabel(worstKss).toLowerCase()}) ${worst.hours_on_duty.toFixed(1)} hours after report` +
     (worst.flight_phase ? ` (${worst.flight_phase.replace(/_/g, ' ')})` : '') +
-    '. Sleep/rest intervals are excluded from operating performance. The score is an experimental index, not a measured percentage of cognitive ability.';
+    (worst.hours_awake != null ? `, after about ${worst.hours_awake.toFixed(1)} h awake` : '') +
+    '. Sleep/rest intervals are excluded. The 20–100 index equals 110 − 10·KSS; it is not a percentage of cognitive ability.';
 }
 
 // ---------------------------------------------------------------------------
@@ -195,8 +207,15 @@ export function generateTrajectoryNarrative(
 // ---------------------------------------------------------------------------
 
 export function findThresholdCrossings(timeline: TimelinePoint[], policy?: Record<string, [number, number]>): ThresholdCrossing[] {
-  const thresholds = policy ? Object.entries(policy).filter(([name]) => name !== 'extreme')
-    .map(([name, range]) => ({value: range[0], label: `${name} band lower boundary`})) : [];
+  // Saved per-duty thresholds take precedence; otherwise the KSS band defaults.
+  const bands = policy && Object.keys(policy).length > 0 ? policy : DEFAULT_RISK_THRESHOLDS;
+  const nextBand: Record<string, string> = { low: 'moderate', moderate: 'high', high: 'critical', critical: 'extreme' };
+  const thresholds = Object.entries(bands)
+    .filter(([name, range]) => name !== 'extreme' && Array.isArray(range) && Number.isFinite(range[0]))
+    .map(([name, range]) => ({
+      value: range[0],
+      label: `KSS ${indexToKss(range[0]).toFixed(1)} — entering ${nextBand[name] ?? 'next'} band`,
+    }));
 
   const crossings: ThresholdCrossing[] = [];
 
@@ -282,28 +301,19 @@ export function analyzeCriticalPhases(
       : null;
 
     const usePerf = relevantPoint?.performance ?? perfValue;
-    const kss = performanceToKSS(usePerf);
-    const sp = performanceToSamnPerelli(usePerf);
-    const rt = performanceToReactionTime(usePerf);
+    const kss = resolveKss(relevantPoint?.kss, usePerf) ?? indexToKss(usePerf);
 
-    // Decompose for dominant factor
+    // Decompose for dominant factor (sleep pressure vs circadian phase)
     let dominantFactor = 'multiple factors';
     if (relevantPoint) {
       const d = decomposePerformance({
         performance: relevantPoint.performance ?? 0,
         sleep_pressure: relevantPoint.sleep_pressure,
         circadian: relevantPoint.circadian,
-        sleep_inertia: relevantPoint.sleep_inertia,
-        time_on_task_penalty: relevantPoint.time_on_task_penalty,
         hours_on_duty: relevantPoint.hours_on_duty,
+        kss: relevantPoint.kss,
       });
-      const maxFactor = [
-        { name: 'Circadian trough', val: d.cContribution },
-        { name: 'Sleep pressure', val: d.sContribution },
-        { name: 'Time on duty', val: d.totContribution },
-        { name: 'Sleep inertia', val: d.wContribution },
-      ].sort((a, b) => b.val - a.val)[0];
-      dominantFactor = maxFactor.name;
+      dominantFactor = d.dominantFactor === 'circadian' ? 'Circadian phase' : 'Sleep pressure';
     }
 
     results.push({
@@ -315,10 +325,9 @@ export function analyzeCriticalPhases(
       performance: usePerf,
       kss,
       kssLabel: getKSSLabel(kss).label,
-      samnPerelli: sp,
-      spLabel: getSamnPerelliLabel(sp).label,
-      reactionTimeMs: rt,
-      rtLabel: `${rt}ms`,
+      kss90: relevantPoint?.kss_90 ?? null,
+      pSevere: relevantPoint?.p_severe_sleepiness ?? null,
+      hoursAwake: relevantPoint?.hours_awake ?? null,
       pvtLapses: relevantPoint?.pvt_lapses ?? null,
       microsleepProbability: relevantPoint?.microsleep_probability ?? null,
       hoursOnDuty: relevantPoint?.hours_on_duty ?? 0,
@@ -348,6 +357,8 @@ export function generateMitigations(
 
   const worst = findWorstPoint(timeline);
   const worstPerf = worst?.performance ?? duty.minPerformance ?? 100;
+  const worstKss = resolveKss(worst?.kss ?? duty.maxKss, worstPerf) ?? indexToKss(worstPerf);
+  const thresholds = resolveThresholds(duty.riskThresholds);
 
   // 1. Prior sleep insufficiency
   if (duty.priorSleep != null && duty.priorSleep < 6) {
@@ -414,12 +425,16 @@ export function generateMitigations(
   }
 
   // 5. Landing performance risk
-  if (duty.landingPerformance != null && duty.landingPerformance < 65) {
+  if (
+    duty.landingPerformance != null &&
+    isElevatedRisk(classifyPerformance(duty.landingPerformance, thresholds))
+  ) {
+    const landingKss = resolveKss(duty.landingKss, duty.landingPerformance)!;
     mitigations.push({
       priority: priority++,
       category: 'MONITORING',
       title: 'Enhanced Crew Monitoring During Approach',
-      text: `Predicted landing performance of ${duty.landingPerformance.toFixed(0)}% falls within the impaired range. ` +
+      text: `Predicted sleepiness at landing is ${formatKssWithLabel(landingKss)} (${classifyPerformance(duty.landingPerformance, thresholds)} band). ` +
         `Enhanced crew cross-checking is recommended during approach and landing. The Pilot Monitoring should ` +
         `maintain heightened vigilance for deviations from standard operating parameters. Consider a PF/PM role ` +
         `swap if the Pilot Flying reports subjective fatigue.`,
@@ -428,7 +443,7 @@ export function generateMitigations(
   }
 
   // 6. Caffeine timing
-  if (worstPerf < 70 && duty.woclExposure != null && duty.woclExposure > 0) {
+  if (classifyPerformance(worstPerf, thresholds) !== 'low' && duty.woclExposure != null && duty.woclExposure > 0) {
     mitigations.push({
       priority: priority++,
       category: 'CAFFEINE',
@@ -449,10 +464,10 @@ export function generateMitigations(
       category: 'SCHEDULING',
       title: 'Time-Awake Risk Management',
       text: `By duty end, the pilot will have been awake for approximately ${totalAwake.toFixed(1)} hours. ` +
-        `Above 17h of continuous wakefulness, cognitive performance degrades to levels comparable to ` +
-        `legal alcohol intoxication thresholds. For future rostering, consider earlier report times ` +
+        `Sleep pressure keeps building with continuous wakefulness, and long periods awake that end in the ` +
+        `circadian low are a recognised fatigue hazard. For future rostering, consider earlier report times ` +
         `or scheduling rest opportunities to limit continuous wakefulness during critical phases.`,
-      reference: 'Dawson & Reid, 1997',
+      reference: 'Ingre et al., 2014; Åkerstedt et al., 2014',
     });
   }
 
@@ -462,7 +477,7 @@ export function generateMitigations(
       priority: priority++,
       category: 'GENERAL',
       title: 'FRMS Documentation Recommended',
-      text: `This duty pattern shows a predicted performance nadir of ${worstPerf.toFixed(0)}%, indicating ` +
+      text: `This duty pattern reaches a predicted ${formatKssWithLabel(worstKss)}, indicating ` +
         `a substantive fatigue risk. Consider documenting this duty through your operator's Fatigue Risk ` +
         `Management System (FRMS) and reviewing whether systemic scheduling changes could reduce recurrence ` +
         `of this risk pattern.`,
@@ -473,7 +488,7 @@ export function generateMitigations(
       priority: priority++,
       category: 'GENERAL',
       title: 'Fatigue Risk Awareness',
-      text: `This duty pattern shows a predicted performance nadir of ${worstPerf.toFixed(0)}%. While this ` +
+      text: `This duty pattern reaches a predicted ${formatKssWithLabel(worstKss)}. While this ` +
         `falls within operational limits, active fatigue countermeasures are recommended. If you experience ` +
         `symptoms of significant fatigue, consider documenting through your operator's FRMS.`,
       reference: 'ICAO Doc 9966',
@@ -515,9 +530,11 @@ export function computeReportData(
         performance: worstPoint.performance ?? 0,
         sleep_pressure: worstPoint.sleep_pressure,
         circadian: worstPoint.circadian,
-        sleep_inertia: worstPoint.sleep_inertia,
-        time_on_task_penalty: worstPoint.time_on_task_penalty,
         hours_on_duty: worstPoint.hours_on_duty,
+        kss: worstPoint.kss,
+        kss_90: worstPoint.kss_90,
+        p_severe_sleepiness: worstPoint.p_severe_sleepiness,
+        hours_awake: worstPoint.hours_awake,
       })
     : null;
 

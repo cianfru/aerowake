@@ -12,6 +12,8 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { ScrollReveal } from './ScrollReveal';
+import { simulateRestedDay } from '@/lib/fatigue-calculations';
+import { INDEX_AXIS_TICKS, INDEX_DOMAIN, indexTickAsKss, performanceHex } from '@/lib/risk-scale';
 
 // --- Performance Curve Preview (auto-animating) ---
 function PerformanceCurvePreview() {
@@ -34,31 +36,9 @@ function PerformanceCurvePreview() {
   }, []);
 
   const data = useMemo(() => {
-    const S_MAX = 0.95;
-    const TAU_INCREASE = 18.2;
-    const MESOR = 0.5;
-    const AMPLITUDE = 0.35;
-    const ACROPHASE = 17;
-    const FLOOR = 20;
-    const S0 = 0.15;
-
     const points: { hour: number; performance: number; riskColor: string }[] = [];
-    for (let h = 0; h <= 20; h++) {
-      const actualHour = (Math.round(wakeHour) + h) % 24;
-      const S = S_MAX - (S_MAX - S0) * Math.exp(-h / TAU_INCREASE);
-      const S_alert = 1 - S;
-      const angle = (2 * Math.PI * (actualHour - ACROPHASE)) / 24;
-      const C = MESOR + AMPLITUDE * Math.cos(angle);
-      const C_alert = (C - (MESOR - AMPLITUDE)) / (2 * AMPLITUDE);
-      const baseAlert = S_alert * 0.6 + C_alert * 0.4;
-      const perf = FLOOR + baseAlert * (100 - FLOOR);
-
-      let riskColor = '#22c55e';
-      if (perf < 55) riskColor = '#ef4444';
-      else if (perf < 65) riskColor = '#f97316';
-      else if (perf < 75) riskColor = '#eab308';
-
-      points.push({ hour: h, performance: Math.round(perf), riskColor });
+    for (const p of simulateRestedDay(Math.round(wakeHour), 20)) {
+      points.push({ hour: p.hoursAwake, performance: Math.round(p.index), riskColor: performanceHex(p.index) });
     }
     return points;
   }, [wakeHour]);
@@ -66,8 +46,8 @@ function PerformanceCurvePreview() {
   return (
     <div className="relative rounded-xl border border-white/[0.08] bg-white/[0.03] p-4 backdrop-blur-sm overflow-hidden">
       <div className="absolute top-3 left-4 z-10">
-        <p className="text-[10px] uppercase tracking-wider text-white/30 font-mono">Performance Score vs. Hours Awake</p>
-        <p className="text-xs text-white/50 mt-0.5">Two-Process Model (Borbely)</p>
+        <p className="text-[10px] uppercase tracking-wider text-white/30 font-mono">Predicted KSS vs. Hours Awake</p>
+        <p className="text-xs text-white/50 mt-0.5">Three Process Model (Ingre et al. 2014)</p>
       </div>
       <div className="h-[220px] md:h-[260px] mt-6">
         <ResponsiveContainer width="100%" height="100%">
@@ -86,14 +66,15 @@ function PerformanceCurvePreview() {
               tickFormatter={(h) => `${h}h`}
             />
             <YAxis
-              domain={[20, 100]}
+              domain={INDEX_DOMAIN}
+              ticks={INDEX_AXIS_TICKS}
               tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.2)' }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(v) => `${v}%`}
+              tickFormatter={(v) => `KSS ${indexTickAsKss(v)}`}
             />
-            <ReferenceLine y={55} stroke="rgba(239,68,68,0.3)" strokeDasharray="3 3" />
-            <ReferenceLine y={75} stroke="rgba(34,197,94,0.3)" strokeDasharray="3 3" />
+            <ReferenceLine y={55} stroke="rgba(234,179,8,0.3)" strokeDasharray="3 3" />
+            <ReferenceLine y={45} stroke="rgba(239,68,68,0.3)" strokeDasharray="3 3" />
             <Area
               type="monotone"
               dataKey="performance"

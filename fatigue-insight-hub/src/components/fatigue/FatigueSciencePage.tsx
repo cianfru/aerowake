@@ -58,6 +58,11 @@ export function FatigueSciencePage() {
             based on multiple scientifically-validated factors. Not all sleep is equal—environment, 
             timing, and circumstances significantly affect recovery.
           </p>
+          <p className="text-muted-foreground leading-relaxed">
+            These sleep estimates are the input to the alertness prediction: sleep periods drive recovery of
+            Process S in the Three Process Model (Ingre et al., 2014), which outputs predicted KSS. Sleep quality
+            itself does not add or subtract KSS points directly.
+          </p>
 
           <div className="rounded-lg border border-border bg-muted/30 p-4">
             <p className="text-sm font-medium mb-2">Input Parameters:</p>

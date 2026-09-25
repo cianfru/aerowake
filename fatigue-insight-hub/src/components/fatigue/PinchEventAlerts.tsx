@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DutyAnalysis, PinchEvent } from '@/types/fatigue';
 import { format } from 'date-fns';
+import { indexToKss } from '@/lib/risk-scale';
 
 interface PinchEventAlertsProps {
   duties: DutyAnalysis[];
@@ -101,10 +102,10 @@ export function PinchEventAlerts({ duties }: PinchEventAlertsProps) {
               </div>
               <div className="text-right text-xs">
                 <p className={event.severity === 'critical' ? 'text-critical' : 'text-warning'}>
-                  {event.performance.toFixed(0)}% perf
+                  KSS {indexToKss(event.performance).toFixed(1)}
                 </p>
                 <p className="text-muted-foreground">
-                  C: {(event.circadian * 100).toFixed(0)}% | S: {(event.sleepPressure * 100).toFixed(0)}%
+                  C: {event.circadian.toFixed(2)} | S: {event.sleepPressure.toFixed(2)}
                 </p>
               </div>
             </div>
@@ -121,9 +122,9 @@ export function PinchEventAlerts({ duties }: PinchEventAlertsProps) {
         <div className="rounded-lg bg-secondary/30 p-3 text-xs text-muted-foreground">
           <p className="font-medium text-foreground mb-1">What is a Pinch Event?</p>
           <p>
-            A "pinch" occurs when high homeostatic sleep pressure (S {">"} 60%) coincides with 
-            low circadian alertness (C {"<"} 40%) during critical flight phases like takeoff, 
-            approach, or landing. This creates maximum fatigue vulnerability.
+            A "pinch" occurs when high homeostatic sleep pressure coincides with a low circadian
+            phase during critical flight phases like takeoff, approach, or landing, pushing predicted
+            sleepiness into an elevated KSS band. This creates maximum fatigue vulnerability.
           </p>
         </div>
       </CardContent>

@@ -15,6 +15,18 @@ import { WorkloadPhaseIndicator } from './WorkloadPhaseIndicator';
 import { isTrainingDuty, getTrainingDutyColor, getTrainingDutyLabel, formatAircraftType } from '@/lib/fatigue-utils';
 import { FDPUtilizationBar } from './FDPUtilizationBar';
 import { CrewRestTimeline } from './CrewRestTimeline';
+import {
+  SLEEP_DEFICIT_LABELS,
+  classifyPerformance,
+  indexToKss,
+  isSevereRisk,
+  kssLabel,
+  normalizeRiskLevel,
+  performanceColorClass,
+  resolveKss,
+  riskBadgeVariant,
+  sleepDeficitClass,
+} from '@/lib/risk-scale';
 
 interface DutyDetailsProps {
   duty: DutyAnalysis;
@@ -37,9 +49,11 @@ export function DutyDetails({ duty, dutyCrewOverride, onCrewChange, onCrewReset 
         performance: pt.performance ?? 0,
         sleep_pressure: pt.sleep_pressure,
         circadian: pt.circadian,
-        sleep_inertia: pt.sleep_inertia,
         hours_on_duty: pt.hours_on_duty,
-        time_on_task_penalty: pt.time_on_task_penalty,
+        kss: pt.kss,
+        kss_90: pt.kss_90,
+        p_severe_sleepiness: pt.p_severe_sleepiness,
+        hours_awake: pt.hours_awake,
         flight_phase: pt.flight_phase ?? null,
         is_critical: pt.is_critical ?? false,
         is_in_rest: pt.is_in_rest ?? false,
@@ -62,20 +76,12 @@ export function DutyDetails({ duty, dutyCrewOverride, onCrewChange, onCrewReset 
   const effectiveCrewSet = dutyCrewOverride || autoDetectedCrewSet;
   const hasOverride = !!dutyCrewOverride;
 
-  const getRiskBadge = (risk: string) => {
-    switch (risk) {
-      case 'LOW':
-        return <Badge variant="success">LOW</Badge>;
-      case 'MODERATE':
-        return <Badge variant="warning">MODERATE</Badge>;
-      case 'HIGH':
-        return <Badge variant="high">HIGH</Badge>;
-      case 'CRITICAL':
-        return <Badge variant="critical">CRITICAL</Badge>;
-      default:
-        return <Badge variant="outline">{risk}</Badge>;
-    }
-  };
+  const getRiskBadge = (risk: string) => (
+    <Badge variant={riskBadgeVariant(normalizeRiskLevel(risk))}>{(risk || 'UNKNOWN').toUpperCase()}</Badge>
+  );
+  const overallLevel = normalizeRiskLevel(duty.overallRisk);
+  const peakKss = resolveKss(duty.maxKss, duty.minPerformance ?? 0) ?? 0;
+  const landingKss = resolveKss(duty.landingKss, duty.landingPerformance ?? 0) ?? 0;
 
   const getRiskEmoji = (risk: string) => {
     switch (risk) {
@@ -87,6 +93,8 @@ export function DutyDetails({ duty, dutyCrewOverride, onCrewChange, onCrewReset 
         return '🟠';
       case 'CRITICAL':
         return '🔴';
+      case 'EXTREME':
+        return '🟥';
       default:
         return '⚪';
     }
@@ -122,22 +130,23 @@ export function DutyDetails({ duty, dutyCrewOverride, onCrewChange, onCrewReset 
               <p className="font-medium text-sm md:text-base">{Math.max(0, duty.blockHours ?? 0).toFixed(1)}h</p>
             </div>
             <div className="space-y-0.5 md:space-y-1">
-              <p className="text-[10px] md:text-xs text-muted-foreground">Min Performance</p>
-              <p className={`font-medium text-sm md:text-base ${(duty.minPerformance ?? 0) < 50 ? 'text-critical' : (duty.minPerformance ?? 0) < 60 ? 'text-warning' : 'text-foreground'}`}>
-                {(duty.minPerformance ?? 0).toFixed(1)}/100
+              <p className="text-[10px] md:text-xs text-muted-foreground">Peak KSS (predicted)</p>
+              <p className={`font-medium text-sm md:text-base ${performanceColorClass(duty.minPerformance, duty.riskThresholds)}`}>
+                {peakKss.toFixed(1)} <span className="text-[10px] text-muted-foreground font-normal">· {kssLabel(peakKss)}</span>
               </p>
+              <p className="text-[10px] text-muted-foreground font-mono">index {(duty.minPerformance ?? 0).toFixed(0)}/100</p>
             </div>
             <div className="space-y-0.5 md:space-y-1">
-              <p className="text-[10px] md:text-xs text-muted-foreground">Avg Performance</p>
-              <p className="font-medium text-sm md:text-base">{(duty.avgPerformance ?? 0).toFixed(1)}/100</p>
+              <p className="text-[10px] md:text-xs text-muted-foreground">Avg KSS</p>
+              <p className="font-medium text-sm md:text-base">{indexToKss(duty.avgPerformance ?? 0).toFixed(1)}</p>
             </div>
             <div className="space-y-0.5 md:space-y-1">
               <p className="text-[10px] md:text-xs text-muted-foreground">Landing</p>
               {isTrainingDuty(duty) ? (
                 <p className="font-medium text-sm md:text-base text-muted-foreground">N/A</p>
               ) : (
-                <p className={`font-medium text-sm md:text-base ${(duty.landingPerformance ?? 0) < 50 ? 'text-critical' : (duty.landingPerformance ?? 0) < 60 ? 'text-warning' : 'text-foreground'}`}>
-                  {(duty.landingPerformance ?? 0).toFixed(1)}/100
+                <p className={`font-medium text-sm md:text-base ${performanceColorClass(duty.landingPerformance, duty.riskThresholds)}`}>
+                  KSS {landingKss.toFixed(1)}
                 </p>
               )}
             </div>
@@ -283,8 +292,8 @@ export function DutyDetails({ duty, dutyCrewOverride, onCrewChange, onCrewReset 
                           </span>
                         )}
                       </div>
-                      <Badge variant={(segment.performance ?? 0) < 50 ? 'critical' : (segment.performance ?? 0) < 60 ? 'warning' : 'success'} className="text-[10px] md:text-xs">
-                        {(segment.performance ?? 0).toFixed(0)}%
+                      <Badge variant={riskBadgeVariant(classifyPerformance(segment.performance ?? 0, duty.riskThresholds))} className="text-[10px] md:text-xs">
+                        KSS {indexToKss(segment.performance ?? 0).toFixed(1)}
                       </Badge>
                     </div>
 
@@ -547,12 +556,12 @@ export function DutyDetails({ duty, dutyCrewOverride, onCrewChange, onCrewReset 
               </div>
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Min Perf. Risk</p>
-              {getRiskBadge(duty.minPerformanceRisk)}
+              <p className="text-xs text-muted-foreground">Peak KSS {peakKss.toFixed(1)}</p>
+              {getRiskBadge(classifyPerformance(duty.minPerformance, duty.riskThresholds))}
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Landing Risk</p>
-              {getRiskBadge(duty.landingRisk)}
+              <p className="text-xs text-muted-foreground">Landing KSS {landingKss.toFixed(1)}</p>
+              {getRiskBadge(classifyPerformance(duty.landingPerformance, duty.riskThresholds))}
             </div>
           </div>
 
@@ -567,6 +576,17 @@ export function DutyDetails({ duty, dutyCrewOverride, onCrewChange, onCrewReset 
                 </span>
               </div>
             </div>
+            {duty.sleepDeficit7d && (
+              <div className="flex items-center gap-2" title="Rolling 7-day sleep ledger vs an 8 h/day need (reported separately from KSS)">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                <div className="text-xs">
+                  <span className="text-muted-foreground">7-day Deficit: </span>
+                  <span className={`font-medium ${sleepDeficitClass(duty.sleepDeficit7d.band)}`}>
+                    {duty.sleepDeficit7d.deficitHours.toFixed(1)}h ({SLEEP_DEFICIT_LABELS[duty.sleepDeficit7d.band] ?? duty.sleepDeficit7d.band})
+                  </span>
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Moon className="h-3.5 w-3.5 text-muted-foreground" />
               <div className="text-xs">
@@ -581,8 +601,8 @@ export function DutyDetails({ duty, dutyCrewOverride, onCrewChange, onCrewReset 
                 <Zap className="h-3.5 w-3.5 text-muted-foreground" />
                 <div className="text-xs">
                   <span className="text-muted-foreground">Return to Deck: </span>
-                  <span className={`font-medium ${(duty.returnToDeckPerformance ?? 0) < 60 ? 'text-critical' : (duty.returnToDeckPerformance ?? 0) < 70 ? 'text-warning' : 'text-foreground'}`}>
-                    {(duty.returnToDeckPerformance ?? 0).toFixed(1)}%
+                  <span className={`font-medium ${performanceColorClass(duty.returnToDeckPerformance, duty.riskThresholds)}`}>
+                    KSS {indexToKss(duty.returnToDeckPerformance ?? 0).toFixed(1)}
                   </span>
                 </div>
               </div>
@@ -653,7 +673,7 @@ export function DutyDetails({ duty, dutyCrewOverride, onCrewChange, onCrewReset 
             <div>
               <h5 className="mb-1 font-medium">Recommendations</h5>
               <ul className="list-inside list-disc space-y-1 text-muted-foreground">
-                {duty.overallRisk === 'CRITICAL' && (
+                {isSevereRisk(overallLevel) && (
                   <>
                     <li>Consider controlled rest if operationally feasible</li>
                     <li>Enhanced crew monitoring during critical phases</li>

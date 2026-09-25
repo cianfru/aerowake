@@ -5,9 +5,10 @@
  * from the TanStack Query mutation hook.
  */
 
-import { AnalysisResults, DutyAnalysis, PilotSettings, CompanyDetection } from '@/types/fatigue';
+import { AnalysisResults, DutyAnalysis, PilotSettings, CompanyDetection, TimelinePoint } from '@/types/fatigue';
 import { AnalysisResult, Duty, SleepEstimate, DutySegment } from '@/lib/api-client';
 import { format, parseISO } from 'date-fns';
+import { toUpperRisk } from '@/lib/risk-scale';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -186,6 +187,47 @@ function transformSleepEstimate(sleep: SleepEstimate) {
   };
 }
 
+// ── Timeline points (GET /api/duty/{analysis_id}/{duty_id}) ──
+
+const optNum = (v: unknown): number | undefined =>
+  typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+
+/**
+ * Map one raw backend timeline point to the frontend TimelinePoint.
+ * Shared by every component that fetches the duty detail endpoint so that
+ * new fields (kss, kss_90, p_severe_sleepiness, hours_awake) reach all views.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function mapTimelinePoint(pt: any): TimelinePoint {
+  return {
+    hours_on_duty: pt?.hours_on_duty ?? 0,
+    // Factor form: 1.0 = no effect (constant since aerowake-4.0-kss)
+    time_on_task_penalty: pt?.time_on_task_penalty ?? 1,
+    sleep_inertia: pt?.sleep_inertia ?? 1,
+    sleep_pressure: pt?.sleep_pressure ?? 0,
+    circadian: pt?.circadian ?? 0,
+    performance: pt?.performance,
+    kss: optNum(pt?.kss),
+    kss_90: optNum(pt?.kss_90),
+    p_severe_sleepiness: optNum(pt?.p_severe_sleepiness),
+    hours_awake: optNum(pt?.hours_awake),
+    is_in_rest: pt?.is_in_rest ?? false,
+    flight_phase: pt?.flight_phase ?? null,
+    is_critical: pt?.is_critical ?? false,
+    timestamp: pt?.timestamp,
+    timestamp_local: pt?.timestamp_local,
+    debt_penalty: pt?.debt_penalty,
+    hypoxia_factor: pt?.hypoxia_factor,
+    pvt_lapses: pt?.pvt_lapses,
+    microsleep_probability: pt?.microsleep_probability,
+  };
+}
+
+/** Map a raw duty-detail timeline array (or undefined). */
+export function mapTimelinePoints(raw: unknown): TimelinePoint[] | undefined {
+  return Array.isArray(raw) ? raw.map(mapTimelinePoint) : undefined;
+}
+
 // ── Main transformer ─────────────────────────────────────────
 
 export function transformAnalysisResult(
@@ -301,21 +343,23 @@ export function transformAnalysisResult(
         modelVersion: duty.model_version,
         modelParameters: duty.model_parameters,
         priorSleep: duty.prior_sleep ?? 0,
-        overallRisk: (duty.risk_level ?? 'unknown').toUpperCase() as
-          | 'LOW'
-          | 'MODERATE'
-          | 'HIGH'
-          | 'CRITICAL',
-        minPerformanceRisk: (duty.risk_level ?? 'unknown').toUpperCase() as
-          | 'LOW'
-          | 'MODERATE'
-          | 'HIGH'
-          | 'CRITICAL',
-        landingRisk: (duty.risk_level ?? 'unknown').toUpperCase() as
-          | 'LOW'
-          | 'MODERATE'
-          | 'HIGH'
-          | 'CRITICAL',
+        overallRisk: toUpperRisk(duty.risk_level),
+        minPerformanceRisk: toUpperRisk(duty.risk_level),
+        landingRisk: toUpperRisk(duty.risk_level),
+        maxKss: duty.max_kss ?? undefined,
+        landingKss: duty.landing_kss ?? undefined,
+        maxKss90: duty.max_kss_90 ?? undefined,
+        maxPSevere: duty.max_p_severe_sleepiness ?? undefined,
+        maxHoursAwake: duty.max_hours_awake ?? undefined,
+        sleepDeficit7d: duty.sleep_deficit_7d
+          ? {
+              days: duty.sleep_deficit_7d.days,
+              sleepHours: duty.sleep_deficit_7d.sleep_hours,
+              needHours: duty.sleep_deficit_7d.need_hours,
+              deficitHours: duty.sleep_deficit_7d.deficit_hours,
+              band: duty.sleep_deficit_7d.band,
+            }
+          : undefined,
         smsReportable: duty.is_reportable,
         riskAdvisory: (duty.risk_advisory as 'routine' | 'monitor' | 'consider_reporting' | 'report_recommended') ?? (duty.is_reportable ? 'report_recommended' : 'routine'),
         maxFdpHours: duty.max_fdp_hours,
@@ -375,8 +419,8 @@ export function transformAnalysisResult(
         // Seed timelinePoints from worst_point so PerformanceSummaryCard renders immediately
         timelinePoints: duty.worst_point ? [{
           hours_on_duty: duty.worst_point.hours_on_duty ?? 0,
-          time_on_task_penalty: duty.worst_point.time_on_task_penalty ?? 0,
-          sleep_inertia: duty.worst_point.sleep_inertia ?? 0,
+          time_on_task_penalty: duty.worst_point.time_on_task_penalty ?? 1,
+          sleep_inertia: duty.worst_point.sleep_inertia ?? 1,
           sleep_pressure: duty.worst_point.sleep_pressure ?? 0,
           circadian: duty.worst_point.circadian ?? 0,
           performance: duty.worst_point.performance,
@@ -386,6 +430,10 @@ export function transformAnalysisResult(
           hypoxia_factor: duty.worst_point.hypoxia_factor,
           pvt_lapses: duty.worst_point.pvt_lapses,
           microsleep_probability: duty.worst_point.microsleep_probability,
+          kss: duty.worst_point.kss,
+          kss_90: duty.worst_point.kss_90,
+          p_severe_sleepiness: duty.worst_point.p_severe_sleepiness,
+          hours_awake: duty.worst_point.hours_awake,
         }] : undefined,
         flightSegments: (duty.segments ?? []).map((seg, idx) => ({
           flightNumber: seg.flight_number,

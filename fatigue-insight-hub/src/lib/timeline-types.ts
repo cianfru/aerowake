@@ -148,7 +148,7 @@ export interface RowLabel {
   /** Date object for this row (if applicable) */
   date?: Date;
   hasDuty: boolean;
-  risk?: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+  risk?: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL' | 'EXTREME' | 'UNKNOWN';
   warnings: string[];
   /** Circadian shift annotation (HPT only), e.g. "→E +2.5h" */
   circadianAnnotation?: string;

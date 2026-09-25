@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import type { ReportData } from '@/lib/report-narrative';
+import { INDEX_AXIS_TICKS, INDEX_DOMAIN, indexTickAsKss, indexToKss, kssLabel, resolveKss, riskReferenceLines } from '@/lib/risk-scale';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -25,10 +26,11 @@ export function ReportFatigueTrajectory({ data }: Props) {
     return timeline.map(pt => ({
       hoursOnDuty: Number(pt.hours_on_duty.toFixed(2)),
       performance: pt.is_in_rest ? null : pt.performance ?? null,
-      sleepPressure: (pt.sleep_pressure ?? 0) * 100,
-      circadian: (pt.circadian ?? 0) * 100,
-      sleepInertia: pt.sleep_inertia != null ? (1 - pt.sleep_inertia) * 100 : 0,
-      timeOnTask: pt.time_on_task_penalty != null ? (1 - pt.time_on_task_penalty) * 100 : 0,
+      kss: pt.is_in_rest ? null : resolveKss(pt.kss, pt.performance),
+      kss90: pt.is_in_rest ? null : pt.kss_90 ?? null,
+      hoursAwake: pt.hours_awake ?? null,
+      sleepPressure: pt.sleep_pressure ?? 0,
+      circadian: pt.circadian ?? 0,
       isRest: pt.is_in_rest,
       phase: pt.flight_phase,
       timestamp: pt.timestamp_local
@@ -78,14 +80,23 @@ export function ReportFatigueTrajectory({ data }: Props) {
                   tickFormatter={(v) => `${v}h`}
                 />
                 <YAxis
-                  domain={[0, 100]}
+                  domain={INDEX_DOMAIN}
+                  ticks={INDEX_AXIS_TICKS}
+                  tickFormatter={indexTickAsKss}
                   tick={{ fontSize: 10 }}
-                  label={{ value: 'Predicted alertness index', angle: -90, position: 'insideLeft', fontSize: 10, offset: 10 }}
+                  label={{ value: 'Predicted KSS', angle: -90, position: 'insideLeft', fontSize: 10, offset: 10 }}
                 />
 
-                {/* Risk thresholds */}
-                {Object.entries(data.duty.riskThresholds ?? {}).filter(([name]) => name !== 'extreme').map(([name, range]) => (
-                  <ReferenceLine key={name} y={range[0]} label={name} stroke="currentColor" strokeDasharray="6 3" strokeOpacity={0.4} />
+                {/* Risk band boundaries (KSS 5.5 / 6.5 / 7.5 / 8.5 by default) */}
+                {riskReferenceLines(data.duty.riskThresholds).map((line) => (
+                  <ReferenceLine
+                    key={line.value}
+                    y={line.value}
+                    label={{ value: line.label, position: 'right', fontSize: 9, fill: line.color }}
+                    stroke={line.color}
+                    strokeDasharray="6 3"
+                    strokeOpacity={0.5}
+                  />
                 ))}
 
                 {/* Performance area */}
@@ -115,11 +126,18 @@ export function ReportFatigueTrajectory({ data }: Props) {
                           {d.timestamp ?? `${d.hoursOnDuty}h on duty`}
                           {d.phase && <span className="text-muted-foreground ml-2">{d.phase}</span>}
                         </p>
-                        <p className="font-mono mt-1">
-                          Performance: <span className="font-bold">{d.performance?.toFixed(1)}%</span>
+                        {d.kss != null && (
+                          <p className="font-mono mt-1">
+                            <span className="font-bold">KSS {d.kss.toFixed(1)}</span> · {kssLabel(d.kss)}
+                          </p>
+                        )}
+                        <p className="text-muted-foreground mt-0.5 font-mono">
+                          index {d.performance?.toFixed(0)}
+                          {d.kss90 != null && ` · 90th pct KSS ${d.kss90.toFixed(1)}`}
                         </p>
                         <p className="text-muted-foreground mt-0.5">
-                          S: {d.sleepPressure.toFixed(0)}% · C: {d.circadian.toFixed(0)}%
+                          Sleep pressure {d.sleepPressure.toFixed(2)} · Circadian {d.circadian.toFixed(2)}
+                          {d.hoursAwake != null && ` · ${d.hoursAwake.toFixed(1)}h awake`}
                         </p>
                       </div>
                     );
@@ -133,9 +151,9 @@ export function ReportFatigueTrajectory({ data }: Props) {
           <div className="flex items-center gap-4 text-[10px] text-muted-foreground print:text-gray-600 justify-center">
             <span className="flex items-center gap-1">
               <span className="inline-block w-3 h-0.5 bg-[hsl(var(--primary))]" />
-              Performance
+              Predicted KSS
             </span>
-            <span>Thresholds: {data.duty.riskThresholds ? 'active model policy' : 'unavailable for legacy result'}</span>
+            <span>Band boundaries: {data.duty.riskThresholds ? 'saved model policy' : 'default KSS 5.5 / 6.5 / 7.5 / 8.5'}</span>
           </div>
 
           {/* Threshold crossings callout */}
@@ -146,13 +164,13 @@ export function ReportFatigueTrajectory({ data }: Props) {
               </h4>
               {thresholdCrossings.map((crossing, i) => (
                 <p key={i} className="text-xs print:text-black">
-                  <span className="font-medium">{crossing.thresholdLabel}</span> ({crossing.threshold}%) crossed at{' '}
+                  <span className="font-medium">{crossing.thresholdLabel}</span> (index {crossing.threshold}) crossed at{' '}
                   <span className="font-mono">
                     {crossing.timestamp
                       ? new Date(crossing.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
                       : `${crossing.crossedAt.toFixed(1)}h on duty`}
                   </span>
-                  {' '}— performance: {crossing.performance.toFixed(0)}%
+                  {' '}— KSS {indexToKss(crossing.performance).toFixed(1)}
                 </p>
               ))}
             </div>

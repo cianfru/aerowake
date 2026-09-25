@@ -9,6 +9,17 @@ import { FDPUtilizationBar } from './FDPUtilizationBar';
 import { SleepQualityInfo } from './SleepQualityInfo';
 import { CrewRestTimeline } from './CrewRestTimeline';
 import { cn } from '@/lib/utils';
+import {
+  SLEEP_DEFICIT_LABELS,
+  classifyPerformance,
+  indexToKss,
+  kssLabel,
+  normalizeRiskLevel,
+  performanceColorClass,
+  resolveKss,
+  riskBadgeVariant,
+  sleepDeficitClass,
+} from '@/lib/risk-scale';
 import { toast } from 'sonner';
 
 const STRATEGY_LABELS: Record<string, string> = {
@@ -75,15 +86,13 @@ export function DutyInfoColumn({ duty, dutyCrewOverride, onCrewChange, onCrewRes
   const isTraining = isTrainingDuty(duty);
   const [crewOpen, setCrewOpen] = useState(false);
 
-  const getRiskBadge = (risk: string) => {
-    switch (risk) {
-      case 'LOW': return <Badge variant="success" className="text-[10px]">LOW</Badge>;
-      case 'MODERATE': return <Badge variant="warning" className="text-[10px]">MODERATE</Badge>;
-      case 'HIGH': return <Badge variant="high" className="text-[10px]">HIGH</Badge>;
-      case 'CRITICAL': return <Badge variant="critical" className="text-[10px]">CRITICAL</Badge>;
-      default: return <Badge variant="outline" className="text-[10px]">{risk}</Badge>;
-    }
-  };
+  const getRiskBadge = (risk: string) => (
+    <Badge variant={riskBadgeVariant(normalizeRiskLevel(risk))} className="text-[10px]">
+      {(risk || 'UNKNOWN').toUpperCase()}
+    </Badge>
+  );
+  const peakKss = resolveKss(duty.maxKss, duty.minPerformance);
+  const landingKss = duty.landingPerformance != null ? resolveKss(duty.landingKss, duty.landingPerformance) : null;
 
   const formatOffset = (offset: number | null | undefined): string => {
     if (offset === null || offset === undefined) return '';
@@ -291,16 +300,23 @@ export function DutyInfoColumn({ duty, dutyCrewOverride, onCrewChange, onCrewRes
               warnAt={1}
               critAt={2}
             />
+            {duty.sleepDeficit7d && (
+              <div className="flex items-center gap-2 text-xs" title="Rolling 7-day sleep ledger vs an 8 h/day need (reported separately from KSS)">
+                <BedDouble className="h-3 w-3 text-muted-foreground" />
+                <span className="text-muted-foreground w-20 truncate">7-day deficit</span>
+                <div className="flex-1" />
+                <span className={cn('font-bold font-mono', sleepDeficitClass(duty.sleepDeficit7d.band))}>
+                  {duty.sleepDeficit7d.deficitHours.toFixed(1)}h · {SLEEP_DEFICIT_LABELS[duty.sleepDeficit7d.band] ?? duty.sleepDeficit7d.band}
+                </span>
+              </div>
+            )}
             {duty.returnToDeckPerformance != null && (
               <div className="flex items-center gap-2 text-xs">
                 <Zap className="h-3 w-3 text-muted-foreground" />
-                <span className="text-muted-foreground w-20 truncate">RTD Perf</span>
+                <span className="text-muted-foreground w-20 truncate">RTD KSS</span>
                 <div className="flex-1" />
-                <span className={cn('font-bold font-mono',
-                  duty.returnToDeckPerformance < 60 ? 'text-critical' :
-                  duty.returnToDeckPerformance < 70 ? 'text-warning' : 'text-foreground'
-                )}>
-                  {duty.returnToDeckPerformance.toFixed(1)}%
+                <span className={cn('font-bold font-mono', performanceColorClass(duty.returnToDeckPerformance, duty.riskThresholds))}>
+                  {indexToKss(duty.returnToDeckPerformance).toFixed(1)}
                 </span>
               </div>
             )}
@@ -315,9 +331,18 @@ export function DutyInfoColumn({ duty, dutyCrewOverride, onCrewChange, onCrewRes
           </div>
           <div className="grid grid-cols-3 gap-2">
             <RiskCell label="Overall" badge={getRiskBadge(duty.overallRisk)} />
-            <RiskCell label="Min Perf" badge={getRiskBadge(duty.minPerformanceRisk)} />
-            <RiskCell label="Landing" badge={getRiskBadge(duty.landingRisk)} />
+            <RiskCell
+              label={peakKss != null ? `Peak KSS ${peakKss.toFixed(1)}` : 'Peak KSS'}
+              badge={getRiskBadge(classifyPerformance(duty.minPerformance, duty.riskThresholds))}
+            />
+            <RiskCell
+              label={landingKss != null ? `Landing KSS ${landingKss.toFixed(1)}` : 'Landing'}
+              badge={getRiskBadge(duty.landingPerformance != null ? classifyPerformance(duty.landingPerformance, duty.riskThresholds) : duty.landingRisk)}
+            />
           </div>
+          {peakKss != null && (
+            <p className="text-[10px] text-muted-foreground">{kssLabel(peakKss)} at the worst point{duty.maxKss90 != null ? ` · 90th-pct pilot KSS ${duty.maxKss90.toFixed(1)}` : ''}</p>
+          )}
         </div>
       </div>
 

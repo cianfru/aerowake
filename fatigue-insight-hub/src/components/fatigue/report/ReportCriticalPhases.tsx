@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { ReportData } from '@/lib/report-narrative';
 import { getPerformanceColor } from '@/lib/fatigue-utils';
+import { RISK_LEVEL_LABELS, classifyPerformance, isElevatedRisk } from '@/lib/risk-scale';
 
 interface Props {
   data: ReportData;
@@ -36,14 +37,15 @@ export function ReportCriticalPhases({ data }: Props) {
         5. Critical Phase Analysis
       </h2>
       <p className="text-xs text-muted-foreground mb-3 print:text-gray-600">
-        Performance assessment at approach and landing — the phases where cognitive
-        impairment carries the highest operational risk.
+        Predicted sleepiness (KSS) at approach and landing — the phases where
+        reduced alertness carries the highest operational risk.
       </p>
 
       <div className="space-y-3">
         {criticalPhaseAnalysis.map((phase) => {
-          const isImpaired = phase.performance < 55;
-          const isReduced = phase.performance < 77 && phase.performance >= 55;
+          const level = classifyPerformance(phase.performance, duty.riskThresholds);
+          const isImpaired = isElevatedRisk(level);
+          const isReduced = level === 'moderate';
 
           return (
             <Card
@@ -66,12 +68,12 @@ export function ReportCriticalPhases({ data }: Props) {
                   {isImpaired && (
                     <Badge variant="critical" className="gap-1 text-[10px]">
                       <AlertTriangle className="h-3 w-3" />
-                      IMPAIRED
+                      {RISK_LEVEL_LABELS[level].toUpperCase()}
                     </Badge>
                   )}
                   {isReduced && (
                     <Badge variant="warning" className="text-[10px]">
-                      REDUCED
+                      MODERATE
                     </Badge>
                   )}
                 </div>
@@ -79,38 +81,42 @@ export function ReportCriticalPhases({ data }: Props) {
                 {/* Phase metrics grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                   <PhaseMetric
-                    label="Performance"
-                    value={`${phase.performance.toFixed(0)}%`}
-                    color={getPerformanceColor(phase.performance)}
+                    label="KSS (predicted)"
+                    value={phase.kss.toFixed(1)}
+                    sublabel={phase.kssLabel}
+                    color={getPerformanceColor(phase.performance, duty.riskThresholds)}
                     emphasis
                   />
                   <PhaseMetric
-                    label="KSS"
-                    value={phase.kss.toFixed(1)}
-                    sublabel={phase.kssLabel}
+                    label="Index"
+                    value={phase.performance.toFixed(0)}
+                    sublabel="110 − 10·KSS"
                   />
-                  <PhaseMetric
-                    label="Samn-Perelli"
-                    value={phase.samnPerelli.toFixed(1)}
-                    sublabel={phase.spLabel}
-                  />
-                  <PhaseMetric
-                    label="Reaction Time"
-                    value={phase.rtLabel}
-                    sublabel={phase.reactionTimeMs > 350 ? 'Impaired' : phase.reactionTimeMs > 280 ? 'Mildly impaired' : 'Normal'}
-                  />
-                  {phase.pvtLapses != null && (
+                  {phase.kss90 != null && (
                     <PhaseMetric
-                      label="PVT Lapses"
-                      value={phase.pvtLapses.toFixed(1)}
-                      sublabel={`per 10-min trial`}
+                      label="KSS 90th pct"
+                      value={phase.kss90.toFixed(1)}
+                      sublabel="sensitive pilot"
+                    />
+                  )}
+                  {phase.pSevere != null && (
+                    <PhaseMetric
+                      label="P(KSS ≥ 7)"
+                      value={`${(phase.pSevere * 100).toFixed(0)}%`}
+                      sublabel="sleepy or worse"
+                    />
+                  )}
+                  {phase.hoursAwake != null && (
+                    <PhaseMetric
+                      label="Hours awake"
+                      value={`${phase.hoursAwake.toFixed(1)}h`}
                     />
                   )}
                   {phase.microsleepProbability != null && phase.microsleepProbability > 0.005 && (
                     <PhaseMetric
-                      label="Microsleep"
+                      label="P(KSS 9)"
                       value={`${(phase.microsleepProbability * 100).toFixed(1)}%`}
-                      sublabel="probability/hr"
+                      sublabel="fighting sleep"
                     />
                   )}
                 </div>

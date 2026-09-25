@@ -22,7 +22,8 @@ export function QuickDutySelector({ duties, selectedDuty, onDutySelect }: QuickD
               duty.overallRisk === 'LOW' && "bg-success hover:bg-success/80",
               duty.overallRisk === 'MODERATE' && "bg-warning hover:bg-warning/80",
               duty.overallRisk === 'HIGH' && "bg-high hover:bg-high/80",
-              duty.overallRisk === 'CRITICAL' && "bg-critical hover:bg-critical/80",
+              (duty.overallRisk === 'CRITICAL' || duty.overallRisk === 'EXTREME') && "bg-critical hover:bg-critical/80",
+              duty.overallRisk === 'UNKNOWN' && "bg-muted hover:bg-muted/80",
               selectedDuty?.date.getTime() === duty.date.getTime()
                 ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background'
                 : 'hover:scale-105'

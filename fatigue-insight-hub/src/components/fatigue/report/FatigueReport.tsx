@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback, useRef } from 'react';
+import { resolveKss } from '@/lib/risk-scale';
 import { FileText, ArrowLeft, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DutyAnalysis, TimelinePoint } from '@/types/fatigue';
@@ -142,17 +143,20 @@ export function FatigueReport({ duty, analysisId, onBack }: FatigueReportProps) 
           {whatIfDuty && (
             <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 print:border-black print:bg-white print:text-black">
               <p className="text-sm font-medium text-blue-400">
-                HYPOTHETICAL SCENARIO — baseline ID: {analysisId ?? 'unavailable'}. Alertness changed from{' '}
-                <span className="font-mono">{(duty.minPerformance ?? 0).toFixed(0)}%</span> to{' '}
-                <span className="font-mono">{(whatIfDuty.minPerformance ?? 0).toFixed(0)}%</span>
-                {' '}({((whatIfDuty.minPerformance ?? 0) - (duty.minPerformance ?? 0) >= 0 ? '+' : '')}{((whatIfDuty.minPerformance ?? 0) - (duty.minPerformance ?? 0)).toFixed(0)}pp)
+                HYPOTHETICAL SCENARIO — baseline ID: {analysisId ?? 'unavailable'}. Peak predicted KSS changed from{' '}
+                <span className="font-mono">{(resolveKss(duty.maxKss, duty.minPerformance ?? 0) ?? 0).toFixed(1)}</span> to{' '}
+                <span className="font-mono">{(resolveKss(whatIfDuty.maxKss, whatIfDuty.minPerformance ?? 0) ?? 0).toFixed(1)}</span>
+                {' '}({(() => {
+                  const d = (resolveKss(whatIfDuty.maxKss, whatIfDuty.minPerformance ?? 0) ?? 0) - (resolveKss(duty.maxKss, duty.minPerformance ?? 0) ?? 0);
+                  return `${d >= 0 ? '+' : ''}${d.toFixed(1)} KSS`;
+                })()})
               </p>
             </div>
           )}
 
           <div className="border-b border-border pb-4 text-sm space-y-1">
             <p><strong>{whatIfDuty ? 'Hypothetical scenario' : 'Roster-based prediction'}</strong> · {activeDuty.modelVersion ?? 'Legacy model version unknown'}</p>
-            <p>Review estimated sleep and crew rest before interpreting this report. Scores are experimental alertness indices; independent operational validation is pending.</p>
+            <p>Review estimated sleep and crew rest before interpreting this report. Values are group-average KSS predictions from the Three Process Model (Ingre et al. 2014; typical error ±1.4 KSS), not a fitness-to-fly determination.</p>
           </div>
           {whatIfDuty?.reportScenario && <div className="text-xs space-y-2">
             <p>Scenario ID: {whatIfDuty.reportScenario.analysisId ?? 'unavailable'} · Baseline ID: {analysisId ?? 'unavailable'}</p>

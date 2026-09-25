@@ -1,3 +1,16 @@
+import type { RiskLevelUpper, SleepDeficitBand } from '@/lib/risk-scale';
+
+export type { RiskLevelUpper } from '@/lib/risk-scale';
+
+/** Rolling 7-day cumulative sleep restriction ledger (backend `sleep_deficit_7d`). */
+export interface SleepDeficit7d {
+  days: number;
+  sleepHours: number;
+  needHours: number;
+  deficitHours: number;
+  band: SleepDeficitBand;
+}
+
 export interface PilotSettings {
   pilotId: string;
   homeBase: string;
@@ -100,9 +113,17 @@ export interface DutyAnalysis {
   sleepDebt: number;
   woclExposure: number;
   priorSleep: number;
-  overallRisk: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
-  minPerformanceRisk: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
-  landingRisk: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+  overallRisk: RiskLevelUpper;
+  minPerformanceRisk: RiskLevelUpper;
+  landingRisk: RiskLevelUpper;
+  // KSS-anchored alertness (backend engine aerowake-4.0-kss). Optional —
+  // older analyses omit them; derive via indexToKss() from risk-scale.ts.
+  maxKss?: number;           // worst predicted KSS on deck (group-average pilot)
+  landingKss?: number;       // predicted KSS at final landing
+  maxKss90?: number;         // worst predicted KSS for the 90th-percentile pilot
+  maxPSevere?: number;       // max P(KSS ≥ 7), 0–1
+  maxHoursAwake?: number;    // max continuous hours awake during the duty
+  sleepDeficit7d?: SleepDeficit7d;
   smsReportable: boolean; // Deprecated — use riskAdvisory
   riskAdvisory: 'routine' | 'monitor' | 'consider_reporting' | 'report_recommended';
   flightSegments: FlightSegment[];
@@ -245,14 +266,20 @@ export interface SleepQualityFactors {
   pre_duty_awake_hours?: number; // Hours awake before report (Dawson & Reid, 1997)
 }
 
-// Per-timeline point performance degradation factors
+// Per-timeline point model outputs (GET /api/duty/{id}/{duty_id})
 export interface TimelinePoint {
   hours_on_duty: number;           // Hours since report
-  time_on_task_penalty: number;    // TOT decrement ~0.008/h (Folkard & Åkerstedt, 1999)
-  sleep_inertia: number;           // Process W component (Tassi & Muzet, 2000)
-  sleep_pressure: number;          // Process S (Borbély, 1982)
-  circadian: number;               // Process C (Dijk & Czeisler, 1995)
-  performance?: number;            // Combined performance score
+  /** @deprecated Constant 1.0 (factor form) since aerowake-4.0-kss — not in the score. */
+  time_on_task_penalty: number;
+  /** @deprecated Constant 1.0 (factor form) since aerowake-4.0-kss — not in the score. */
+  sleep_inertia: number;
+  sleep_pressure: number;          // Homeostatic pressure, normalised 0–1 (1 = depleted)
+  circadian: number;               // Circadian phase, normalised 0–1 (1 = circadian peak)
+  performance?: number;            // 20–100 index = 110 − 10·KSS
+  kss?: number;                    // Predicted KSS (group-average pilot)
+  kss_90?: number;                 // Predicted KSS, 90th-percentile pilot
+  p_severe_sleepiness?: number;    // P(KSS ≥ 7), 0–1
+  hours_awake?: number;            // Continuous hours awake
   is_in_rest?: boolean;            // True when crew member is in bunk rest
   // Extended fields (Phase 2 — populated from GET /api/duty detail)
   flight_phase?: string | null;    // Current flight phase: "takeoff", "cruise", "landing", etc.
@@ -260,10 +287,12 @@ export interface TimelinePoint {
   timestamp?: string;              // ISO 8601 UTC timestamp
   timestamp_local?: string;        // ISO 8601 home-base timezone timestamp
   // Phase 2 — Model deepening additions
-  debt_penalty?: number;           // Chronic sleep debt multiplicative penalty (0.80-1.0) (Van Dongen, 2003)
-  hypoxia_factor?: number;         // Cabin altitude hypoxia factor (0.97-1.0) (Nesthus, 2007)
-  pvt_lapses?: number;             // Predicted PVT lapses per 10-min trial (Van Dongen, 2003)
-  microsleep_probability?: number; // Estimated microsleep probability per hour (Åkerstedt, 2010)
+  /** @deprecated Constant 1.0 since aerowake-4.0-kss — not in the score. */
+  debt_penalty?: number;
+  /** @deprecated Constant 1.0 since aerowake-4.0-kss — not in the score. */
+  hypoxia_factor?: number;
+  pvt_lapses?: number;             // Legacy heuristic (not part of the KSS model)
+  microsleep_probability?: number; // P(KSS = 9, "fighting sleep") from the ordinal model
 }
 
 // Academic reference for sleep calculations

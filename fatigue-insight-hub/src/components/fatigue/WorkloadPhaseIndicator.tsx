@@ -5,6 +5,7 @@ import { Gauge } from 'lucide-react';
 import { InfoTooltip, FATIGUE_INFO } from '@/components/ui/InfoTooltip';
 import { DutyDetailTimeline } from '@/hooks/useContinuousTimelineData';
 import { getPerformanceColor } from '@/lib/fatigue-utils';
+import { indexToKss } from '@/lib/risk-scale';
 import { cn } from '@/lib/utils';
 
 interface WorkloadPhaseIndicatorProps {
@@ -158,7 +159,7 @@ export function WorkloadPhaseIndicator({
                 backgroundColor: seg.color,
                 opacity: 0.85,
               }}
-              title={`${formatPhase(seg.phase)}: ${seg.durationMin}min, ${seg.multiplier}x workload, avg ${seg.avgPerformance.toFixed(0)}%`}
+              title={`${formatPhase(seg.phase)}: ${seg.durationMin}min, ${seg.multiplier}x workload (context only), avg KSS ${indexToKss(seg.avgPerformance).toFixed(1)}`}
             >
               {widthPct > 6 && (
                 <span className="text-[9px] font-bold text-white drop-shadow-sm">
@@ -192,7 +193,7 @@ export function WorkloadPhaseIndicator({
             <span className="font-semibold">{seg.short}</span>
             <span className="text-muted-foreground">{seg.durationMin}m</span>
             <span className="font-mono" style={{ color: getPerformanceColor(seg.avgPerformance) }}>
-              {seg.avgPerformance.toFixed(0)}%
+              KSS {indexToKss(seg.avgPerformance).toFixed(1)}
             </span>
             <span className="text-muted-foreground">{seg.multiplier}x</span>
           </div>

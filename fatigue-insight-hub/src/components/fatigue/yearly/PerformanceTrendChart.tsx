@@ -6,6 +6,7 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Activity } from 'lucide-react';
 import type { MonthlyMetrics } from '@/lib/api-client';
+import { INDEX_AXIS_TICKS, INDEX_DOMAIN, indexTickAsKss, indexToKss, riskReferenceLines } from '@/lib/risk-scale';
 
 interface PerformanceTrendChartProps {
   months: MonthlyMetrics[];
@@ -19,17 +20,20 @@ function formatMonth(month: string): string {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function CustomTooltip({ active, payload, label }: any) {
   if (active && payload?.length) {
     return (
       <div className="rounded-lg border border-border bg-card p-3 shadow-lg">
         <p className="text-xs font-medium mb-1.5">{label}</p>
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         {payload.map((entry: any, i: number) => (
           <p key={i} className="text-xs">
             <span className="text-muted-foreground">{entry.name}: </span>
             <span className="font-mono font-medium" style={{ color: entry.color }}>
-              {entry.value.toFixed(1)}%
+              KSS {indexToKss(entry.value).toFixed(1)}
             </span>
+            <span className="text-muted-foreground font-mono"> (index {entry.value.toFixed(0)})</span>
           </p>
         ))}
       </div>
@@ -41,8 +45,8 @@ function CustomTooltip({ active, payload, label }: any) {
 export function PerformanceTrendChart({ months }: PerformanceTrendChartProps) {
   const data = months.map((m) => ({
     month: formatMonth(m.month),
-    'Avg Performance': m.avg_performance,
-    'Worst Performance': m.worst_performance,
+    'Avg alertness': m.avg_performance,
+    'Worst alertness': m.worst_performance,
   }));
 
   return (
@@ -50,7 +54,7 @@ export function PerformanceTrendChart({ months }: PerformanceTrendChartProps) {
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
           <Activity className="h-4 w-4 text-primary" />
-          Performance Trend
+          Alertness Trend (predicted KSS)
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -65,31 +69,28 @@ export function PerformanceTrendChart({ months }: PerformanceTrendChartProps) {
               axisLine={false}
             />
             <YAxis
-              domain={[40, 100]}
+              domain={INDEX_DOMAIN}
+              ticks={INDEX_AXIS_TICKS}
               stroke="hsl(var(--muted-foreground))"
               fontSize={10}
               tickLine={false}
               axisLine={false}
-              tickFormatter={(v) => `${v}%`}
+              tickFormatter={(v) => `KSS ${indexTickAsKss(v)}`}
             />
             <Tooltip content={<CustomTooltip />} />
-            <ReferenceLine
-              y={77}
-              stroke="hsl(var(--warning))"
-              strokeDasharray="5 5"
-              strokeOpacity={0.6}
-              label={{ value: '77%', position: 'right', fontSize: 9, fill: 'hsl(var(--warning))' }}
-            />
-            <ReferenceLine
-              y={55}
-              stroke="hsl(var(--critical))"
-              strokeDasharray="5 5"
-              strokeOpacity={0.6}
-              label={{ value: '55%', position: 'right', fontSize: 9, fill: 'hsl(var(--critical))' }}
-            />
+            {riskReferenceLines().map((line) => (
+              <ReferenceLine
+                key={line.value}
+                y={line.value}
+                stroke={line.color}
+                strokeDasharray="5 5"
+                strokeOpacity={0.6}
+                label={{ value: line.label, position: 'right', fontSize: 9, fill: line.color }}
+              />
+            ))}
             <Line
               type="monotone"
-              dataKey="Avg Performance"
+              dataKey="Avg alertness"
               stroke="hsl(var(--primary))"
               strokeWidth={2}
               dot={{ r: 3, fill: 'hsl(var(--primary))' }}
@@ -97,7 +98,7 @@ export function PerformanceTrendChart({ months }: PerformanceTrendChartProps) {
             />
             <Line
               type="monotone"
-              dataKey="Worst Performance"
+              dataKey="Worst alertness"
               stroke="hsl(var(--critical))"
               strokeWidth={1.5}
               strokeDasharray="4 4"

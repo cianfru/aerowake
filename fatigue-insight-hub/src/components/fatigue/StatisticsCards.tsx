@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Plane, Timer, Zap, TrendingDown, AlertTriangle, AlertCircle, Clock, Globe, Users, Moon, Eye } from 'lucide-react';
+import { Plane, Timer, Zap, TrendingDown, AlertTriangle, AlertCircle, Clock, Globe, Users, Moon } from 'lucide-react';
 import { DutyStatistics, DutyAnalysis } from '@/types/fatigue';
 import { InfoTooltip, FATIGUE_INFO, type InfoTooltipEntry } from '@/components/ui/InfoTooltip';
 import { SparklineChart } from '@/components/ui/SparklineChart';
@@ -8,6 +8,7 @@ import {
   getKSSLabel,
 } from '@/lib/fatigue-calculations';
 import { cn } from '@/lib/utils';
+import { classifyKss, indexToKss, kssLabel, resolveKss, riskCssColor } from '@/lib/risk-scale';
 
 interface StatisticsCardsProps {
   statistics: DutyStatistics;
@@ -28,15 +29,19 @@ export function StatisticsCards({ statistics, duties }: StatisticsCardsProps) {
     if (!duties || duties.length < 3) return null;
     const sorted = [...duties].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     return {
-      performance: sorted.map(d => d.minPerformance ?? 0),
+      peakKss: sorted.map(d => resolveKss(d.maxKss, d.minPerformance ?? 0) ?? 0),
       sleepDebt: sorted.map(d => d.sleepDebt ?? 0),
       priorSleep: sorted.map(d => d.priorSleep ?? 0),
     };
   }, [duties]);
 
   // Roster-level worst KSS
-  const rosterWorstKSS = useMemo(() => (duties ? calculateRosterWorstKSS(duties) : 1), [duties]);
+  const rosterWorstKSS = useMemo(
+    () => (duties && duties.length > 0 ? calculateRosterWorstKSS(duties) : indexToKss(statistics.worstPerformance)),
+    [duties, statistics.worstPerformance],
+  );
   const kssInfo = getKSSLabel(rosterWorstKSS);
+  const kssColor = riskCssColor(classifyKss(rosterWorstKSS));
 
   return (
     <div className="space-y-2">
@@ -58,16 +63,16 @@ export function StatisticsCards({ statistics, duties }: StatisticsCardsProps) {
           info={FATIGUE_INFO.pinchEvent}
         />
         <RibbonStat
-          label="Worst Score"
-          value={`${Math.round(statistics.worstPerformance)}%`}
+          label="Peak KSS"
+          value={rosterWorstKSS.toFixed(1)}
           icon={<TrendingDown className="h-3.5 w-3.5" />}
-          variant={statistics.worstPerformance >= 70 ? 'success' : statistics.worstPerformance >= 60 ? 'warning' : 'critical'}
-          info={FATIGUE_INFO.performance}
+          variant={kssInfo.variant}
+          info={{ ...FATIGUE_INFO.kss, description: `${kssLabel(rosterWorstKSS)} — highest predicted sleepiness of any duty. ${FATIGUE_INFO.kss.description}` }}
           sparkline={sparklineData && (
             <SparklineChart
-              data={sparklineData.performance}
-              color={statistics.worstPerformance >= 70 ? 'hsl(var(--success))' : 'hsl(var(--warning))'}
-              referenceLine={77}
+              data={sparklineData.peakKss}
+              color={kssColor}
+              referenceLine={5.5}
             />
           )}
         />
@@ -110,15 +115,6 @@ export function StatisticsCards({ statistics, duties }: StatisticsCardsProps) {
             />
           )}
         />
-        {duties && duties.length > 0 && (
-          <RibbonStat
-            label="Worst KSS"
-            value={`${rosterWorstKSS.toFixed(1)}`}
-            icon={<Eye className="h-3.5 w-3.5" />}
-            variant={kssInfo.variant}
-            info={FATIGUE_INFO.kss}
-          />
-        )}
       </div>
 
       {/* ULR/Augmented Stats Ribbon - only when relevant */}

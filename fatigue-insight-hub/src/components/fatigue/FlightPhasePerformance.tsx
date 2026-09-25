@@ -4,6 +4,14 @@ import { Badge } from '@/components/ui/badge';
 import { Plane, AlertTriangle, ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useState } from 'react';
+import {
+  INDEX_MIN,
+  classifyPerformance,
+  indexToKss,
+  isElevatedRisk,
+  riskBadgeVariant,
+  riskClasses,
+} from '@/lib/risk-scale';
 
 interface FlightPhasePerformanceProps {
   duty: DutyAnalysis;
@@ -28,19 +36,12 @@ const phaseConfig: Record<FlightPhase, { label: string; icon: string; critical: 
   landing: { label: 'Landing', icon: '🛬', critical: true },
 };
 
-const getPerformanceColor = (performance: number): string => {
-  if (performance >= 70) return 'bg-success';
-  if (performance >= 60) return 'bg-warning';
-  if (performance >= 50) return 'bg-high';
-  return 'bg-critical';
-};
+const getPerformanceColor = (performance: number): string => riskClasses(classifyPerformance(performance)).fill;
 
-const getPerformanceTextColor = (performance: number): string => {
-  if (performance >= 70) return 'text-success';
-  if (performance >= 60) return 'text-warning';
-  if (performance >= 50) return 'text-high';
-  return 'text-critical';
-};
+const getPerformanceTextColor = (performance: number): string => riskClasses(classifyPerformance(performance)).text;
+
+/** Position of an index value on a 20–100 bar, as a percentage. */
+const barPct = (index: number) => Math.max(0, Math.min(100, ((index - INDEX_MIN) / (100 - INDEX_MIN)) * 100));
 
 // Generate simulated phase performance for a single flight segment
 const generateSegmentPhases = (segment: FlightSegment, dutyAvg: number): PhaseData[] => {
@@ -75,13 +76,17 @@ function FlightPhaseBar({ phase }: { phase: PhaseData }) {
       <div className="flex-1 h-5 bg-secondary/50 rounded-full overflow-hidden relative">
         <div
           className={`h-full ${getPerformanceColor(phase.performance)} transition-all duration-500`}
-          style={{ width: `${phase.performance}%` }}
+          style={{ width: `${barPct(phase.performance)}%` }}
         />
-        <div className="absolute top-0 bottom-0 left-[50%] w-px bg-critical/50" />
-        <div className="absolute top-0 bottom-0 left-[70%] w-px bg-success/50" />
+        {/* Band boundaries: KSS 6.5 (high) and KSS 5.5 (moderate) */}
+        <div className="absolute top-0 bottom-0 w-px bg-critical/50" style={{ left: `${barPct(45)}%` }} />
+        <div className="absolute top-0 bottom-0 w-px bg-success/50" style={{ left: `${barPct(55)}%` }} />
       </div>
-      <div className={`w-12 text-right text-xs font-mono ${getPerformanceTextColor(phase.performance)}`}>
-        {phase.performance.toFixed(0)}%
+      <div
+        className={`w-16 text-right text-xs font-mono ${getPerformanceTextColor(phase.performance)}`}
+        title={`index ${phase.performance.toFixed(0)}`}
+      >
+        KSS {indexToKss(phase.performance).toFixed(1)}
       </div>
     </div>
   );
@@ -123,7 +128,7 @@ export function FlightPhasePerformance({ duty }: FlightPhasePerformanceProps) {
 
   const clampedPhases = overallPhasePerformance.map(p => ({
     ...p,
-    performance: Math.max(0, Math.min(100, p.performance)),
+    performance: Math.max(INDEX_MIN, Math.min(100, p.performance)),
   }));
 
   const criticalPhases = clampedPhases.filter(p => p.isCritical);
@@ -137,17 +142,17 @@ export function FlightPhasePerformance({ duty }: FlightPhasePerformanceProps) {
         <CardTitle className="flex items-center justify-between text-base">
           <span className="flex items-center gap-2">
             <Plane className="h-4 w-4 text-primary" />
-            Flight Phase Performance
+            Flight Phase Alertness
             {hasMultipleSegments && (
               <Badge variant="outline" className="text-[10px] ml-1">
                 {duty.flightSegments.length} sectors
               </Badge>
             )}
           </span>
-          {lowestCritical && lowestCritical.performance < 60 && (
+          {lowestCritical && isElevatedRisk(classifyPerformance(lowestCritical.performance)) && (
             <Badge variant="critical" className="flex items-center gap-1">
               <AlertTriangle className="h-3 w-3" />
-              {lowestCritical.label}: {lowestCritical.performance.toFixed(0)}%
+              {lowestCritical.label}: KSS {indexToKss(lowestCritical.performance).toFixed(1)}
             </Badge>
           )}
         </CardTitle>
@@ -188,12 +193,12 @@ export function FlightPhasePerformance({ duty }: FlightPhasePerformanceProps) {
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge 
-                          variant={segment.performance < 50 ? 'critical' : segment.performance < 60 ? 'warning' : 'success'}
+                          variant={riskBadgeVariant(classifyPerformance(segment.performance, duty.riskThresholds))}
                           className="text-[10px]"
                         >
-                          {segment.performance.toFixed(0)}%
+                          KSS {indexToKss(segment.performance).toFixed(1)}
                         </Badge>
-                        {lowestPhase.performance < 60 && (
+                        {isElevatedRisk(classifyPerformance(lowestPhase.performance, duty.riskThresholds)) && (
                           <span className="text-[10px] text-critical">
                             ⚠️ {phaseConfig[lowestPhase.phase].label}
                           </span>
@@ -226,15 +231,19 @@ export function FlightPhasePerformance({ duty }: FlightPhasePerformanceProps) {
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-success" />
-              70%+
+              KSS &lt;5.5
             </span>
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-warning" />
-              60-70%
+              5.5–6.5
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-high" />
+              6.5–7.5
             </span>
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-critical" />
-              &lt;60%
+              ≥7.5
             </span>
           </div>
         </div>

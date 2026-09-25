@@ -15,37 +15,41 @@ export function ReportMethodology() {
           </div>
 
           <p className="text-xs leading-relaxed text-muted-foreground print:text-gray-700">
-            This report uses the Borbely Two-Process Model of sleep regulation (Borbely, 1982)
-            as extended for aviation applications. The model integrates three primary processes:
+            This report uses the Three Process Model of alertness (Åkerstedt &amp; Folkard, 1997) in the
+            form validated on airline crew by Ingre et al. (2014, model 5c). It predicts sleepiness on the
+            Karolinska Sleepiness Scale (KSS, 1–9) from three processes:
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <ProcessCard
               process="S"
               name="Homeostatic Sleep Pressure"
-              description="Tracks the accumulation of sleep need during wakefulness and its dissipation during sleep. Higher values indicate greater sleep debt."
-              reference="Borbely, 1982; Achermann et al., 1993"
+              description="Builds during wakefulness and recovers during sleep, with a 'brake' that slows recovery near full restoration. Up to ~5.5 KSS points between fully rested and depleted."
+              reference="Ingre et al., 2014; Åkerstedt & Folkard, 1997"
             />
             <ProcessCard
               process="C"
               name="Circadian Rhythm"
-              description="Models the ~24h biological clock cycle. Alertness peaks in the afternoon and reaches its nadir during the Window of Circadian Low (02:00–05:59)."
-              reference="Czeisler et al., 1999; Åkerstedt & Folkard, 1997"
+              description="~24h body clock, lowest in the early-morning body-clock hours (WOCL). Worth ~2.3 KSS points peak to trough. Re-adapts to a new time zone at ~30% of the remaining difference per day."
+              reference="Ingre et al., 2014"
             />
             <ProcessCard
-              process="W"
-              name="Sleep Inertia"
-              description="Captures the transient grogginess immediately after waking. Dissipates over 15–30 minutes but can be significant if woken during deep sleep."
-              reference="Jewett et al., 1999; Tassi & Muzet, 2000"
+              process="U"
+              name="Ultradian Rhythm"
+              description="A small 12-hour component (≤0.5 KSS) that captures the post-lunch dip."
+              reference="Ingre et al., 2014"
             />
           </div>
 
           <p className="text-xs leading-relaxed text-muted-foreground print:text-gray-700">
-            Additional factors integrated into the performance prediction include time-on-task fatigue
-            (Folkard & Åkerstedt, 1999), chronic sleep debt vulnerability (Van Dongen et al., 2003),
-            and cabin altitude hypoxia effects (Nesthus et al., 2007). The model output is expressed
-            as a composite performance score (0–100%) that maps to validated subjective scales (KSS, Samn-Perelli)
-            and objective measures (PVT reaction time).
+            Predicted KSS = 9.68 − 0.46·(S + C + U). The 20–100 index shown alongside is a linear
+            re-expression (index = 110 − 10·KSS); it is not a percentage and not alcohol-equivalent. Risk
+            bands: low KSS &lt; 5.5, moderate 5.5–6.5, high 6.5–7.5, critical 7.5–8.5, extreme ≥ 8.5.
+            KSS ≥ 7 is associated with physiological signs of sleepiness (Åkerstedt et al., 2014). The
+            90th-percentile KSS and P(KSS ≥ 7) come from the published individual-difference and ordinal
+            models. Sleep inertia, time-on-task, workload and cabin hypoxia are not part of the score; the
+            7-day sleep deficit is reported separately. Predictions describe a group-average pilot
+            (typical error ±1.4 KSS) and are not a fitness-to-fly determination.
           </p>
 
           {/* References */}
@@ -55,18 +59,15 @@ export function ReportMethodology() {
             </h4>
             <div className="space-y-1.5 text-[10px] text-muted-foreground print:text-gray-600 leading-relaxed">
               <Reference text="Åkerstedt, T. & Folkard, S. (1997). The three-process model of alertness and its extension to performance. Sleep, 20(4), 282-292." />
+              <Reference text="Åkerstedt, T., Anund, A., Axelsson, J. & Kecklund, G. (2014). Subjective sleepiness is a sensitive indicator of insufficient sleep and impaired waking function. J Sleep Res, 23(3), 240-252." />
               <Reference text="Åkerstedt, T. & Gillberg, M. (1990). Subjective and objective sleepiness in the active individual. Int J Neurosci, 52(1-2), 29-37." />
-              <Reference text="Basner, M. & Dinges, D.F. (2011). Maximizing sensitivity of the PVT to sleep loss. Sleep, 34(5), 581-591." />
               <Reference text="Belenky, G. et al. (2003). Patterns of performance degradation and restoration during sleep restriction and subsequent recovery. J Sleep Res, 12(1), 1-12." />
-              <Reference text="Borbely, A.A. (1982). A two process model of sleep regulation. Human Neurobiology, 1(3), 195-204." />
               <Reference text="Caldwell, J.A. et al. (2009). Fatigue countermeasures in aviation. Aviation, Space, and Environmental Medicine, 80(1), 29-59." />
-              <Reference text="Dawson, D. & Reid, K. (1997). Fatigue, alcohol and performance impairment. Nature, 388, 235." />
-              <Reference text="Folkard, S. & Åkerstedt, T. (1999). A three process model of the regulation of alertness-sleepiness. In: Sleep, Sleepiness and Performance." />
+              <Reference text="Ingre, M., Van Leeuwen, W., Klemets, T. et al. (2014). Validating and extending the three process model of alertness in airline operations. PLoS ONE, 9(10), e108679." />
               <Reference text="ICAO (2016). Doc 9966: Manual for the Oversight of Fatigue Management Approaches (2nd ed.)." />
               <Reference text="Kamimori, G.H. et al. (2015). Caffeine improves reaction time, vigilance and logical reasoning. Aviation, Space, and Environmental Medicine, 86(8), 700-706." />
               <Reference text="Ker, K. et al. (2010). Caffeine for the prevention of injuries and errors in shift workers. Cochrane Database of Systematic Reviews, 5." />
               <Reference text="Kitamura, S. et al. (2016). Estimating individual optimal sleep duration and potential sleep debt. Scientific Reports, 6, 35812." />
-              <Reference text="Nesthus, T.E. et al. (2007). Effects of mild hypoxia on pilot performances at general aviation altitudes. DOT/FAA/AM-07/6." />
               <Reference text="Rosekind, M.R. et al. (1994). Alertness management in long-haul flight operations. SAE Technical Paper 942130." />
               <Reference text="Signal, T.L. et al. (2013). In-flight sleep of flight crew during a 7-hour rest break. Aviation, Space, and Environmental Medicine, 84(5), 471-476." />
               <Reference text="Van Dongen, H.P.A. et al. (2003). The cumulative cost of additional wakefulness. Sleep, 26(2), 117-126." />
@@ -99,7 +100,7 @@ function ProcessCard({ process, name, description, reference }: {
   const colors: Record<string, string> = {
     S: 'text-red-400 bg-red-400/10 border-red-400/30',
     C: 'text-blue-400 bg-blue-400/10 border-blue-400/30',
-    W: 'text-amber-400 bg-amber-400/10 border-amber-400/30',
+    U: 'text-amber-400 bg-amber-400/10 border-amber-400/30',
   };
   const colorClass = colors[process] ?? 'text-primary bg-primary/10 border-primary/30';
 

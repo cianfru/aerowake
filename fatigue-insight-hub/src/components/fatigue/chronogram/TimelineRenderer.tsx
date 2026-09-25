@@ -14,6 +14,7 @@ import type { TimelineData } from '@/lib/timeline-types';
 import type { DutyAnalysis } from '@/types/fatigue';
 import type { SleepEdit } from '@/hooks/useSleepEdits';
 import { format } from 'date-fns';
+import { RISK_LEVEL_KSS_RANGE, RISK_LEVEL_LABELS, riskHex } from '@/lib/risk-scale';
 
 interface TimelineRendererProps {
   data: TimelineData;
@@ -94,7 +95,7 @@ export function TimelineRenderer({
     ? 'This chart shows duties positioned in UTC (Zulu) time. All bars use deterministic UTC coordinates from ISO timestamps — no timezone conversion applied.'
     : data.variant === 'elapsed'
     ? 'This chart shows duties on an elapsed-time axis. Each row represents 24 hours of continuous time. WOCL bands shift with circadian adaptation.'
-    : 'The chart shows duty periods across the month. Colors indicate fatigue level (performance score):';
+    : 'The chart shows duty periods across the month. Colors indicate the predicted sleepiness band (KSS):';
 
   const woclNote = data.variant === 'utc'
     ? 'Purple shaded area = WOCL (Window of Circadian Low: 02:00-06:00 UTC)'
@@ -151,10 +152,12 @@ export function TimelineRenderer({
           <div className="rounded-lg bg-secondary/30 p-3 text-xs text-muted-foreground">
             <p className="mb-2">{infoText}</p>
             <div className="flex flex-wrap gap-4">
-              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded" style={{ backgroundColor: 'hsl(120, 70%, 45%)' }} /> 80-100% (Good)</span>
-              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded" style={{ backgroundColor: 'hsl(55, 90%, 55%)' }} /> 60-80% (Moderate)</span>
-              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded" style={{ backgroundColor: 'hsl(25, 95%, 50%)' }} /> 40-60% (High Risk)</span>
-              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded" style={{ backgroundColor: 'hsl(0, 80%, 50%)' }} /> &lt;40% (Critical)</span>
+              {(['low', 'moderate', 'high', 'critical', 'extreme'] as const).map((level) => (
+                <span key={level} className="flex items-center gap-1">
+                  <span className="h-3 w-3 rounded" style={{ backgroundColor: riskHex(level) }} />
+                  {RISK_LEVEL_KSS_RANGE[level]} ({RISK_LEVEL_LABELS[level]})
+                </span>
+              ))}
             </div>
             <p className="mt-2">{woclNote}</p>
           </div>

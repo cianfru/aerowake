@@ -17,6 +17,16 @@ import { Loader2, Plane, Moon, Home } from 'lucide-react';
 import { DutyAnalysis, RestDaySleep } from '@/types/fatigue';
 import { useContinuousTimelineData, ContinuousTimelinePoint, DutyDetailTimeline } from '@/hooks/useContinuousTimelineData';
 import { useFetchAllDutyTimelines } from '@/hooks/useFetchAllDutyTimelines';
+import {
+  DEFAULT_RISK_THRESHOLDS,
+  INDEX_AXIS_TICKS,
+  indexTickAsKss,
+  kssLabel,
+  normalizeRiskLevel,
+  resolveKss,
+  riskCssColor,
+  riskReferenceLines,
+} from '@/lib/risk-scale';
 import { format } from 'date-fns';
 
 interface ContinuousPerformanceTimelineProps {
@@ -29,14 +39,16 @@ interface ContinuousPerformanceTimelineProps {
   pilotBase?: string;
 }
 
-const getRiskColor = (level: string) => {
-  switch (level) {
-    case 'CRITICAL': return 'hsl(var(--destructive))';
-    case 'HIGH': return 'hsl(var(--warning))';
-    case 'MODERATE': return 'hsl(var(--chart-4))';
-    default: return 'hsl(var(--success))';
-  }
-};
+const getRiskColor = (level: string) => riskCssColor(normalizeRiskLevel(level));
+
+/** Background risk bands on the index axis (default KSS bands). */
+const RISK_BANDS: Array<{ level: 'low' | 'moderate' | 'high' | 'critical' | 'extreme'; y1: number; y2: number }> = [
+  { level: 'low', y1: DEFAULT_RISK_THRESHOLDS.low[0], y2: 100 },
+  { level: 'moderate', y1: DEFAULT_RISK_THRESHOLDS.moderate[0], y2: DEFAULT_RISK_THRESHOLDS.low[0] },
+  { level: 'high', y1: DEFAULT_RISK_THRESHOLDS.high[0], y2: DEFAULT_RISK_THRESHOLDS.moderate[0] },
+  { level: 'critical', y1: DEFAULT_RISK_THRESHOLDS.critical[0], y2: DEFAULT_RISK_THRESHOLDS.high[0] },
+  { level: 'extreme', y1: 20, y2: DEFAULT_RISK_THRESHOLDS.critical[0] },
+];
 
 const formatTimestamp = (ms: number) => {
   const d = new Date(ms);
@@ -66,12 +78,17 @@ function CustomTooltip({ active, payload }: any) {
       )}
 
       <div className="mt-2 space-y-1">
-        <div className="flex justify-between gap-4">
-          <span className="text-muted-foreground">Performance:</span>
-          <span className="font-mono font-bold" style={{ color: getRiskColor(d.riskLevel) }}>
-            {d.performance.toFixed(1)}%
-          </span>
-        </div>
+        {(() => {
+          const kss = resolveKss(d.kss, d.performance);
+          return kss == null ? null : (
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Predicted KSS:</span>
+              <span className="font-mono font-bold" style={{ color: getRiskColor(d.riskLevel) }}>
+                {kss.toFixed(1)} · {kssLabel(kss)}
+              </span>
+            </div>
+          );
+        })()}
         <div className="flex justify-between gap-4">
           <span className="text-muted-foreground">Sleep Reservoir:</span>
           <span className="font-mono">{d.sleepReservoir.toFixed(1)}%</span>
@@ -99,21 +116,15 @@ function CustomTooltip({ active, payload }: any) {
         {/* High-res three-process breakdown */}
         {d.isHighRes && d.circadian !== undefined && (
           <div className="border-t border-border/50 mt-1.5 pt-1.5 space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">Borbely Components</p>
+            <p className="text-xs font-medium text-muted-foreground">Model components (0–1)</p>
             <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Circadian (C):</span>
-              <span className="font-mono">{((d.circadian ?? 0) * 100).toFixed(0)}%</span>
+              <span className="text-muted-foreground">Circadian phase (C):</span>
+              <span className="font-mono">{(d.circadian ?? 0).toFixed(2)}</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Homeostatic (S):</span>
-              <span className="font-mono">{((d.homeostatic ?? 0) * 100).toFixed(0)}%</span>
+              <span className="text-muted-foreground">Sleep pressure (S):</span>
+              <span className="font-mono">{(d.homeostatic ?? 0).toFixed(2)}</span>
             </div>
-            {d.sleepInertia !== undefined && d.sleepInertia < 0.99 && (
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Sleep Inertia (W):</span>
-                <span className="font-mono">{(d.sleepInertia * 100).toFixed(0)}%</span>
-              </div>
-            )}
           </div>
         )}
 
@@ -210,7 +221,7 @@ export function ContinuousPerformanceTimeline({
         <div className="flex items-center gap-4 text-xs">
           <span className="flex items-center gap-1.5">
             <span className="h-0.5 w-4 bg-foreground inline-block" />
-            Performance
+            Predicted alertness (KSS)
           </span>
           <span className="flex items-center gap-1.5">
             <span className="h-0.5 w-4 bg-destructive inline-block" />
@@ -255,10 +266,16 @@ export function ContinuousPerformanceTimeline({
               <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
 
               {/* Risk zone background bands */}
-              <ReferenceArea y1={75} y2={100} fill="hsl(var(--success))" fillOpacity={0.06} yAxisId="left" />
-              <ReferenceArea y1={65} y2={75} fill="hsl(var(--chart-4))" fillOpacity={0.06} yAxisId="left" />
-              <ReferenceArea y1={55} y2={65} fill="hsl(var(--warning))" fillOpacity={0.08} yAxisId="left" />
-              <ReferenceArea y1={0} y2={55} fill="hsl(var(--destructive))" fillOpacity={0.06} yAxisId="left" />
+              {RISK_BANDS.map((band) => (
+                <ReferenceArea
+                  key={band.level}
+                  y1={Math.max(band.y1, activityLaneTop)}
+                  y2={band.y2}
+                  fill={riskCssColor(band.level)}
+                  fillOpacity={0.06}
+                  yAxisId="left"
+                />
+              ))}
 
               {/* WOCL bands */}
               {woclBands.map((band, idx) => (
@@ -313,8 +330,17 @@ export function ContinuousPerformanceTimeline({
               ))}
 
               {/* Threshold reference lines */}
-              <ReferenceLine y={77} stroke="hsl(var(--success))" strokeDasharray="6 3" strokeOpacity={0.5} yAxisId="left" label={{ value: '77%', position: 'right', fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} />
-              <ReferenceLine y={55} stroke="hsl(var(--destructive))" strokeDasharray="6 3" strokeOpacity={0.5} yAxisId="left" label={{ value: '55%', position: 'right', fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} />
+              {riskReferenceLines().map((line) => (
+                <ReferenceLine
+                  key={line.value}
+                  y={line.value}
+                  stroke={line.color}
+                  strokeDasharray="6 3"
+                  strokeOpacity={0.5}
+                  yAxisId="left"
+                  label={{ value: line.label, position: 'right', fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
+                />
+              ))}
 
               {/* Activity lane separator */}
               <ReferenceLine y={activityLaneTop} stroke="hsl(var(--border))" strokeWidth={1} yAxisId="left" />
@@ -333,13 +359,13 @@ export function ContinuousPerformanceTimeline({
                 minTickGap={50}
               />
 
-              {/* Left Y-Axis: Performance % */}
+              {/* Left Y-Axis: index 20–100 labelled as KSS (0–10 = activity lane) */}
               <YAxis
                 yAxisId="left"
                 domain={[0, 100]}
-                ticks={[0, 25, 50, 55, 65, 75, 100]}
+                ticks={INDEX_AXIS_TICKS}
                 tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
-                tickFormatter={(v) => v > activityLaneTop ? `${v}%` : ''}
+                tickFormatter={(v) => v > activityLaneTop ? `KSS ${indexTickAsKss(v)}` : ''}
                 tickLine={false}
                 axisLine={false}
                 width={40}
@@ -373,7 +399,7 @@ export function ContinuousPerformanceTimeline({
                 fill="url(#perfGradient)"
                 dot={false}
                 isAnimationActive={false}
-                name="Performance"
+                name="Predicted alertness"
                 connectNulls
               />
 
@@ -398,30 +424,30 @@ export function ContinuousPerformanceTimeline({
       <div className="flex items-center justify-between text-xs text-muted-foreground flex-wrap gap-2">
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1">
-            <span className="h-px w-4 border-t-2 border-dashed border-success" />
-            EASA Threshold (77%)
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="h-px w-4 border-t-2 border-dashed border-destructive" />
-            Critical (55%)
+            <span className="h-px w-4 border-t-2 border-dashed border-warning" />
+            Band boundaries at KSS 5.5 / 6.5 / 7.5 / 8.5
           </span>
         </div>
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1">
-            <span className="h-2 w-3 rounded-sm" style={{ backgroundColor: 'hsl(var(--success))', opacity: 0.3 }} />
-            Low Risk
+            <span className="h-2 w-3 rounded-sm" style={{ backgroundColor: riskCssColor('low'), opacity: 0.3 }} />
+            Low
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2 w-3 rounded-sm" style={{ backgroundColor: 'hsl(var(--chart-4))', opacity: 0.3 }} />
+            <span className="h-2 w-3 rounded-sm" style={{ backgroundColor: riskCssColor('moderate'), opacity: 0.3 }} />
             Moderate
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2 w-3 rounded-sm" style={{ backgroundColor: 'hsl(var(--warning))', opacity: 0.4 }} />
+            <span className="h-2 w-3 rounded-sm" style={{ backgroundColor: riskCssColor('high'), opacity: 0.4 }} />
             High
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2 w-3 rounded-sm" style={{ backgroundColor: 'hsl(var(--destructive))', opacity: 0.3 }} />
+            <span className="h-2 w-3 rounded-sm" style={{ backgroundColor: riskCssColor('critical'), opacity: 0.3 }} />
             Critical
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-3 rounded-sm" style={{ backgroundColor: riskCssColor('extreme'), opacity: 0.3 }} />
+            Extreme
           </span>
         </div>
       </div>

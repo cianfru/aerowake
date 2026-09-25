@@ -5,7 +5,8 @@
  * eliminate duplication and ensure consistent behavior.
  */
 
-import type { DutyAnalysis } from '@/types/fatigue';
+import type { DutyAnalysis, RiskLevelUpper } from '@/types/fatigue';
+import { classifyPerformance, indexToKss, isElevatedRisk, performanceHex, resolveKss, type RiskThresholds } from '@/lib/risk-scale';
 
 /** Parse "HH:mm" time string to decimal hours (e.g., "18:30" → 18.5). */
 export const parseTimeToHours = (timeStr: string | undefined): number | undefined => {
@@ -73,15 +74,14 @@ export const getStrategyIcon = (strategy: string): string => {
   }
 };
 
-/** Map performance percentage (0–100) to an HSL color string. */
-export const getPerformanceColor = (performance: number): string => {
-  if (performance >= 80) return 'hsl(120, 70%, 45%)';
-  if (performance >= 70) return 'hsl(90, 70%, 50%)';
-  if (performance >= 60) return 'hsl(55, 90%, 55%)';
-  if (performance >= 50) return 'hsl(40, 95%, 50%)';
-  if (performance >= 40) return 'hsl(20, 95%, 50%)';
-  return 'hsl(0, 80%, 50%)';
-};
+/**
+ * Map the 20–100 alertness index (= 110 − 10·KSS) to its risk-band hex colour.
+ * Delegates to the shared risk scale so every view agrees with the backend bands.
+ */
+export const getPerformanceColor = (
+  performance: number,
+  thresholds?: RiskThresholds | null,
+): string => performanceHex(performance, thresholds);
 
 // --- Training duty helpers ---
 
@@ -268,7 +268,7 @@ export function buildFlightPhases(
 export function getDayWarnings(
   duties: DutyAnalysis[],
   dayOfMonth: number,
-): { warnings: string[]; risk: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL' } | null {
+): { warnings: string[]; risk: RiskLevelUpper } | null {
   const duty = duties.find(d => {
     const dom = d.dateString ? Number(d.dateString.split('-')[2]) : d.date.getDate();
     return dom === dayOfMonth;
@@ -283,8 +283,9 @@ export function getDayWarnings(
   if (duty.priorSleep < 8) {
     warnings.push(`Sleep ${duty.priorSleep.toFixed(1)}h`);
   }
-  if (duty.minPerformance < 60) {
-    warnings.push(`Perf ${Math.round(duty.minPerformance)}%`);
+  if (isElevatedRisk(classifyPerformance(duty.minPerformance, duty.riskThresholds))) {
+    const kss = resolveKss(duty.maxKss, duty.minPerformance) ?? indexToKss(duty.minPerformance);
+    warnings.push(`KSS ${kss.toFixed(1)}`);
   }
   if (duty.sleepDebt > 4) {
     warnings.push(`Debt ${duty.sleepDebt.toFixed(1)}h`);

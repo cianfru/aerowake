@@ -68,6 +68,7 @@ export interface DutySegment {
   arrival_utc_offset: number | null;    // UTC offset hours e.g. 3.0
   // Line training annotations (X, U, UL, L, E, ZFT)
   line_training_codes?: string[];
+  aircraft_type?: string | null;
 }
 
 // Sleep block from strategic sleep estimator
@@ -93,6 +94,11 @@ export interface SleepBlockResponse {
   // UTC ISO timestamps (canonical, unambiguous — used for what-if sleep editing)
   sleep_start_utc?: string | null;
   sleep_end_utc?: string | null;
+  // Home-base TZ positioning
+  sleep_start_day_home_tz?: number | null;
+  sleep_start_hour_home_tz?: number | null;
+  sleep_end_day_home_tz?: number | null;
+  sleep_end_hour_home_tz?: number | null;
 }
 
 // Strategic sleep estimator output (SleepQualityResponse from backend)
@@ -185,6 +191,40 @@ export interface Duty {
   sleep_debt: number;
   wocl_hours: number;
   prior_sleep: number;
+
+  // KSS-anchored alertness (engine aerowake-4.0-kss)
+  max_kss?: number | null;
+  landing_kss?: number | null;
+  max_kss_90?: number | null;
+  max_p_severe_sleepiness?: number | null;
+  max_hours_awake?: number | null;
+  sleep_deficit_7d?: {
+    days: number;
+    sleep_hours: number;
+    need_hours: number;
+    deficit_hours: number;
+    band: 'none' | 'mild' | 'moderate' | 'severe';
+  } | null;
+
+  // Worst on-deck point (S/C decomposition for immediate rendering)
+  worst_point?: {
+    performance: number;
+    sleep_pressure?: number;
+    circadian?: number;
+    sleep_inertia?: number;
+    time_on_task_penalty?: number;
+    debt_penalty?: number;
+    hypoxia_factor?: number;
+    pvt_lapses?: number;
+    microsleep_probability?: number;
+    kss?: number;
+    kss_90?: number;
+    p_severe_sleepiness?: number;
+    hours_awake?: number;
+    hours_on_duty?: number;
+    timestamp?: string;
+    timestamp_local?: string;
+  } | null;
   
   // Strategic sleep estimator fields
   sleep_estimate?: SleepEstimate;
@@ -201,11 +241,16 @@ export interface Duty {
   max_fdp_hours?: number;
   extended_fdp_hours?: number;
   used_discretion?: boolean;
+  actual_fdp_hours?: number | null;
+  // Cabin environment
+  cabin_altitude_ft?: number | null;
+  aircraft_type?: string | null;
   // Circadian adaptation state at duty report time
   circadian_phase_shift?: number | null;
 
   // ULR / Augmented crew fields
   crew_composition?: CrewComposition;
+  ulr_crew_set?: 'crew_a' | 'crew_b' | null;
   rest_facility_class?: RestFacilityClass | null;
   is_ulr?: boolean;
   acclimatization_state?: AcclimatizationState;

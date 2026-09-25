@@ -23,7 +23,7 @@ const capabilities = [
   {
     icon: Activity,
     title: 'Per-Phase Scoring',
-    desc: 'Performance scores at every flight phase — from departure through cruise to approach and landing.',
+    desc: 'Predicted sleepiness (KSS) at every flight phase — from departure through cruise to approach and landing.',
     accent: 'hsl(30, 90%, 55%)',
   },
   {

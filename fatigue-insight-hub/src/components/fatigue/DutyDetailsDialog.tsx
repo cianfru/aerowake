@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { mapTimelinePoints } from '@/lib/transform-analysis';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { DutyAnalysis } from '@/types/fatigue';
 import { getDutyDetail } from '@/lib/api-client';
@@ -68,25 +69,7 @@ export function DutyDetailsDialog({
         const rawTimeline = detail?.timeline ?? detail?.timeline_points ?? detail?.timelinePoints;
 
         // Map snake_case fields to TimelinePoint interface
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const timelinePoints = Array.isArray(rawTimeline) ? rawTimeline.map((pt: any) => ({
-          hours_on_duty: pt.hours_on_duty ?? 0,
-          time_on_task_penalty: pt.time_on_task_penalty ?? 0,
-          sleep_inertia: pt.sleep_inertia ?? 0,
-          sleep_pressure: pt.sleep_pressure ?? 0,
-          circadian: pt.circadian ?? 0,
-          performance: pt.performance,
-          is_in_rest: pt.is_in_rest ?? false,
-          flight_phase: pt.flight_phase ?? null,
-          is_critical: pt.is_critical ?? false,
-          timestamp: pt.timestamp,
-          timestamp_local: pt.timestamp_local,
-          // Phase 2 model deepening fields
-          debt_penalty: pt.debt_penalty,
-          hypoxia_factor: pt.hypoxia_factor,
-          pvt_lapses: pt.pvt_lapses,
-          microsleep_probability: pt.microsleep_probability,
-        })) : undefined;
+        const timelinePoints = mapTimelinePoints(rawTimeline);
 
         setDetailedDuty({
           ...duty,

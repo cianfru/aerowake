@@ -7,7 +7,7 @@ interface DayLabelProps {
 }
 
 export function DayLabel({ label, rowHeight }: DayLabelProps) {
-  const riskClass = label.risk === 'CRITICAL' ? 'risk-border-critical'
+  const riskClass = label.risk === 'CRITICAL' || label.risk === 'EXTREME' ? 'risk-border-critical'
     : label.risk === 'HIGH' ? 'risk-border-high'
     : label.risk === 'MODERATE' ? 'risk-border-moderate'
     : label.hasDuty ? 'risk-border-low' : '';
@@ -25,7 +25,7 @@ export function DayLabel({ label, rowHeight }: DayLabelProps) {
         {label.warnings.length > 0 && (
           <span className={cn(
             "text-[9px] leading-tight truncate max-w-[50px]",
-            label.risk === 'CRITICAL' && "text-critical",
+            (label.risk === 'CRITICAL' || label.risk === 'EXTREME') && "text-critical",
             label.risk === 'HIGH' && "text-high",
             label.risk === 'MODERATE' && "text-warning",
             label.risk === 'LOW' && "text-muted-foreground"

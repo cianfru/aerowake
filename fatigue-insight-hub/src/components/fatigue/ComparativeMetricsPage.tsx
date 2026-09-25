@@ -19,6 +19,7 @@ import { useComparativeMetrics } from '@/hooks/useComparativeMetrics';
 import { useRosterHistory } from '@/hooks/useRosterHistory';
 import { cn } from '@/lib/utils';
 import type { GroupMetrics, PercentilePosition } from '@/lib/api-client';
+import { INDEX_AXIS_TICKS, INDEX_DOMAIN, indexTickAsKss, indexToKss, riskReferenceLines } from '@/lib/risk-scale';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -224,10 +225,10 @@ export function ComparativeMetricsPage() {
         {metrics.has_sufficient_data && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <MetricCard
-              label="Avg Performance"
+              label="Avg alertness index (110 − 10·KSS)"
               icon={<Activity className="h-4 w-4" />}
               value={metrics.pilot.avg_performance}
-              unit="%"
+              unit=""
               groups={metrics.groups}
               metricKey="avg_performance"
               positions={metrics.positions.filter(p => p.metric === 'performance')}
@@ -337,16 +338,18 @@ function HeadlineCard({
           <div>
             <p className="text-xs text-muted-foreground mb-1">{formatMonth(month)} — You vs. {label}</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold tabular-nums">{pilotPerf?.toFixed(1) ?? '—'}%</span>
+              <span className="text-3xl font-bold tabular-nums">
+                {pilotPerf != null ? `KSS ${indexToKss(pilotPerf).toFixed(1)}` : '—'}
+              </span>
               {diff !== null && (
                 <span className={cn('flex items-center gap-0.5 text-sm font-medium', isAbove ? 'text-emerald-500' : 'text-amber-500')}>
                   {isAbove ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
-                  {Math.abs(diff).toFixed(1)}%
+                  {(Math.abs(diff) / 10).toFixed(1)} KSS {isAbove ? 'more alert' : 'sleepier'}
                 </span>
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {groupAvg !== null ? `${label} average: ${groupAvg.toFixed(1)}%` : 'No group average available'}
+              {groupAvg !== null ? `${label} average: KSS ${indexToKss(groupAvg).toFixed(1)}` : 'No group average available'}
               {sampleSize > 0 && <span className="text-muted-foreground/60"> · n={sampleSize}</span>}
             </p>
           </div>
@@ -500,7 +503,7 @@ function TrendChart({ trend }: { trend: { months: Array<{ month: string; your_pe
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
           <TrendingUp className="h-4 w-4 text-primary" />
-          Performance Trend vs. Peers
+          Alertness Trend vs. Peers (predicted KSS)
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -514,11 +517,12 @@ function TrendChart({ trend }: { trend: { months: Array<{ month: string; your_pe
               axisLine={false}
             />
             <YAxis
-              domain={[40, 100]}
+              domain={INDEX_DOMAIN}
+              ticks={INDEX_AXIS_TICKS}
               tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
               tickLine={false}
               axisLine={false}
-              tickFormatter={(v) => `${v}%`}
+              tickFormatter={(v) => `KSS ${indexTickAsKss(v)}`}
             />
             <Tooltip
               content={({ active, payload, label }) => {
@@ -530,7 +534,7 @@ function TrendChart({ trend }: { trend: { months: Array<{ month: string; your_pe
                         <p key={i} className="text-xs">
                           <span className="text-muted-foreground">{entry.name}: </span>
                           <span className="font-mono font-medium" style={{ color: entry.color }}>
-                            {entry.value?.toFixed(1) ?? '—'}%
+                            {entry.value != null ? `KSS ${indexToKss(entry.value).toFixed(1)}` : '—'}
                           </span>
                         </p>
                       ))}
@@ -540,12 +544,16 @@ function TrendChart({ trend }: { trend: { months: Array<{ month: string; your_pe
                 return null;
               }}
             />
-            <ReferenceLine
-              y={77}
-              stroke="hsl(var(--warning))"
-              strokeDasharray="3 3"
-              strokeOpacity={0.5}
-            />
+            {riskReferenceLines().map((line) => (
+              <ReferenceLine
+                key={line.value}
+                y={line.value}
+                stroke={line.color}
+                strokeDasharray="3 3"
+                strokeOpacity={0.5}
+                label={{ value: line.label, position: 'right', fontSize: 9, fill: line.color }}
+              />
+            ))}
             <Area
               type="monotone"
               dataKey="Fleet Avg"

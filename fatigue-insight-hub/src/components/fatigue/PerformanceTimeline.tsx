@@ -3,6 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DutyAnalysis } from '@/types/fatigue';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { format, eachDayOfInterval, startOfMonth, endOfMonth, isSameDay } from 'date-fns';
+import { INDEX_AXIS_TICKS, INDEX_DOMAIN, indexTickAsKss, indexToKss, riskReferenceLines } from '@/lib/risk-scale';
+
+/** Illustrative "rested" ceiling for rest days: index 80 = KSS 3 ("alert"). */
+const RESTED_INDEX = 80;
 
 interface PerformanceTimelineProps {
   duties: DutyAnalysis[];
@@ -64,10 +68,10 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
       const baseSleepEfficiency = lastSleepEstimate?.sleepEfficiency || 0.85;
       
       // Recovery model: better prior sleep = faster recovery
-      const baseRecovery = lastDuty ? lastDuty.avgPerformance : 85;
+      const baseRecovery = lastDuty ? lastDuty.avgPerformance : RESTED_INDEX;
       const recoveryRate = 5 + (baseSleepEfficiency * 5); // 5-10% per day
-      const recoveredPerformance = Math.min(95, baseRecovery + (daysSinceLastDuty * recoveryRate));
-      const minRecovered = Math.min(92, (lastDuty?.minPerformance || 80) + (daysSinceLastDuty * recoveryRate));
+      const recoveredPerformance = Math.min(RESTED_INDEX, baseRecovery + (daysSinceLastDuty * recoveryRate));
+      const minRecovered = Math.min(RESTED_INDEX - 3, (lastDuty?.minPerformance || RESTED_INDEX - 5) + (daysSinceLastDuty * recoveryRate));
       
       // Recovery score improves with rest days (home sleep quality ~90%)
       const recoveryScore = Math.min(100, 65 + (daysSinceLastDuty * 8));
@@ -119,12 +123,12 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
           </p>
           <div className="space-y-1">
             <p className="text-xs">
-              <span className="text-muted-foreground">Avg Performance: </span>
-              <span className="font-medium text-primary">{data.avgPerformance.toFixed(1)}%</span>
+              <span className="text-muted-foreground">Avg KSS: </span>
+              <span className="font-medium text-primary">{indexToKss(data.avgPerformance).toFixed(1)}</span>
             </p>
             <p className="text-xs">
-              <span className="text-muted-foreground">Min Performance: </span>
-              <span className="font-medium text-critical">{data.minPerformance.toFixed(1)}%</span>
+              <span className="text-muted-foreground">Peak KSS: </span>
+              <span className="font-medium text-critical">{indexToKss(data.minPerformance).toFixed(1)}</span>
             </p>
             {data.recoveryScore !== null && (
               <>
@@ -189,7 +193,7 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
     <Card variant="glass">
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span>Performance Timeline - {format(month, 'MMMM yyyy')}</span>
+          <span>Alertness Timeline (predicted KSS) - {format(month, 'MMMM yyyy')}</span>
           <div className="flex items-center gap-4 text-xs font-normal">
             <span className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-primary" />
@@ -226,27 +230,25 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
                 interval={0}
               />
               <YAxis
-                domain={[40, 100]}
+                domain={INDEX_DOMAIN}
                 stroke="hsl(var(--muted-foreground))"
                 fontSize={11}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(value) => `${value}%`}
-                ticks={[40, 50, 60, 70, 80, 90, 100]}
+                tickFormatter={(value) => `KSS ${indexTickAsKss(value)}`}
+                ticks={INDEX_AXIS_TICKS}
               />
                <Tooltip content={<CustomTooltip />} />
-              <ReferenceLine
-                y={50}
-                stroke="hsl(var(--critical))"
-                strokeDasharray="5 5"
-                strokeWidth={1.5}
-              />
-              <ReferenceLine
-                y={70}
-                stroke="hsl(var(--success))"
-                strokeDasharray="5 5"
-                strokeWidth={1.5}
-              />
+              {riskReferenceLines().map((line) => (
+                <ReferenceLine
+                  key={line.value}
+                  y={line.value}
+                  stroke={line.color}
+                  strokeDasharray="5 5"
+                  strokeWidth={1.5}
+                  label={{ value: line.label, position: 'right', fontSize: 9, fill: line.color }}
+                />
+              ))}
               <Area
                 type="monotone"
                 dataKey="minPerformance"
@@ -254,7 +256,7 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
                 fillOpacity={1}
                 fill="url(#colorMin)"
                 strokeWidth={2}
-                name="Min Performance"
+                name="Peak sleepiness"
                 dot={(props: any) => {
                   const { cx, cy, payload } = props;
                   if (payload.isDuty) {
@@ -279,7 +281,7 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
                 fillOpacity={1}
                 fill="url(#colorAvg)"
                 strokeWidth={2}
-                name="Avg Performance"
+                name="Average"
                 dot={(props: any) => {
                   const { cx, cy, payload } = props;
                   if (payload.isDuty) {
@@ -304,21 +306,17 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
           <div className="flex items-center gap-6">
             <span className="flex items-center gap-2">
               <span className="h-3 w-3 rounded-full bg-critical" />
-              Min Performance
+              Peak sleepiness (worst KSS)
             </span>
             <span className="flex items-center gap-2">
               <span className="h-3 w-3 rounded-full bg-primary" />
-              Avg Performance
+              Average KSS
             </span>
           </div>
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1">
-              <span className="h-px w-4 border-t-2 border-dashed border-critical" />
-              Critical (50%)
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="h-px w-4 border-t-2 border-dashed border-success" />
-              Safe (70%)
+              <span className="h-px w-4 border-t-2 border-dashed border-warning" />
+              Band boundaries: KSS 5.5 / 6.5 / 7.5 / 8.5
             </span>
           </div>
         </div>

@@ -178,8 +178,8 @@ export function WelcomePage() {
             />
             <ProcessStep 
               number={4}
-              title="Performance Predictions"
-              description="Get minute-by-minute performance scores on a 0-100 scale, from optimal (90-100) through good, moderate, high risk, critical, to extreme impairment."
+              title="Alertness Predictions"
+              description="Get minute-by-minute predicted sleepiness on the Karolinska Sleepiness Scale (KSS 1–9), banded low (<5.5), moderate, high, critical and extreme (≥8.5)."
             />
             <ProcessStep 
               number={5}

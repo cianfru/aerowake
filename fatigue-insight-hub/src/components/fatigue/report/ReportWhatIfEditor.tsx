@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { DutyAnalysis } from '@/types/fatigue';
 import { runWhatIf, getDutyDetail } from '@/lib/api-client';
-import { transformAnalysisResult } from '@/lib/transform-analysis';
+import { transformAnalysisResult, mapTimelinePoint } from '@/lib/transform-analysis';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 
 interface Props {
@@ -105,24 +105,7 @@ export function ReportWhatIfEditor({ duty, analysisId, onResult, onReset, isModi
         const rawTimeline = detail?.timeline ?? detail?.timeline_points ?? detail?.timelinePoints;
 
         if (Array.isArray(rawTimeline)) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          updatedDuty.timelinePoints = rawTimeline.map((pt: any) => ({
-            hours_on_duty: pt.hours_on_duty ?? 0,
-            time_on_task_penalty: pt.time_on_task_penalty ?? 0,
-            sleep_inertia: pt.sleep_inertia ?? 0,
-            sleep_pressure: pt.sleep_pressure ?? 0,
-            circadian: pt.circadian ?? 0,
-            performance: pt.performance,
-            is_in_rest: pt.is_in_rest ?? false,
-            flight_phase: pt.flight_phase ?? null,
-            is_critical: pt.is_critical ?? false,
-            timestamp: pt.timestamp,
-            timestamp_local: pt.timestamp_local,
-            debt_penalty: pt.debt_penalty,
-            hypoxia_factor: pt.hypoxia_factor,
-            pvt_lapses: pt.pvt_lapses,
-            microsleep_probability: pt.microsleep_probability,
-          }));
+          updatedDuty.timelinePoints = rawTimeline.map(mapTimelinePoint);
         }
       } catch {
         // Timeline fetch failed — report will work without it (just less detail)

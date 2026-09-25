@@ -30,9 +30,9 @@ import {
   decomposePerformance,
   calculateFHA,
   getFHASeverity,
-  performanceToKSS,
   getKSSLabel,
 } from '@/lib/fatigue-calculations';
+import { indexToKss, normalizeRiskLevel, resolveKss, riskColorClass } from '@/lib/risk-scale';
 import type { TimelineDutyBar } from '@/lib/timeline-types';
 import type { DutyAnalysis } from '@/types/fatigue';
 import { format } from 'date-fns';
@@ -124,7 +124,7 @@ export function DutyBarTooltip({
                           width: `${phase.widthPercent}%`,
                           backgroundColor: getPerformanceColor(phase.performance),
                         }}
-                        title={`${phase.phase}: ${Math.round(phase.performance)}%`}
+                        title={`${phase.phase}: KSS ${indexToKss(phase.performance).toFixed(1)}`}
                       >
                         {/* Phase separator */}
                         {phaseIndex > 0 && (
@@ -133,7 +133,7 @@ export function DutyBarTooltip({
                         {/* Phase label — only show for cruise when wide enough */}
                         {phase.phase === 'cruise' && segmentWidth > 15 && (
                           <span className="text-[6px] font-medium text-background/90 truncate">
-                            {Math.round(phase.performance)}%
+                            {indexToKss(phase.performance).toFixed(1)}
                           </span>
                         )}
                       </div>
@@ -350,7 +350,7 @@ export function DutyBarTooltip({
                             style={{ color: getPerformanceColor(segment.performance) }}
                             className="font-medium"
                           >
-                            {Math.round(segment.performance)}%
+                            KSS {indexToKss(segment.performance).toFixed(1)}
                           </span>
                         </div>
                       ))}
@@ -361,9 +361,10 @@ export function DutyBarTooltip({
 
             {/* Common metrics */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border pt-2">
-              <span className="text-muted-foreground">Min Perf:</span>
-              <span style={{ color: getPerformanceColor(bar.duty.minPerformance) }}>
-                {Math.round(bar.duty.minPerformance)}%
+              <span className="text-muted-foreground">Peak KSS:</span>
+              <span style={{ color: getPerformanceColor(bar.duty.minPerformance, bar.duty.riskThresholds) }}>
+                {(resolveKss(bar.duty.maxKss, bar.duty.minPerformance) ?? 0).toFixed(1)}
+                <span className="text-muted-foreground ml-1">(index {Math.round(bar.duty.minPerformance)})</span>
               </span>
               <span className="text-muted-foreground">WOCL Exposure:</span>
               <span className={bar.duty.woclExposure > 0 ? 'text-warning' : ''}>
@@ -376,22 +377,10 @@ export function DutyBarTooltip({
               <span className="text-muted-foreground">Sleep Debt:</span>
               <span className={bar.duty.sleepDebt > 4 ? 'text-high' : ''}>
                 {bar.duty.sleepDebt.toFixed(1)}h
-                {(() => {
-                  const wp = bar.duty.timelinePoints?.[0];
-                  if (wp?.debt_penalty != null && wp.debt_penalty < 0.99) {
-                    return <span className="text-warning ml-1">({((1 - wp.debt_penalty) * 100).toFixed(0)}%)</span>;
-                  }
-                  return null;
-                })()}
               </span>
               <span className="text-muted-foreground">Risk Level:</span>
               <span
-                className={cn(
-                  bar.duty.overallRisk === 'LOW' && 'text-success',
-                  bar.duty.overallRisk === 'MODERATE' && 'text-warning',
-                  bar.duty.overallRisk === 'HIGH' && 'text-high',
-                  bar.duty.overallRisk === 'CRITICAL' && 'text-critical'
-                )}
+                className={riskColorClass(normalizeRiskLevel(bar.duty.overallRisk))}
               >
                 {bar.duty.overallRisk}
               </span>
@@ -399,7 +388,7 @@ export function DutyBarTooltip({
 
             {/* Performance "Why?" breakdown + KSS/FHA badges */}
             {(() => {
-              const tp = bar.duty.timelinePoints;
+              const tp = bar.duty.timelinePoints?.filter((pt) => !pt.is_in_rest);
               if (!tp || tp.length === 0) return null;
               const worst = tp.reduce(
                 (min, pt) =>
@@ -411,55 +400,35 @@ export function DutyBarTooltip({
                 performance: worst.performance,
                 sleep_pressure: worst.sleep_pressure,
                 circadian: worst.circadian,
-                sleep_inertia: worst.sleep_inertia,
-                time_on_task_penalty: worst.time_on_task_penalty,
                 hours_on_duty: worst.hours_on_duty,
+                kss: worst.kss,
               });
-              const kss = performanceToKSS(worst.performance);
+              const kss = decomp.kss;
               const kssLabel = getKSSLabel(kss);
               const validPts = tp.filter((pt) => pt.performance != null);
               const fha = calculateFHA(
-                validPts.map((pt) => ({ performance: pt.performance ?? 0 }))
+                validPts.map((pt) => ({ performance: pt.performance ?? 0, kss: pt.kss })),
+                bar.duty.riskThresholds,
               );
               const fhaSev = getFHASeverity(fha);
               return (
                 <div className="border-t border-border pt-2 mt-1 space-y-1.5">
                   <span className="text-muted-foreground font-medium">
-                    Why {Math.round(worst.performance)}%?
+                    Why KSS {kss.toFixed(1)}?
                   </span>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
                     <span className="text-muted-foreground">Sleep Pressure (S):</span>
-                    <span
-                      className={
-                        decomp.sContribution > 10
-                          ? 'text-critical'
-                          : decomp.sContribution > 5
-                            ? 'text-warning'
-                            : ''
-                      }
-                    >
-                      -{decomp.sContribution.toFixed(1)}%
+                    <span className={decomp.sKss > 3 ? 'text-critical' : decomp.sKss > 2 ? 'text-warning' : ''}>
+                      +{decomp.sKss.toFixed(1)} KSS
                     </span>
                     <span className="text-muted-foreground">Circadian (C):</span>
-                    <span
-                      className={
-                        decomp.cContribution > 10
-                          ? 'text-critical'
-                          : decomp.cContribution > 5
-                            ? 'text-warning'
-                            : ''
-                      }
-                    >
-                      -{decomp.cContribution.toFixed(1)}%
+                    <span className={decomp.cKss > 1.5 ? 'text-critical' : decomp.cKss > 1 ? 'text-warning' : ''}>
+                      +{decomp.cKss.toFixed(1)} KSS
                     </span>
-                    <span className="text-muted-foreground">Time on Duty (ToT):</span>
-                    <span>-{decomp.totContribution.toFixed(1)}%</span>
-                    {decomp.wContribution > 0.1 && (
+                    {worst.hours_awake != null && (
                       <>
-                        <span className="text-muted-foreground">Sleep Inertia (W):</span>
-                        <span className="text-warning">
-                          -{decomp.wContribution.toFixed(1)}%
-                        </span>
+                        <span className="text-muted-foreground">Hours awake:</span>
+                        <span>{worst.hours_awake.toFixed(1)}h</span>
                       </>
                     )}
                   </div>
@@ -469,7 +438,7 @@ export function DutyBarTooltip({
                     </Badge>
                     {fha > 0 && (
                       <Badge variant={fhaSev.variant} className="text-[10px]">
-                        FHA {fha}
+                        FHA {fha.toFixed(1)} KSS-h
                       </Badge>
                     )}
                   </div>
@@ -492,20 +461,6 @@ export function DutyBarTooltip({
                   )}
                   <span className="text-muted-foreground">Cabin Alt.</span>
                   <span className="text-foreground font-medium">{bar.duty.cabinAltitudeFt.toLocaleString()} ft</span>
-                  {(() => {
-                    const wp = bar.duty.timelinePoints?.[0];
-                    if (wp?.hypoxia_factor != null && wp.hypoxia_factor < 0.99) {
-                      return (
-                        <>
-                          <span className="text-muted-foreground">Hypoxia</span>
-                          <span className="text-warning font-medium">
-                            {((1 - wp.hypoxia_factor) * 100).toFixed(1)}%
-                          </span>
-                        </>
-                      );
-                    }
-                    return null;
-                  })()}
                 </div>
               </div>
             )}
@@ -525,7 +480,7 @@ export function DutyBarTooltip({
                   <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
                     {pvt != null && (
                       <>
-                        <span className="text-muted-foreground">PVT Lapses</span>
+                        <span className="text-muted-foreground">PVT lapses (heuristic)</span>
                         <span className={cn(
                           'font-medium',
                           pvt <= 2 ? 'text-success' : pvt <= 5 ? 'text-warning' : 'text-critical',
@@ -536,12 +491,12 @@ export function DutyBarTooltip({
                     )}
                     {micro != null && micro > 0.01 && (
                       <>
-                        <span className="text-muted-foreground">Microsleep</span>
+                        <span className="text-muted-foreground">P(KSS 9)</span>
                         <span className={cn(
                           'font-medium',
                           micro < 0.02 ? 'text-success' : micro < 0.05 ? 'text-warning' : 'text-critical',
                         )}>
-                          {(micro * 100).toFixed(1)}%/hr
+                          {(micro * 100).toFixed(1)}%
                         </span>
                       </>
                     )}

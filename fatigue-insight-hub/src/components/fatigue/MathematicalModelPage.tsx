@@ -26,7 +26,6 @@ import {
 import { 
   ProcessSChart, 
   ProcessCChart, 
-  SleepInertiaChart, 
   CombinedPerformanceChart 
 } from './charts';
 
@@ -36,19 +35,18 @@ export function MathematicalModelPage() {
       {/* Header */}
       <Card variant="glass" className="text-center">
         <CardHeader className="pb-4">
-          <CardTitle className="text-3xl font-bold tracking-tight">The Borbély Two-Process Model</CardTitle>
+          <CardTitle className="text-3xl font-bold tracking-tight">The Three Process Model of Alertness</CardTitle>
           <p className="text-lg text-muted-foreground mt-3">
-            Mathematical foundation for predicting alertness and performance
+            Predicted sleepiness (KSS) for airline pilots — engine aerowake-4.0-kss
           </p>
         </CardHeader>
         <CardContent>
           <div className="flex justify-center gap-2 flex-wrap">
-            <Badge variant="outline">Process S (Homeostatic)</Badge>
+            <Badge variant="outline">Process S (Homeostatic, with brake)</Badge>
             <Badge variant="outline">Process C (Circadian)</Badge>
-            <Badge variant="outline">Process W (Inertia)</Badge>
-            <Badge variant="outline">Time-on-Task</Badge>
-            <Badge variant="outline">Sleep Debt</Badge>
-            <Badge variant="outline">Cabin Hypoxia</Badge>
+            <Badge variant="outline">Process U (Ultradian)</Badge>
+            <Badge variant="outline">KSS output</Badge>
+            <Badge variant="outline">Ingre et al. 2014</Badge>
           </div>
         </CardContent>
       </Card>
@@ -61,19 +59,21 @@ export function MathematicalModelPage() {
             Overview
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground leading-relaxed mb-6">
-            The Borbély model combines two independent biological processes to predict alertness and performance:
+        <CardContent className="space-y-6">
+          <p className="text-muted-foreground leading-relaxed">
+            AeroWake uses the Three Process Model of alertness (Åkerstedt &amp; Folkard, 1997) in the form
+            validated against sleepiness ratings from airline crew by Ingre et al. (2014, PLoS ONE e108679,
+            model 5c). It predicts the Karolinska Sleepiness Scale (KSS, 1 = extremely alert … 9 = very sleepy,
+            fighting sleep) for a group-average pilot from three processes:
           </p>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <div className="rounded-lg border border-border bg-card/50 p-5">
               <div className="flex items-center gap-2 mb-2">
                 <Brain className="h-5 w-5 text-primary" />
-                <h4 className="font-semibold">Process S (Sleep/Homeostatic)</h4>
+                <h4 className="font-semibold">Process S (Homeostatic)</h4>
               </div>
               <p className="text-sm text-muted-foreground">
-                Sleep pressure that builds during wakefulness. The longer you're awake, 
-                the stronger the drive to sleep becomes.
+                Sleep pressure: builds while awake and recovers during sleep. Worth up to ~5.5 KSS points.
               </p>
             </div>
             <div className="rounded-lg border border-border bg-card/50 p-5">
@@ -82,10 +82,26 @@ export function MathematicalModelPage() {
                 <h4 className="font-semibold">Process C (Circadian)</h4>
               </div>
               <p className="text-sm text-muted-foreground">
-                Your internal 24-hour body clock that creates natural rhythms of alertness, 
-                independent of how long you've been awake.
+                The body clock, independent of time awake. Worth ~2.3 KSS points between peak and trough.
               </p>
             </div>
+            <div className="rounded-lg border border-border bg-card/50 p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <Waves className="h-5 w-5 text-primary" />
+                <h4 className="font-semibold">Process U (Ultradian)</h4>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                A small 12-hour rhythm (≤ 0.5 KSS) that captures the post-lunch dip.
+              </p>
+            </div>
+          </div>
+          <div className="rounded-lg border border-warning/30 bg-warning/5 p-4 text-sm">
+            <p className="font-medium mb-1">Not in the score</p>
+            <p className="text-muted-foreground">
+              Sleep inertia, time-on-task, flight-phase workload, cabin hypoxia and a sleep-debt multiplier are
+              not validated in this model family and are not part of the prediction. Duty length, sectors and
+              timing are reported as separate contributing factors; the 7-day sleep deficit is reported separately.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -102,53 +118,50 @@ export function MathematicalModelPage() {
           <div>
             <h4 className="font-semibold mb-2">The Science</h4>
             <p className="text-muted-foreground leading-relaxed">
-              When you're awake, adenosine accumulates in your brain, creating "sleep pressure." 
-              The longer you're awake, the stronger this pressure becomes. During sleep, adenosine is cleared.
+              While awake, alertness reserve S falls exponentially towards a lower asymptote; during sleep it
+              recovers towards an upper asymptote. Recovery slows sharply near full restoration (the "brake"),
+              which is why a short sleep restores a lot while the last hours add less.
             </p>
           </div>
 
           <Separator />
 
           <div>
-            <h4 className="font-semibold mb-4">The Mathematics</h4>
-            
+            <h4 className="font-semibold mb-4">The Mathematics (Ingre et al. 2014, eq. 1.1–1.5)</h4>
             <div className="space-y-4">
               <div className="rounded-lg border border-border bg-muted/30 p-4">
                 <p className="text-sm font-medium mb-2">During Wakefulness:</p>
                 <code className="block bg-background/50 rounded p-3 text-sm font-mono">
-                  S(t) = S_max - (S_max - S₀) × e^(-t / τᵢ)
+                  S(t) = LA + (S₀ − LA) × e^(d·t)
                 </code>
               </div>
-
               <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <p className="text-sm font-medium mb-2">During Sleep:</p>
+                <p className="text-sm font-medium mb-2">During Sleep (with brake below BL):</p>
                 <code className="block bg-background/50 rounded p-3 text-sm font-mono">
-                  S(t) = S_min + (S₀ - S_min) × e^(-t / τd)
+                  S(t) = HA − (HA − S₀) × e^(g·t)
                 </code>
               </div>
-
               <div className="grid gap-2 text-sm">
                 <div className="flex gap-3 p-2 rounded bg-muted/20">
-                  <code className="font-mono text-primary w-16">S(t)</code>
-                  <span className="text-muted-foreground">Sleep pressure at time t</span>
+                  <code className="font-mono text-primary w-16">HA</code>
+                  <span className="text-muted-foreground">Upper asymptote (fully rested) = <strong>14.3</strong></span>
                 </div>
                 <div className="flex gap-3 p-2 rounded bg-muted/20">
-                  <code className="font-mono text-primary w-16">S_max</code>
-                  <span className="text-muted-foreground">Maximum sleep pressure = <strong>0.95</strong></span>
+                  <code className="font-mono text-primary w-16">LA</code>
+                  <span className="text-muted-foreground">Lower asymptote while awake = <strong>2.4</strong></span>
                 </div>
                 <div className="flex gap-3 p-2 rounded bg-muted/20">
-                  <code className="font-mono text-primary w-16">S₀</code>
-                  <span className="text-muted-foreground">Sleep pressure at wake time (typically 0.1-0.3)</span>
+                  <code className="font-mono text-primary w-16">d</code>
+                  <span className="text-muted-foreground">Wake decay rate = <strong>−0.0353 /h</strong></span>
                 </div>
                 <div className="flex gap-3 p-2 rounded bg-muted/20">
-                  <code className="font-mono text-primary w-16">τᵢ</code>
-                  <span className="text-muted-foreground">Time constant for increase = <strong>18.2 hours</strong> (Jewett & Kronauer, 1999)</span>
-                </div>
-                <div className="flex gap-3 p-2 rounded bg-muted/20">
-                  <code className="font-mono text-primary w-16">τd</code>
-                  <span className="text-muted-foreground">Time constant for decrease = <strong>4.2 hours</strong> (Jewett & Kronauer, 1999)</span>
+                  <code className="font-mono text-primary w-16">BL</code>
+                  <span className="text-muted-foreground">Brake level = <strong>12.2</strong> (recovery is linear below it, exponential above)</span>
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground">
+                The app shows S normalised to 0–1 as "sleep pressure" (0 = fully rested, 1 = depleted).
+              </p>
             </div>
           </div>
 
@@ -156,32 +169,32 @@ export function MathematicalModelPage() {
 
           <div>
             <h4 className="font-semibold mb-3">Real-World Example</h4>
-            <p className="text-sm text-muted-foreground mb-3">Scenario: You wake at 07:00 after 8 hours of good sleep</p>
+            <p className="text-sm text-muted-foreground mb-3">Scenario: You wake at 07:00 after a full night's sleep (S₀ ≈ 14.0)</p>
             <div className="grid gap-2 text-sm font-mono">
               <div className="flex items-center gap-3 p-2 rounded bg-success/10 border border-success/20">
                 <span className="w-14">07:00</span>
-                <span className="w-20">S = 0.15</span>
-                <span className="text-muted-foreground font-sans">Low pressure, well-rested</span>
+                <span className="w-20">S = 14.0</span>
+                <span className="text-muted-foreground font-sans">Fully rested</span>
               </div>
               <div className="flex items-center gap-3 p-2 rounded bg-success/5 border border-success/10">
                 <span className="w-14">12:00</span>
-                <span className="w-20">S = 0.38</span>
-                <span className="text-muted-foreground font-sans">5h awake, mild pressure building</span>
+                <span className="w-20">S = 12.1</span>
+                <span className="text-muted-foreground font-sans">5h awake, +0.9 KSS from S</span>
               </div>
               <div className="flex items-center gap-3 p-2 rounded bg-warning/10 border border-warning/20">
                 <span className="w-14">18:00</span>
-                <span className="w-20">S = 0.62</span>
-                <span className="text-muted-foreground font-sans">11h awake, noticeable tiredness</span>
+                <span className="w-20">S = 10.3</span>
+                <span className="text-muted-foreground font-sans">11h awake, +1.7 KSS from S</span>
               </div>
               <div className="flex items-center gap-3 p-2 rounded bg-warning/20 border border-warning/30">
                 <span className="w-14">23:00</span>
-                <span className="w-20">S = 0.78</span>
-                <span className="text-muted-foreground font-sans">16h awake, strong sleep drive</span>
+                <span className="w-20">S = 9.0</span>
+                <span className="text-muted-foreground font-sans">16h awake, +2.3 KSS from S</span>
               </div>
               <div className="flex items-center gap-3 p-2 rounded bg-destructive/10 border border-destructive/20">
                 <span className="w-14">03:00</span>
-                <span className="w-20">S = 0.89</span>
-                <span className="text-muted-foreground font-sans">20h awake, extreme sleepiness</span>
+                <span className="w-20">S = 8.1</span>
+                <span className="text-muted-foreground font-sans">20h awake, +2.7 KSS from S</span>
               </div>
             </div>
           </div>
@@ -189,16 +202,15 @@ export function MathematicalModelPage() {
           <div className="rounded-lg border border-border bg-card/30 p-4 text-sm">
             <p className="font-medium mb-1">Scientific Reference:</p>
             <p className="text-muted-foreground">
-              Borbély AA, Achermann P (1999). <em>Sleep homeostasis and models of sleep regulation.</em> 
-              Journal of Biological Rhythms, 14(6), 559-570
+              Ingre M, Van Leeuwen W, Klemets T, et al. (2014). <em>Validating and extending the three process
+              model of alertness in airline operations.</em> PLoS ONE 9(10): e108679
             </p>
           </div>
 
           <Separator />
 
-          {/* Interactive Chart */}
           <div>
-            <h4 className="font-semibold mb-4">Interactive Visualization</h4>
+            <h4 className="font-semibold mb-4">Interactive Visualization (illustrative shape)</h4>
             <ProcessSChart />
           </div>
         </CardContent>
@@ -209,80 +221,50 @@ export function MathematicalModelPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-3">
             <Clock className="h-5 w-5 text-primary" />
-            Process C: Circadian Rhythm
+            Process C: Circadian Rhythm (and U)
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div>
             <h4 className="font-semibold mb-2">The Science</h4>
             <p className="text-muted-foreground leading-relaxed">
-              Your suprachiasmatic nucleus (SCN) generates a natural ~24-hour rhythm of alertness 
-              that's independent of how long you've been awake. You're naturally most alert in the 
-              late afternoon and least alert in the early morning (02:00-06:00).
+              The suprachiasmatic nucleus generates a ~24-hour rhythm of alertness that is independent of how
+              long you have been awake: highest in the late afternoon, lowest in the early morning body-clock
+              hours.
             </p>
           </div>
 
           <Separator />
 
           <div>
-            <h4 className="font-semibold mb-4">The Mathematics — Two-Harmonic Model</h4>
-
-            <div className="rounded-lg border border-border bg-muted/30 p-4 mb-4">
-              <p className="text-sm font-medium mb-2">Fundamental + Second Harmonic:</p>
+            <h4 className="font-semibold mb-4">The Mathematics (Ingre et al. 2014, eq. 1.7–1.8)</h4>
+            <div className="rounded-lg border border-border bg-muted/30 p-4 mb-4 space-y-2">
               <code className="block bg-background/50 rounded p-3 text-sm font-mono">
-                C(t) = M + A₁·cos(2π(t−φ₁)/24) + A₂·cos(4π(t−φ₂)/24)
+                C(t) = 2.5 · cos(2π(t − 16.8)/24)
+              </code>
+              <code className="block bg-background/50 rounded p-3 text-sm font-mono">
+                U(t) = −0.5 + 0.5 · cos(2π(t − 19.8)/12)
               </code>
             </div>
-
             <div className="grid gap-2 text-sm">
               <div className="flex gap-3 p-2 rounded bg-muted/20">
-                <code className="font-mono text-primary w-24">M</code>
-                <span className="text-muted-foreground">Mesor (midline) = <strong>0.5</strong></span>
-              </div>
-              <div className="flex gap-3 p-2 rounded bg-muted/20">
-                <code className="font-mono text-primary w-24">A₁</code>
-                <span className="text-muted-foreground">Fundamental amplitude = <strong>0.25</strong> (Dijk & Czeisler, 1994)</span>
-              </div>
-              <div className="flex gap-3 p-2 rounded bg-muted/20">
-                <code className="font-mono text-primary w-24">φ₁</code>
-                <span className="text-muted-foreground">Acrophase (peak time) = <strong>17:00</strong> (5 PM)</span>
-              </div>
-              <div className="flex gap-3 p-2 rounded bg-muted/20">
-                <code className="font-mono text-primary w-24">A₂</code>
-                <span className="text-muted-foreground">Second harmonic amplitude = <strong>0.08</strong> (≈ 0.3 × A₁)</span>
-              </div>
-              <div className="flex gap-3 p-2 rounded bg-muted/20">
-                <code className="font-mono text-primary w-24">φ₂</code>
-                <span className="text-muted-foreground">Second harmonic phase = <strong>20:00</strong> (8 PM)</span>
-              </div>
-              <div className="flex gap-3 p-2 rounded bg-muted/20">
                 <code className="font-mono text-primary w-24">t</code>
-                <span className="text-muted-foreground">Local hour adjusted for circadian phase shift</span>
+                <span className="text-muted-foreground">Body-clock time (home time adjusted for acclimatization)</span>
+              </div>
+              <div className="flex gap-3 p-2 rounded bg-muted/20">
+                <code className="font-mono text-primary w-24">16.8 h</code>
+                <span className="text-muted-foreground">Circadian acrophase (peak ≈ 16:48 body-clock time)</span>
+              </div>
+              <div className="flex gap-3 p-2 rounded bg-muted/20">
+                <code className="font-mono text-primary w-24">30 %/day</code>
+                <span className="text-muted-foreground">Acclimatization: the body clock moves ~30% of the remaining time-zone difference per day (eq. 1.10)</span>
               </div>
             </div>
-
-            <div className="mt-4 p-4 rounded-lg bg-info/5 border border-info/20 text-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <Waves className="h-4 w-4 text-info" />
-                <p className="font-medium">Wake Maintenance Zone (WMZ)</p>
-              </div>
-              <p className="text-muted-foreground mb-2">
-                The second harmonic creates a paradoxical alertness plateau between ~18:00-21:00 — the
-                "forbidden zone for sleep" (Lavie, 1986). Despite rising homeostatic pressure in the evening,
-                the circadian system actively promotes wakefulness, making it very difficult to fall asleep.
-              </p>
-              <p className="text-muted-foreground">
-                This bimodal structure was confirmed by Strogatz et al. (1987) and is why a single cosine
-                wave is insufficient to model real circadian alertness.
-              </p>
-            </div>
-
             <div className="mt-4 p-3 rounded-lg bg-muted/20 text-sm">
-              <p className="font-medium">Normalized to [0, 1] scale:</p>
+              <p className="font-medium">Normalised to [0, 1] in the app:</p>
               <ul className="mt-2 space-y-1 text-muted-foreground">
-                <li>• <strong>1.0</strong> = Peak alertness (afternoon, ~17:00)</li>
-                <li>• <strong>~0.7</strong> = WMZ plateau (evening, ~18:00-21:00)</li>
-                <li>• <strong>0.0</strong> = Maximum circadian low (03:00-05:00)</li>
+                <li>• <strong>1.0</strong> = circadian peak (late afternoon)</li>
+                <li>• <strong>0.0</strong> = circadian trough (early morning, ~04:48 body clock)</li>
               </ul>
             </div>
           </div>
@@ -294,20 +276,18 @@ export function MathematicalModelPage() {
               <AlertTriangle className="h-5 w-5 text-destructive" />
               <h4 className="font-semibold">The Window of Circadian Low (WOCL)</h4>
             </div>
-            
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 mb-4">
               <p className="font-semibold text-destructive">Critical Period: 02:00 - 05:59 (reference time)</p>
               <p className="text-sm text-muted-foreground mt-2">
-                This is when your circadian system produces the lowest alertness, regardless of sleep. 
-                Even if you're well-rested, cognitive performance drops ~20-30% during WOCL.
+                The circadian term is near its minimum here. Compared with mid-afternoon it adds roughly
+                2 KSS points for the same amount of prior sleep.
               </p>
             </div>
-
             <div className="rounded-lg border border-border bg-card/30 p-4 text-sm">
               <p className="font-medium mb-1">EASA Definition:</p>
               <p className="text-muted-foreground">
-                AMC1 ORO.FTL.105(10) defines WOCL as the period when circadian desynchronization 
-                has the most severe impact on performance.
+                AMC1 ORO.FTL.105(10) defines the WOCL as 02:00–05:59 in the time zone to which the crew
+                member is acclimatised.
               </p>
             </div>
           </div>
@@ -316,117 +296,58 @@ export function MathematicalModelPage() {
 
           <div>
             <h4 className="font-semibold mb-3">Real-World Example</h4>
-            <p className="text-sm text-muted-foreground mb-3">Same person, same sleep quality, different report times:</p>
+            <p className="text-sm text-muted-foreground mb-3">Same person, same sleep, different times (C normalised 0–1):</p>
             <div className="grid gap-2 text-sm font-mono">
               <div className="flex items-center gap-3 p-2 rounded bg-success/10 border border-success/20">
-                <span className="w-24">Report 14:00</span>
-                <span className="w-20">C = 0.82</span>
-                <span className="text-muted-foreground font-sans">Afternoon peak, high circadian support</span>
+                <span className="w-24">14:00</span>
+                <span className="w-20">C = 0.87</span>
+                <span className="text-muted-foreground font-sans">Afternoon, strong circadian support</span>
               </div>
               <div className="flex items-center gap-3 p-2 rounded bg-warning/10 border border-warning/20">
-                <span className="w-24">Report 22:00</span>
-                <span className="w-20">C = 0.45</span>
-                <span className="text-muted-foreground font-sans">Evening dip, moderate support</span>
+                <span className="w-24">22:00</span>
+                <span className="w-20">C = 0.60</span>
+                <span className="text-muted-foreground font-sans">Evening, declining support</span>
               </div>
               <div className="flex items-center gap-3 p-2 rounded bg-destructive/10 border border-destructive/20">
-                <span className="w-24">Report 03:00</span>
-                <span className="w-20">C = 0.12</span>
-                <span className="text-muted-foreground font-sans">WOCL, very low circadian support</span>
+                <span className="w-24">03:00</span>
+                <span className="w-20">C = 0.05</span>
+                <span className="text-muted-foreground font-sans">WOCL, near the circadian trough</span>
               </div>
             </div>
             <p className="text-sm text-muted-foreground mt-3 p-3 bg-muted/20 rounded-lg">
-              <strong>Result:</strong> Landing at 04:00 after the same duty length shows 35-40% lower 
-              performance due purely to circadian phase.
+              <strong>Result:</strong> the circadian term alone makes a 04:00 landing about 2 KSS points
+              sleepier than a 15:00 landing after the same duty.
             </p>
           </div>
 
           <Separator />
 
-          {/* Interactive Chart */}
           <div>
-            <h4 className="font-semibold mb-4">Interactive Visualization</h4>
+            <h4 className="font-semibold mb-4">Interactive Visualization (illustrative shape)</h4>
             <ProcessCChart />
           </div>
         </CardContent>
       </Card>
 
-      {/* Process W */}
+      {/* Sleep inertia — not in the score */}
       <Card variant="glass">
         <CardHeader>
           <CardTitle className="flex items-center gap-3">
             <Zap className="h-5 w-5 text-primary" />
-            Process W: Sleep Inertia
+            Sleep Inertia (not in the score)
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div>
-            <h4 className="font-semibold mb-2">The Science</h4>
-            <p className="text-muted-foreground leading-relaxed">
-              Immediately after waking, your brain undergoes a transition period where performance 
-              is temporarily impaired—even if you're well-rested. This is called "sleep inertia."
-            </p>
-          </div>
-
-          <Separator />
-
-          <div>
-            <h4 className="font-semibold mb-4">The Mathematics</h4>
-            
-            <div className="rounded-lg border border-border bg-muted/30 p-4 mb-4">
-              <code className="block bg-background/50 rounded p-3 text-sm font-mono">
-                W(t) = W_max × e^(-t / (τw / 3))
-              </code>
-            </div>
-
-            <div className="grid gap-2 text-sm">
-              <div className="flex gap-3 p-2 rounded bg-muted/20">
-                <code className="font-mono text-primary w-16">W_max</code>
-                <span className="text-muted-foreground">Maximum inertia magnitude = <strong>0.30</strong> (30% performance reduction)</span>
-              </div>
-              <div className="flex gap-3 p-2 rounded bg-muted/20">
-                <code className="font-mono text-primary w-16">τw</code>
-                <span className="text-muted-foreground">Duration of effect = <strong>30 minutes</strong> (Tassi & Muzet, 2000)</span>
-              </div>
-              <div className="flex gap-3 p-2 rounded bg-muted/20">
-                <code className="font-mono text-primary w-16">t</code>
-                <span className="text-muted-foreground">Minutes since waking</span>
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          <div>
-            <h4 className="font-semibold mb-3">Time to Dissipate</h4>
-            <div className="grid gap-2 text-sm">
-              <div className="flex items-center gap-3 p-2 rounded bg-destructive/10 border border-destructive/20">
-                <span className="font-mono w-24">10 minutes</span>
-                <span className="text-muted-foreground">~70% of inertia remains</span>
-              </div>
-              <div className="flex items-center gap-3 p-2 rounded bg-warning/10 border border-warning/20">
-                <span className="font-mono w-24">20 minutes</span>
-                <span className="text-muted-foreground">~40% remains</span>
-              </div>
-              <div className="flex items-center gap-3 p-2 rounded bg-success/10 border border-success/20">
-                <span className="font-mono w-24">30 minutes</span>
-                <span className="text-muted-foreground">~13% remains (mostly resolved)</span>
-              </div>
-            </div>
-          </div>
-
+        <CardContent className="space-y-4">
+          <p className="text-muted-foreground leading-relaxed">
+            Grogginess immediately after waking is real, but in the airline validation study the default
+            sleep-inertia function made the model fit worse, so it is not part of the KSS prediction. Allow
+            15–30 minutes after waking (e.g. after controlled rest) before critical tasks.
+          </p>
           <div className="rounded-lg border border-border bg-card/30 p-4 text-sm">
-            <p className="font-medium mb-1">Scientific Reference:</p>
+            <p className="font-medium mb-1">References:</p>
             <p className="text-muted-foreground">
-              Tassi P, Muzet A (2000). <em>Sleep inertia.</em> Sleep Medicine Reviews, 4(4), 341-353
+              Ingre et al. (2014); Tassi P, Muzet A (2000). <em>Sleep inertia.</em> Sleep Medicine Reviews, 4(4), 341-353
             </p>
-          </div>
-
-          <Separator />
-
-          {/* Interactive Chart */}
-          <div>
-            <h4 className="font-semibold mb-4">Interactive Visualization</h4>
-            <SleepInertiaChart />
           </div>
         </CardContent>
       </Card>
@@ -436,104 +357,92 @@ export function MathematicalModelPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-3">
             <Calculator className="h-5 w-5 text-primary" />
-            Integration: Calculating Performance
+            Integration: From S, C and U to KSS
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div>
             <h4 className="font-semibold mb-4">The Full Pipeline</h4>
-
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 mb-4">
-              <p className="text-sm font-medium mb-2">6-Stage Computation:</p>
+              <p className="text-sm font-medium mb-2">Transfer to KSS (eq. 1.9, model 5c):</p>
               <code className="block bg-background/50 rounded p-3 text-sm font-mono leading-relaxed">
-                Base → Inertia → Time-on-Task → Debt Penalty → Hypoxia → Scale to 20-100
+                KSS = 9.68 − 0.46 × (S + C + U)
               </code>
             </div>
-
             <div className="rounded-lg border border-border bg-muted/30 p-4 mb-4">
-              <p className="text-sm font-medium mb-2">Where:</p>
+              <p className="text-sm font-medium mb-2">Derived outputs:</p>
               <div className="space-y-1 text-sm font-mono">
-                <p>Base_Alertness = (S_alertness × 0.55) + (C_alertness × 0.45)</p>
-                <p>S_alertness = 1 - S</p>
-                <p>C_alertness = (C + 1) / 2</p>
-                <p>After_Inertia = Base_Alertness × (1 - W)</p>
-                <p>After_ToT = After_Inertia - T(hours_on_task)</p>
-                <p>After_Debt = After_ToT × D(sleep_debt)</p>
-                <p>After_Hypoxia = After_Debt × H(cabin_altitude)</p>
-                <p>Performance = 20 + After_Hypoxia × 80</p>
+                <p>index = 110 − 10 × KSS   (KSS 1 → 100, KSS 5 → 60, KSS 9 → 20)</p>
+                <p>KSS₉₀ = KSS + 1.07   (90th-percentile pilot, eq. 1.16)</p>
+                <p>P(KSS &gt; k) = logistic(−0.599 × (S + C + U) − K_k + offset)   (eq. 1.17)</p>
               </div>
             </div>
-
             <div className="grid gap-3 md:grid-cols-3 text-sm">
               <div className="rounded-lg border border-border bg-card/50 p-4 text-center">
-                <p className="text-2xl font-bold text-primary">55%</p>
-                <p className="text-muted-foreground">Process S Weight</p>
-                <p className="text-xs text-muted-foreground mt-1">Dominant factor</p>
+                <p className="text-2xl font-bold text-primary">≤ 5.5</p>
+                <p className="text-muted-foreground">KSS from S</p>
+                <p className="text-xs text-muted-foreground mt-1">Fully rested → depleted</p>
               </div>
               <div className="rounded-lg border border-border bg-card/50 p-4 text-center">
-                <p className="text-2xl font-bold text-primary">45%</p>
-                <p className="text-muted-foreground">Process C Weight</p>
-                <p className="text-xs text-muted-foreground mt-1">Modulating factor</p>
+                <p className="text-2xl font-bold text-primary">≤ 2.3</p>
+                <p className="text-muted-foreground">KSS from C</p>
+                <p className="text-xs text-muted-foreground mt-1">Peak → trough</p>
               </div>
               <div className="rounded-lg border border-border bg-card/50 p-4 text-center">
-                <p className="text-2xl font-bold text-primary">×</p>
-                <p className="text-muted-foreground">Modifiers</p>
-                <p className="text-xs text-muted-foreground mt-1">W, T, D, H multiplicative</p>
+                <p className="text-2xl font-bold text-primary">≤ 0.5</p>
+                <p className="text-muted-foreground">KSS from U</p>
+                <p className="text-xs text-muted-foreground mt-1">Post-lunch dip</p>
               </div>
             </div>
-
             <div className="mt-4 p-3 rounded-lg bg-warning/10 border border-warning/20 text-sm">
               <div className="flex items-center gap-2 mb-1">
                 <Wrench className="h-4 w-4 text-warning" />
-                <span className="font-medium text-warning">Calibration Note</span>
+                <span className="font-medium text-warning">Limitations</span>
               </div>
-              <p className="text-muted-foreground">
-                The 55/45 S/C weighting is an operational calibration choice — not directly from the
-                literature. Gander et al. (2013) showed trained pilots maintain performance better
-                than predicted during moderate circadian lows, supporting a slightly homeostatic-dominant
-                weighting. The research config uses 50/50 for academic comparison.
-              </p>
+              <ul className="space-y-1 text-muted-foreground">
+                <li>• Predicts a group-average pilot; the typical error of predicted vs. rated KSS is about ±1.4 KSS.</li>
+                <li>• Individuals differ — see the 90th-percentile KSS for a more fatigue-sensitive pilot.</li>
+                <li>• Subjective sleepiness plateaus under chronic restriction while performance keeps worsening, so the 7-day sleep deficit is shown separately.</li>
+                <li>• Only as good as the sleep inputs. It is not a fitness-to-fly determination: your own assessment always takes precedence.</li>
+              </ul>
             </div>
           </div>
 
           <Separator />
 
           <div>
-            <h4 className="font-semibold mb-3">Performance Scale</h4>
+            <h4 className="font-semibold mb-3">Risk Bands (predicted KSS)</h4>
             <div className="grid gap-2 text-sm">
               <div className="flex items-center gap-3 p-2 rounded bg-success/10 border border-success/20">
-                <span className="font-mono font-medium w-16">90-100</span>
-                <span className="font-medium text-success w-20">Optimal</span>
-                <span className="text-muted-foreground">Full cognitive capacity</span>
-              </div>
-              <div className="flex items-center gap-3 p-2 rounded bg-success/5 border border-success/10">
-                <span className="font-mono font-medium w-16">75-90</span>
-                <span className="font-medium text-success/80 w-20">Good</span>
-                <span className="text-muted-foreground">Minor fatigue, normal operations safe</span>
+                <span className="font-mono font-medium w-24">&lt; 5.5</span>
+                <span className="font-medium text-success w-20">Low</span>
+                <span className="text-muted-foreground">Alert … neither alert nor sleepy (index ≥ 55)</span>
               </div>
               <div className="flex items-center gap-3 p-2 rounded bg-warning/10 border border-warning/20">
-                <span className="font-mono font-medium w-16">65-75</span>
+                <span className="font-mono font-medium w-24">5.5 – 6.5</span>
                 <span className="font-medium text-warning w-20">Moderate</span>
-                <span className="text-muted-foreground">Enhanced monitoring recommended</span>
+                <span className="text-muted-foreground">Some signs of sleepiness (index 45–55)</span>
               </div>
-              <div className="flex items-center gap-3 p-2 rounded bg-warning/20 border border-warning/30">
-                <span className="font-mono font-medium w-16">55-65</span>
-                <span className="font-medium text-warning w-20">High Risk</span>
-                <span className="text-muted-foreground">Mitigation strategies required</span>
+              <div className="flex items-center gap-3 p-2 rounded bg-high/10 border border-high/20">
+                <span className="font-mono font-medium w-24">6.5 – 7.5</span>
+                <span className="font-medium text-high w-20">High</span>
+                <span className="text-muted-foreground">Sleepy, no effort to stay awake (index 35–45)</span>
               </div>
               <div className="flex items-center gap-3 p-2 rounded bg-destructive/10 border border-destructive/20">
-                <span className="font-mono font-medium w-16">45-55</span>
+                <span className="font-mono font-medium w-24">7.5 – 8.5</span>
                 <span className="font-medium text-destructive w-20">Critical</span>
-                <span className="text-muted-foreground">Roster modification mandatory</span>
+                <span className="text-muted-foreground">Sleepy, some effort to stay awake (index 25–35)</span>
               </div>
               <div className="flex items-center gap-3 p-2 rounded bg-destructive/20 border border-destructive/30">
-                <span className="font-mono font-medium w-16">0-45</span>
+                <span className="font-mono font-medium w-24">≥ 8.5</span>
                 <span className="font-medium text-destructive w-20">Extreme</span>
-                <span className="text-muted-foreground">Unsafe to operate (≈ 0.05% BAC impairment*)</span>
+                <span className="text-muted-foreground">Very sleepy, fighting sleep (index &lt; 25)</span>
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-3 italic">
-              *Dawson & Reid (1997): 17-19h awake ≈ 0.05% blood alcohol impairment
+              KSS ≥ 7 is associated with physiological signs of sleepiness and impaired waking function
+              (Åkerstedt et al., 2014); KSS 8–9 with sharply more lapses in driving studies (Ingre et al., 2006).
+              The index is not a percentage and not alcohol-equivalent.
             </p>
           </div>
 
@@ -542,30 +451,28 @@ export function MathematicalModelPage() {
           <div>
             <h4 className="font-semibold mb-3">Complete Example Timeline</h4>
             <p className="text-sm text-muted-foreground mb-3">
-              Scenario: Home base in Middle East (UTC+3), Night departure 23:00
+              Scenario: acclimatised to home time, woke 07:00 after a full night, no nap, night duty reporting 23:00
             </p>
             <div className="space-y-2 text-sm">
-              <TimelineRow time="19:00" event="Wake from afternoon nap" values="S = 0.25, C = 0.52, W = 0.30" performance={63} risk="MODERATE" note="sleep inertia present" />
-              <TimelineRow time="19:30" event="Sleep inertia cleared" values="S = 0.28, C = 0.48, W = 0.04" performance={74} risk="GOOD" />
-              <TimelineRow time="23:00" event="Report time (4h awake)" values="S = 0.42, C = 0.38, W = 0.00" performance={68} risk="MODERATE" note="evening dip" />
-              <TimelineRow time="02:00" event="Cruise (7h awake, WOCL)" values="S = 0.58, C = 0.15, W = 0.00" performance={48} risk="CRITICAL" note="WOCL + sleep pressure" />
-              <TimelineRow time="05:00" event="Landing (10h awake, late WOCL)" values="S = 0.68, C = 0.18, W = 0.00" performance={43} risk="EXTREME" />
+              <TimelineRow time="07:00" event="Wake" values="S = 14.0, C = −2.1" performance={68} risk="LOW" note="KSS 4.2" />
+              <TimelineRow time="15:00" event="Afternoon (8h awake)" values="S = 11.2, C = 2.2" performance={71} risk="LOW" note="KSS 3.9" />
+              <TimelineRow time="23:00" event="Report (16h awake)" values="S = 9.0, C = −0.1" performance={51} risk="MODERATE" note="KSS 5.9" />
+              <TimelineRow time="02:00" event="Cruise (19h awake, WOCL)" values="S = 8.3, C = −1.9" performance={38} risk="HIGH" note="KSS 7.2" />
+              <TimelineRow time="05:00" event="Landing (22h awake, WOCL)" values="S = 7.7, C = −2.5" performance={35} risk="HIGH" note="KSS 7.5" />
             </div>
-
             <div className="mt-4 p-4 rounded-lg border border-destructive/30 bg-destructive/5">
               <p className="font-semibold text-destructive mb-2">Why is this dangerous?</p>
               <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
-                <li>Sleep pressure built up for 10 hours</li>
-                <li>Landing during deepest circadian low</li>
-                <li>No restorative sleep since 19:00 nap</li>
-                <li>Equivalent to ~0.06% BAC impairment</li>
+                <li>22 hours awake by landing — sleep pressure is high</li>
+                <li>Landing near the circadian trough</li>
+                <li>Predicted KSS ≈ 7.5: sleepy, on the edge of needing effort to stay awake</li>
+                <li>A pre-duty afternoon nap would lower S and the predicted KSS</li>
               </ol>
             </div>
           </div>
 
           <Separator />
 
-          {/* Interactive Chart */}
           <div>
             <h4 className="font-semibold mb-4">Interactive Model Visualization</h4>
             <CombinedPerformanceChart />
@@ -585,6 +492,10 @@ export function MathematicalModelPage() {
           </AccordionTrigger>
           <AccordionContent className="pt-2 pb-4">
             <div className="space-y-6">
+              <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm text-muted-foreground">
+                <span className="font-medium text-warning">Not in the score. </span>
+                {'Workload multipliers and the sector penalty are legacy mechanisms. They are not part of the aerowake-4.0-kss prediction; sectors and duty length are reported as separate contributing factors.'}
+              </div>
               <p className="text-muted-foreground">
                 Not all flight time is equal in terms of fatigue accumulation. The model applies 
                 workload multipliers based on flight phase and sector number.
@@ -683,9 +594,7 @@ export function MathematicalModelPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      <tr><td className="py-2">Eastward</td><td className="py-2 font-mono">0.5 h/day</td><td className="py-2 text-muted-foreground">Harder (phase advance)</td></tr>
-                      <tr><td className="py-2">Westward</td><td className="py-2 font-mono">0.9 h/day</td><td className="py-2 text-muted-foreground">Easier (phase delay)</td></tr>
-                      <tr><td className="py-2">Large shift</td><td className="py-2 font-mono">0.3-0.7 h/day</td><td className="py-2 text-muted-foreground">Non-linear (depends on magnitude)</td></tr>
+                      <tr><td className="py-2">Any direction</td><td className="py-2 font-mono">30 % of remaining difference / day</td><td className="py-2 text-muted-foreground">Empirically optimal rate in airline data (Ingre et al. 2014, eq. 1.10)</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -694,7 +603,7 @@ export function MathematicalModelPage() {
               <div className="rounded-lg border border-border bg-muted/30 p-4">
                 <p className="text-sm font-medium mb-2">Formula:</p>
                 <code className="block bg-background/50 rounded p-3 text-sm font-mono">
-                  Phase_Shift(t) = Phase_Shift₀ + min(|Target - Current|, Rate × Days) × sign(Target - Current)
+                  Shift(day) = Target × (1 − 0.7^day)
                 </code>
               </div>
 
@@ -708,39 +617,39 @@ export function MathematicalModelPage() {
                   </div>
                   <div className="flex gap-3 p-2 rounded bg-muted/20">
                     <span className="w-14">Day 1:</span>
-                    <span>Shift = -0.9h</span>
-                    <span className="text-muted-foreground font-sans">(slight adaptation)</span>
+                    <span>Shift = -1.8h</span>
+                    <span className="text-muted-foreground font-sans">(30% adapted)</span>
                   </div>
                   <div className="flex gap-3 p-2 rounded bg-muted/20">
                     <span className="w-14">Day 3:</span>
-                    <span>Shift = -2.7h</span>
+                    <span>Shift = -3.9h</span>
                   </div>
                   <div className="flex gap-3 p-2 rounded bg-muted/20">
                     <span className="w-14">Day 7:</span>
-                    <span>Shift = -5.4h</span>
-                    <span className="text-muted-foreground font-sans">(almost adapted)</span>
+                    <span>Shift = -5.5h</span>
+                    <span className="text-muted-foreground font-sans">(~92% adapted)</span>
                   </div>
                   <div className="flex gap-3 p-2 rounded bg-success/10 border border-success/20">
                     <span className="w-14">Day 8:</span>
-                    <span>Shift = -6.0h</span>
-                    <span className="text-muted-foreground font-sans">(fully adapted)</span>
+                    <span>Shift = -5.7h</span>
+                    <span className="text-muted-foreground font-sans">(~94% adapted)</span>
                   </div>
                 </div>
               </div>
 
               <div className="p-4 rounded-lg border border-info/30 bg-info/5">
-                <h4 className="font-medium mb-2">Performance Impact</h4>
+                <h4 className="font-medium mb-2">Alertness Impact</h4>
                 <p className="text-sm text-muted-foreground mb-3">
                   Scenario: European-based pilot flying to New York on Day 2
                 </p>
                 <div className="text-sm space-y-2">
                   <p><strong>Body clock:</strong> Still mostly on European time</p>
                   <p><strong>NYC 02:00 = Europe 08:00</strong> (mid-morning, good circadian phase)</p>
-                  <p className="text-success">Performance: Much better than if fully adapted!</p>
+                  <p className="text-success">Predicted KSS: much lower than if fully adapted</p>
                   <Separator className="my-3" />
                   <p className="text-muted-foreground">But on Day 8 after full adaptation:</p>
                   <p><strong>NYC 02:00 = NYC 02:00</strong> (WOCL, terrible circadian phase)</p>
-                  <p className="text-destructive">Performance: Significantly degraded</p>
+                  <p className="text-destructive">Predicted KSS: ~2 points higher from the circadian term alone</p>
                 </div>
               </div>
 
@@ -761,6 +670,10 @@ export function MathematicalModelPage() {
           </AccordionTrigger>
           <AccordionContent className="pt-2 pb-4">
             <div className="space-y-6">
+              <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm text-muted-foreground">
+                <span className="font-medium text-warning">Not in the score. </span>
+                {'Time-on-task is a legacy mechanism and is not part of the aerowake-4.0-kss prediction (the validated model has no time-on-task term). Duty length is reported as a separate contributing factor.'}
+              </div>
               <p className="text-muted-foreground">
                 Extended duty time causes cognitive fatigue that accelerates non-linearly beyond ~8 hours.
                 The model uses a logarithmic ramp for normal duties with a quadratic acceleration for
@@ -836,6 +749,10 @@ export function MathematicalModelPage() {
           </AccordionTrigger>
           <AccordionContent className="pt-2 pb-4">
             <div className="space-y-6">
+              <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm text-muted-foreground">
+                <span className="font-medium text-warning">Not in the score. </span>
+                {'The debt multiplier is a legacy mechanism and is not part of the aerowake-4.0-kss prediction. Chronic restriction is instead shown as a separate 7-day sleep deficit (none < 5h, mild 5–10h, moderate 10–15h, severe ≥ 15h), because KSS plateaus under chronic restriction while objective performance keeps worsening.'}
+              </div>
               <p className="text-muted-foreground">
                 Chronic sleep restriction amplifies fatigue beyond what Process S alone predicts.
                 Accumulated sleep debt acts as a multiplier on the performance deficit — even moderate
@@ -914,6 +831,10 @@ export function MathematicalModelPage() {
           </AccordionTrigger>
           <AccordionContent className="pt-2 pb-4">
             <div className="space-y-6">
+              <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm text-muted-foreground">
+                <span className="font-medium text-warning">Not in the score. </span>
+                {'Cabin hypoxia is a legacy mechanism and is not part of the aerowake-4.0-kss prediction. Cabin altitude is shown for context only.'}
+              </div>
               <p className="text-muted-foreground">
                 Aircraft cabin pressure is maintained at an equivalent altitude of 6,000-8,000 ft,
                 producing mild hypoxia that subtly degrades cognitive performance. The effect is small
@@ -995,6 +916,10 @@ export function MathematicalModelPage() {
           </AccordionTrigger>
           <AccordionContent className="pt-2 pb-4">
             <div className="space-y-6">
+              <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm text-muted-foreground">
+                <span className="font-medium text-warning">Not in the score. </span>
+                {'Legacy mechanism. In aerowake-4.0-kss, sleep recovery follows the Three Process Model S process with its "brake" (Ingre et al. 2014), not this formula.'}
+              </div>
               <p className="text-muted-foreground">
                 Slow-wave activity (SWA) power declines exponentially during sleep, making the
                 first hours of sleep the most restorative. After ~5-6 hours, recovery is increasingly
@@ -1113,6 +1038,10 @@ export function MathematicalModelPage() {
           </AccordionTrigger>
           <AccordionContent className="pt-2 pb-4">
             <div className="space-y-6">
+              <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm text-muted-foreground">
+                <span className="font-medium text-warning">Not in the score. </span>
+                {'Legacy mechanism, not part of the aerowake-4.0-kss prediction.'}
+              </div>
               <p className="text-muted-foreground">
                 Chronic sleep restriction doesn't just increase homeostatic pressure — it also dampens
                 the amplitude of the circadian rhythm. Well-rested individuals show large day-night
@@ -1159,6 +1088,10 @@ export function MathematicalModelPage() {
           </AccordionTrigger>
           <AccordionContent className="pt-2 pb-4">
             <div className="space-y-6">
+              <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm text-muted-foreground">
+                <span className="font-medium text-warning">Not in the score. </span>
+                {'Legacy mechanism, not part of the aerowake-4.0-kss prediction. Individual differences are shown instead as the 90th-percentile KSS (Ingre et al. 2014, eq. 1.16).'}
+              </div>
               <p className="text-muted-foreground">
                 Individuals differ in two important ways: their natural circadian timing (chronotype) and
                 their vulnerability to sleep deprivation. These are trait-like characteristics — stable
@@ -1214,12 +1147,12 @@ export function MathematicalModelPage() {
           <AccordionContent className="pt-2 pb-4">
             <div className="space-y-6">
               <p className="text-muted-foreground">
-                Beyond the main performance score, the model derives two additional safety-critical
-                metrics that quantify operational risk in more concrete terms.
+                Beyond predicted KSS, the app shows the probability of severe sleepiness from the published
+                ordinal model and a legacy PVT-lapse heuristic.
               </p>
 
               <div>
-                <h4 className="font-medium mb-3">PVT Lapses (Reaction Time Failures)</h4>
+                <h4 className="font-medium mb-3">PVT Lapses (legacy heuristic, not validated in this model)</h4>
                 <div className="rounded-lg border border-border bg-muted/30 p-4 mb-3">
                   <code className="block bg-background/50 rounded p-3 text-sm font-mono">
                     L = 1.5 + 0.4 × debt + 1.2 × max(0, awake − 16)
@@ -1249,38 +1182,23 @@ export function MathematicalModelPage() {
               <Separator />
 
               <div>
-                <h4 className="font-medium mb-3">Microsleep Probability</h4>
+                <h4 className="font-medium mb-3">P(KSS ≥ 7) and P(KSS = 9)</h4>
                 <div className="rounded-lg border border-border bg-muted/30 p-4 mb-3">
                   <code className="block bg-background/50 rounded p-3 text-sm font-mono">
-                    P = 0.02 × exp(4 × (S − 0.50)) × (1 + 2 × max(0, 0.5 − C))
+                    P(KSS &gt; k) = logistic(−0.599 × (S + C + U) − K_k + offset)
                   </code>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Microsleep events (involuntary sleep episodes lasting 0.5-15 seconds) are one of the
-                  most dangerous consequences of fatigue during flight operations. The probability
-                  increases exponentially with sleep pressure and is amplified during circadian lows.
+                  The published ordinal model (Ingre et al. 2014, eq. 1.17) gives the probability of each KSS
+                  level. The app shows P(KSS ≥ 7, "sleepy") and, in the field labelled microsleep, P(KSS = 9,
+                  "fighting sleep"). These are probabilities of a sleepiness rating, not measured microsleep rates.
                 </p>
-                <div className="mt-2 grid gap-2 text-sm font-mono">
-                  <div className="flex items-center gap-3 p-2 rounded bg-success/10 border border-success/20">
-                    <span className="w-32">S=0.3, C=0.7</span>
-                    <span className="text-muted-foreground font-sans">P ≈ 0.9% (well-rested, daytime)</span>
-                  </div>
-                  <div className="flex items-center gap-3 p-2 rounded bg-warning/10 border border-warning/20">
-                    <span className="w-32">S=0.6, C=0.3</span>
-                    <span className="text-muted-foreground font-sans">P ≈ 4.4% (tired, night)</span>
-                  </div>
-                  <div className="flex items-center gap-3 p-2 rounded bg-destructive/10 border border-destructive/20">
-                    <span className="w-32">S=0.8, C=0.15</span>
-                    <span className="text-muted-foreground font-sans">P ≈ 17% (extreme fatigue, WOCL)</span>
-                  </div>
-                </div>
               </div>
-
               <div className="text-sm text-muted-foreground">
                 <p className="font-medium">Scientific Basis:</p>
                 <ul className="mt-1 space-y-1">
                   <li>• Basner & Dinges (2011): PVT lapses dose-response formula</li>
-                  <li>• Åkerstedt et al. (2010): Microsleep probability — circadian and sleep pressure interaction</li>
+                  <li>• Ingre et al. (2014): Ordinal model of KSS levels (eq. 1.17)</li>
                 </ul>
               </div>
             </div>
@@ -1298,63 +1216,36 @@ export function MathematicalModelPage() {
           <AccordionContent className="pt-2 pb-4">
             <div className="space-y-4">
               <p className="text-muted-foreground">
-                Simplified implementation of the full pipeline:
+                Simplified implementation of the prediction (sleep recovery with the brake omitted):
               </p>
 
               <div className="rounded-lg border border-border bg-muted/30 overflow-hidden">
                 <div className="bg-muted/50 px-4 py-2 border-b border-border">
-                  <span className="text-sm font-medium">fatigue-pipeline.ts</span>
+                  <span className="text-sm font-medium">three-process-model.ts</span>
                 </div>
                 <pre className="p-4 overflow-x-auto text-sm font-mono">
-{`// Process S — Homeostatic sleep pressure
+{`// Three Process Model — Ingre et al. (2014), model 5c
+const HA = 14.3, LA = 2.4, D = -0.0353;
+
+// Process S while awake (hours since wake)
 function processS(hoursAwake: number, S0: number): number {
-  return 0.95 - (0.95 - S0) * Math.exp(-hoursAwake / 18.2);
+  return LA + (S0 - LA) * Math.exp(D * hoursAwake);
 }
 
-// Process C — Two-harmonic circadian rhythm
-function processC(localHour: number, phaseShift = 0): number {
-  const t = (localHour - phaseShift + 24) % 24;
-  const fundamental = 0.25 * Math.cos((2 * Math.PI * (t - 17)) / 24);
-  const secondHarmonic = 0.08 * Math.cos((4 * Math.PI * (t - 20)) / 24);
-  return 0.5 + fundamental + secondHarmonic;
+// Process C and U (body-clock hour)
+function processC(t: number): number {
+  return 2.5 * Math.cos((2 * Math.PI * (t - 16.8)) / 24);
+}
+function processU(t: number): number {
+  return -0.5 + 0.5 * Math.cos((2 * Math.PI * (t - 16.8 - 3)) / 12);
 }
 
-// Process W — Sleep inertia (exponential decay)
-function processW(minutesAwake: number): number {
-  if (minutesAwake > 30) return 0;
-  return 0.30 * Math.exp(-minutesAwake / 10);
+// KSS transfer (eq. 1.9) and the 20–100 index
+function kss(S: number, t: number): number {
+  const raw = 9.68 - 0.46 * (S + processC(t) + processU(t));
+  return Math.min(9, Math.max(1, raw));
 }
-
-// Time-on-task (non-linear)
-function timeOnTask(hours: number): number {
-  return 0.012 * Math.log(1 + hours) +
-    0.0005 * Math.max(0, hours - 8) ** 2;
-}
-
-// Sleep debt vulnerability
-function debtPenalty(debtHours: number): number {
-  return Math.max(0.80, 1.0 - 0.025 * debtHours);
-}
-
-// Cabin altitude hypoxia
-function hypoxia(cabinAltFt: number): number {
-  return 1.0 - 0.01 * Math.max(0, cabinAltFt - 5000) / 1000;
-}
-
-// Full pipeline
-function performance(
-  S: number, C: number, W: number,
-  dutyHours: number, debtHours: number, cabinAlt = 7000
-): number {
-  const sAlert = 1 - S;
-  const cAlert = (C + 1) / 2;
-  const base = sAlert * 0.55 + cAlert * 0.45;
-  const afterInertia = base * (1 - W);
-  const afterToT = afterInertia - timeOnTask(dutyHours);
-  const afterDebt = afterToT * debtPenalty(debtHours);
-  const afterHypoxia = afterDebt * hypoxia(cabinAlt);
-  return 20 + Math.max(0, afterHypoxia) * 80;
-}`}
+const index = (k: number) => 110 - 10 * k;`}
                 </pre>
               </div>
             </div>
@@ -1383,8 +1274,9 @@ function TimelineRow({
   note?: string;
 }) {
   const riskColors: Record<string, string> = {
-    'GOOD': 'bg-success/10 border-success/20 text-success',
+    'LOW': 'bg-success/10 border-success/20 text-success',
     'MODERATE': 'bg-warning/10 border-warning/20 text-warning',
+    'HIGH': 'bg-high/10 border-high/20 text-high',
     'CRITICAL': 'bg-destructive/10 border-destructive/20 text-destructive',
     'EXTREME': 'bg-destructive/20 border-destructive/30 text-destructive',
   };
@@ -1395,12 +1287,12 @@ function TimelineRow({
       <span className="flex-1 text-sm">{event}</span>
       <span className="font-mono text-xs text-muted-foreground">{values}</span>
       <div className="flex items-center gap-2">
-        <span className="font-mono font-bold">{performance}</span>
-        <Badge variant={risk === 'GOOD' ? 'success' : risk === 'MODERATE' ? 'warning' : 'destructive'} className="text-xs">
+        <span className="font-mono font-bold" title="index = 110 − 10·KSS">{performance}</span>
+        <Badge variant={risk === 'LOW' ? 'success' : risk === 'MODERATE' ? 'warning' : risk === 'HIGH' ? 'high' : 'destructive'} className="text-xs">
           {risk}
         </Badge>
       </div>
-      {note && <span className="text-xs text-muted-foreground italic hidden lg:block">{note}</span>}
+      {note && <span className="text-xs text-muted-foreground italic">{note}</span>}
     </div>
   );
 }

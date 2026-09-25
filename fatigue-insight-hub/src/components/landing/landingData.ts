@@ -1,3 +1,4 @@
+import { performanceHex } from '@/lib/risk-scale';
 // Static airport coordinates for landing page globe — avoids async API dependency
 export interface LandingAirport {
   code: string;
@@ -54,12 +55,7 @@ export const LANDING_ROUTES: LandingRoute[] = [
 ];
 
 // Get route color based on performance — matches RouteNetworkMapbox.tsx
-export const getRouteColor = (performance: number): string => {
-  if (performance >= 70) return '#22c55e';
-  if (performance >= 60) return '#eab308';
-  if (performance >= 50) return '#f97316';
-  return '#ef4444';
-};
+export const getRouteColor = (performance: number): string => performanceHex(performance);
 
 // Aggregate routes by unique pair (for display, take worst performance)
 export const LANDING_ROUTE_PAIRS = (() => {

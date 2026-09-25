@@ -11,7 +11,7 @@ export interface InfoTooltipEntry {
   regulation?: string;
   /** Optional formula or equation string. */
   formula?: string;
-  /** Safety threshold description, e.g. ">77% adequate, <55% impaired". */
+  /** Threshold description, e.g. "KSS <5.5 low, ≥8.5 extreme". */
   threshold?: string;
   /** Practical action tip for the pilot. */
   actionTip?: string;
@@ -118,42 +118,65 @@ export function InfoTooltip({
 export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
   performance: {
     description:
-      'Integrated alertness score (20-100%) combining three biological processes: homeostatic sleep drive, circadian rhythm, and sleep inertia, minus time-on-task degradation.',
-    reference: 'Hursh et al., 2004 (SAFTE)',
-    formula: 'P = 20 + 80 \u00d7 [S\u00b7C \u00d7 (1\u2212W) \u2212 ToT]',
-    threshold: '\u226577% adequate, 55-77% reduced, <55% impaired',
-    actionTip: 'Check the contributing factors breakdown to understand what drove the score down.',
+      'Predicted sleepiness on the Karolinska Sleepiness Scale (KSS 1\u20139) from the Three Process Model (sleep pressure S, circadian C, ultradian U), validated on airline crew. The 20\u2013100 index is a linear re-expression of KSS; it is not a percentage.',
+    reference: 'Ingre et al., 2014 (PLoS ONE e108679)',
+    formula: 'KSS = 9.68 \u2212 0.46\u00b7(S + C + U);  index = 110 \u2212 10\u00b7KSS',
+    threshold: 'KSS <5.5 low \u00b7 5.5\u20136.5 moderate \u00b7 6.5\u20137.5 high \u00b7 7.5\u20138.5 critical \u00b7 \u22658.5 extreme',
+    actionTip: 'Group-average prediction (typical error \u00b11.4 KSS). Your own assessment of fitness to fly always takes precedence.',
   },
   sleepPressure: {
     description:
-      'Process S — the homeostatic sleep drive that accumulates exponentially during wakefulness and dissipates during sleep. Higher values indicate greater sleep need.',
-    reference: 'Borb\u00e9ly, 1982',
-    formula: 'S(t) = S\u2080 \u00d7 e^(-t/\u03c4_d) during sleep',
-    actionTip: 'Prioritize 7-8h sleep before duty. Even a 20-min nap reduces sleep pressure significantly.',
+      'Process S \u2014 homeostatic sleep pressure. Builds during wakefulness and recovers during sleep (with a "brake" near full recovery). Shown normalised 0\u20131 (1 = depleted). Up to ~5.5 KSS points at full depletion.',
+    reference: 'Ingre et al., 2014; \u00c5kerstedt & Folkard, 1997',
+    actionTip: 'Prioritize 7-8h sleep before duty. A nap before a late or night duty reduces sleep pressure.',
   },
   circadian: {
     description:
-      'Process C — the endogenous ~24h biological clock that modulates alertness independently of sleep history. Lowest between 02:00-05:59 (WOCL).',
-    reference: 'Dijk & Czeisler, 1995',
+      'Process C \u2014 the body clock. Shown normalised 0\u20131 (1 = circadian peak). Worth up to ~2.3 KSS points between peak and trough; lowest in the early morning body-clock hours (WOCL). The body clock re-adapts to a new time zone at ~30% of the remaining difference per day.',
+    reference: 'Ingre et al., 2014',
     regulation: 'AMC1 ORO.FTL.105(10)',
     threshold: 'Body clock low: 02:00-05:59 home base time',
     actionTip: 'Use strategic light exposure and meal timing to support circadian alignment on layovers.',
   },
+  hoursAwake: {
+    description:
+      'Continuous hours awake at this point, from the model\u2019s sleep inputs. Sleep pressure (S) rises with time awake; the KSS prediction already accounts for it.',
+    reference: 'Ingre et al., 2014',
+    actionTip: 'Verify the assumed sleep and naps \u2014 hours awake are only as good as the sleep inputs.',
+  },
+  kss90: {
+    description:
+      'Predicted KSS for a more fatigue-sensitive pilot (90th percentile of individual differences in the validation data). Nine in ten pilots are expected to rate at or below this value.',
+    reference: 'Ingre et al., 2014 (eq. 1.16)',
+  },
+  pSevere: {
+    description:
+      'Model probability that a pilot rates KSS 7 or higher ("sleepy") at this point, from the published ordinal model. KSS \u2265 7 is associated with physiological signs of sleepiness.',
+    reference: 'Ingre et al., 2014 (eq. 1.17); \u00c5kerstedt et al., 2014',
+    threshold: '<10% low, 10\u201330% elevated, >30% high',
+  },
+  sleepDeficit7d: {
+    description:
+      'Rolling 7-day sleep ledger against an 8 h/day need. Reported separately because subjective sleepiness (KSS) plateaus under chronic restriction while objective performance keeps worsening.',
+    reference: 'Van Dongen et al., 2003; Belenky et al., 2003',
+    threshold: '<5h none \u00b7 5\u201310h mild \u00b7 10\u201315h moderate \u00b7 \u226515h severe',
+    actionTip: 'Recovery usually needs more than one long sleep; plan several nights of full sleep.',
+  },
   sleepInertia: {
     description:
-      'Process W — the transient grogginess after awakening that impairs cognitive performance. Dissipates within 15-30 minutes but can be severe during WOCL.',
-    reference: 'Tassi & Muzet, 2000',
+      'Grogginess just after waking. Not included in the alertness score: the default inertia function worsened fit in the airline validation study. Allow time after waking before critical tasks.',
+    reference: 'Ingre et al., 2014; Tassi & Muzet, 2000',
     actionTip: 'Allow 15-30 min after waking before critical tasks. Bright light and caffeine help.',
   },
   timeOnTask: {
     description:
-      'Linear degradation of alertness with increasing time on duty, approximately 0.8% per hour. Compounds with other fatigue factors during long duties.',
-    reference: 'Folkard & \u00c5kerstedt, 1999',
+      'Duty length and sectors are reported as separate contributing factors. They are not added to the alertness score, which is not validated for a time-on-task term.',
+    reference: 'Ingre et al., 2014',
     actionTip: 'Take micro-breaks during cruise. Verbal crosschecks help maintain vigilance.',
   },
   sleepDebt: {
     description:
-      'Cumulative deficit between actual sleep obtained and the 8h baseline need. Debt above 4h significantly impairs cognitive performance and reaction time.',
+      'Cumulative deficit between sleep obtained and the 8h baseline need (model estimate). Not added to the KSS score; see the 7-day sleep deficit for the restriction ledger.',
     reference: 'Van Dongen et al., 2003',
     threshold: '\u22642h low risk, 2-4h moderate, >4h high risk',
     actionTip: 'Recovery requires 2-3 nights of extended sleep. One long sleep cannot fully repay large debt.',
@@ -182,38 +205,35 @@ export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
   },
   pinchEvent: {
     description:
-      'A moment during a critical flight phase (takeoff, approach, landing) where performance drops below the safety threshold. Each event requires mitigation.',
-    reference: 'Hursh et al., 2004',
+      'A moment during a critical flight phase (takeoff, approach, landing) where predicted sleepiness enters an elevated risk band. Each event warrants mitigation.',
+    reference: 'Ingre et al., 2014',
     threshold: 'Any occurrence during takeoff, approach, or landing',
     actionTip: 'Consider enhanced crew monitoring and verbal callouts during critical phases.',
   },
   fha: {
     description:
-      'Fatigue Hazard Area \u2014 cumulative fatigue exposure below the 72% operational risk threshold. Integrates the depth and duration of performance deficits into a single score.',
-    reference: 'Dawson & McCulloch, 2005',
-    formula: 'FHA = \u03A3 max(0, 72% \u2212 P(t)) \u00D7 \u0394t',
-    threshold: '\u22645 low, 5\u201320 moderate, >20 high (%-hours)',
+      'Fatigue Hazard Area \u2014 cumulative time spent above the low-risk boundary (KSS 5.5), weighted by how far above. Integrates depth and duration of predicted sleepiness.',
+    reference: 'Dawson & McCulloch, 2005 (concept)',
+    formula: 'FHA = \u03A3 max(0, KSS(t) \u2212 5.5) \u00D7 \u0394t',
+    threshold: '\u22640.5 low, 0.5\u20132 moderate, >2 high (KSS-hours)',
     actionTip: 'High FHA may warrant fatigue report filing under EASA ORO.FTL.120.',
   },
   kss: {
     description:
-      'Karolinska Sleepiness Scale — a validated subjective sleepiness measure from 1 (extremely alert) to 9 (extremely sleepy). Mapped from model performance.',
-    reference: '\u00c5kerstedt & Gillberg, 1990',
-    threshold: '1-3 alert, 4-6 normal, 7-9 impaired',
-    actionTip: 'KSS 7+ correlates with increased risk of involuntary microsleeps.',
+      'Karolinska Sleepiness Scale \u2014 1 (extremely alert) to 9 (very sleepy, fighting sleep). Predicted directly by the Three Process Model for a group-average pilot.',
+    reference: '\u00c5kerstedt & Gillberg, 1990; Ingre et al., 2014',
+    threshold: '<5.5 low \u00b7 5.5\u20136.5 moderate \u00b7 6.5\u20137.5 high \u00b7 7.5\u20138.5 critical \u00b7 \u22658.5 extreme',
+    actionTip: 'KSS \u2265 7 is associated with physiological signs of sleepiness; 8\u20139 with sharply more lapses.',
   },
   samnPerelli: {
     description:
-      'Samn-Perelli Fatigue Scale — a 7-point scale developed for aviation (1 = fully alert, 7 = completely exhausted). Widely used in military and civil fatigue studies.',
+      'Samn-Perelli Fatigue Scale \u2014 a 7-point self-rating used in aviation (1 = fully alert, 7 = completely exhausted). There is no validated mapping from the model\u2019s KSS prediction, so it is not estimated here; use it for self-rating.',
     reference: 'Samn & Perelli, 1982',
-    threshold: '1-2 alert, 3-4 normal, 5-7 fatigued',
   },
   reactionTime: {
     description:
-      'Estimated mean reaction time derived from the performance model. Calibrated for trained crew against Basner & Dinges (2011) dose-response data.',
-    reference: 'Basner & Dinges, 2011; Gander et al., 2013',
-    threshold: '\u2264300ms normal, 300-370ms mild, >370ms impaired',
-    actionTip: 'Reaction time above 370ms is comparable to 0.05% BAC impairment.',
+      'Reaction time is not estimated: the KSS model has no validated mapping to reaction time.',
+    reference: 'Ingre et al., 2014',
   },
   fdpUtilization: {
     description:
@@ -224,13 +244,13 @@ export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
   },
   workloadPhase: {
     description:
-      'Cognitive workload varies by flight phase. Takeoff (1.8\u00d7) and landing (2.0\u00d7) are the most demanding; cruise (0.8\u00d7) is the least.',
+      'Cognitive workload varies by flight phase; takeoff and landing are the most demanding. Workload is shown for context only and does not change the KSS prediction.',
     reference: 'Wickens, 2008',
   },
   sleepReservoir: {
     description:
-      'A normalized measure of available sleep reserves (50-100%). Derived from cumulative sleep debt — lower values indicate greater fatigue vulnerability.',
-    reference: 'Hursh et al., 2004 (SAFTE)',
+      'Display-only view of the cumulative sleep debt estimate (100% = no debt, 50% = 16h debt). Not an input to the KSS prediction.',
+    reference: 'Display transform of the model sleep ledger',
     threshold: '>80% good, 65-80% moderate, <65% depleted',
     actionTip: 'Sleep reservoir replenishes slowly. Multiple nights of good sleep are needed to rebuild.',
   },
@@ -242,20 +262,19 @@ export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
   },
   pvtLapses: {
     description:
-      'Predicted Psychomotor Vigilance Task lapses per 10-minute trial. A validated objective measure of sustained attention failure.',
-    reference: 'Van Dongen et al., 2003; Basner & Dinges, 2011',
-    threshold: '\u22642 normal, 2-5 impaired, >5 severely impaired',
+      'Legacy heuristic estimate of Psychomotor Vigilance Task lapses per 10-minute trial from sleep debt and time awake. Not part of the validated KSS model; indicative only.',
+    reference: 'Van Dongen et al., 2003 (heuristic)',
   },
   microsleepProbability: {
     description:
-      'Estimated probability of involuntary microsleep events per hour of wakefulness. Increases exponentially with sleep debt and circadian misalignment.',
-    reference: '\u00c5kerstedt et al., 2010',
-    threshold: '<2% low, 2-5% moderate, >5% high risk',
-    actionTip: 'Microsleep probability >5% warrants enhanced crew monitoring.',
+      'Model probability of a KSS 9 rating ("very sleepy, fighting sleep") at this point, from the published ordinal model. A marker of severe sleepiness, not a measured microsleep rate.',
+    reference: 'Ingre et al., 2014 (eq. 1.17)',
+    threshold: '<2% low, 2-5% moderate, >5% high',
+    actionTip: 'Any meaningful probability of KSS 9 warrants enhanced crew monitoring.',
   },
   cabinAltitude: {
     description:
-      'Mild hypoxia from reduced cabin pressure (6,000-8,000 ft equivalent) can impair cognitive performance by 1-3%. Effect is multiplicative with fatigue.',
+      'Cabin altitude (6,000-8,000 ft equivalent) is shown for context. Mild hypoxia is not included in the KSS prediction.',
     reference: 'Nesthus et al., 2007; Muhm et al., 2007',
   },
 };

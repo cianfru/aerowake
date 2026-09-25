@@ -60,7 +60,7 @@ const features = [
     alt: 'Aerowake Duty Details',
     title: 'Every duty, fully analysed.',
     description:
-      'Drill into any single duty for a complete fatigue assessment. Per-flight performance scores, KSS and Samn-Perelli ratings, FDP utilisation, prior sleep quality, and a four-factor decomposition showing exactly what drove your fatigue — sleep pressure, circadian phase, time on duty, or cabin altitude.',
+      'Drill into any single duty for a complete fatigue assessment. Per-flight predicted sleepiness (KSS), FDP utilisation, prior sleep quality, and a decomposition showing what drove it — sleep pressure or circadian phase — plus the 7-day sleep deficit.',
     align: 'right' as const,
   },
   {

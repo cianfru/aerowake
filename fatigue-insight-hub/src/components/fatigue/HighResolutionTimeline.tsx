@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DutyAnalysis, DutyStatistics } from '@/types/fatigue';
 import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { indexToKss, performanceHex, riskHex } from '@/lib/risk-scale';
 
 interface HighResolutionTimelineProps {
   duties: DutyAnalysis[];
@@ -24,15 +25,8 @@ interface DutyBar {
 const WOCL_START = 2;
 const WOCL_END = 6;
 
-const getPerformanceColor = (performance: number): string => {
-  // Create gradient from red (0) to yellow (50) to green (100)
-  if (performance >= 80) return 'hsl(120, 70%, 45%)'; // Green
-  if (performance >= 70) return 'hsl(90, 70%, 50%)'; // Yellow-green
-  if (performance >= 60) return 'hsl(55, 90%, 55%)'; // Yellow
-  if (performance >= 50) return 'hsl(40, 95%, 50%)'; // Orange-yellow
-  if (performance >= 40) return 'hsl(25, 95%, 50%)'; // Orange
-  return 'hsl(0, 80%, 50%)'; // Red
-};
+// Shared risk-band colours (index = 110 − 10·KSS)
+const getPerformanceColor = (performance: number): string => performanceHex(performance);
 
 export function HighResolutionTimeline({ duties, statistics, month, pilotId }: HighResolutionTimelineProps) {
   const daysInMonth = getDaysInMonth(month);
@@ -266,7 +260,7 @@ export function HighResolutionTimeline({ duties, statistics, month, pilotId }: H
                               width: `${((bar.endHour - bar.startHour) / 24) * 100}%`,
                               background: `linear-gradient(to right, ${getPerformanceColor(bar.startPerformance)}, ${getPerformanceColor(bar.endPerformance)})`,
                             }}
-                            title={`${format(bar.duty.date, 'MMM d')}: ${bar.duty.flightSegments.map(s => s.flightNumber).join(', ')} - Start: ${bar.startPerformance.toFixed(0)}% → End: ${bar.endPerformance.toFixed(0)}%${sleepInfo}`}
+                            title={`${format(bar.duty.date, 'MMM d')}: ${bar.duty.flightSegments.map(s => s.flightNumber).join(', ')} - Start: KSS ${indexToKss(bar.startPerformance).toFixed(1)} → End: KSS ${indexToKss(bar.endPerformance).toFixed(1)}${sleepInfo}`}
                           />
                         );
                       })}
@@ -277,18 +271,18 @@ export function HighResolutionTimeline({ duties, statistics, month, pilotId }: H
 
             {/* Color legend */}
             <div className="ml-4 flex w-16 flex-shrink-0 flex-col items-center">
-              <div className="h-8 text-[10px] text-muted-foreground">Score</div>
+              <div className="h-8 text-[10px] text-muted-foreground">KSS</div>
               <div className="relative h-full w-4 rounded-sm overflow-hidden">
                 <div
                   className="absolute inset-0"
                   style={{
-                    background: 'linear-gradient(to bottom, hsl(120, 70%, 45%), hsl(90, 70%, 50%), hsl(55, 90%, 55%), hsl(40, 95%, 50%), hsl(25, 95%, 50%), hsl(0, 80%, 50%))',
+                    background: `linear-gradient(to bottom, ${riskHex('low')} 0%, ${riskHex('low')} 56%, ${riskHex('moderate')} 56%, ${riskHex('moderate')} 69%, ${riskHex('high')} 69%, ${riskHex('high')} 81%, ${riskHex('critical')} 81%, ${riskHex('critical')} 94%, ${riskHex('extreme')} 94%)`,
                   }}
                 />
               </div>
               <div className="mt-1 flex w-full flex-col text-[9px] text-muted-foreground">
-                <span className="text-right">100</span>
-                <span className="mt-auto text-right">0</span>
+                <span className="text-right">1</span>
+                <span className="mt-auto text-right">9</span>
               </div>
             </div>
           </div>

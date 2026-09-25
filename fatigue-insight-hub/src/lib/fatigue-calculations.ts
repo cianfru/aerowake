@@ -1,306 +1,242 @@
 /**
- * Fatigue calculation utilities for Phase 2 Data Richness.
+ * Fatigue calculation utilities.
  *
  * Provides:
- * - FHA (Fatigue Hazard Area) calculation
- * - Derived fatigue scales (KSS, Samn-Perelli, PVT Reaction Time)
- * - Performance formula decomposition helpers
+ * - FHA (Fatigue Hazard Area) — time spent above the low-risk KSS boundary
+ * - KSS helpers (the 20–100 index is a linear re-expression of predicted KSS)
+ * - S/C decomposition of predicted KSS (Three Process Model, Ingre et al. 2014)
+ *
+ * Retired (not supported by the aerowake-4.0-kss model): Samn-Perelli and
+ * reaction-time converters derived from the index. There is no validated
+ * mapping from predicted KSS to either, so the UI shows KSS only.
  */
+
+import {
+  classifyKss,
+  indexToKss,
+  kssLabel,
+  kssToIndex,
+  resolveKss,
+  resolveThresholds,
+  type RiskThresholds,
+} from '@/lib/risk-scale';
 
 // ---------------------------------------------------------------------------
 // FHA — Fatigue Hazard Area
 // ---------------------------------------------------------------------------
-
-/** Threshold below which time-minutes are counted as hazardous (aligned with operational "moderate" risk boundary). */
-const FHA_THRESHOLD = 72;
 
 /** Resolution of the timeline data in minutes. */
 const TIMELINE_RESOLUTION_MIN = 5;
 
 interface TimelineDataPoint {
   performance: number;
+  kss?: number;
+  is_in_rest?: boolean;
 }
 
 /**
- * Calculate the Fatigue Hazard Area (FHA) in %-hours.
+ * Calculate the Fatigue Hazard Area (FHA) in KSS-hours.
  *
- * FHA = Σ max(0, threshold − P(t)) × Δt / 60
+ * FHA = Σ max(0, KSS(t) − KSS_low) × Δt
  *
- * This is the trapezoidal integration of the area under the moderate-risk
- * threshold (72%, aligned with operational risk classification) across all timeline points, converted from %-minutes
- * to %-hours for intuitive display. Higher values indicate greater
- * cumulative fatigue exposure.
+ * where KSS_low is the upper boundary of the low-risk band (KSS 5.5 by
+ * default, i.e. index 55; taken from the duty's risk thresholds when given).
+ * Rest (bunk) samples are excluded. Higher values indicate greater
+ * cumulative exposure to predicted sleepiness.
  *
- * Reference: Dawson & McCulloch, 2005.
+ * Concept: Dawson & McCulloch (2005) fatigue hazard area.
  *
- * @param points Array of timeline data points with performance values.
- * @param threshold Performance threshold (default 72%).
- * @param resolutionMin Time step in minutes (default 5).
- * @returns FHA value in %-hours.
+ * @returns FHA in KSS-hours, rounded to 0.1.
  */
 export function calculateFHA(
   points: TimelineDataPoint[],
-  threshold: number = FHA_THRESHOLD,
+  thresholds?: RiskThresholds | null,
   resolutionMin: number = TIMELINE_RESOLUTION_MIN,
 ): number {
   if (!points || points.length === 0) return 0;
+  const kssLimit = indexToKss(resolveThresholds(thresholds).low[0]);
 
   let fha = 0;
-  for (let i = 0; i < points.length; i++) {
-    const deficit = Math.max(0, threshold - points[i].performance);
-    fha += deficit * resolutionMin;
+  for (const p of points) {
+    if (p.is_in_rest) continue;
+    const kss = resolveKss(p.kss, p.performance);
+    if (kss == null) continue;
+    fha += Math.max(0, kss - kssLimit) * resolutionMin;
   }
-  return Math.round(fha / 60);
+  return Math.round((fha / 60) * 10) / 10;
 }
 
 /**
- * Classify FHA severity for display.
+ * Classify FHA severity for display (KSS-hours above the low-risk band).
  *
- * Thresholds calibrated for %-hours:
- *   ≤5 %-hours  → Low (typical well-rested roster)
- *   ≤20 %-hours → Moderate (some fatigue exposure)
- *   >20 %-hours → High (significant cumulative exposure)
+ *   ≤ 0.5 KSS-h → Low      (brief or marginal excursions)
+ *   ≤ 2   KSS-h → Moderate (e.g. ~2 h one KSS point into the moderate band)
+ *   > 2   KSS-h → High
  */
 export function getFHASeverity(fha: number): {
   label: string;
   variant: 'success' | 'warning' | 'critical';
 } {
-  if (fha <= 5) return { label: 'Low', variant: 'success' };
-  if (fha <= 20) return { label: 'Moderate', variant: 'warning' };
+  if (fha <= 0.5) return { label: 'Low', variant: 'success' };
+  if (fha <= 2) return { label: 'Moderate', variant: 'warning' };
   return { label: 'High', variant: 'critical' };
 }
 
 // ---------------------------------------------------------------------------
-// Derived Fatigue Scales
+// KSS
 // ---------------------------------------------------------------------------
 
 /**
- * Convert model performance (20-100) to Karolinska Sleepiness Scale (1-9).
+ * Convert the 20–100 index to predicted KSS (1–9).
  *
- * Mapping uses a piecewise linear interpolation calibrated against
- * Åkerstedt & Gillberg (1990) validation data:
- *
- *   P ≥ 95  → KSS 1 (extremely alert)
- *   P = 77  → KSS 5 (neither alert nor sleepy)
- *   P = 55  → KSS 7 (sleepy, some effort to stay awake)
- *   P = 35  → KSS 8 (sleepy, great effort)
- *   P ≤ 20  → KSS 9 (extremely sleepy, fighting sleep)
+ * Exact inverse of the backend mapping index = 110 − 10·KSS
+ * (aerowake-4.0-kss). Prefer the backend `kss` field when available.
  */
 export function performanceToKSS(performance: number): number {
-  const p = Math.max(20, Math.min(100, performance));
-  // Piecewise linear breakpoints: [perf, kss]
-  const breakpoints: [number, number][] = [
-    [95, 1],
-    [88, 2],
-    [83, 3],
-    [80, 4],
-    [77, 5],
-    [70, 6],
-    [55, 7],
-    [35, 8],
-    [20, 9],
-  ];
-
-  // Find surrounding breakpoints
-  for (let i = 0; i < breakpoints.length - 1; i++) {
-    const [p1, k1] = breakpoints[i];
-    const [p2, k2] = breakpoints[i + 1];
-    if (p >= p2 && p <= p1) {
-      const ratio = (p1 - p) / (p1 - p2);
-      return Math.round((k1 + ratio * (k2 - k1)) * 10) / 10;
-    }
-  }
-
-  return p >= 95 ? 1 : 9;
+  return indexToKss(performance);
 }
 
 /**
- * Get KSS label and risk classification.
+ * KSS verbal anchor and a display variant based on the risk bands
+ * (low → success, moderate → warning, high and above → critical).
  */
 export function getKSSLabel(kss: number): {
   label: string;
   variant: 'success' | 'warning' | 'critical';
 } {
-  if (kss <= 3) return { label: 'Alert', variant: 'success' };
-  if (kss <= 5) return { label: 'Neither alert nor sleepy', variant: 'success' };
-  if (kss <= 6) return { label: 'Some signs of sleepiness', variant: 'warning' };
-  if (kss <= 7) return { label: 'Sleepy, no effort to stay awake', variant: 'warning' };
-  if (kss <= 8) return { label: 'Sleepy, some effort to stay awake', variant: 'critical' };
-  return { label: 'Extremely sleepy', variant: 'critical' };
-}
-
-/**
- * Convert model performance (20-100) to Samn-Perelli Fatigue Scale (1-7).
- *
- * Mapping calibrated against Samn & Perelli (1982) aviator fatigue data:
- *
- *   P ≥ 95  → SP 1 (fully alert, wide awake)
- *   P = 77  → SP 3 (okay, somewhat fresh)
- *   P = 55  → SP 5 (moderately tired, let down)
- *   P = 35  → SP 6 (extremely tired, very difficult to concentrate)
- *   P ≤ 20  → SP 7 (completely exhausted, unable to function)
- */
-export function performanceToSamnPerelli(performance: number): number {
-  const p = Math.max(20, Math.min(100, performance));
-  const breakpoints: [number, number][] = [
-    [95, 1],
-    [88, 2],
-    [77, 3],
-    [65, 4],
-    [55, 5],
-    [35, 6],
-    [20, 7],
-  ];
-
-  for (let i = 0; i < breakpoints.length - 1; i++) {
-    const [p1, k1] = breakpoints[i];
-    const [p2, k2] = breakpoints[i + 1];
-    if (p >= p2 && p <= p1) {
-      const ratio = (p1 - p) / (p1 - p2);
-      return Math.round((k1 + ratio * (k2 - k1)) * 10) / 10;
-    }
-  }
-
-  return p >= 95 ? 1 : 7;
-}
-
-/**
- * Get Samn-Perelli label and risk classification.
- */
-export function getSamnPerelliLabel(sp: number): {
-  label: string;
-  variant: 'success' | 'warning' | 'critical';
-} {
-  if (sp <= 2) return { label: 'Fully alert', variant: 'success' };
-  if (sp <= 3) return { label: 'Okay, somewhat fresh', variant: 'success' };
-  if (sp <= 4) return { label: 'A little tired', variant: 'warning' };
-  if (sp <= 5) return { label: 'Moderately tired', variant: 'warning' };
-  if (sp <= 6) return { label: 'Extremely tired', variant: 'critical' };
-  return { label: 'Completely exhausted', variant: 'critical' };
-}
-
-/**
- * Convert model performance (20-100) to estimated mean reaction time (ms).
- *
- * Calibrated for trained crew (Gander et al., 2013) against Basner & Dinges
- * (2011) dose-response curves. Reduced slope and baseline reflect operational
- * pilot performance vs. lab-subject data.
- *
- *   P = 100 → ~210ms (optimal)
- *   P = 77  → ~274ms (normal range)
- *   P = 72  → ~288ms (operational low-risk boundary)
- *   P = 55  → ~336ms (mildly impaired)
- *   P = 35  → ~392ms (significantly impaired)
- *   P = 20  → ~434ms (severe impairment)
- */
-export function performanceToReactionTime(performance: number): number {
-  const p = Math.max(20, Math.min(100, performance));
-  // Inverse linear mapping: lower performance → higher reaction time
-  // RT = 210 + (100 - P) × 2.8
-  const rt = 210 + (100 - p) * 2.8;
-  return Math.round(rt);
-}
-
-/**
- * Get reaction time risk classification.
- */
-export function getReactionTimeLabel(rtMs: number): {
-  label: string;
-  variant: 'success' | 'warning' | 'critical';
-} {
-  if (rtMs <= 300) return { label: 'Normal', variant: 'success' };
-  if (rtMs <= 370) return { label: 'Mildly impaired', variant: 'warning' };
-  if (rtMs <= 440) return { label: 'Significantly impaired', variant: 'critical' };
-  return { label: 'Severely impaired', variant: 'critical' };
+  const level = classifyKss(kss);
+  const variant = level === 'low' ? 'success' : level === 'moderate' ? 'warning' : 'critical';
+  return { label: kssLabel(kss), variant };
 }
 
 // ---------------------------------------------------------------------------
-// Performance Decomposition
+// Decomposition of predicted KSS
 // ---------------------------------------------------------------------------
 
-/**
- * Decompose the performance formula into individual factor contributions.
- *
- * P = 20 + 80 × [base_alertness × (1 − W) − ToT]
- *
- * Where base_alertness = S × C + (1 − S) × (1 − C) + resilience
+/*
+ * Three Process Model (Ingre et al. 2014, model 5c):
+ *   KSS = 9.68 − 0.46 · (S + C + U)
+ * The API reports S and C normalised to 0–1:
+ *   sleep_pressure = (HA − S) / (HA − LA),  HA = 14.3, LA = 2.4
+ *   circadian      = (C + 2.5) / 5           (1 = circadian peak)
+ * so the KSS added by each process, relative to a fully rested pilot at the
+ * circadian peak, is exactly:
+ *   ΔKSS_S = 0.46 · 11.9 · sleep_pressure
+ *   ΔKSS_C = 0.46 · 5.0  · (1 − circadian)
+ * The remainder is the small ultradian term (0–0.46 KSS) plus clamping.
  */
+const KSS_SLOPE = 0.46;
+const S_RANGE = 14.3 - 2.4;
+const C_RANGE = 2 * 2.5;
+/** Predicted KSS when fully rested (S = HA) at the circadian peak (C = +2.5), U = 0. */
+export const REFERENCE_KSS = 9.68 - KSS_SLOPE * (14.3 + 2.5);
+
 export interface PerformanceDecomposition {
-  /** Raw performance score (20-100). */
+  /** 20–100 index (= 110 − 10·KSS). */
   performance: number;
-  /** Process S contribution — homeostatic sleep pressure (0-1, higher = worse). */
+  /** Predicted KSS (group-average pilot). */
+  kss: number;
+  /** Predicted KSS for the 90th-percentile pilot, when provided by the backend. */
+  kss90?: number;
+  /** P(KSS ≥ 7), 0–1, when provided by the backend. */
+  pSevere?: number;
+  /** Normalised homeostatic sleep pressure (0 = rested, 1 = depleted). */
   sleepPressure: number;
-  /** Process C contribution — circadian drive (0-1, higher = worse). */
+  /** Normalised circadian phase (1 = circadian peak, 0 = trough). */
   circadian: number;
-  /** Process W — sleep inertia (0-1, higher = worse). */
-  sleepInertia: number;
-  /** Time-on-task penalty (0-1). */
-  timeOnTaskPenalty: number;
   /** Hours on duty when this point was sampled. */
   hoursOnDuty: number;
-  /** Percentage of performance lost to Process S. */
-  sContribution: number;
-  /** Percentage of performance lost to Process C. */
-  cContribution: number;
-  /** Percentage of performance lost to Process W. */
-  wContribution: number;
-  /** Percentage of performance lost to Time-on-Task. */
-  totContribution: number;
+  /** Continuous hours awake, when provided by the backend. */
+  hoursAwake?: number;
+  /** Reference KSS (rested, circadian peak). */
+  referenceKss: number;
+  /** KSS points added by sleep pressure (Process S). */
+  sKss: number;
+  /** KSS points added by circadian phase (Process C). */
+  cKss: number;
+  /** Remainder (ultradian process U, clamping). */
+  otherKss: number;
+  /** The larger of the two drivers. */
+  dominantFactor: 'sleep_pressure' | 'circadian';
 }
 
 /**
- * Decompose a single timeline point into factor contributions.
- *
- * The contributions are expressed as percentage of the 80-point range
- * (since floor is 20 and ceiling is 100).
+ * Decompose a timeline point's predicted KSS into the sleep-pressure and
+ * circadian contributions of the Three Process Model.
  */
 export function decomposePerformance(point: {
   performance: number;
   sleep_pressure: number;
   circadian: number;
-  sleep_inertia: number;
-  time_on_task_penalty: number;
   hours_on_duty: number;
+  kss?: number;
+  kss_90?: number;
+  p_severe_sleepiness?: number;
+  hours_awake?: number;
 }): PerformanceDecomposition {
-  // API value semantics (from backend api_server.py):
-  //   sleep_pressure (S): 0-1, higher = MORE pressure = WORSE (deficit form)
-  //   circadian (C):      0-1, higher = MORE alertness = BETTER (alertness form)
-  //   sleep_inertia (W):  0-1, 1.0 = no inertia, <1 = grogginess (alertness form)
-  //   time_on_task (ToT): 0-1, 1.0 = no penalty, <1 = fatigued (alertness form)
-  //
-  // Convert all to deficit form (higher = worse) before proportional attribution.
-  const S_deficit = point.sleep_pressure;            // already deficit form
-  const C_deficit = 1 - point.circadian;             // invert: low alertness → high deficit
-  const W_deficit = 1 - point.sleep_inertia;         // invert: 1.0 (no inertia) → 0 deficit
-  const ToT_deficit = 1 - point.time_on_task_penalty; // invert: 1.0 (no penalty) → 0 deficit
-
-  // Total performance deficit from 100%
-  const totalDeficit = Math.max(0, 100 - point.performance);
-
-  // Distribute deficit proportionally across factors
-  const rawTotal = S_deficit + C_deficit + W_deficit + ToT_deficit;
-
-  let sContrib = 0, cContrib = 0, wContrib = 0, totContrib = 0;
-
-  if (rawTotal > 0 && totalDeficit > 0) {
-    sContrib = (S_deficit / rawTotal) * totalDeficit;
-    cContrib = (C_deficit / rawTotal) * totalDeficit;
-    wContrib = (W_deficit / rawTotal) * totalDeficit;
-    totContrib = (ToT_deficit / rawTotal) * totalDeficit;
-  }
+  const pressure = Math.max(0, Math.min(1, point.sleep_pressure ?? 0));
+  const circ = Math.max(0, Math.min(1, point.circadian ?? 1));
+  const kss = resolveKss(point.kss, point.performance) ?? indexToKss(point.performance);
+  const sKss = KSS_SLOPE * S_RANGE * pressure;
+  const cKss = KSS_SLOPE * C_RANGE * (1 - circ);
+  const otherKss = kss - REFERENCE_KSS - sKss - cKss;
+  const r = (v: number) => Math.round(v * 10) / 10;
 
   return {
     performance: point.performance,
-    sleepPressure: point.sleep_pressure,
-    circadian: point.circadian,
-    sleepInertia: point.sleep_inertia,
-    timeOnTaskPenalty: point.time_on_task_penalty,
+    kss: r(kss),
+    kss90: point.kss_90,
+    pSevere: point.p_severe_sleepiness,
+    sleepPressure: pressure,
+    circadian: circ,
     hoursOnDuty: point.hours_on_duty,
-    sContribution: Math.round(sContrib * 10) / 10,
-    cContribution: Math.round(cContrib * 10) / 10,
-    wContribution: Math.round(wContrib * 10) / 10,
-    totContribution: Math.round(totContrib * 10) / 10,
+    hoursAwake: point.hours_awake,
+    referenceKss: r(REFERENCE_KSS),
+    sKss: r(sKss),
+    cKss: r(cKss),
+    otherKss: r(otherKss),
+    dominantFactor: sKss >= cKss ? 'sleep_pressure' : 'circadian',
   };
+}
+
+export const DECOMPOSITION_FACTOR_LABELS: Record<PerformanceDecomposition['dominantFactor'], string> = {
+  sleep_pressure: 'Sleep pressure (time awake / prior sleep)',
+  circadian: 'Circadian phase (body-clock time)',
+};
+
+// ---------------------------------------------------------------------------
+// Illustrative simulation (education / landing charts)
+// ---------------------------------------------------------------------------
+
+export interface SimulatedPoint {
+  hoursAwake: number;
+  clockHour: number;
+  s: number;
+  c: number;
+  u: number;
+  kss: number;
+  /** 20–100 index (= 110 − 10·KSS). */
+  index: number;
+}
+
+/**
+ * Predicted KSS across a day for a pilot who woke at `wakeHour` after a full
+ * night's sleep, using the Three Process Model (Ingre et al. 2014, model 5c,
+ * default phase, home time zone). For illustration only — the backend
+ * computes the real duty predictions.
+ */
+export function simulateRestedDay(wakeHour: number, hours = 20, s0 = 14.0): SimulatedPoint[] {
+  const LA = 2.4, D = -0.0353, PHASE = 16.8, CA = 2.5, UA = 0.5, UM = -0.5;
+  const out: SimulatedPoint[] = [];
+  for (let h = 0; h <= hours; h++) {
+    const clockHour = (wakeHour + h) % 24;
+    const sVal = LA + (s0 - LA) * Math.exp(D * h);
+    const c = CA * Math.cos((2 * Math.PI / 24) * (clockHour - PHASE));
+    const u = UM + UA * Math.cos((2 * Math.PI / 12) * (clockHour - PHASE - 3));
+    const kss = Math.max(1, Math.min(9, 9.68 - KSS_SLOPE * (sVal + c + u)));
+    out.push({ hoursAwake: h, clockHour, s: sVal, c, u, kss, index: kssToIndex(kss) });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -310,15 +246,14 @@ export function decomposePerformance(point: {
 import type { DutyAnalysis } from '@/types/fatigue';
 
 /**
- * Find the worst (highest) KSS across all duties in a roster.
- *
- * Returns the KSS value at the worst performance point of any duty.
+ * Find the worst (highest) predicted KSS across all duties in a roster.
+ * Uses the backend `maxKss` when present, otherwise derives it from the index.
  */
 export function calculateRosterWorstKSS(duties: DutyAnalysis[]): number {
-  let worstPerf = 100;
+  let worst = 1;
   for (const duty of duties) {
-    const minPerf = duty.minPerformance ?? 100;
-    if (minPerf < worstPerf) worstPerf = minPerf;
+    const kss = resolveKss(duty.maxKss, duty.minPerformance);
+    if (kss != null && kss > worst) worst = kss;
   }
-  return performanceToKSS(worstPerf);
+  return worst;
 }

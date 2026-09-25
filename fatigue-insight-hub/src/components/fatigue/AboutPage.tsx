@@ -16,7 +16,7 @@ export function AboutPage() {
         <div className="flex justify-center gap-2 flex-wrap">
           <Badge variant="info">v{APP_VERSION}</Badge>
           <Badge variant="success">EASA ORO.FTL</Badge>
-          <Badge variant="outline">Borbély Two-Process</Badge>
+          <Badge variant="outline">Three Process Model (KSS)</Badge>
         </div>
       </div>
 
@@ -42,12 +42,12 @@ export function AboutPage() {
           <PillarCard
             icon={<Brain className="h-4 w-4" />}
             title="Peer-reviewed science"
-            description="Built on the Borbély Two-Process Model with 56 cited references. No proprietary black boxes."
+            description="Built on the open Three Process Model of alertness, validated on airline crew (Ingre et al. 2014). No proprietary black boxes."
           />
           <PillarCard
             icon={<Eye className="h-4 w-4" />}
             title="Fully transparent"
-            description="Every performance score decomposes into sleep pressure, circadian phase, time on task, and sleep inertia."
+            description="Every predicted KSS decomposes into sleep pressure and circadian phase, with the 90th-percentile pilot and P(KSS ≥ 7) alongside."
           />
           <PillarCard
             icon={<Shield className="h-4 w-4" />}

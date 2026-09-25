@@ -17,6 +17,18 @@ import {
   Legend,
 } from 'recharts';
 import { Calculator } from 'lucide-react';
+import { simulateRestedDay } from '@/lib/fatigue-calculations';
+import {
+  INDEX_AXIS_TICKS,
+  INDEX_DOMAIN,
+  RISK_LEVEL_KSS_RANGE,
+  classifyPerformance,
+  indexTickAsKss,
+  normalizeRiskLevel,
+  riskCssColor,
+  riskReferenceLines,
+  toUpperRisk,
+} from '@/lib/risk-scale';
 
 interface CombinedPerformanceChartProps {
   compact?: boolean;
@@ -26,61 +38,30 @@ export function CombinedPerformanceChart({ compact = false }: CombinedPerformanc
   const [wakeHour, setWakeHour] = useState(7);
   const [reportHour, setReportHour] = useState(14);
 
-  // Model constants
-  const S_MAX = 0.95;
-  const TAU_INCREASE = 18.2;
-  const MESOR = 0.5;
-  const AMPLITUDE = 0.35;
-  const ACROPHASE = 17;
-  const FLOOR = 20;
-
   const data = useMemo(() => {
     const points: {
       hour: number;
       hoursAwake: number;
       processS: number;
       processC: number;
+      kss: number;
       performance: number;
       riskLevel: string;
       inWOCL: boolean;
     }[] = [];
     
-    const S0 = 0.15; // Sleep pressure at wake
-    
-    // Generate 20 hours from wake time
-    for (let h = 0; h <= 20; h++) {
-      const actualHour = (wakeHour + h) % 24;
-      
-      // Process S
-      const S = S_MAX - (S_MAX - S0) * Math.exp(-h / TAU_INCREASE);
-      const S_alert = 1 - S;
-      
-      // Process C
-      const angle = (2 * Math.PI * (actualHour - ACROPHASE)) / 24;
-      const C = MESOR + AMPLITUDE * Math.cos(angle);
-      const C_alert = (C - (MESOR - AMPLITUDE)) / (2 * AMPLITUDE);
-      
-      // Combined performance
-      const baseAlert = S_alert * 0.6 + C_alert * 0.4;
-      const performance = FLOOR + baseAlert * (100 - FLOOR);
-      
-      // Risk level
-      let riskLevel = 'LOW';
-      if (performance < 55) riskLevel = 'CRITICAL';
-      else if (performance < 65) riskLevel = 'HIGH';
-      else if (performance < 75) riskLevel = 'MODERATE';
-      
-      // WOCL
-      const inWOCL = actualHour >= 2 && actualHour < 6;
 
+    // Generate 20 hours from wake time (Three Process Model, Ingre et al. 2014)
+    for (const p of simulateRestedDay(wakeHour, 20)) {
       points.push({
-        hour: h,
-        hoursAwake: h,
-        processS: Math.round(S * 100) / 100,
-        processC: Math.round(C * 100) / 100,
-        performance: Math.round(performance),
-        riskLevel,
-        inWOCL,
+        hour: p.hoursAwake,
+        hoursAwake: p.hoursAwake,
+        processS: Math.round(p.s * 100) / 100,
+        processC: Math.round(p.c * 100) / 100,
+        kss: Math.round(p.kss * 10) / 10,
+        performance: Math.round(p.index),
+        riskLevel: toUpperRisk(classifyPerformance(p.index)),
+        inWOCL: p.clockHour >= 2 && p.clockHour < 6,
       });
     }
     
@@ -92,14 +73,7 @@ export function CombinedPerformanceChart({ compact = false }: CombinedPerformanc
     return `${actualHour.toString().padStart(2, '0')}:00`;
   };
 
-  const getRiskColor = (level: string) => {
-    switch (level) {
-      case 'CRITICAL': return 'hsl(var(--destructive))';
-      case 'HIGH': return 'hsl(var(--warning))';
-      case 'MODERATE': return 'hsl(var(--chart-4))';
-      default: return 'hsl(var(--success))';
-    }
-  };
+  const getRiskColor = (level: string) => riskCssColor(normalizeRiskLevel(level));
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -117,9 +91,9 @@ export function CombinedPerformanceChart({ compact = false }: CombinedPerformanc
               <span className="font-mono">{d.processC.toFixed(2)}</span>
             </p>
             <p className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Performance:</span>
+              <span className="text-muted-foreground">Predicted KSS:</span>
               <span className="font-mono font-bold" style={{ color: getRiskColor(d.riskLevel) }}>
-                {d.performance}%
+                {d.kss.toFixed(1)} (index {d.performance})
               </span>
             </p>
             <Badge 
@@ -149,7 +123,7 @@ export function CombinedPerformanceChart({ compact = false }: CombinedPerformanc
       <CardHeader className={compact ? "pb-2" : ""}>
         <CardTitle className="flex items-center gap-2 text-lg">
           <Calculator className="h-5 w-5 text-primary" />
-          Combined Performance Model
+          Three Process Model (KSS)
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -189,9 +163,16 @@ export function CombinedPerformanceChart({ compact = false }: CombinedPerformanc
               )}
               
               {/* Risk thresholds */}
-              <ReferenceLine y={55} stroke="hsl(var(--destructive))" strokeDasharray="5 5" strokeOpacity={0.6} />
-              <ReferenceLine y={65} stroke="hsl(var(--warning))" strokeDasharray="5 5" strokeOpacity={0.6} />
-              <ReferenceLine y={75} stroke="hsl(var(--chart-4))" strokeDasharray="5 5" strokeOpacity={0.6} />
+              {riskReferenceLines().map((line) => (
+                <ReferenceLine
+                  key={line.value}
+                  y={line.value}
+                  stroke={line.color}
+                  strokeDasharray="5 5"
+                  strokeOpacity={0.6}
+                  label={{ value: line.label, position: 'right', fontSize: 9, fill: line.color }}
+                />
+              ))}
               
               <XAxis
                 dataKey="hour"
@@ -200,10 +181,11 @@ export function CombinedPerformanceChart({ compact = false }: CombinedPerformanc
                 tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
               />
               <YAxis
-                domain={[20, 100]}
-                ticks={[20, 40, 55, 65, 75, 90, 100]}
+                domain={INDEX_DOMAIN}
+                ticks={INDEX_AXIS_TICKS}
+                tickFormatter={(v: number) => `KSS ${indexTickAsKss(v)}`}
                 tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
-                width={35}
+                width={45}
               />
               <Tooltip content={<CustomTooltip />} />
               
@@ -221,10 +203,11 @@ export function CombinedPerformanceChart({ compact = false }: CombinedPerformanc
 
         {!compact && (
           <div className="flex flex-wrap gap-2 text-xs">
-            <Badge variant="outline" className="border-success text-success">≥75 LOW</Badge>
-            <Badge variant="outline" className="border-chart-4 text-chart-4">65-74 MODERATE</Badge>
-            <Badge variant="outline" className="border-warning text-warning">55-64 HIGH</Badge>
-            <Badge variant="outline" className="border-destructive text-destructive">&lt;55 CRITICAL</Badge>
+            {(['low', 'moderate', 'high', 'critical', 'extreme'] as const).map((level) => (
+              <Badge key={level} variant="outline" style={{ borderColor: riskCssColor(level), color: riskCssColor(level) }}>
+                {RISK_LEVEL_KSS_RANGE[level]} {level.toUpperCase()}
+              </Badge>
+            ))}
           </div>
         )}
       </CardContent>

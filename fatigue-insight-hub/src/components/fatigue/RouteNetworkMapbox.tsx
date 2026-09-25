@@ -7,6 +7,7 @@ import { DutyAnalysis } from '@/types/fatigue';
 import { Globe, Plane, MapPin, ZoomIn, ZoomOut, RotateCcw, AlertTriangle, Loader2 } from 'lucide-react';
 import { AirportData } from '@/data/airportCoordinates';
 import { getMultipleAirportsAsync } from '@/lib/airport-api';
+import { indexToKss, performanceHex } from '@/lib/risk-scale';
 
 interface RegionPreset {
   name: string;
@@ -35,13 +36,8 @@ interface RouteData {
   avgPerformance: number;
 }
 
-// Get route color based on performance
-const getRouteColor = (performance: number): string => {
-  if (performance >= 70) return '#22c55e'; // success
-  if (performance >= 60) return '#eab308'; // warning
-  if (performance >= 50) return '#f97316'; // high
-  return '#ef4444'; // critical
-};
+// Route colour from the shared risk bands (index = 110 − 10·KSS)
+const getRouteColor = (performance: number): string => performanceHex(performance);
 
 export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }: RouteNetworkMapboxProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -579,7 +575,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
                 <div className="mt-1 text-xs text-muted-foreground">
                   <span>Flights: {routes.find(r => `${r.from}-${r.to}` === hoveredRoute)?.count}</span>
                   <span className="mx-2">•</span>
-                  <span>Avg Perf: {routes.find(r => `${r.from}-${r.to}` === hoveredRoute)?.avgPerformance.toFixed(1)}%</span>
+                  <span>Avg KSS: {indexToKss(routes.find(r => `${r.from}-${r.to}` === hoveredRoute)?.avgPerformance ?? 100).toFixed(1)}</span>
                 </div>
               )}
             </div>
@@ -610,7 +606,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
               <div className="flex items-center gap-3 text-xs">
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-success" />
-                  Safe (&gt;70%)
+                  Low (KSS &lt;5.5)
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-warning" />
@@ -622,7 +618,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-critical" />
-                  Critical
+                  Critical / Extreme
                 </span>
               </div>
             </div>
@@ -646,7 +642,7 @@ export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }:
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>×{route.count}</span>
                     <span className="text-[10px]">
-                      ({route.minPerformance.toFixed(0)}-{route.maxPerformance.toFixed(0)}%)
+                      (KSS {indexToKss(route.maxPerformance).toFixed(1)}–{indexToKss(route.minPerformance).toFixed(1)})
                     </span>
                   </div>
                 </div>

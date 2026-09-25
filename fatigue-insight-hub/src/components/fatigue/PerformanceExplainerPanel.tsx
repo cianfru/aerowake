@@ -1,10 +1,9 @@
-import { Activity, Moon, Sun, Clock, Zap } from 'lucide-react';
+import { Activity, Moon, Sun, Hourglass } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { InfoTooltip, FATIGUE_INFO } from '@/components/ui/InfoTooltip';
 import { decomposePerformance, type PerformanceDecomposition } from '@/lib/fatigue-calculations';
-import { getPerformanceColor } from '@/lib/fatigue-utils';
-import { cn } from '@/lib/utils';
+import { classifyKss, kssLabel, riskCssColor } from '@/lib/risk-scale';
 
 interface PerformanceExplainerPanelProps {
   /** A single high-resolution timeline point from the backend. */
@@ -12,9 +11,11 @@ interface PerformanceExplainerPanelProps {
     performance: number;
     sleep_pressure: number;
     circadian: number;
-    sleep_inertia: number;
-    time_on_task_penalty: number;
     hours_on_duty: number;
+    kss?: number;
+    kss_90?: number;
+    p_severe_sleepiness?: number;
+    hours_awake?: number;
     flight_phase?: string | null;
     is_critical?: boolean;
     is_in_rest?: boolean;
@@ -26,8 +27,10 @@ interface PerformanceExplainerPanelProps {
 }
 
 /**
- * Performance Explainer Panel — shows P = 20 + 80 × [S·C × (1−W) − ToT]
- * decomposition with live values and a stacked contribution bar.
+ * Alertness Explainer Panel — predicted KSS at one timeline point and how it
+ * builds up from the Three Process Model: KSS = 9.68 − 0.46·(S + C + U)
+ * (Ingre et al. 2014). Sleep inertia, time-on-task, workload and hypoxia
+ * are not part of the score.
  */
 export function PerformanceExplainerPanel({
   point,
@@ -35,26 +38,25 @@ export function PerformanceExplainerPanel({
   variant = 'card',
 }: PerformanceExplainerPanelProps) {
   const decomp = decomposePerformance(point);
+  const color = riskCssColor(classifyKss(decomp.kss));
 
   const content = (
     <div className="space-y-3">
-      {/* Performance headline */}
+      {/* KSS headline */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span
-            className="text-2xl font-bold font-mono leading-none"
-            style={{ color: getPerformanceColor(decomp.performance) }}
-          >
-            {decomp.performance.toFixed(1)}%
+          <span className="text-2xl font-bold font-mono leading-none" style={{ color }}>
+            KSS {decomp.kss.toFixed(1)}
           </span>
+          <div className="flex flex-col">
+            <span className="text-xs">{kssLabel(decomp.kss)}</span>
+            <span className="text-[10px] text-muted-foreground font-mono">index {decomp.performance.toFixed(0)}</span>
+          </div>
           <InfoTooltip entry={FATIGUE_INFO.performance} />
         </div>
         <div className="flex items-center gap-1.5">
           {point.flight_phase && (
-            <Badge
-              variant={point.is_critical ? 'critical' : 'outline'}
-              className="text-[10px]"
-            >
+            <Badge variant={point.is_critical ? 'critical' : 'outline'} className="text-[10px]">
               {formatFlightPhase(point.flight_phase)}
             </Badge>
           )}
@@ -63,17 +65,13 @@ export function PerformanceExplainerPanel({
               In-Rest
             </Badge>
           )}
-          {timestamp && (
-            <span className="text-xs text-muted-foreground font-mono">
-              {timestamp}
-            </span>
-          )}
+          {timestamp && <span className="text-xs text-muted-foreground font-mono">{timestamp}</span>}
         </div>
       </div>
 
       {/* Formula display */}
       <div className="rounded bg-secondary/50 px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground">
-        P = 20 + 80 &times; [S&middot;C &times; (1&minus;W) &minus; ToT]
+        KSS = 9.68 &minus; 0.46&middot;(S + C + U)
       </div>
 
       {/* Factor breakdown */}
@@ -83,42 +81,35 @@ export function PerformanceExplainerPanel({
           label="Sleep Pressure"
           tag="S"
           rawValue={decomp.sleepPressure}
-          contribution={decomp.sContribution}
+          kssPoints={decomp.sKss}
           color="hsl(0, 80%, 60%)"
           infoKey="sleepPressure"
         />
         <FactorRow
           icon={<Sun className="h-3.5 w-3.5" />}
-          label="Circadian"
+          label="Circadian Phase"
           tag="C"
           rawValue={decomp.circadian}
-          contribution={decomp.cContribution}
+          kssPoints={decomp.cKss}
           color="hsl(220, 80%, 60%)"
           infoKey="circadian"
         />
-        <FactorRow
-          icon={<Zap className="h-3.5 w-3.5" />}
-          label="Sleep Inertia"
-          tag="W"
-          rawValue={decomp.sleepInertia}
-          contribution={decomp.wContribution}
-          color="hsl(30, 90%, 55%)"
-          infoKey="sleepInertia"
-        />
-        <FactorRow
-          icon={<Clock className="h-3.5 w-3.5" />}
-          label="Time-on-Task"
-          tag="ToT"
-          rawValue={decomp.timeOnTaskPenalty}
-          contribution={decomp.totContribution}
-          color="hsl(var(--muted-foreground))"
-          infoKey="timeOnTask"
-          suffix={`${decomp.hoursOnDuty.toFixed(1)}h on duty`}
-        />
+        {decomp.hoursAwake != null && (
+          <div className="flex items-center gap-2 text-xs">
+            <Hourglass className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="flex-1">Hours awake</span>
+            <span className="font-mono">{decomp.hoursAwake.toFixed(1)}h</span>
+          </div>
+        )}
+        {(decomp.kss90 != null || decomp.pSevere != null) && (
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            {decomp.kss90 != null && <span>90th-percentile pilot: KSS {decomp.kss90.toFixed(1)}</span>}
+            {decomp.pSevere != null && <span>P(KSS ≥ 7): {(decomp.pSevere * 100).toFixed(0)}%</span>}
+          </div>
+        )}
       </div>
 
-      {/* Stacked contribution bar */}
-      <ContributionBar decomp={decomp} />
+      <KssBar decomp={decomp} />
     </div>
   );
 
@@ -131,7 +122,7 @@ export function PerformanceExplainerPanel({
       <CardHeader className="pb-2 md:pb-3">
         <CardTitle className="flex items-center gap-2 text-sm md:text-base">
           <Activity className="h-3.5 w-3.5 md:h-4 md:w-4 text-primary" />
-          Performance Breakdown
+          Alertness Breakdown
         </CardTitle>
       </CardHeader>
       <CardContent>{content}</CardContent>
@@ -148,19 +139,17 @@ function FactorRow({
   label,
   tag,
   rawValue,
-  contribution,
+  kssPoints,
   color,
   infoKey,
-  suffix,
 }: {
   icon: React.ReactNode;
   label: string;
   tag: string;
   rawValue: number;
-  contribution: number;
+  kssPoints: number;
   color: string;
   infoKey: string;
-  suffix?: string;
 }) {
   const info = FATIGUE_INFO[infoKey];
   return (
@@ -172,64 +161,50 @@ function FactorRow({
           <span className="text-[10px] font-mono text-muted-foreground">({tag})</span>
           {info && <InfoTooltip entry={info} size="sm" />}
         </div>
-        {suffix && (
-          <span className="text-[10px] text-muted-foreground">{suffix}</span>
-        )}
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
-        <span className="text-xs font-mono text-muted-foreground w-8 text-right">
-          {rawValue.toFixed(2)}
-        </span>
-        <span
-          className="text-xs font-mono font-semibold w-12 text-right"
-          style={{ color }}
-        >
-          -{contribution.toFixed(1)}%
+        <span className="text-xs font-mono text-muted-foreground w-8 text-right">{rawValue.toFixed(2)}</span>
+        <span className="text-xs font-mono font-semibold w-16 text-right" style={{ color }}>
+          +{kssPoints.toFixed(1)} KSS
         </span>
       </div>
     </div>
   );
 }
 
-function ContributionBar({ decomp }: { decomp: PerformanceDecomposition }) {
-  const totalDeficit = decomp.sContribution + decomp.cContribution + decomp.wContribution + decomp.totContribution;
-  const remaining = Math.max(0, 100 - totalDeficit);
-
-  // Segment widths as percentages
+/** KSS 1 → 9 bar: rested baseline + S + C + remainder (U). */
+function KssBar({ decomp }: { decomp: PerformanceDecomposition }) {
+  const toPct = (k: number) => Math.max(0, (k / 8) * 100);
   const segments = [
-    { width: remaining, color: 'hsl(var(--success))', label: 'Alert' },
-    { width: decomp.sContribution, color: 'hsl(0, 80%, 60%)', label: 'S' },
-    { width: decomp.cContribution, color: 'hsl(220, 80%, 60%)', label: 'C' },
-    { width: decomp.wContribution, color: 'hsl(30, 90%, 55%)', label: 'W' },
-    { width: decomp.totContribution, color: 'hsl(var(--muted-foreground))', label: 'ToT' },
-  ].filter(s => s.width > 0.5); // hide negligible segments
+    { width: toPct(decomp.referenceKss - 1), color: 'hsl(var(--success))', label: 'Rested' },
+    { width: toPct(decomp.sKss), color: 'hsl(0, 80%, 60%)', label: 'S' },
+    { width: toPct(decomp.cKss), color: 'hsl(220, 80%, 60%)', label: 'C' },
+    { width: toPct(decomp.otherKss), color: 'hsl(var(--muted-foreground))', label: 'U' },
+  ].filter(s => s.width > 0.5);
 
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-0.5 h-3 rounded-full overflow-hidden bg-secondary">
-        {segments.map((seg, i) => (
+        {segments.map((seg) => (
           <div
-            key={i}
+            key={seg.label}
             className="h-full transition-all"
             style={{ width: `${seg.width}%`, backgroundColor: seg.color }}
-            title={`${seg.label}: ${seg.width.toFixed(1)}%`}
+            title={`${seg.label}: ${((seg.width / 100) * 8).toFixed(1)} KSS`}
           />
         ))}
       </div>
       <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-        <span>0%</span>
+        <span>KSS 1</span>
         <div className="flex items-center gap-2">
-          {segments.map((seg, i) => (
-            <span key={i} className="flex items-center gap-0.5">
-              <span
-                className="inline-block h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: seg.color }}
-              />
+          {segments.map((seg) => (
+            <span key={seg.label} className="flex items-center gap-0.5">
+              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: seg.color }} />
               {seg.label}
             </span>
           ))}
         </div>
-        <span>100%</span>
+        <span>KSS 9</span>
       </div>
     </div>
   );

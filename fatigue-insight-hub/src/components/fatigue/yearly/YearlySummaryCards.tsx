@@ -1,6 +1,7 @@
 import { Plane, Clock, Activity, Moon, AlertTriangle, Zap } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import type { YearlySummary } from '@/lib/api-client';
+import { indexToKss, performanceColorClass } from '@/lib/risk-scale';
 
 interface YearlySummaryCardsProps {
   summary: YearlySummary;
@@ -38,9 +39,7 @@ function StatCard({
 }
 
 function getPerformanceColor(value: number): string {
-  if (value >= 77) return 'text-[hsl(var(--success))]';
-  if (value >= 55) return 'text-[hsl(var(--warning))]';
-  return 'text-[hsl(var(--critical))]';
+  return performanceColorClass(value);
 }
 
 function getSleepColor(value: number): string {
@@ -70,9 +69,9 @@ export function YearlySummaryCards({ summary }: YearlySummaryCardsProps) {
       />
       <StatCard
         icon={Activity}
-        label="Avg Performance"
-        value={`${summary.avg_performance}%`}
-        subValue={`Worst: ${summary.worst_performance}%`}
+        label="Avg KSS (predicted)"
+        value={indexToKss(summary.avg_performance).toFixed(1)}
+        subValue={`Worst: KSS ${indexToKss(summary.worst_performance).toFixed(1)}`}
         color={getPerformanceColor(summary.avg_performance)}
       />
       <StatCard

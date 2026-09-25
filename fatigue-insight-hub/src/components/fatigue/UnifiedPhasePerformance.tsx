@@ -8,6 +8,7 @@ import { DutyAnalysis, FlightPhase } from '@/types/fatigue';
 import { DutyDetailTimeline } from '@/hooks/useContinuousTimelineData';
 import { getPerformanceColor } from '@/lib/fatigue-utils';
 import { cn } from '@/lib/utils';
+import { classifyPerformance, indexToKss, isElevatedRisk, performanceColorClass } from '@/lib/risk-scale';
 
 interface UnifiedPhasePerformanceProps {
   duty: DutyAnalysis;
@@ -30,7 +31,7 @@ const phaseConfig: Record<string, { label: string; icon: string; critical: boole
   ground_turnaround: { label: 'Ground',     icon: '🔄', critical: false },
 };
 
-/** Workload multipliers (from backend WorkloadModel). */
+/** Workload multipliers — shown for context only; they do not change the KSS prediction. */
 const PHASE_WORKLOAD: Record<string, { multiplier: number; color: string; short: string }> = {
   preflight:         { multiplier: 1.1, color: 'hsl(var(--muted-foreground))', short: 'PRE' },
   taxi_out:          { multiplier: 1.2, color: 'hsl(160, 60%, 45%)',          short: 'TXO' },
@@ -152,8 +153,8 @@ function buildPhaseRowsFromDuty(duty: DutyAnalysis): PhaseRow[] {
 
 /* ── Performance color helpers ────────────────────────────── */
 
-const getTextColor = (v: number) =>
-  v >= 70 ? 'text-success' : v >= 60 ? 'text-warning' : v >= 50 ? 'text-high' : 'text-critical';
+const getTextColor = (v: number) => performanceColorClass(v);
+const kssText = (v: number) => `KSS ${indexToKss(v).toFixed(1)}`;
 
 /* ── Main component ──────────────────────────────────────── */
 
@@ -199,7 +200,7 @@ export function UnifiedPhasePerformance({ duty, timeline }: UnifiedPhasePerforma
         <CardTitle className="flex items-center justify-between text-sm">
           <span className="flex items-center gap-2">
             <Gauge className="h-3.5 w-3.5 text-primary" />
-            Phase Performance
+            Phase Alertness
             {FATIGUE_INFO.workloadPhase && <InfoTooltip entry={FATIGUE_INFO.workloadPhase} size="sm" />}
             {hasMultipleSegments && (
               <Badge variant="outline" className="text-[10px] ml-1">
@@ -207,9 +208,9 @@ export function UnifiedPhasePerformance({ duty, timeline }: UnifiedPhasePerforma
               </Badge>
             )}
           </span>
-          {lowestCritical && lowestCritical.performance < 60 && (
+          {lowestCritical && isElevatedRisk(classifyPerformance(lowestCritical.performance, duty.riskThresholds)) && (
             <Badge variant="critical" className="text-[10px]">
-              {lowestCritical.label}: {lowestCritical.performance.toFixed(0)}%
+              {lowestCritical.label}: {kssText(lowestCritical.performance)}
             </Badge>
           )}
         </CardTitle>
@@ -226,7 +227,7 @@ export function UnifiedPhasePerformance({ duty, timeline }: UnifiedPhasePerforma
                   key={`${seg.phase}-${i}`}
                   className="relative flex items-center justify-center overflow-hidden"
                   style={{ width: `${widthPct}%`, backgroundColor: seg.color, opacity: 0.85 }}
-                  title={`${seg.label}: ${seg.durationMin}min, ${seg.multiplier}x, avg ${seg.performance.toFixed(0)}%`}
+                  title={`${seg.label}: ${seg.durationMin}min, workload ${seg.multiplier}x (context), avg ${kssText(seg.performance)}`}
                 >
                   {widthPct > 6 && (
                     <span className="text-[8px] font-bold text-white drop-shadow-sm">{seg.short}</span>
@@ -253,8 +254,8 @@ export function UnifiedPhasePerformance({ duty, timeline }: UnifiedPhasePerforma
             >
               <span className="w-4 text-center text-[11px]">{row.icon}</span>
               <span className={cn('w-20 truncate', row.isCritical && 'font-medium')}>{row.label}</span>
-              <span className={cn('w-10 text-right font-mono font-medium', getTextColor(row.performance))}>
-                {row.performance.toFixed(0)}%
+              <span className={cn('w-14 text-right font-mono font-medium', getTextColor(row.performance))}>
+                {kssText(row.performance)}
               </span>
               <span className="w-10 text-right text-muted-foreground font-mono">
                 {row.multiplier}x
@@ -286,7 +287,7 @@ export function UnifiedPhasePerformance({ duty, timeline }: UnifiedPhasePerforma
                         <span className="text-muted-foreground">{seg.departure} → {seg.arrival}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className={cn('font-mono font-medium', getTextColor(segPerf))}>{segPerf.toFixed(0)}%</span>
+                        <span className={cn('font-mono font-medium', getTextColor(segPerf))}>{kssText(segPerf)}</span>
                         <ChevronDown className={cn('h-3 w-3 transition-transform', isExpanded && 'rotate-180')} />
                       </div>
                     </div>
@@ -300,8 +301,8 @@ export function UnifiedPhasePerformance({ duty, timeline }: UnifiedPhasePerforma
                         )}>
                           <span className="w-3 text-center text-[10px]">{sp.icon}</span>
                           <span className="w-16 truncate">{sp.label}</span>
-                          <span className={cn('w-10 text-right font-mono', getTextColor(sp.performance))}>
-                            {sp.performance.toFixed(0)}%
+                          <span className={cn('w-14 text-right font-mono', getTextColor(sp.performance))}>
+                            {kssText(sp.performance)}
                           </span>
                         </div>
                       ))}

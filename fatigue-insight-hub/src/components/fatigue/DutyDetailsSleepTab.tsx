@@ -6,6 +6,16 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { DutyAnalysis } from '@/types/fatigue';
 import { PriorSleepIndicator } from './PriorSleepIndicator';
 import { SleepRecoveryIndicator } from './SleepRecoveryIndicator';
+import {
+  SLEEP_DEFICIT_LABELS,
+  classifyPerformance,
+  indexToKss,
+  normalizeRiskLevel,
+  performanceColorClass,
+  resolveKss,
+  riskBadgeVariant,
+  sleepDeficitClass,
+} from '@/lib/risk-scale';
 
 interface DutyDetailsSleepTabProps {
   duty: DutyAnalysis;
@@ -23,20 +33,11 @@ interface DutyDetailsSleepTabProps {
 export function DutyDetailsSleepTab({ duty }: DutyDetailsSleepTabProps) {
   const [assessmentOpen, setAssessmentOpen] = useState(false);
 
-  const getRiskBadge = (risk: string) => {
-    switch (risk) {
-      case 'LOW':
-        return <Badge variant="success">LOW</Badge>;
-      case 'MODERATE':
-        return <Badge variant="warning">MODERATE</Badge>;
-      case 'HIGH':
-        return <Badge variant="high">HIGH</Badge>;
-      case 'CRITICAL':
-        return <Badge variant="critical">CRITICAL</Badge>;
-      default:
-        return <Badge variant="outline">{risk}</Badge>;
-    }
-  };
+  const getRiskBadge = (risk: string) => (
+    <Badge variant={riskBadgeVariant(normalizeRiskLevel(risk))}>{(risk || 'UNKNOWN').toUpperCase()}</Badge>
+  );
+  const peakKss = resolveKss(duty.maxKss, duty.minPerformance ?? 0) ?? 0;
+  const landingKss = resolveKss(duty.landingKss, duty.landingPerformance ?? 0) ?? 0;
 
   const getRiskEmoji = (risk: string) => {
     switch (risk) {
@@ -44,6 +45,7 @@ export function DutyDetailsSleepTab({ duty }: DutyDetailsSleepTabProps) {
       case 'MODERATE': return '\u{1F7E1}';
       case 'HIGH': return '\u{1F7E0}';
       case 'CRITICAL': return '\u{1F534}';
+      case 'EXTREME': return '\u{1F7E5}';
       default: return '\u26AA';
     }
   };
@@ -76,12 +78,12 @@ export function DutyDetailsSleepTab({ duty }: DutyDetailsSleepTabProps) {
               </div>
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Min Perf. Risk</p>
-              {getRiskBadge(duty.minPerformanceRisk)}
+              <p className="text-xs text-muted-foreground">Peak KSS {peakKss.toFixed(1)}</p>
+              {getRiskBadge(classifyPerformance(duty.minPerformance, duty.riskThresholds))}
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Landing Risk</p>
-              {getRiskBadge(duty.landingRisk)}
+              <p className="text-xs text-muted-foreground">Landing KSS {landingKss.toFixed(1)}</p>
+              {getRiskBadge(classifyPerformance(duty.landingPerformance, duty.riskThresholds))}
             </div>
           </div>
 
@@ -96,6 +98,17 @@ export function DutyDetailsSleepTab({ duty }: DutyDetailsSleepTabProps) {
                 </span>
               </div>
             </div>
+            {duty.sleepDeficit7d && (
+              <div className="flex items-center gap-2" title="Rolling 7-day sleep ledger vs an 8 h/day need (reported separately from KSS)">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                <div className="text-xs">
+                  <span className="text-muted-foreground">7-day Deficit: </span>
+                  <span className={`font-medium ${sleepDeficitClass(duty.sleepDeficit7d.band)}`}>
+                    {duty.sleepDeficit7d.deficitHours.toFixed(1)}h ({SLEEP_DEFICIT_LABELS[duty.sleepDeficit7d.band] ?? duty.sleepDeficit7d.band})
+                  </span>
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Moon className="h-3.5 w-3.5 text-muted-foreground" />
               <div className="text-xs">
@@ -110,8 +123,8 @@ export function DutyDetailsSleepTab({ duty }: DutyDetailsSleepTabProps) {
                 <Zap className="h-3.5 w-3.5 text-muted-foreground" />
                 <div className="text-xs">
                   <span className="text-muted-foreground">Return to Deck: </span>
-                  <span className={`font-medium ${(duty.returnToDeckPerformance ?? 0) < 60 ? 'text-critical' : (duty.returnToDeckPerformance ?? 0) < 70 ? 'text-warning' : 'text-foreground'}`}>
-                    {(duty.returnToDeckPerformance ?? 0).toFixed(1)}%
+                  <span className={`font-medium ${performanceColorClass(duty.returnToDeckPerformance, duty.riskThresholds)}`}>
+                    KSS {indexToKss(duty.returnToDeckPerformance ?? 0).toFixed(1)}
                   </span>
                 </div>
               </div>
@@ -182,7 +195,7 @@ export function DutyDetailsSleepTab({ duty }: DutyDetailsSleepTabProps) {
             <div>
               <h5 className="mb-1 font-medium">Recommendations</h5>
               <ul className="list-inside list-disc space-y-1 text-muted-foreground">
-                {duty.overallRisk === 'CRITICAL' && (
+                {(duty.overallRisk === 'CRITICAL' || duty.overallRisk === 'EXTREME') && (
                   <>
                     <li>Consider controlled rest if operationally feasible</li>
                     <li>Enhanced crew monitoring during critical phases</li>

@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
 import { DutyAnalysis, RestDaySleep } from '@/types/fatigue';
 import { startOfMonth, endOfMonth, addHours } from 'date-fns';
+import { classifyPerformance, toUpperRisk } from '@/lib/risk-scale';
 
 export interface ContinuousTimelinePoint {
   timestampMs: number;
-  performance: number;        // 0-100 (left Y-axis)
+  performance: number;        // 20-100 index = 110 − 10·KSS (left Y-axis)
+  kss?: number;               // predicted KSS (high-res only)
   sleepReservoir: number;     // 50-100 (right Y-axis)
   circadian?: number;         // 0-1 (high-res only)
   homeostatic?: number;       // 0-1 (high-res only)
@@ -42,9 +44,15 @@ export interface DutyDetailTimeline {
     performance: number;
     sleep_pressure: number;
     circadian: number;
-    sleep_inertia: number;
     hours_on_duty: number;
-    time_on_task_penalty: number;
+    kss?: number;
+    kss_90?: number;
+    p_severe_sleepiness?: number;
+    hours_awake?: number;
+    /** @deprecated constant 1.0 since aerowake-4.0-kss */
+    sleep_inertia?: number;
+    /** @deprecated constant 1.0 since aerowake-4.0-kss */
+    time_on_task_penalty?: number;
     flight_phase: string | null;
     is_critical: boolean;
     is_in_rest: boolean;
@@ -67,11 +75,11 @@ function debtToReservoir(sleepDebt: number): number {
 }
 
 function getRiskLevel(performance: number): string {
-  if (performance < 55) return 'CRITICAL';
-  if (performance < 65) return 'HIGH';
-  if (performance < 75) return 'MODERATE';
-  return 'LOW';
+  return toUpperRisk(classifyPerformance(performance));
 }
+
+/** Synthetic "rested" level used between duties in coarse mode (KSS 3, "alert"). */
+const RESTED_INDEX = 80;
 
 /** Parse a duty's report/release time into epoch ms using the duty date and HH:mm string */
 function parseTimeToMs(date: Date, timeStr: string | undefined, fallbackHour: number): number {
@@ -122,7 +130,7 @@ export function useContinuousTimelineData({
     if (firstDutyStartMs > monthStart) {
       points.push({
         timestampMs: monthStart,
-        performance: 97,
+        performance: RESTED_INDEX,
         sleepReservoir: 98,
         phase: 'rest',
         riskLevel: 'LOW',
@@ -150,11 +158,11 @@ export function useContinuousTimelineData({
           points.push({
             timestampMs: tsMs,
             performance: pt.performance,
+            kss: pt.kss,
             sleepReservoir: debtToReservoir(highRes.summary.sleep_debt),
             circadian: pt.circadian,
             homeostatic: pt.sleep_pressure,
-            sleepInertia: pt.sleep_inertia,
-            hoursAwake: pt.hours_on_duty + (duty.preDutyAwakeHours || 0),
+            hoursAwake: pt.hours_awake ?? pt.hours_on_duty + (duty.preDutyAwakeHours || 0),
             sleepDebt: highRes.summary.sleep_debt,
             priorSleep: highRes.summary.prior_sleep,
             phase: pt.is_in_rest ? 'sleep' : 'duty',
@@ -283,7 +291,7 @@ export function useContinuousTimelineData({
           const sleepEndMs = sleepStartMs + Math.min(8, gapHours - 3) * 60 * 60 * 1000;
           const sleepEfficiency = duty.sleepEstimate?.sleepEfficiency || 0.85;
           const recoveryRate = 3 + sleepEfficiency * 5; // 3-8% per hour of gap
-          const recoveredPerf = Math.min(97, (duty.avgPerformance - 2) + gapHours * recoveryRate / 10);
+          const recoveredPerf = Math.min(RESTED_INDEX, (duty.avgPerformance - 2) + gapHours * recoveryRate / 10);
           const recoveredReservoir = Math.min(98, (reservoir - 3) + gapHours * 1.5);
 
           // Post-duty wind-down
@@ -336,7 +344,7 @@ export function useContinuousTimelineData({
       if (monthEnd > lastReleaseMs + 12 * 60 * 60 * 1000) {
         points.push({
           timestampMs: monthEnd - 1000,
-          performance: 97,
+          performance: RESTED_INDEX,
           sleepReservoir: 98,
           phase: 'rest',
           riskLevel: 'LOW',

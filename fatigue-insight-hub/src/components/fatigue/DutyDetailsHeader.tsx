@@ -5,6 +5,15 @@ import { DutyAnalysis } from '@/types/fatigue';
 import { format } from 'date-fns';
 import { isTrainingDuty, getTrainingDutyLabel } from '@/lib/fatigue-utils';
 import { cn } from '@/lib/utils';
+import {
+  classifyPerformance,
+  kssLabel,
+  normalizeRiskLevel,
+  resolveKss,
+  riskBadgeVariant,
+  riskColorClass,
+  type RiskThresholds,
+} from '@/lib/risk-scale';
 
 interface DutyDetailsHeaderProps {
   duty: DutyAnalysis;
@@ -14,18 +23,17 @@ interface DutyDetailsHeaderProps {
 
 /** Risk badge for the header. */
 function RiskBadge({ risk }: { risk: string }) {
-  const variant =
-    risk === 'LOW' ? 'success' :
-    risk === 'MODERATE' ? 'warning' :
-    risk === 'HIGH' ? 'high' :
-    risk === 'CRITICAL' ? 'critical' : 'outline';
-  return <Badge variant={variant as 'success' | 'warning' | 'high' | 'critical' | 'outline'} className="text-[10px] md:text-xs">{risk}</Badge>;
+  return (
+    <Badge variant={riskBadgeVariant(normalizeRiskLevel(risk))} className="text-[10px] md:text-xs">
+      {risk}
+    </Badge>
+  );
 }
 
 /**
  * DutyDetailsHeader — compact single-row header for the full-screen dialog.
  *
- * Shows: icon, date, duty/block/sectors, min/avg/landing performance, risk badge.
+ * Shows: icon, date, duty/block/sectors, peak/avg/landing predicted KSS, risk badge.
  * Flight segments and FDP bar are now in the left column (DutyInfoColumn).
  */
 export function DutyDetailsHeader({ duty, onGenerateReport, reportMode }: DutyDetailsHeaderProps) {
@@ -58,9 +66,11 @@ export function DutyDetailsHeader({ duty, onGenerateReport, reportMode }: DutyDe
         <StatChip label="Block" value={`${Math.max(0, duty.blockHours ?? 0).toFixed(1)}h`} />
         {!isTraining && <StatChip label="Sectors" value={String(duty.sectors)} />}
         <div className="w-px h-4 bg-border/30 mx-1 hidden sm:block" />
-        <StatPerfChip label="Min" value={duty.minPerformance} />
-        <StatPerfChip label="Avg" value={duty.avgPerformance} />
-        {!isTraining && <StatPerfChip label="Ldg" value={duty.landingPerformance} />}
+        <StatKssChip label="Peak KSS" index={duty.minPerformance} kss={duty.maxKss} thresholds={duty.riskThresholds} />
+        <StatKssChip label="Avg" index={duty.avgPerformance} thresholds={duty.riskThresholds} />
+        {!isTraining && (
+          <StatKssChip label="Ldg" index={duty.landingPerformance} kss={duty.landingKss} thresholds={duty.riskThresholds} />
+        )}
       </div>
 
       {/* Right: report button + risk badge */}
@@ -88,13 +98,28 @@ function StatChip({ label, value }: { label: string; value: string }) {
   );
 }
 
-function StatPerfChip({ label, value }: { label: string; value: number }) {
-  const v = value ?? 0;
-  const color = v < 50 ? 'text-critical' : v < 60 ? 'text-warning' : 'text-foreground';
+function StatKssChip({
+  label,
+  index,
+  kss,
+  thresholds,
+}: {
+  label: string;
+  index: number | null | undefined;
+  kss?: number;
+  thresholds?: RiskThresholds;
+}) {
+  const k = resolveKss(kss, index);
+  if (k == null) return null;
+  const level = classifyPerformance(index, thresholds);
+  const color = level === 'low' ? 'text-foreground' : riskColorClass(level);
   return (
-    <span className="inline-flex items-center gap-1 rounded-md bg-secondary/40 px-2 py-0.5">
+    <span
+      className="inline-flex items-center gap-1 rounded-md bg-secondary/40 px-2 py-0.5"
+      title={`${kssLabel(k)} · index ${Math.round(index ?? 0)}`}
+    >
       <span className="text-[10px] text-muted-foreground">{label}</span>
-      <span className={cn('text-[11px] font-medium font-mono', color)}>{v.toFixed(0)}%</span>
+      <span className={cn('text-[11px] font-medium font-mono', color)}>{k.toFixed(1)}</span>
     </span>
   );
 }
