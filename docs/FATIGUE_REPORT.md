@@ -21,6 +21,7 @@ The backend is stateless and stores nothing. The pilot decides where the report 
 - **Predicted KSS across the period**, computed from the sleep the pilot supplied (Ingre et al. 2014). It covers the affected duty: KSS at start, at peak, at the last landing, and for the 90th-percentile pilot.
 - **Prior sleep/wake check** (Dawson & McCulloch 2005). Sleep in the prior 24 h must be at least 5 h, and in the prior 48 h at least 12 h. Hours awake at the end of the duty must not exceed the sleep obtained in the prior 48 h.
 - **Cumulative restriction** over the preceding 7 days.
+- **EASA cumulative checks** on the duties entered (same code as roster analysis, `core/easa_checks.py`): ORO.FTL.210 duty and flight-time limits, ORO.FTL.235(d) recovery rest, FDP above the table maximum.
 - **Roster findings**, each with a reference:
   - rest shorter than the ORO.FTL.235 minimum;
   - a late finish followed by an early start;

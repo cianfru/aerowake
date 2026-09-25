@@ -64,14 +64,10 @@ uvicorn api.api_server:app --reload --host 0.0.0.0 --port 8000
 OpenAPI docs available at `http://localhost:8000/docs`
 
 ### Run tests
-Tests use **print-based validation** (not pytest). Run each directly:
 ```bash
-python tests/test_sleep_strategies.py
-python tests/test_sleep_efficiency.py
-python tests/test_comprehensive_improvements.py
-python tests/test_performance_improvements.py
+pip install -r requirements.txt -r requirements-dev.txt
+python -m pytest tests -q      # CI runs this on every PR (.github/workflows/ci.yml)
 ```
-Expected output: `✅ TEST PASSED` or `❌ TEST FAILED`
 
 ### Install dependencies
 ```bash
@@ -113,6 +109,23 @@ check are reported separately. Audit and rationale: `docs/MODEL_VALIDATION.md`.
 ### Fatigue report (`reports/`, `POST /api/fatigue-report`)
 Stateless report from pilot-supplied duties, actual sleep and self-rating. See
 `docs/FATIGUE_REPORT.md`. The pilot's own assessment is never contradicted.
+
+### EASA roster checks (`core/easa_checks.py`)
+Run on every analysis (`easa_findings`, `easa_summary`) and in fatigue reports:
+ORO.FTL.210 rolling duty 60h/7d, 110h/14d, 190h/28d and block 100h/28d;
+ORO.FTL.235 minimum rest; ORO.FTL.235(d) recovery rest (36h incl. 2 local nights,
+≤168h apart); FDP above the ORO.FTL.205 table. Disruptive elements follow
+ORO.FTL.105(8) (`EASAComplianceValidator.is_disruptive_duty`).
+
+### Standby
+CrewLink PSBY/HSBY/SBY → `DutyType.HOME_STANDBY` on `Roster.standbys`: not scored
+(pilot at home, free to sleep), counts 25% toward cumulative duty. ASBY/APSBY →
+`DutyType.AIRPORT_STANDBY`, kept in `roster.duties` and counted in full.
+
+### Operational settings (env)
+`ANALYSIS_STORE_MAX` (LRU, default 200), `MAX_UPLOAD_MB` (10),
+`RATE_LIMIT_PER_MINUTE` (20, POST analyze/what-if/fatigue-report/reanalyze),
+`CORS_ORIGINS`. See `api/hardening.py`.
 
 ### Configuration Presets
 Presets in `core/parameters.py` via `ModelConfig`. Since 4.0 the KSS core is identical
