@@ -76,9 +76,16 @@ export function DutyDetailsHeader({ duty, onGenerateReport, reportMode }: DutyDe
       {/* Right: report button + risk badge */}
       <div className="flex items-center gap-2.5">
         {onGenerateReport && !reportMode && (
-          <Button variant="outline" size="sm" onClick={onGenerateReport} className="gap-1.5 text-xs rounded-lg h-8">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onGenerateReport}
+            className="gap-1.5 text-xs rounded-lg h-8"
+            aria-label="Full duty report"
+            title="Full duty report (PDF)"
+          >
             <FileText className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Report</span>
+            <span className="hidden sm:inline">Full duty report</span>
           </Button>
         )}
         <RiskBadge risk={duty.overallRisk} />

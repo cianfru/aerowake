@@ -1,6 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, type ReactNode } from 'react';
 import { PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { loadPersistedSettings, savePersistedSettings } from '@/hooks/usePersistedSettings';
+import { applyTab, type HubId, type SubTab } from '@/lib/navigation';
 
 // ── State ────────────────────────────────────────────────────
 
@@ -11,7 +12,12 @@ export interface AnalysisState {
   analysisResults: AnalysisResults | null;
   selectedDuty: DutyAnalysis | null;
   drawerOpen: boolean;
-  activeTab: string;
+  /** Active hub: 'roster' | 'fatigue-report' | 'history' | 'learn'. */
+  activeTab: HubId;
+  /** Sub-tab inside the History / Learn hubs. */
+  activeSubTab: SubTab | null;
+  /** One-shot prefill for the fatigue-report wizard ("Report fatigue" on a duty). */
+  fatigueReportPrefill: { dutyId: string } | null;
   dutyCrewOverrides: Map<string, 'crew_a' | 'crew_b'>;
   showLanding: boolean;
 }
@@ -22,7 +28,6 @@ const DEFAULT_SETTINGS: PilotSettings = {
   analysisType: 'single',
   selectedMonth: new Date(2026, 1, 1),
   theme: 'dark',
-  configPreset: 'operational',
 };
 
 function buildInitialState(): AnalysisState {
@@ -36,7 +41,9 @@ function buildInitialState(): AnalysisState {
     analysisResults: null,
     selectedDuty: null,
     drawerOpen: false,
-    activeTab: 'summary',
+    activeTab: 'roster',
+    activeSubTab: null,
+    fatigueReportPrefill: null,
     dutyCrewOverrides: new Map(),
     showLanding: !landingDismissed,
   };
@@ -52,6 +59,8 @@ type AnalysisAction =
   | { type: 'CLEAR_SELECTED_DUTY' }
   | { type: 'TOGGLE_DRAWER'; payload?: boolean }
   | { type: 'SET_ACTIVE_TAB'; payload: string }
+  | { type: 'SET_SUB_TAB'; payload: SubTab }
+  | { type: 'SET_FATIGUE_REPORT_PREFILL'; payload: { dutyId: string } | null }
   | { type: 'SET_CREW_OVERRIDE'; payload: { dutyId: string; crewSet: 'crew_a' | 'crew_b' } }
   | { type: 'CLEAR_CREW_OVERRIDE'; payload: { dutyId: string } }
   | { type: 'REMOVE_FILE' }
@@ -89,7 +98,13 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
       return { ...state, drawerOpen: action.payload ?? !state.drawerOpen };
 
     case 'SET_ACTIVE_TAB':
-      return { ...state, activeTab: action.payload };
+      return { ...state, ...applyTab(state, action.payload) };
+
+    case 'SET_SUB_TAB':
+      return { ...state, activeSubTab: action.payload };
+
+    case 'SET_FATIGUE_REPORT_PREFILL':
+      return { ...state, fatigueReportPrefill: action.payload };
 
     case 'SET_CREW_OVERRIDE': {
       const updated = new Map(state.dutyCrewOverrides);
@@ -126,7 +141,7 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
         analysisResults: action.payload,
         selectedDuty: null,
         drawerOpen: false,
-        activeTab: 'analysis',
+        activeTab: 'roster',
         showLanding: false,
       };
 
@@ -137,7 +152,7 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
         analysisResults: action.payload,
         selectedDuty: null,
         drawerOpen: false,
-        activeTab: 'summary',
+        activeTab: 'roster',
         showLanding: false,
       };
 
@@ -161,7 +176,12 @@ interface AnalysisContextValue {
   selectDuty: (d: DutyAnalysis) => void;
   clearSelectedDuty: () => void;
   setDrawerOpen: (open: boolean) => void;
+  /** Accepts hub ids and legacy tab ids ('analysis', 'rosters', 'about', …). */
   setActiveTab: (tab: string) => void;
+  setSubTab: (sub: SubTab) => void;
+  /** Open the fatigue-report wizard pre-filled for a duty. */
+  openFatigueReportForDuty: (dutyId: string) => void;
+  clearFatigueReportPrefill: () => void;
   setCrewOverride: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
   clearCrewOverride: (dutyId: string) => void;
   removeFile: () => void;
@@ -190,6 +210,13 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     clearSelectedDuty: () => dispatch({ type: 'CLEAR_SELECTED_DUTY' }),
     setDrawerOpen: (open) => dispatch({ type: 'TOGGLE_DRAWER', payload: open }),
     setActiveTab: (tab) => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab }),
+    setSubTab: (sub) => dispatch({ type: 'SET_SUB_TAB', payload: sub }),
+    openFatigueReportForDuty: (dutyId) => {
+      dispatch({ type: 'SET_FATIGUE_REPORT_PREFILL', payload: { dutyId } });
+      dispatch({ type: 'CLEAR_SELECTED_DUTY' });
+      dispatch({ type: 'SET_ACTIVE_TAB', payload: 'fatigue-report' });
+    },
+    clearFatigueReportPrefill: () => dispatch({ type: 'SET_FATIGUE_REPORT_PREFILL', payload: null }),
     setCrewOverride: (dutyId, crewSet) =>
       dispatch({ type: 'SET_CREW_OVERRIDE', payload: { dutyId, crewSet } }),
     clearCrewOverride: (dutyId) =>

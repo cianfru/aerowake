@@ -6,6 +6,7 @@ const STORAGE_KEY = 'aerowake-pilot-settings';
 interface PersistedFields {
   pilotId?: string;
   homeBase?: string;
+  /** Legacy (pre-4.0 presets). Read-tolerated, never written. */
   configPreset?: string;
   analysisType?: 'single' | 'range';
   selectedMonth?: string; // ISO string
@@ -24,17 +25,7 @@ export function loadPersistedSettings(): Partial<PilotSettings> {
     const result: Partial<PilotSettings> = {};
     if (parsed.pilotId) result.pilotId = parsed.pilotId;
     if (parsed.homeBase) result.homeBase = parsed.homeBase;
-    if (parsed.configPreset) {
-      // Migrate legacy preset values from before Phase 3
-      const LEGACY_PRESET_MAP: Record<string, string> = {
-        'default': 'operational',
-        'liberal': 'operational',
-        'easa-default': 'operational',
-        'faa-standard': 'operational',
-        'custom': 'operational',
-      };
-      result.configPreset = LEGACY_PRESET_MAP[parsed.configPreset] ?? parsed.configPreset;
-    }
+    // parsed.configPreset (legacy) is intentionally ignored — one model only.
     if (parsed.analysisType) result.analysisType = parsed.analysisType;
     if (parsed.selectedMonth) {
       const d = new Date(parsed.selectedMonth);
@@ -55,7 +46,6 @@ export function savePersistedSettings(settings: PilotSettings): void {
     const toStore: PersistedFields = {
       pilotId: settings.pilotId,
       homeBase: settings.homeBase,
-      configPreset: settings.configPreset,
       analysisType: settings.analysisType,
       selectedMonth: settings.selectedMonth.toISOString(),
     };

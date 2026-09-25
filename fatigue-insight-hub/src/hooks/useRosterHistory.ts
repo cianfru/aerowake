@@ -21,10 +21,7 @@ export function useRosterHistory() {
   });
 
   const reanalyzeMutation = useMutation({
-    mutationFn: ({ rosterId, configPreset }: {
-      rosterId: string;
-      configPreset?: string;
-    }) => reanalyzeRoster(rosterId, configPreset),
+    mutationFn: ({ rosterId }: { rosterId: string }) => reanalyzeRoster(rosterId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rosters'] });
     },

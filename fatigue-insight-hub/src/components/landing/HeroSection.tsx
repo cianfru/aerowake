@@ -74,9 +74,9 @@ export function HeroSection({ onScrollToContent }: HeroSectionProps) {
 
             {/* Body copy — warm, supportive, not confrontational */}
             <p className="mt-6 max-w-md text-[15px] leading-[1.7] text-white/60 font-light">
-              Aerowake uses peer-reviewed sleep science to model your cognitive
-              performance across every duty. Understand your alertness patterns,
-              identify high-risk windows, to help you make informed decisions.
+              Aerowake uses a published, airline-validated alertness model to
+              predict how sleepy you are likely to be on every duty. See which
+              duties need attention and report fatigue in a few taps.
             </p>
 
             {/* CTAs */}

@@ -15,7 +15,7 @@ const pillars = [
   {
     icon: Shield,
     label: 'SMS-ready output',
-    detail: 'Professional fatigue reports with impairment equivalences and mitigations',
+    detail: 'Clear fatigue reports with EASA ORO.FTL context and mitigations',
   },
 ];
 

@@ -39,7 +39,13 @@ interface RouteData {
 // Route colour from the shared risk bands (index = 110 − 10·KSS)
 const getRouteColor = (performance: number): string => performanceHex(performance);
 
-export function RouteNetworkMapbox({ duties, homeBase = 'DOH', theme = 'dark' }: RouteNetworkMapboxProps) {
+/** Renders nothing at all when no Mapbox token is configured (no placeholder card). */
+export function RouteNetworkMapbox(props: RouteNetworkMapboxProps) {
+  if (!import.meta.env.VITE_MAPBOX_TOKEN) return null;
+  return <RouteNetworkMapboxInner {...props} />;
+}
+
+function RouteNetworkMapboxInner({ duties, homeBase = 'DOH', theme = 'dark' }: RouteNetworkMapboxProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [activeRegion, setActiveRegion] = useState('World');

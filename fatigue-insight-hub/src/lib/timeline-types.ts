@@ -9,7 +9,7 @@
  * with a fundamentally different architecture and does NOT use these types.
  */
 
-import type { DutyAnalysis, FlightPhase, SleepQualityFactors, SleepReference } from '@/types/fatigue';
+import type { DutyAnalysis, FlightPhase, SleepQualityFactors, SleepReference, StandbyPeriod } from '@/types/fatigue';
 
 // ---------------------------------------------------------------------------
 // Flight segment within a duty bar
@@ -138,6 +138,17 @@ export interface WmzBand {
 }
 
 // ---------------------------------------------------------------------------
+// Standby bar (home standby / airport standby — not scored)
+// ---------------------------------------------------------------------------
+
+export interface TimelineStandbyBar {
+  rowIndex: number;
+  startHour: number;
+  endHour: number;
+  period: StandbyPeriod;
+}
+
+// ---------------------------------------------------------------------------
 // Row label (Y-axis)
 // ---------------------------------------------------------------------------
 
@@ -174,4 +185,6 @@ export interface TimelineData {
   totalRows: number;
   /** X-axis label (e.g. "Time of Day (Home Base)") */
   xAxisLabel: string;
+  /** Standby periods (home-base view only; optional). */
+  standbyBars?: TimelineStandbyBar[];
 }

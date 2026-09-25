@@ -5,7 +5,7 @@ const capabilities = [
   {
     icon: Brain,
     title: 'Biomathematical Modeling',
-    desc: 'Borbély Two-Process Model predicts cognitive performance from sleep history, circadian phase, and time awake.',
+    desc: 'The Three Process Model of alertness (validated on airline crew, Ingre et al. 2014) predicts sleepiness on the KSS scale from sleep history, body clock and time awake.',
     accent: 'hsl(199, 89%, 48%)',
   },
   {
@@ -41,7 +41,7 @@ const capabilities = [
   {
     icon: FileText,
     title: 'SMS-Ready Reports',
-    desc: 'Generate professional fatigue assessment reports with impairment equivalences and mitigation recommendations.',
+    desc: 'Generate clear fatigue reports with predicted sleepiness, EASA ORO.FTL context and mitigation suggestions.',
     accent: 'hsl(45, 90%, 55%)',
   },
   {

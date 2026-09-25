@@ -260,18 +260,13 @@ function RosterRow({ roster, onView, onDelete, onReanalyze, isDeleting, isReanal
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-6">
           {/* Left: details */}
           <div className="flex-1 min-w-0 space-y-2">
-            {/* Row 1: Filename + month + preset */}
+            {/* Row 1: Filename + month */}
             <div className="flex items-center gap-2 flex-wrap">
               <FileText className="h-4 w-4 text-primary flex-shrink-0" />
               <span className="text-sm font-semibold truncate">{roster.filename}</span>
               <Badge variant="outline" className="text-[10px]">
                 {formatMonth(roster.month)}
               </Badge>
-              {roster.config_preset && (
-                <Badge variant="info" className="text-[10px] capitalize">
-                  {roster.config_preset}
-                </Badge>
-              )}
             </div>
 
             {/* Row 2: Pilot info */}

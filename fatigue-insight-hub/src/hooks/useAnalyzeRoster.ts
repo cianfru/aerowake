@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { analyzeRoster, reanalyzeRoster } from '@/lib/api-client';
+import { analyzeRoster } from '@/lib/api-client';
 import { transformAnalysisResult } from '@/lib/transform-analysis';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { toast } from 'sonner';
@@ -22,7 +22,6 @@ export function useAnalyzeRoster() {
         state.actualFileObject,
         state.settings.pilotId,
         state.settings.homeBase,
-        state.settings.configPreset,
         state.dutyCrewOverrides,
       );
     },
@@ -37,56 +36,8 @@ export function useAnalyzeRoster() {
     },
   });
 
-  // Re-analyze uploaded file with different settings (no toast — silent refresh)
-  const rerunMutation = useMutation({
-    mutationFn: async (overrides: { configPreset?: string }) => {
-      if (!state.actualFileObject) {
-        throw new Error('No file in memory');
-      }
-      return analyzeRoster(
-        state.actualFileObject,
-        state.settings.pilotId,
-        state.settings.homeBase,
-        overrides.configPreset ?? state.settings.configPreset,
-        state.dutyCrewOverrides,
-      );
-    },
-    onSuccess: (result) => {
-      const transformed = transformAnalysisResult(result, state.settings.selectedMonth);
-      setAnalysisResults(transformed);
-    },
-    onError: (error: Error) => {
-      // Silent fail — auto-triggered, don't spam toasts when API is offline
-      console.warn('[Re-analysis] failed:', error.message);
-    },
-  });
-
-  // Re-analyze a saved roster by ID with different settings
-  const reanalyzeSavedMutation = useMutation({
-    mutationFn: async ({ rosterId, configPreset }: {
-      rosterId: string;
-      configPreset?: string;
-    }) => {
-      return reanalyzeRoster(
-        rosterId,
-        configPreset ?? state.settings.configPreset,
-      );
-    },
-    onSuccess: (result) => {
-      const transformed = transformAnalysisResult(result, state.settings.selectedMonth);
-      setAnalysisResults(transformed);
-    },
-    onError: (error: Error) => {
-      // Silent fail — auto-triggered, don't spam toasts when API is offline
-      console.warn('[Saved roster re-analysis] failed:', error.message);
-    },
-  });
-
   return {
     runAnalysis: mutation.mutate,
     isAnalyzing: mutation.isPending,
-    rerunWithSettings: rerunMutation.mutate,
-    reanalyzeSaved: reanalyzeSavedMutation.mutate,
-    isRerunning: rerunMutation.isPending || reanalyzeSavedMutation.isPending,
   };
 }

@@ -238,6 +238,28 @@ export function TimelineGrid({
                   />
                 ))}
 
+              {/* Standby bars (muted, hatched — not scored) */}
+              {(data.standbyBars ?? [])
+                .filter((bar) => bar.rowIndex === label.rowIndex)
+                .map((bar, i) => (
+                  <div
+                    key={`standby-${i}`}
+                    className="absolute rounded-sm border border-muted-foreground/40 pointer-events-auto"
+                    style={{
+                      top: 6,
+                      bottom: 6,
+                      left: `${(bar.startHour / 24) * 100}%`,
+                      width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 0.5)}%`,
+                      background:
+                        'repeating-linear-gradient(45deg, transparent, transparent 3px, hsl(var(--muted-foreground) / 0.35) 3px, hsl(var(--muted-foreground) / 0.35) 5px)',
+                      zIndex: 5,
+                    }}
+                    title={`${bar.period.type === 'airport_standby' ? 'Airport standby' : 'Home standby'} ${bar.period.startHome}–${bar.period.endHome}`}
+                    aria-label={`${bar.period.type === 'airport_standby' ? 'Airport standby' : 'Home standby'} ${bar.period.startHome} to ${bar.period.endHome}`}
+                    role="img"
+                  />
+                ))}
+
               {/* Duty bars */}
               {data.dutyBars
                 .filter((bar) => bar.rowIndex === label.rowIndex)

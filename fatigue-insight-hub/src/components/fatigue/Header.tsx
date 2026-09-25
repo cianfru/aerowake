@@ -1,18 +1,11 @@
 import { useState } from 'react';
 import {
   Menu, Moon, Sun, LogIn, LogOut, Shield,
-  Home, FolderOpen, BarChart3, Activity, CalendarRange, Users,
-  BookOpen, Info, Microscope, Settings2, Globe, ShieldAlert, FileText, FileWarning,
+  CalendarDays, History, BookOpen, FileWarning, Microscope,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { PRESET_PARAMS, ParamRow, RISK_COLORS } from './AdvancedParametersDialog';
 import { PilotAvatar } from './PilotAvatar';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { SettingsProfileManager } from './SettingsProfileManager';
 import { AuthSheet } from '@/components/auth/AuthSheet';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,30 +14,15 @@ import { useTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/utils';
 import logoDark from '@/assets/logo-dark.png';
 import type { PilotSettings } from '@/types/fatigue';
+import type { HubId } from '@/lib/navigation';
 
-// ── Config presets (shared with former SettingsPanel) ─────────
+// ── Nav items (four hubs; see src/lib/navigation.ts) ─────────
 
-const configPresets = [
-  { value: 'operational', label: 'Operational', description: 'KSS model (Ingre 2014) with standard sleep assumptions and risk bands.' },
-  { value: 'easa_default', label: 'EASA Default', description: 'Same KSS model with literature sleep-quality values.' },
-  { value: 'conservative', label: 'Conservative', description: 'Risk bands 0.5 KSS earlier; stricter sleep assumptions.' },
-  { value: 'research', label: 'Research', description: 'Same KSS model; legacy research parameters have no effect.' },
-];
-
-// ── Nav items ────────────────────────────────────────────────
-
-const navItems = [
-  { id: 'summary',  icon: Home,          label: 'Summary',   section: 'primary' },
-  { id: 'fatigue-report', icon: FileWarning, label: 'Report fatigue', section: 'primary' },
-  { id: 'pilot-study', icon: Activity, label: 'Pilot study', section: 'primary' },
-  { id: 'rosters',  icon: FolderOpen,    label: 'Rosters',   section: 'primary' },
-  { id: 'analysis', icon: BarChart3,     label: 'Analysis',  section: 'primary' },
-  { id: 'insights', icon: Activity,      label: 'Insights',  section: 'primary' },
-  { id: 'reports',  icon: FileText,     label: 'Reports',   section: 'primary' },
-  { id: 'yearly',   icon: CalendarRange, label: '12-Month',  section: 'primary' },
-  { id: 'compare',  icon: Users,         label: 'Compare',   section: 'primary' },
-  { id: 'learn',    icon: BookOpen,      label: 'Learn',     section: 'secondary' },
-  { id: 'about',    icon: Info,          label: 'About',     section: 'secondary' },
+const navItems: Array<{ id: HubId; icon: typeof CalendarDays; label: string }> = [
+  { id: 'roster',         icon: CalendarDays, label: 'Roster' },
+  { id: 'fatigue-report', icon: FileWarning,  label: 'Report fatigue' },
+  { id: 'history',        icon: History,      label: 'History' },
+  { id: 'learn',          icon: BookOpen,     label: 'Learn' },
 ];
 
 // ── Header + Sidebar ─────────────────────────────────────────
@@ -83,11 +61,6 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
   const pilotBase = analysisResults?.pilotBase || user?.home_base || settings.homeBase;
   const pilotAircraft = analysisResults?.pilotAircraft || null;
 
-  const activePreset = configPresets.find(p => p.value === settings.configPreset);
-  const paramConfig = PRESET_PARAMS[settings.configPreset] || PRESET_PARAMS.operational;
-
-  const primaryNav = navItems.filter(n => n.section === 'primary');
-  const secondaryNav = navItems.filter(n => n.section === 'secondary');
 
   return (
     <>
@@ -103,9 +76,9 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
               <Menu className="h-4.5 w-4.5 text-foreground" />
             </button>
             <button
-              onClick={() => { setActiveTab('summary'); setSidebarOpen(false); }}
+              onClick={() => { setActiveTab('roster'); setSidebarOpen(false); }}
               className="focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
-              aria-label="Go to Summary"
+              aria-label="Go to Roster"
             >
               <img
                 src={logoDark}
@@ -115,39 +88,8 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
             </button>
           </div>
 
-          {/* Right: Preset switcher + Auth + Badge + theme toggle */}
+          {/* Right: Auth + Badge + theme toggle */}
           <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-            {/* Quick preset switcher */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  className="hidden sm:inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-secondary/50 hover:bg-secondary/80 border border-border/40 transition-colors text-[11px] font-medium text-foreground"
-                  title="Switch model preset"
-                >
-                  <Microscope className="h-3 w-3 text-primary" />
-                  {activePreset?.label || 'Operational'}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 p-1.5" align="end" sideOffset={8}>
-                <div className="space-y-0.5">
-                  {configPresets.map((preset) => (
-                    <button
-                      key={preset.value}
-                      onClick={() => handleSettingsChange({ configPreset: preset.value })}
-                      className={cn(
-                        'w-full text-left px-2.5 py-2 rounded-md transition-colors text-xs',
-                        settings.configPreset === preset.value
-                          ? 'bg-primary/15 text-primary font-medium'
-                          : 'hover:bg-secondary/60 text-foreground'
-                      )}
-                    >
-                      <div className="font-medium">{preset.label}</div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{preset.description}</div>
-                    </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
             <Badge variant="success" className="hidden lg:inline-flex text-[10px]">EASA ORO.FTL</Badge>
 
             {isAuthenticated ? (
@@ -235,38 +177,15 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
             </div>
 
             {/* Primary nav */}
-            <nav className="flex-1 p-2 space-y-0.5">
-              {primaryNav.map(item => {
-                if (item.requiresAuth && !isAuthenticated) return null;
+            <nav className="flex-1 p-2 space-y-0.5" aria-label="Main">
+              {navItems.map(item => {
                 const Icon = item.icon;
                 const isActive = state.activeTab === item.id;
                 return (
                   <button
                     key={item.id}
                     onClick={() => handleNavClick(item.id)}
-                    className={cn(
-                      'flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm transition-colors',
-                      isActive
-                        ? 'bg-primary/10 text-primary font-medium'
-                        : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
-                    )}
-                  >
-                    <Icon className="h-4 w-4 flex-shrink-0" />
-                    {item.label}
-                  </button>
-                );
-              })}
-
-              {/* Divider */}
-              <div className="my-2 border-t border-border/30" />
-
-              {secondaryNav.map(item => {
-                const Icon = item.icon;
-                const isActive = state.activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => handleNavClick(item.id)}
+                    aria-current={isActive ? 'page' : undefined}
                     className={cn(
                       'flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm transition-colors',
                       isActive
@@ -285,123 +204,12 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
             <div className="border-t border-border/30 p-3 space-y-3">
               <div className="flex items-center gap-2">
                 <Microscope className="h-3.5 w-3.5 text-primary" />
-                <span className="text-xs font-semibold">Configuration</span>
+                <span className="text-xs font-semibold">Model &amp; profile</span>
               </div>
 
-              {/* Model preset */}
-              <div className="space-y-1">
-                <Label className="text-[10px] text-muted-foreground">Model Preset</Label>
-                <Select
-                  value={settings.configPreset}
-                  onValueChange={(value) => handleSettingsChange({ configPreset: value })}
-                >
-                  <SelectTrigger className="h-8 bg-secondary/50 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover border-border">
-                    {configPresets.map((preset) => (
-                      <SelectItem key={preset.value} value={preset.value} className="text-xs">
-                        {preset.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {activePreset && (
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    {activePreset.description}
-                  </p>
-                )}
-              </div>
-
-              {/* Inline model parameters (collapsed accordions) */}
-              <Accordion type="multiple" className="w-full">
-                <AccordionItem value="processS" className="border-border/30">
-                  <AccordionTrigger className="text-[11px] font-medium py-2">
-                    <span className="flex items-center gap-1.5">
-                      <Activity className="h-3 w-3 text-chart-1" />
-                      Process S
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-0">
-                      {Object.values(paramConfig.processS).map((entry, i) => (
-                        <ParamRow key={i} entry={entry} />
-                      ))}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-
-                <AccordionItem value="processC" className="border-border/30">
-                  <AccordionTrigger className="text-[11px] font-medium py-2">
-                    <span className="flex items-center gap-1.5">
-                      <Globe className="h-3 w-3 text-chart-2" />
-                      Process C
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-0">
-                      {Object.values(paramConfig.processC).map((entry, i) => (
-                        <ParamRow key={i} entry={entry} />
-                      ))}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-
-                <AccordionItem value="sleepQuality" className="border-border/30">
-                  <AccordionTrigger className="text-[11px] font-medium py-2">
-                    <span className="flex items-center gap-1.5">
-                      <Moon className="h-3 w-3 text-chart-3" />
-                      Sleep Quality
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-0">
-                      {Object.values(paramConfig.sleepQuality).map((entry, i) => (
-                        <ParamRow key={i} entry={entry} />
-                      ))}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-
-                <AccordionItem value="riskThresholds" className="border-border/30">
-                  <AccordionTrigger className="text-[11px] font-medium py-2">
-                    <span className="flex items-center gap-1.5">
-                      <ShieldAlert className="h-3 w-3 text-warning" />
-                      Risk Thresholds
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-1">
-                      {Object.entries(paramConfig.riskThresholds).map(([key, entry]) => (
-                        <div key={key} className="flex items-center justify-between py-1 border-b border-border/50 last:border-0">
-                          <span className={`text-[10px] font-medium ${RISK_COLORS[key] || 'text-foreground'}`}>
-                            {entry.label}
-                          </span>
-                          <span className="text-[10px] font-mono tabular-nums text-muted-foreground">
-                            {entry.range}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-
-                <AccordionItem value="adaptation" className="border-border/30">
-                  <AccordionTrigger className="text-[11px] font-medium py-2">
-                    <span className="flex items-center gap-1.5">
-                      <Globe className="h-3 w-3 text-chart-4" />
-                      Adaptation
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-0">
-                      {Object.values(paramConfig.adaptation).map((entry, i) => (
-                        <ParamRow key={i} entry={entry} />
-                      ))}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                One alertness model (Three Process Model, KSS — Ingre et al. 2014) with EASA ORO.FTL checks. No presets to tune.
+              </p>
 
               {/* Settings profiles */}
               <SettingsProfileManager

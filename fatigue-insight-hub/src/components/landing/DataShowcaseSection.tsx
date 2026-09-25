@@ -306,8 +306,8 @@ export function DataShowcaseSection() {
               The Science in Action
             </h2>
             <p className="mt-3 text-sm text-white/40 max-w-lg mx-auto">
-              Real biomathematical models running live. These curves predict cognitive
-              performance degradation before it happens.
+              A published alertness model running live. These curves predict
+              group-average sleepiness (KSS) before it happens.
             </p>
           </div>
         </ScrollReveal>

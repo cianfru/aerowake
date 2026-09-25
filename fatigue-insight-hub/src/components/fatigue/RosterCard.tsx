@@ -56,11 +56,6 @@ export function RosterCard({
                 <Calendar className="h-3 w-3 mr-1" />
                 {formatMonth(roster.month)}
               </Badge>
-              {roster.config_preset && (
-                <Badge variant="info" className="text-[10px] capitalize">
-                  {roster.config_preset}
-                </Badge>
-              )}
             </div>
           </div>
         </div>

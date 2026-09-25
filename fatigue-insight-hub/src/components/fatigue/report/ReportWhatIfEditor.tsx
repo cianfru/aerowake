@@ -60,7 +60,6 @@ export function ReportWhatIfEditor({ duty, analysisId, onResult, onReset, isModi
       // Build what-if request
       const request: Parameters<typeof runWhatIf>[0] = {
         analysis_id: analysisId,
-        config_preset: state.settings.configPreset,
       };
 
       // Duty modifications (report time shift)

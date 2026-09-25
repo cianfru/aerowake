@@ -19,7 +19,6 @@ export interface PilotSettings {
   startDate?: Date;
   endDate?: Date;
   theme: 'dark' | 'light';
-  configPreset: string;
 }
 
 export interface UploadedFile {
@@ -249,8 +248,11 @@ export interface DutyAnalysis {
   cabinAltitudeFt?: number | null;   // Inferred cabin altitude from aircraft type (ft)
   aircraftType?: string | null;      // Aircraft type string (e.g., "A320")
 
+  /** Up to 3 plain-language reasons behind the risk level. */
+  riskReasons?: string[];
+
   // Training duty classification
-  dutyType?: 'flight' | 'simulator' | 'ground_training';
+  dutyType?: 'flight' | 'simulator' | 'ground_training' | 'airport_standby';
   trainingCode?: string;           // Raw activity code: "OPTR", "FFS", "EBTGR", etc.
   trainingAnnotations?: string[];  // Trailing codes: ["ea"], ["aw","lpc","rh"]
 }
@@ -347,6 +349,46 @@ export interface RestDaySleep {
   references?: SleepReference[];
 }
 
+// ── EASA ORO.FTL roster-level checks ─────────────────────────
+
+export interface EasaFinding {
+  rule: string;
+  reference: string;
+  severity: 'info' | 'warning';
+  title: string;
+  detail: string;
+  windowStartUtc?: string;
+  windowEndUtc?: string;
+  value?: number;
+  limit?: number;
+}
+
+export interface EasaSummary {
+  duty7dMax: number;
+  duty14dMax: number;
+  duty28dMax: number;
+  block28dMax: number;
+  limits: {
+    duty7d: number;
+    duty14d: number;
+    duty28d: number;
+    block28d: number;
+  };
+}
+
+/** Standby period — not a scored duty (home standby counts 25% toward cumulative duty). */
+export interface StandbyPeriod {
+  id: string;
+  type: 'home_standby' | 'airport_standby';
+  code: string;
+  startUtc: string;
+  endUtc: string;
+  startHome: string; // HH:MM home base
+  endHome: string;   // HH:MM home base
+  date: string;      // YYYY-MM-DD home base
+  countedDutyHours: number;
+}
+
 export interface CompanyDetection {
   suggestedName: string;
   suggestedIcao: string;
@@ -373,6 +415,12 @@ export interface AnalysisResults {
   bodyClockTimeline?: BodyClockTimelineEntry[];
   // Company detection (first upload only)
   companyDetection?: CompanyDetection;
+  // Roster verdict: duty ids with high/critical/extreme risk, worst first.
+  // Undefined when the backend predates the field.
+  dutiesToWatch?: string[];
+  easaFindings?: EasaFinding[];
+  easaSummary?: EasaSummary;
+  standbyPeriods?: StandbyPeriod[];
   // Fatigue continuity (multi-roster chaining)
   continuityFromMonth?: string;    // "2026-01" if prior state was injected
   initialConditions?: {

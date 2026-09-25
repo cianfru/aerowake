@@ -161,7 +161,6 @@ export function useSleepEdits(
       return runWhatIf({
         analysis_id: analysisId,
         sleep_modifications: sleepModifications,
-        config_preset: state.settings.configPreset,
       });
     },
     onSuccess: (result) => {

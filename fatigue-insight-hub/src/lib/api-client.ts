@@ -260,9 +260,51 @@ export interface Duty {
   pre_duty_awake_hours?: number;
 
   // Training duty classification
-  duty_type?: 'flight' | 'simulator' | 'ground_training';
+  duty_type?: 'flight' | 'simulator' | 'ground_training' | 'airport_standby';
   training_code?: string;
   training_annotations?: string[];
+
+  /** Up to 3 plain-language reasons behind the risk level (aerowake-4.0-kss). */
+  risk_reasons?: string[] | null;
+}
+
+// ── EASA ORO.FTL roster-level checks (aerowake-4.0-kss) ─────────
+
+export interface EasaFindingResponse {
+  rule: string;
+  reference: string;
+  severity: 'info' | 'warning';
+  title: string;
+  detail: string;
+  window_start_utc?: string | null;
+  window_end_utc?: string | null;
+  value?: number | null;
+  limit?: number | null;
+}
+
+export interface EasaSummaryResponse {
+  duty_7d_max: number;
+  duty_14d_max: number;
+  duty_28d_max: number;
+  block_28d_max: number;
+  limits: {
+    duty_7d: number;
+    duty_14d: number;
+    duty_28d: number;
+    block_28d: number;
+  };
+}
+
+export interface StandbyPeriodResponse {
+  id: string;
+  type: 'home_standby' | 'airport_standby';
+  code: string;
+  start_utc: string;
+  end_utc: string;
+  start_home: string; // HH:MM home base
+  end_home: string;   // HH:MM home base
+  date: string;       // YYYY-MM-DD home base
+  counted_duty_hours: number;
 }
 
 // Rest day sleep block from backend
@@ -370,6 +412,12 @@ export interface AnalysisResult {
     needs_confirmation: boolean;
   } | null;
 
+  // Roster-level verdict + EASA checks (aerowake-4.0-kss). All optional.
+  duties_to_watch?: string[] | null;
+  easa_findings?: EasaFindingResponse[] | null;
+  easa_summary?: EasaSummaryResponse | null;
+  standby_periods?: StandbyPeriodResponse[] | null;
+
   // Fatigue continuity (multi-roster chaining)
   continuity_from_month?: string | null;
   initial_conditions?: {
@@ -399,7 +447,6 @@ export async function analyzeRoster(
   file: File,
   pilotId: string,
   homeBase: string,
-  configPreset: string = 'operational',
   dutyCrewOverrides?: Map<string, ULRCrewSet>
 ): Promise<AnalysisResult> {
 
@@ -407,7 +454,7 @@ export async function analyzeRoster(
   formData.append('file', file);
   formData.append('pilot_id', pilotId);
   formData.append('home_base', homeBase);
-  formData.append('config_preset', configPreset);
+  // One model only (aerowake-4.0-kss) — the backend ignores presets.
 
   // Per-duty crew set overrides (parser auto-detection provides defaults)
   if (dutyCrewOverrides && dutyCrewOverrides.size > 0) {
@@ -529,10 +576,8 @@ export async function deleteRoster(rosterId: string): Promise<void> {
 
 export async function reanalyzeRoster(
   rosterId: string,
-  configPreset: string = 'operational',
 ): Promise<AnalysisResult> {
   const formData = new FormData();
-  formData.append('config_preset', configPreset);
 
   const response = await fetch(`${API_BASE_URL}/api/rosters/${rosterId}/reanalyze`, {
     method: 'POST',
@@ -638,7 +683,6 @@ export interface WhatIfRequest {
   analysis_id: string;
   modifications?: DutyModification[];
   sleep_modifications?: SleepModification[];
-  config_preset?: string;
 }
 
 export async function runWhatIf(request: WhatIfRequest): Promise<AnalysisResult> {

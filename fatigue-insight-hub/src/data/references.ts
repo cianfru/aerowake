@@ -48,8 +48,8 @@ export const ALL_REFERENCES: Reference[] = [
   },
   {
     key: 'akerstedt_2014',
-    short: 'Åkerstedt et al. (2014)',
-    full: 'Åkerstedt T et al. Predicting sleepiness in airline operations using the BAM three-process model. PLOS ONE 9(10):e108769',
+    short: 'Ingre et al. (2014)',
+    full: 'Ingre M, Van Leeuwen W, Klemets T, et al. Validating and extending the three process model of alertness in airline operations. PLoS ONE 9(10):e108679',
     category: 'model',
   },
   {

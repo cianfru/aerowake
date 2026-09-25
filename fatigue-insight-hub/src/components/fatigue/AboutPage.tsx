@@ -30,8 +30,9 @@ export function AboutPage() {
         </p>
         <p className="text-sm text-muted-foreground leading-relaxed">
           Aerowake models that difference. It takes your roster, estimates your sleep patterns,
-          and runs a peer-reviewed fatigue simulation to predict your cognitive performance
-          across every duty. Hour by hour, phase by phase.
+          and runs a published alertness model (the Three Process Model as validated on airline
+          crew, Ingre et al. 2014) to predict how sleepy you are likely to be (KSS) across every duty.
+          It is not equivalent to BAM or SAFTE-FAST and does not assess fitness to fly.
         </p>
       </div>
 

@@ -5,7 +5,7 @@
  * from the TanStack Query mutation hook.
  */
 
-import { AnalysisResults, DutyAnalysis, PilotSettings, CompanyDetection, TimelinePoint } from '@/types/fatigue';
+import { AnalysisResults, DutyAnalysis, PilotSettings, CompanyDetection, TimelinePoint, EasaFinding, EasaSummary, StandbyPeriod } from '@/types/fatigue';
 import { AnalysisResult, Duty, SleepEstimate, DutySegment } from '@/lib/api-client';
 import { format, parseISO } from 'date-fns';
 import { toUpperRisk } from '@/lib/risk-scale';
@@ -230,6 +230,60 @@ export function mapTimelinePoints(raw: unknown): TimelinePoint[] | undefined {
 
 // ── Main transformer ─────────────────────────────────────────
 
+const num = (v: unknown): number | undefined =>
+  typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+
+export function transformEasaFindings(raw: AnalysisResult['easa_findings']): EasaFinding[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  return raw
+    .filter((f) => f && typeof f === 'object')
+    .map((f) => ({
+      rule: String(f.rule ?? ''),
+      reference: String(f.reference ?? ''),
+      severity: f.severity === 'warning' ? 'warning' : 'info',
+      title: String(f.title ?? ''),
+      detail: String(f.detail ?? ''),
+      windowStartUtc: f.window_start_utc ?? undefined,
+      windowEndUtc: f.window_end_utc ?? undefined,
+      value: num(f.value),
+      limit: num(f.limit),
+    }));
+}
+
+export function transformEasaSummary(raw: AnalysisResult['easa_summary']): EasaSummary | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const l = raw.limits ?? ({} as NonNullable<AnalysisResult['easa_summary']>['limits']);
+  return {
+    duty7dMax: num(raw.duty_7d_max) ?? 0,
+    duty14dMax: num(raw.duty_14d_max) ?? 0,
+    duty28dMax: num(raw.duty_28d_max) ?? 0,
+    block28dMax: num(raw.block_28d_max) ?? 0,
+    limits: {
+      duty7d: num(l?.duty_7d) ?? 60,
+      duty14d: num(l?.duty_14d) ?? 110,
+      duty28d: num(l?.duty_28d) ?? 190,
+      block28d: num(l?.block_28d) ?? 100,
+    },
+  };
+}
+
+export function transformStandbyPeriods(raw: AnalysisResult['standby_periods']): StandbyPeriod[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  return raw
+    .filter((p) => p && typeof p === 'object' && p.start_utc && p.end_utc)
+    .map((p) => ({
+      id: String(p.id ?? `${p.type}-${p.start_utc}`),
+      type: p.type === 'airport_standby' ? 'airport_standby' : 'home_standby',
+      code: String(p.code ?? ''),
+      startUtc: p.start_utc,
+      endUtc: p.end_utc,
+      startHome: p.start_home ?? '',
+      endHome: p.end_home ?? '',
+      date: p.date ?? p.start_utc.slice(0, 10),
+      countedDutyHours: num(p.counted_duty_hours) ?? 0,
+    }));
+}
+
 export function transformAnalysisResult(
   result: AnalysisResult,
   fallbackMonth: Date,
@@ -411,6 +465,9 @@ export function transformAnalysisResult(
         returnToDeckPerformance: duty.return_to_deck_performance ?? null,
         preDutyAwakeHours: duty.pre_duty_awake_hours ?? 0,
         dutyType: duty.duty_type || 'flight',
+        riskReasons: Array.isArray(duty.risk_reasons)
+          ? duty.risk_reasons.filter((r): r is string => typeof r === 'string' && r.trim().length > 0).slice(0, 3)
+          : undefined,
         trainingCode: duty.training_code || undefined,
         trainingAnnotations: duty.training_annotations || undefined,
         // Cabin environment
@@ -465,6 +522,12 @@ export function transformAnalysisResult(
           needsConfirmation: result.company_detection.needs_confirmation,
         }
       : undefined,
+    dutiesToWatch: Array.isArray(result.duties_to_watch)
+      ? result.duties_to_watch.filter((id): id is string => typeof id === 'string')
+      : undefined,
+    easaFindings: transformEasaFindings(result.easa_findings),
+    easaSummary: transformEasaSummary(result.easa_summary),
+    standbyPeriods: transformStandbyPeriods(result.standby_periods),
     continuityFromMonth: result.continuity_from_month ?? undefined,
     initialConditions: result.initial_conditions
       ? {

@@ -1,12 +1,12 @@
 import { useState, useMemo } from 'react';
-import { Brain, Battery, Home, Globe, BarChart3, Pencil } from 'lucide-react';
+import { Home, Globe, BarChart3, Pencil } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { DutyAnalysis, DutyStatistics, RestDaySleep } from '@/types/fatigue';
-import { ContinuousPerformanceTimeline } from './ContinuousPerformanceTimeline';
+import { DutyAnalysis, DutyStatistics, RestDaySleep, StandbyPeriod } from '@/types/fatigue';
 import { TimelineRenderer } from './chronogram/TimelineRenderer';
-import { homeBaseTransform, utcTransform, elapsedTransform } from '@/lib/timeline-transforms';
+import { homeBaseTransform, utcTransform } from '@/lib/timeline-transforms';
+import { standbyBarsForMonth } from '@/lib/standby-bars';
 import { useSleepEdits } from '@/hooks/useSleepEdits';
 
 interface ChronogramProps {
@@ -21,28 +21,30 @@ interface ChronogramProps {
   selectedDuty: DutyAnalysis | null;
   restDaysSleep?: RestDaySleep[];
   analysisId?: string;
+  /** Standby periods (not scored) — drawn as muted hatched bars in the home-base view. */
+  standbyPeriods?: StandbyPeriod[];
 }
 
-export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilotBase, pilotAircraft, onDutySelect, selectedDuty, restDaysSleep, analysisId }: ChronogramProps) {
-  const [activeTab, setActiveTab] = useState<'homebase' | 'utc' | 'elapsed' | 'continuous'>('homebase');
+type ChronogramTab = 'homebase' | 'utc';
+
+export function Chronogram({ duties, statistics, month, pilotName, pilotBase, pilotAircraft, onDutySelect, selectedDuty, restDaysSleep, analysisId, standbyPeriods }: ChronogramProps) {
+  const [activeTab, setActiveTab] = useState<ChronogramTab>('homebase');
 
   // Sleep editing state
   const sleepEdits = useSleepEdits(analysisId);
 
   // Pre-compute timeline data for each grid-based view
   const homeBaseData = useMemo(
-    () => homeBaseTransform(duties, statistics, month, restDaysSleep),
-    [duties, statistics, month, restDaysSleep],
+    () => ({
+      ...homeBaseTransform(duties, statistics, month, restDaysSleep),
+      standbyBars: standbyBarsForMonth(standbyPeriods, month),
+    }),
+    [duties, statistics, month, restDaysSleep, standbyPeriods],
   );
 
   const utcData = useMemo(
     () => utcTransform(duties, statistics, month, restDaysSleep),
     [duties, statistics, month, restDaysSleep],
-  );
-
-  const elapsedData = useMemo(
-    () => elapsedTransform(duties, month, restDaysSleep),
-    [duties, month, restDaysSleep],
   );
 
   const statsSubset = useMemo(() => ({
@@ -64,23 +66,15 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Tab selector for timeline type */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'homebase' | 'utc' | 'elapsed' | 'continuous')}>
-          <TabsList className="grid w-full grid-cols-4">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ChronogramTab)}>
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="homebase" className="text-xs">
-              <Home className="h-3.5 w-3.5 sm:h-3 sm:w-3 sm:mr-1" />
-              <span className="hidden sm:inline">Home-Base Timeline</span>
+              <Home className="h-3.5 w-3.5 mr-1 sm:h-3 sm:w-3" />
+              Home base
             </TabsTrigger>
             <TabsTrigger value="utc" className="text-xs">
-              <Globe className="h-3.5 w-3.5 sm:h-3 sm:w-3 sm:mr-1" />
-              <span className="hidden sm:inline">UTC (Zulu)</span>
-            </TabsTrigger>
-            <TabsTrigger value="elapsed" className="text-xs">
-              <Brain className="h-3.5 w-3.5 sm:h-3 sm:w-3 sm:mr-1" />
-              <span className="hidden sm:inline">Human Performance (Elapsed)</span>
-            </TabsTrigger>
-            <TabsTrigger value="continuous" className="text-xs">
-              <Battery className="h-3.5 w-3.5 sm:h-3 sm:w-3 sm:mr-1" />
-              <span className="hidden sm:inline">SAFTE View</span>
+              <Globe className="h-3.5 w-3.5 mr-1 sm:h-3 sm:w-3" />
+              UTC (Zulu)
             </TabsTrigger>
           </TabsList>
 
@@ -120,33 +114,6 @@ export function Chronogram({ duties, statistics, month, pilotId, pilotName, pilo
             />
           </TabsContent>
 
-          {/* Human Performance (Elapsed Time) Tab */}
-          <TabsContent value="elapsed" className="mt-4">
-            <TimelineRenderer
-              data={elapsedData}
-              duties={duties}
-              statistics={statsSubset}
-              month={month}
-              pilotName={pilotName}
-              pilotBase={pilotBase}
-              pilotAircraft={pilotAircraft}
-              onDutySelect={onDutySelect}
-              selectedDuty={selectedDuty}
-            />
-          </TabsContent>
-
-          {/* Continuous Performance Timeline (SAFTE View) Tab */}
-          <TabsContent value="continuous" className="mt-4">
-            <ContinuousPerformanceTimeline
-              duties={duties}
-              month={month}
-              analysisId={analysisId}
-              restDaysSleep={restDaysSleep}
-              onDutySelect={onDutySelect}
-              selectedDuty={selectedDuty}
-              pilotBase={pilotBase}
-            />
-          </TabsContent>
         </Tabs>
 
         {/* Floating Apply bar — shows when sleep edits are pending */}

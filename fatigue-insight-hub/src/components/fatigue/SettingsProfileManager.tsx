@@ -76,7 +76,10 @@ export function SettingsProfileManager({ settings, onSettingsChange }: SettingsP
     const profile = profiles.find(p => p.name === profileName);
     if (!profile) return;
 
-    const loaded: Partial<PilotSettings> = { ...profile.settings };
+    // Drop legacy keys (e.g. configPreset from pre-4.0 presets) — one model only.
+    const { configPreset: _legacyPreset, ...rest } = profile.settings as Partial<PilotSettings> & { configPreset?: string };
+    void _legacyPreset;
+    const loaded: Partial<PilotSettings> = { ...rest };
     // Reconstruct Date from ISO string if needed
     if (loaded.selectedMonth && typeof loaded.selectedMonth === 'string') {
       loaded.selectedMonth = new Date(loaded.selectedMonth as unknown as string);
@@ -113,7 +116,7 @@ export function SettingsProfileManager({ settings, onSettingsChange }: SettingsP
                     <div className="flex items-center justify-between w-full gap-2">
                       <span>{p.name}</span>
                       <span className="text-[10px] text-muted-foreground">
-                        {p.settings.configPreset || 'operational'}
+                        {p.settings.homeBase || ''}
                       </span>
                     </div>
                   </SelectItem>

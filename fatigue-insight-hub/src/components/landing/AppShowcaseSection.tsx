@@ -48,20 +48,12 @@ const features = [
     align: 'right' as const,
   },
   {
-    src: '/screenshots/safte-view.png',
-    alt: 'Aerowake SAFTE View',
-    title: 'Continuous performance tracking.',
-    description:
-      'Monitor your cognitive performance and sleep reservoir in real time across your entire roster. Hover any point to see the exact Borbély model breakdown — homeostatic pressure, circadian drive, time on task — and understand precisely why your alertness changes.',
-    align: 'left' as const,
-  },
-  {
     src: '/screenshots/duty-details.png',
     alt: 'Aerowake Duty Details',
     title: 'Every duty, fully analysed.',
     description:
       'Drill into any single duty for a complete fatigue assessment. Per-flight predicted sleepiness (KSS), FDP utilisation, prior sleep quality, and a decomposition showing what drove it — sleep pressure or circadian phase — plus the 7-day sleep deficit.',
-    align: 'right' as const,
+    align: 'left' as const,
   },
   {
     src: '/screenshots/sleep-debt.png',
@@ -69,15 +61,15 @@ const features = [
     title: 'Track your sleep debt over time.',
     description:
       'Watch how fatigue accumulates across consecutive duties and recovers during rest periods. Peak debt, current debt, recovery rate — all mapped across your roster so you can see the long-term effects of your schedule, not just single-duty snapshots.',
-    align: 'left' as const,
+    align: 'right' as const,
   },
   {
     src: '/screenshots/fatigue-report.png',
     alt: 'Aerowake Fatigue Report',
     title: 'SMS-ready fatigue reports.',
     description:
-      'Generate professional fatigue assessment reports with narrative analysis, performance trajectory charts, impairment equivalences, and actionable mitigation recommendations. Ready for Safety Management System submissions, with a one-click PDF export.',
-    align: 'right' as const,
+      'Generate professional fatigue assessment reports with narrative analysis, predicted sleepiness (KSS) charts, EASA ORO.FTL context and practical mitigation suggestions. Ready for Safety Management System submissions, with a one-click PDF export.',
+    align: 'left' as const,
   },
 ];
 

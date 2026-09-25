@@ -6,7 +6,7 @@ export function Footer() {
       <div className="text-center text-[10px] md:text-xs text-muted-foreground">
         <p className="font-medium">Aerowake v{APP_VERSION}</p>
         <p className="mt-1 hidden sm:block">
-          Biomathematical alertness model grounded in 56 peer-reviewed studies · Includes EASA FTL checks
+          Alertness model: Three Process Model (Ingre et al. 2014) · EASA ORO.FTL checks
         </p>
       </div>
     </footer>
