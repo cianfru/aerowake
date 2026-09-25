@@ -21,7 +21,7 @@ import pytz
 import airportsdata
 
 # Ensure you have these models defined in your project
-from models.data_models import Airport, FlightSegment, Duty, Roster, CrewComposition, RestFacilityClass, ULRCrewSet
+from models.data_models import Airport, FlightSegment, Duty, Roster, CrewComposition, RestFacilityClass, ULRCrewSet, DutyType
 from parsers.qatar_crewlink_parser import CrewLinkRosterParser
 
 
@@ -380,6 +380,8 @@ class PDFRosterParser:
         print(f"   Found Pilot: {final_pilot_name} (ID: {final_pilot_id})")
         print(f"   Base: {final_base} | Aircraft: {final_aircraft}")
 
+        standbys = [d for d in duties if d.duty_type == DutyType.HOME_STANDBY]
+        duties = [d for d in duties if d.duty_type != DutyType.HOME_STANDBY]
         roster = Roster(
             roster_id=f"R_{final_pilot_id}_{month}",
             pilot_id=final_pilot_id,
@@ -388,7 +390,8 @@ class PDFRosterParser:
             pilot_aircraft=final_aircraft,
             month=month,
             duties=duties,
-            home_base_timezone=self.home_timezone
+            home_base_timezone=self.home_timezone,
+            standbys=standbys,
         )
 
         # Auto-detect augmented crew / ULR duties

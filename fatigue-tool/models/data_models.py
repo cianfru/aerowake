@@ -83,6 +83,10 @@ class DutyType(Enum):
     FLIGHT = "flight"
     SIMULATOR = "simulator"              # FFS, OPTR, AFTD, 77LP, FS1, AW8
     GROUND_TRAINING = "ground_training"  # EBTGR, TMTG, INAS, 6ESEC, 6EVS, EVNT
+    # Standby (ORO.FTL.225). Home standby is kept on Roster.standbys, not scored
+    # as a duty: the pilot is at home and free to sleep unless called out.
+    HOME_STANDBY = "home_standby"        # PSBY, SBY, HSBY
+    AIRPORT_STANDBY = "airport_standby"  # ASBY, APSBY
 
 
 # ============================================================================
@@ -291,6 +295,10 @@ class Roster:
     pilot_base: Optional[str] = None  # Home base airport code (e.g., "DOH")
     pilot_aircraft: Optional[str] = None  # Aircraft type (e.g., "A320", "B777")
     
+    # Home standby periods (ORO.FTL.225): not scored, count 25% toward
+    # cumulative duty (CS FTL.1.225). Airport standby stays in ``duties``.
+    standbys: List['Duty'] = field(default_factory=list)
+
     # Initial conditions (defaults = well-rested; overridden by fatigue continuity)
     initial_sleep_pressure: float = 0.15
     initial_sleep_debt: float = 0.0

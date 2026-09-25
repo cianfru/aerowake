@@ -148,20 +148,41 @@ class EASAComplianceValidator:
         return total_encroachment
     
     def is_disruptive_duty(self, duty: Duty) -> Dict[str, any]:
-        """Check if duty qualifies as disruptive per EASA GM1 ORO.FTL.235"""
+        """Disruptive schedule elements — Regulation (EU) 965/2012 ORO.FTL.105(8).
+
+        On home-base time ('early type' definitions):
+          early start  — duty starting 05:00–05:59
+          late finish  — duty finishing 23:00–01:59
+          night duty   — duty encroaching any portion of 02:00–04:59
+        Reports 02:00–04:59 are night duties (not early starts).
+        WOCL encroachment (02:00–05:59, AMC1 ORO.FTL.105(10)) is reported
+        separately as ``wocl_hours``.
+        """
         wocl_encroachment = self.calculate_wocl_encroachment(
             duty.report_time_utc, duty.release_time_utc, duty.home_base_timezone
         )
         wocl_hours = wocl_encroachment.total_seconds() / 3600
-        
+        tz = pytz.timezone(duty.home_base_timezone)
+        report = duty.report_time_utc.astimezone(tz)
+        release = duty.release_time_utc.astimezone(tz)
+        rep_h = report.hour + report.minute / 60
+        rel_h = release.hour + release.minute / 60
+        early_start = 5.0 <= rep_h < 6.0
+        late_finish = rel_h >= 23.0 or rel_h < 2.0
+        night_duty = False
+        t = duty.report_time_utc
+        while t < duty.release_time_utc:
+            h = t.astimezone(tz)
+            if 2 <= h.hour < 5:
+                night_duty = True
+                break
+            t += timedelta(minutes=5)
         return {
             'wocl_encroachment': wocl_hours > 0,
             'wocl_hours': wocl_hours,
-            'early_start': duty.report_time_local.hour < self.framework.early_start_threshold_hour,
-            'late_finish': self.framework.late_finish_threshold_hour <= duty.release_time_local.hour < self.framework.local_night_end_hour,
-            'is_disruptive': (
-                wocl_hours > 0 or
-                duty.report_time_local.hour < self.framework.early_start_threshold_hour or
-                (self.framework.late_finish_threshold_hour <= duty.release_time_local.hour < self.framework.local_night_end_hour)
-            )
+            'early_start': early_start,
+            'late_finish': late_finish,
+            'night_duty': night_duty,
+            'is_disruptive': early_start or late_finish or night_duty,
         }
+

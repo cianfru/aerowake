@@ -524,6 +524,16 @@ def analyse(inp: ReportInput) -> Dict:
         if d.status != 'cancelled_fatigue':
             prev = d
 
+    # Cumulative EASA limits and recovery rest (same checks as roster analysis).
+    easa = _easa_checks(inp, duties)
+    for f in easa['findings']:
+        if f['rule'] == 'min_rest':
+            continue  # already reported per duty above
+        findings.append(_finding('warning' if f['severity'] == 'warning' else 'info', 'roster',
+                                 f['title'], f['detail'],
+                                 datetime.fromisoformat(f['window_end_utc']) if f.get('window_end_utc') else None,
+                                 f"Regulation (EU) 965/2012 {f['reference']}", tz))
+
     # Time-zone changes across the period.
     offsets = {round(aw.utc_offset_hours(z, inp.event_time_utc) - aw.utc_offset_hours(tz, inp.event_time_utc), 1)
                for _, z in track.events if _ <= eval_start}
@@ -616,6 +626,7 @@ def analyse(inp: ReportInput) -> Dict:
         assessment=assessment,
         prior_sleep_wake=sw,
         cumulative_deficit=deficit,
+        easa_summary=easa['summary'],
         self_assessment=self_assessment,
         contributing_factors=[dict(code=f, label=FACTOR_LABELS.get(f, f)) for f in inp.factors],
         pilot_narrative=inp.narrative,
@@ -629,6 +640,27 @@ def analyse(inp: ReportInput) -> Dict:
     )
     report['narrative'] = _narrative(report, inp)
     return report
+
+
+def _easa_checks(inp: ReportInput, duties: List[DutyIn]) -> Dict:
+    """Run core.easa_checks on the reported duties (operated or planned)."""
+    from core.easa_checks import run_checks
+    from models.data_models import Airport, Duty, DutyType, FlightSegment, Roster
+    built, standbys = [], []
+    for d in duties:
+        if d.status in ('cancelled_fatigue', 'not_operated'):
+            continue
+        segs = [FlightSegment(s.flight_number or 'X', Airport(s.departure, s.departure_tz),
+                              Airport(s.arrival, s.arrival_tz), s.departure_utc, s.arrival_utc,
+                              activity_code='DH' if s.is_deadhead else None) for s in d.sectors]
+        kind = {'simulator': DutyType.SIMULATOR, 'ground': DutyType.GROUND_TRAINING}.get(d.duty_type, DutyType.FLIGHT)
+        duty = Duty(d.id, d.report_utc, d.report_utc, d.release_utc, segs, inp.home_timezone, duty_type=kind)
+        (standbys if d.duty_type == 'standby' else built).append(duty)
+    roster = Roster('report', 'pilot', '', built, inp.home_timezone, standbys=standbys)
+    try:
+        return run_checks(roster)
+    except Exception:  # never fail a report because of an auxiliary check
+        return {'findings': [], 'summary': None}
 
 
 def _headline(objective, self_assessment, findings) -> str:

@@ -339,6 +339,7 @@ class DutyResponse(BaseModel):
     pre_duty_awake_hours: float = 0.0  # hours awake before report
     
     # KSS-anchored alertness (engine aerowake-4.0-kss)
+    risk_reasons: List[str] = []                  # up to 3 plain-language reasons
     max_kss: Optional[float] = None               # worst predicted KSS on deck
     landing_kss: Optional[float] = None
     max_kss_90: Optional[float] = None            # 90th-percentile pilot
@@ -458,6 +459,12 @@ class AnalysisResponse(BaseModel):
 
     # Company detection (included only on first upload when user has no company)
     company_detection: Optional[dict] = None
+
+    # Roster verdict (engine aerowake-4.0-kss)
+    duties_to_watch: List[str] = []        # duty_ids at high risk or worse, worst first
+    easa_findings: List[dict] = []         # ORO.FTL.210 / .235 / .205 roster checks
+    easa_summary: Optional[dict] = None    # rolling duty / block totals vs limits
+    standby_periods: List[dict] = []       # home standby (not scored; 25% duty)
 
     # Fatigue continuity (multi-roster chaining)
     continuity_from_month: Optional[str] = None   # "2026-01" if prior state was injected
@@ -692,6 +699,81 @@ def _build_ulr_data(duty_timeline, duty) -> tuple:
     return ulr_compliance_dict, inflight_blocks
 
 
+
+RISK_ORDER = {'low': 0, 'moderate': 1, 'high': 2, 'critical': 3, 'extreme': 4, 'unknown': -1}
+
+
+def _roster_insights(roster, duties_response) -> dict:
+    """Roster-level verdict: duties to watch, EASA checks, standby periods."""
+    import pytz
+    from core.easa_checks import run_checks, HOME_STANDBY_FACTOR
+    watch = [d for d in duties_response if RISK_ORDER.get(d.risk_level, 0) >= RISK_ORDER['high']]
+    watch.sort(key=lambda d: (-(d.max_kss or 0), d.report_time_utc))
+    try:
+        easa = run_checks(roster)
+    except Exception as exc:  # checks must never break the analysis
+        logger.warning(f"EASA checks failed: {exc}")
+        easa = {'findings': [], 'summary': None}
+    home_tz = pytz.timezone(roster.home_base_timezone)
+    standbys = []
+    for s in getattr(roster, 'standbys', []):
+        start, end = s.report_time_utc.astimezone(home_tz), s.release_time_utc.astimezone(home_tz)
+        standbys.append({
+            'id': s.duty_id, 'type': s.duty_type.value, 'code': s.training_code,
+            'start_utc': s.report_time_utc.isoformat(), 'end_utc': s.release_time_utc.isoformat(),
+            'start_home': start.strftime('%H:%M'), 'end_home': end.strftime('%H:%M'),
+            'date': start.strftime('%Y-%m-%d'),
+            'counted_duty_hours': round(s.duty_hours * HOME_STANDBY_FACTOR, 2),
+        })
+    return dict(duties_to_watch=[d.duty_id for d in watch], easa_findings=easa['findings'],
+                easa_summary=easa['summary'], standby_periods=standbys)
+
+
+def _risk_reasons(duty_timeline, duty, roster) -> List[str]:
+    """Up to three plain-language reasons behind a duty's predicted sleepiness."""
+    import pytz
+    home_tz = pytz.timezone(duty.home_base_timezone)
+    shift = getattr(duty_timeline, 'circadian_phase_shift', 0.0) or 0.0
+    reasons: List[tuple] = []
+
+    def clock(dt):
+        home = dt.astimezone(home_tz)
+        body = (home.hour + home.minute / 60 + shift) % 24
+        return home, body
+
+    last_arrival = duty.segments[-1].scheduled_arrival_utc if duty.segments else None
+    if last_arrival is not None:
+        home, body = clock(last_arrival)
+        if 2 <= body < 6:
+            where = 'home-base time' if abs(shift) < 1 else f'home-base time ({int(body):02d}:{int(body % 1 * 60):02d} body clock)'
+            reasons.append((5, f"Lands {home:%H:%M} {where}, during the body-clock low"))
+    if not any(r[0] == 5 for r in reasons):
+        points = [p for p in duty_timeline.timeline if not p.is_in_rest]
+        low = [p for p in points if 2 <= clock(p.timestamp_utc)[1] < 6]
+        if low:
+            reasons.append((4, "On duty during the body-clock low (02:00–06:00)"))
+    awake = duty_timeline.max_hours_awake
+    if awake is not None and awake >= 16:
+        reasons.append((4 if awake >= 18 else 3, f"About {awake:.0f}h awake by the end of the duty"))
+    if duty_timeline.prior_sleep_hours is not None and duty_timeline.prior_sleep_hours < 6:
+        reasons.append((3, f"Only about {duty_timeline.prior_sleep_hours:.1f}h estimated sleep in the 24h before report"))
+    idx = roster.get_duty_index(duty.duty_id)
+    if idx:
+        prev = roster.duties[idx - 1]
+        rest = (duty.report_time_utc - prev.release_time_utc).total_seconds() / 3600
+        if rest < 12:
+            reasons.append((3, f"Short rest before report ({int(rest)}h{int(rest % 1 * 60):02d})"))
+    report = duty.report_time_utc.astimezone(home_tz)
+    if 4 <= report.hour < 7:
+        reasons.append((2, f"Early report ({report:%H:%M})"))
+    deficit = getattr(duty_timeline, 'sleep_deficit_7d', None) or {}
+    if deficit.get('band') in ('moderate', 'severe'):
+        reasons.append((2, f"About {deficit['deficit_hours']:.0f}h sleep shortfall over the previous 7 days"))
+    if duty.segments and len([s for s in duty.segments if not s.is_deadhead]) >= 4:
+        reasons.append((1, f"{len(duty.segments)} sectors"))
+    reasons.sort(key=lambda r: -r[0])
+    return [text for _, text in reasons[:3]]
+
 def _round_opt(value, digits=2):
     return None if value is None else round(value, digits)
 
@@ -801,6 +883,7 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
         prior_sleep=duty_timeline.prior_sleep_hours,
         pre_duty_awake_hours=duty_timeline.pre_duty_awake_hours,
         risk_level=risk,
+        risk_reasons=_risk_reasons(duty_timeline, duty, roster),
         max_kss=_round_opt(duty_timeline.max_kss),
         landing_kss=_round_opt(duty_timeline.landing_kss),
         max_kss_90=_round_opt(duty_timeline.max_kss_90),
@@ -1275,6 +1358,7 @@ async def analyze_roster(
             worst_duty_id=monthly_analysis.lowest_performance_duty,
             worst_performance=monthly_analysis.lowest_performance_value,
             duties=duties_response,
+            **_roster_insights(roster, duties_response),
             rest_days_sleep=rest_days_sleep,
             body_clock_timeline=[
                 {'timestamp_utc': ts, 'phase_shift_hours': ps, 'reference_timezone': tz}
@@ -1393,6 +1477,7 @@ async def get_analysis(analysis_id: str, db=Depends(get_db)):
             worst_duty_id=monthly_analysis.lowest_performance_duty,
             worst_performance=monthly_analysis.lowest_performance_value,
             duties=duties_response,
+            **_roster_insights(roster, duties_response),
             rest_days_sleep=rest_days_sleep,
             body_clock_timeline=[
                 {'timestamp_utc': ts, 'phase_shift_hours': ps, 'reference_timezone': tz}
@@ -1848,6 +1933,7 @@ async def reanalyze_roster(
         worst_duty_id=monthly_analysis.lowest_performance_duty,
         worst_performance=monthly_analysis.lowest_performance_value,
         duties=duties_response,
+        **_roster_insights(roster_obj, duties_response),
         rest_days_sleep=rest_days_sleep,
         body_clock_timeline=[
             {"timestamp_utc": ts, "phase_shift_hours": ps, "reference_timezone": tz}
@@ -2163,6 +2249,7 @@ async def run_what_if(request: WhatIfRequest, db=Depends(get_db)):
         worst_duty_id=monthly_analysis.lowest_performance_duty,
         worst_performance=monthly_analysis.lowest_performance_value,
         duties=duties_response,
+        **_roster_insights(modified_roster, duties_response),
         rest_days_sleep=rest_days_sleep,
         body_clock_timeline=[
             {"timestamp_utc": ts, "phase_shift_hours": ps, "reference_timezone": tz}

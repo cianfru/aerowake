@@ -506,6 +506,17 @@ class CrewLinkRosterParser:
         # NOTE: Training codes (6ESEC, EBTGR, etc.) are no longer skipped here —
         # they are now parsed as training duties below.
         first_item = lines[0].upper()
+        # Standby columns look like training columns: RPT, code, DOH, start, end.
+        tokens = {line.strip().upper() for line in lines}
+        standby_code = next((c for c in ('PSBY', 'HSBY', 'SBY', 'ASBY', 'APSBY') if c in tokens), None)
+        if standby_code:
+            duty = self._parse_training_duty(lines, date, standby_code)
+            if duty is not None:
+                is_airport = standby_code in ('ASBY', 'APSBY')
+                duty.duty_type = DutyType.AIRPORT_STANDBY if is_airport else DutyType.HOME_STANDBY
+                duty.release_time_utc -= timedelta(minutes=30)  # no debrief buffer on standby
+                duty.duty_id = f"{duty.duty_id}_{standby_code}"
+            return duty
         _NON_FLYING_CODES = {
             'OFF', 'GOFF', 'DOFF',          # Days off
             'SBY', 'PSBY', 'STANDBY',       # Standby (home or phone)

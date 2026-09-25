@@ -413,8 +413,11 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
             hours_to_bio_evening = (22.0 - bio_release_hour) % 24
             onset_delay_hours = max(2.0, hours_to_bio_evening)
         else:
-            # Evening on biological clock (17:00-20:00) — approaching biological night
-            onset_delay_hours = 2.0
+            # Evening on biological clock (17:00-20:00): still inside the wake
+            # maintenance zone (~18:00-21:00), where sleep onset is difficult
+            # (Lavie 1986; Dijk & Czeisler 1994). Onset no earlier than 22:00
+            # biological time and at least 1.5h after release.
+            onset_delay_hours = max(1.5, 22.0 - bio_release_hour)
 
         # Modulate onset by sleep pressure: higher pressure → faster onset
         # Åkerstedt (2003): sleep latency shortens under high homeostatic load
@@ -422,9 +425,10 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
             previous_duty.release_time_utc - previous_duty.report_time_utc
         ).total_seconds() / 3600
         prior_wake_estimate = duty_duration_hours + self.MIN_WAKE_BEFORE_REPORT
-        if prior_wake_estimate > 18:
+        in_wmz_window = 17 <= bio_release_hour < 20
+        if prior_wake_estimate > 18 and not in_wmz_window:
             onset_delay_hours = max(1.0, onset_delay_hours - 0.5)
-        elif prior_wake_estimate > 14:
+        elif prior_wake_estimate > 14 and not in_wmz_window:
             onset_delay_hours = max(1.0, onset_delay_hours - 0.25)
 
         sleep_start = release_local + timedelta(hours=onset_delay_hours)
