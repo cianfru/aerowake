@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Menu, Moon, Sun, LogIn, LogOut, Shield,
   Home, FolderOpen, BarChart3, Activity, CalendarRange, Users,
-  BookOpen, Info, Microscope, Settings2, Globe, ShieldAlert, FileText,
+  BookOpen, Info, Microscope, Settings2, Globe, ShieldAlert, FileText, FileWarning,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
@@ -25,17 +25,18 @@ import type { PilotSettings } from '@/types/fatigue';
 // ── Config presets (shared with former SettingsPanel) ─────────
 
 const configPresets = [
-  { value: 'operational', label: 'Operational', description: 'Experimental aviation adjustments. Operational validation pending.' },
-  { value: 'easa_default', label: 'EASA Default', description: 'Pure literature values, EASA-compliant thresholds' },
-  { value: 'conservative', label: 'Conservative', description: 'Faster fatigue buildup, stricter thresholds, 8.5h sleep need' },
-  { value: 'research', label: 'Research', description: 'Two-process research core; experimental 50/50 output index' },
+  { value: 'operational', label: 'Operational', description: 'KSS model (Ingre 2014) with standard sleep assumptions and risk bands.' },
+  { value: 'easa_default', label: 'EASA Default', description: 'Same KSS model with literature sleep-quality values.' },
+  { value: 'conservative', label: 'Conservative', description: 'Risk bands 0.5 KSS earlier; stricter sleep assumptions.' },
+  { value: 'research', label: 'Research', description: 'Same KSS model; legacy research parameters have no effect.' },
 ];
 
 // ── Nav items ────────────────────────────────────────────────
 
 const navItems = [
-  { id: 'pilot-study', icon: Activity, label: 'Pilot study', section: 'primary' },
   { id: 'summary',  icon: Home,          label: 'Summary',   section: 'primary' },
+  { id: 'fatigue-report', icon: FileWarning, label: 'Report fatigue', section: 'primary' },
+  { id: 'pilot-study', icon: Activity, label: 'Pilot study', section: 'primary' },
   { id: 'rosters',  icon: FolderOpen,    label: 'Rosters',   section: 'primary' },
   { id: 'analysis', icon: BarChart3,     label: 'Analysis',  section: 'primary' },
   { id: 'insights', icon: Activity,      label: 'Insights',  section: 'primary' },

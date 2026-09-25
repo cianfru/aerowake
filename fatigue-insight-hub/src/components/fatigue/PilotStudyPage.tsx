@@ -64,7 +64,7 @@ export function PilotStudyPage() {
     <header className="space-y-2"><p className="text-sm font-medium text-primary">Pilot study · awaiting operational validation</p>
       <h1 className="text-3xl font-semibold">How sleepy do you feel?</h1>
       <p className="text-muted-foreground">Record your own sleepiness before viewing a prediction. This study compares reported sleep with the published Ingre 2014 model 5c. It estimates sleepiness on the 1–9 Karolinska Sleepiness Scale (KSS), not physical exhaustion or fitness to fly.</p>
-      <p className="text-sm text-muted-foreground">The roster dashboard uses a different experimental score. This baseline does not reproduce BAM. Use this diary only when safely free from operational tasks.</p>
+      <p className="text-sm text-muted-foreground">The roster dashboard uses the same published model with sleep estimated from your roster; this study measures how accurate it is with your actual sleep. It does not reproduce BAM. Use this diary only when safely free from operational tasks.</p>
     </header>
     {!isAuthenticated ? <p className="rounded-lg border p-6">Sign in using the account menu to save your private pilot diary.</p> : <>
       {result ? <div className="rounded-xl border bg-card p-6 space-y-3" role="status">

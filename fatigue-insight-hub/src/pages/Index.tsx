@@ -10,6 +10,7 @@ import { AboutPage } from '@/components/fatigue/AboutPage';
 import { YearlyDashboardPage } from '@/components/fatigue/YearlyDashboardPage';
 import { ComparativeMetricsPage } from '@/components/fatigue/ComparativeMetricsPage';
 import { SummaryPage } from '@/components/fatigue/SummaryPage';
+import { FatigueReportPage } from '@/components/fatigue/fatigue-report/FatigueReportPage';
 
 import { LandingPage } from '@/components/landing/LandingPage';
 import { AuroraBackground } from '@/components/ui/aurora-background';
@@ -63,6 +64,7 @@ const Index = () => {
         <main className="flex-1">
           {state.activeTab === 'pilot-study' && <PilotStudyPage />}
           {state.activeTab === 'summary' && <SummaryPage />}
+          {state.activeTab === 'fatigue-report' && <FatigueReportPage />}
           {state.activeTab === 'rosters' && <RostersPage />}
           {state.activeTab === 'analysis' && <DashboardContent />}
           {state.activeTab === 'reports' && <ReportsPage />}
