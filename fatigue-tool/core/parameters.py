@@ -440,19 +440,17 @@ class ModelConfig:
             self.ulr_params = ULRParameters()
 
     @classmethod
-    def default_easa_config(cls):
-        return cls(
-            easa_framework=EASAFatigueFramework(),
-            borbely_params=BorbelyParameters(),
-            risk_thresholds=RiskThresholds(),
-            adaptation_rates=AdaptationRates(),
-            sleep_quality_params=SleepQualityParameters(),
-        )
-
-    @classmethod
-    def operational_config(cls):
+    def aerowake(cls):
         """
-        Experimental aviation adjustments (default preset; not operationally validated).
+        The single AeroWake model configuration (engine aerowake-4.0-kss).
+
+        There is deliberately one model: the KSS core (core/alertness.py) is
+        fixed to published parameters, and one set of sleep-estimation
+        assumptions and risk bands is used for every analysis so results are
+        comparable across pilots, months and research. The legacy notes below
+        describe BorbelyParameters that now only affect sleep estimation.
+
+        Legacy notes (3.x "operational" preset):
 
         Adjusts time constants, debt sensitivity, and sleep inertia based on
         operational data from trained flight crew. Core science (circadian model,
@@ -533,76 +531,17 @@ class ModelConfig:
             )
         )
 
+    # Legacy preset names resolve to the single model so stored analyses
+    # and older clients keep working. Do not add new presets.
     @classmethod
-    def conservative_config(cls):
-        """
-        Stricter thresholds for safety-first analysis.
-        - Faster homeostatic pressure buildup (shorter tau_i)
-        - Slower recovery during sleep (longer tau_d)
-        - Higher baseline sleep need
-        - Stronger circadian penalties on sleep quality
-        - Tighter risk thresholds (scores shift up by ~5 points)
-        """
-        return cls(
-            easa_framework=EASAFatigueFramework(),
-            borbely_params=BorbelyParameters(
-                tau_i=16.0,
-                tau_d=4.8,
-                baseline_sleep_need_hours=8.5,
-                inertia_duration_minutes=40.0,
-                inertia_max_magnitude=0.35,
-            ),
-            # Bands shifted by 0.5 KSS (≈ the 75th-percentile offset of
-            # 0.57, Ingre et al. 2014 eq. 1.16) toward earlier warning.
-            risk_thresholds=RiskThresholds(thresholds={
-                'low': (60, 100),
-                'moderate': (50, 60),
-                'high': (40, 50),
-                'critical': (30, 40),
-                'extreme': (0, 30)
-            }),
-            adaptation_rates=AdaptationRates(
-                westward_hours_per_day=1.0,
-                eastward_hours_per_day=0.7,
-            ),
-            sleep_quality_params=SleepQualityParameters(
-                quality_hotel_typical=0.75,
-                quality_hotel_airport=0.70,
-                quality_crew_rest_facility=0.60,
-                max_circadian_quality_penalty=0.30,
-            )
-        )
+    def operational_config(cls):
+        return cls.aerowake()
 
     @classmethod
-    def research_config(cls):
-        """
-        Reproducible two-process core for research comparisons.
-        Uses values from Jewett & Kronauer (1999) and Van Dongen (2003)
-        without workload, resilience, debt, altitude or inertia adjustments.
-        The 20–100 output mapping and thresholds remain experimental; this
-        preset is not a reproduction of BAM or a validated sleepiness scale.
-        """
-        return cls(
-            easa_framework=EASAFatigueFramework(),
-            borbely_params=BorbelyParameters(
-                workload_enabled=False,
-                resilience_boost_magnitude=0.0,
-                circadian_second_harmonic_amplitude=0.0,
-                inertia_max_magnitude=0.0,
-                tot_log_coeff=0.0,
-                tot_quadratic_coeff=0.0,
-                sleep_debt_vulnerability_floor=1.0,
-                circadian_dampening_coeff=0.0,
-                hypoxia_coeff=0.0,
-                tau_i=18.2,
-                tau_d=4.2,
-                circadian_amplitude=0.30,
-                weight_circadian=0.5,
-                weight_homeostatic=0.5,
-                interaction_exponent=1.0,
-                baseline_sleep_need_hours=8.0,
-            ),
-            risk_thresholds=RiskThresholds(),
-            adaptation_rates=AdaptationRates(),
-            sleep_quality_params=SleepQualityParameters()
-        )
+    def default_easa_config(cls):
+        return cls.aerowake()
+
+    @classmethod
+    def from_preset(cls, _preset: str = None):
+        """Accepts any legacy preset name; always returns the single model."""
+        return cls.aerowake()

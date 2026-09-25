@@ -60,7 +60,7 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
     """
 
     def __init__(self, config: ModelConfig = None):
-        self.config = config or ModelConfig.default_easa_config()
+        self.config = config or ModelConfig.aerowake()
         self._quality_engine = SleepQualityEngine(self.config)
         
         # Sleep timing parameters — operational defaults for working-age pilots.

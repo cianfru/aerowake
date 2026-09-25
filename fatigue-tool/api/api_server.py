@@ -1145,16 +1145,8 @@ async def analyze_roster(
             logger.warning(f"Fleet/role extraction failed: {e}")
 
         # Get config
-        config_map = {
-            "default": ModelConfig.operational_config,
-            "operational": ModelConfig.operational_config,
-            "easa_default": ModelConfig.default_easa_config,
-            "conservative": ModelConfig.conservative_config,
-            "liberal": ModelConfig.operational_config,  # legacy → operational
-            "research": ModelConfig.research_config
-        }
-        config_func = config_map.get(config_preset, ModelConfig.operational_config)
-        config = config_func()
+        # Single model: legacy preset names are accepted and ignored.
+        config = ModelConfig.aerowake()
 
         # Use the month actually parsed from the roster (not the form default)
         effective_month = roster.month or month
@@ -1467,15 +1459,8 @@ async def get_duty_detail(analysis_id: str, duty_id: str, db=Depends(get_db)):
                     finally:
                         os.unlink(tmp_path)
 
-                    config_map = {
-                        "default": ModelConfig.operational_config,
-                        "operational": ModelConfig.operational_config,
-                        "easa_default": ModelConfig.default_easa_config,
-                        "conservative": ModelConfig.conservative_config,
-                        "liberal": ModelConfig.operational_config,  # legacy → operational
-                        "research": ModelConfig.research_config,
-                    }
-                    config = config_map.get(preset, ModelConfig.operational_config)()
+                    # Single model: legacy preset names are accepted and ignored.
+                    config = ModelConfig.aerowake()
                     model = BorbelyFatigueModel(config)
                     monthly_analysis_obj = model.simulate_roster(roster_obj)
 
@@ -1784,15 +1769,8 @@ async def reanalyze_roster(
     # endpoint accepts duty_crew_overrides (currently it does not).
 
     # Run analysis
-    config_map = {
-        "default": ModelConfig.operational_config,
-        "operational": ModelConfig.operational_config,
-        "easa_default": ModelConfig.default_easa_config,
-        "conservative": ModelConfig.conservative_config,
-        "liberal": ModelConfig.operational_config,  # legacy → operational
-        "research": ModelConfig.research_config,
-    }
-    config = config_map.get(config_preset, ModelConfig.operational_config)()
+    # Single model: legacy preset names are accepted and ignored.
+    config = ModelConfig.aerowake()
 
     # ── Fatigue continuity for re-analysis ────────────────────
     reanalyze_effective_month = roster_obj.month or db_roster.month or "2026-02"
@@ -2023,15 +2001,8 @@ async def run_what_if(request: WhatIfRequest, db=Depends(get_db)):
                         os.unlink(tmp_path)
 
                     preset = db_roster_model.config_preset or "default"
-                    config_map = {
-                        "default": ModelConfig.operational_config,
-                        "operational": ModelConfig.operational_config,
-                        "easa_default": ModelConfig.default_easa_config,
-                        "conservative": ModelConfig.conservative_config,
-                        "liberal": ModelConfig.operational_config,  # legacy → operational
-                        "research": ModelConfig.research_config,
-                    }
-                    config = config_map.get(preset, ModelConfig.operational_config)()
+                    # Single model: legacy preset names are accepted and ignored.
+                    config = ModelConfig.aerowake()
                     model = BorbelyFatigueModel(config)
                     monthly_analysis_obj = model.simulate_roster(roster_obj)
                     analysis_store[analysis_id] = (monthly_analysis_obj, roster_obj, model.sleep_strategies)
@@ -2147,15 +2118,8 @@ async def run_what_if(request: WhatIfRequest, db=Depends(get_db)):
             }
 
     # 9. Run fatigue model on modified roster
-    config_map = {
-        "default": ModelConfig.operational_config,
-        "operational": ModelConfig.operational_config,
-        "easa_default": ModelConfig.default_easa_config,
-        "conservative": ModelConfig.conservative_config,
-        "liberal": ModelConfig.operational_config,  # legacy → operational
-        "research": ModelConfig.research_config,
-    }
-    config = config_map.get(request.config_preset, ModelConfig.operational_config)()
+    # Single model: legacy preset names are accepted and ignored.
+    config = ModelConfig.aerowake()
     model = BorbelyFatigueModel(config)
     monthly_analysis = model.simulate_roster(modified_roster, sleep_overrides=sleep_overrides)
 

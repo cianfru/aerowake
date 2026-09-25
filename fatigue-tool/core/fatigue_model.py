@@ -51,7 +51,7 @@ class BorbelyFatigueModel:
     """
     
     def __init__(self, config: ModelConfig = None):
-        self.config = config or ModelConfig.default_easa_config()
+        self.config = config or ModelConfig.aerowake()
         self.params = self.config.borbely_params
         self.adaptation_rates = self.config.adaptation_rates
         

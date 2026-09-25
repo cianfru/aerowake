@@ -772,7 +772,9 @@ class CSVRosterParser:
         for _, row in df.iterrows():
             segment = self._parse_csv_flight(row)
             
-            if last_report and row['Report'] != last_report:
+            # A duty is one (date, report) pair; report time alone would merge
+            # consecutive days that share the same report time.
+            if last_report and (row['Report'], row['Date']) != (last_report, last_date):
                 duty = self._build_csv_duty(
                     current_duty_flights,
                     last_date,
@@ -811,6 +813,10 @@ class CSVRosterParser:
         
         std_utc = dep_tz.localize(datetime.combine(date, std_time)).astimezone(pytz.utc)
         sta_utc = arr_tz.localize(datetime.combine(date, sta_time)).astimezone(pytz.utc)
+        # Arrivals after local midnight (or across time zones) belong to the next day.
+        while sta_utc <= std_utc:
+            sta_utc = arr_tz.localize(datetime.combine(sta_utc.astimezone(arr_tz).date() + timedelta(days=1),
+                                                       sta_time)).astimezone(pytz.utc)
         
         return FlightSegment(
             flight_number=row['Flight'],
@@ -829,6 +835,11 @@ class CSVRosterParser:
         
         report_utc = home_tz.localize(datetime.combine(date_obj, report_time)).astimezone(pytz.utc)
         release_utc = home_tz.localize(datetime.combine(date_obj, release_time)).astimezone(pytz.utc)
+        # Release after midnight: move to the day that follows the last arrival.
+        last_arrival = max(seg.scheduled_arrival_utc for seg in segments)
+        while release_utc < last_arrival:
+            release_utc = home_tz.localize(datetime.combine(
+                release_utc.astimezone(home_tz).date() + timedelta(days=1), release_time)).astimezone(pytz.utc)
         
         duty_id = f"D_{date_obj.strftime('%Y%m%d')}_{segments[0].flight_number}"
         

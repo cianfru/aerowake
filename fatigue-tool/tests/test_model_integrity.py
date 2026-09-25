@@ -59,9 +59,8 @@ def test_debt_used_matches_reported_and_state_is_carried():
     assert m.inputs[1][0]['state_time'] == first.release_time_utc
 
 
-@pytest.mark.parametrize('preset', ['operational_config', 'research_config', 'conservative_config'])
-def test_risk_boundaries_and_invalid_data(preset):
-    policy = getattr(ModelConfig, preset)().risk_thresholds
+def test_risk_boundaries_and_invalid_data():
+    policy = ModelConfig.aerowake().risk_thresholds
     assert policy.classify(100) == 'low'
     assert policy.classify(float('nan')) == 'unknown'
     assert policy.classify(None) == 'unknown'
@@ -69,8 +68,9 @@ def test_risk_boundaries_and_invalid_data(preset):
         assert policy.classify(low) == name
 
 
-def test_research_baseline_has_no_operational_boosts():
-    m = BorbelyFatigueModel(ModelConfig.research_config())
-    assert not m.params.workload_enabled
-    assert m.c_amplitude == m.params.circadian_amplitude
-    assert m.integrate_performance(.5, .4, 0, 15, 20, 8000)[0] == pytest.approx(64)
+def test_single_model_for_all_legacy_presets():
+    # One model only: legacy preset names must not change results.
+    base = ModelConfig.aerowake()
+    for name in ['default', 'operational', 'easa_default', 'conservative', 'liberal', 'research']:
+        assert ModelConfig.from_preset(name).risk_thresholds.thresholds == base.risk_thresholds.thresholds
+    assert ModelConfig.operational_config().sleep_quality_params == base.sleep_quality_params
