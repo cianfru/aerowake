@@ -13,7 +13,7 @@ import { getAirportCoordinatesAsync } from '@/lib/airport-api';
 import { cn } from '@/lib/utils';
 import {
   FACTOR_OPTIONS, KSS_OPTIONS, SAMN_PERELLI_OPTIONS,
-  dutiesInPeriod, estimatedSleepsFromAnalysis, generateFatigueReport, localInputToUtcIso, utcIsoToLocalInput,
+  dutiesInPeriod, dutyFromAnalysis, estimatedSleepsFromAnalysis, generateFatigueReport, localInputToUtcIso, utcIsoToLocalInput,
   type DutyStatus, type EventType, type FatigueReport, type ReportDuty, type ReportSector, type ReportSleep,
 } from '@/lib/fatigue-report-api';
 import { FatigueReportView } from './FatigueReportView';
@@ -72,7 +72,8 @@ function TimeInput({ value, onChange, tz, label, required }: {
 }
 
 export function FatigueReportPage() {
-  const { state } = useAnalysis();
+  const { state, clearFatigueReportPrefill } = useAnalysis();
+  const { fatigueReportPrefill } = state;
   const results = state.analysisResults;
 
   const [step, setStep] = useState(0);
@@ -120,19 +121,46 @@ export function FatigueReportPage() {
 
   // Pre-fill duties and estimated sleep from the loaded roster when entering step 2.
   const periodKey = `${periodStart}|${periodEnd}`;
-  const prefill = () => {
+  const runPrefill = (opts: {
+    start: string; end: string; event: string; type: EventType; affected?: string | null;
+  }) => {
     if (!results) return;
-    const found = dutiesInPeriod(results, periodStart, periodEnd);
-    setDuties(found);
-    setSleeps(estimatedSleepsFromAnalysis(results, periodStart, periodEnd).map((s) => ({ ...s, key: newId('s') })));
-    const eventMs = new Date(eventTime).getTime();
-    const next = found.find((d) => new Date(d.release_utc).getTime() >= eventMs);
-    setAffectedId(next?.id ?? null);
-    if (next && eventType === 'fatigue_call_before_duty') {
-      setDuties((ds) => ds.map((d) => (d.id === next.id ? { ...d, status: 'cancelled_fatigue' } : d)));
-    }
-    setPrefilledFor(periodKey);
+    const found = dutiesInPeriod(results, opts.start, opts.end);
+    const eventMs = new Date(opts.event).getTime();
+    const target = opts.affected
+      ? found.find((d) => d.id === opts.affected)
+      : found.find((d) => new Date(d.release_utc).getTime() >= eventMs);
+    setDuties(target && opts.type === 'fatigue_call_before_duty'
+      ? found.map((d) => (d.id === target.id ? { ...d, status: 'cancelled_fatigue' } : d))
+      : found);
+    setSleeps(estimatedSleepsFromAnalysis(results, opts.start, opts.end).map((s) => ({ ...s, key: newId('s') })));
+    setAffectedId(target?.id ?? null);
+    setPrefilledFor(`${opts.start}|${opts.end}`);
   };
+  const prefill = () => runPrefill({ start: periodStart, end: periodEnd, event: eventTime, type: eventType });
+
+  // "Report fatigue" on a duty (Roster page): pre-select that duty once, then clear the request.
+  useEffect(() => {
+    const req = fatigueReportPrefill;
+    if (!req) return;
+    clearFatigueReportPrefill();
+    if (!results) return;
+    const idx = results.duties.findIndex((d) => d.dutyId === req.dutyId);
+    const rd = idx >= 0 ? dutyFromAnalysis(results.duties[idx], idx) : null;
+    if (!rd) return;
+    const reportMs = new Date(rd.report_utc).getTime();
+    const event = new Date(reportMs - 3600e3).toISOString();
+    const start = new Date(reportMs - 3 * 86400e3).toISOString();
+    const end = new Date(reportMs + 18 * 3600e3).toISOString();
+    setEventType('fatigue_call_before_duty');
+    setEventTime(event);
+    setPeriodStart(start);
+    setPeriodEnd(end);
+    runPrefill({ start, end, event, type: 'fatigue_call_before_duty', affected: rd.id });
+    setStep(0);
+    // Run once per prefill request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fatigueReportPrefill]);
 
   const goTo = (n: number) => {
     setError('');
