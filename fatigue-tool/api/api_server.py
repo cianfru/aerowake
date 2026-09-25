@@ -75,6 +75,9 @@ app.include_router(company_router)
 from metrics.routes import router as metrics_router
 app.include_router(metrics_router)
 
+from reports.routes import router as fatigue_report_router
+app.include_router(fatigue_report_router)
+
 # CORS - Allow Aerowake frontend origins
 # Production origins loaded from CORS_ORIGINS env var (comma-separated)
 # e.g. CORS_ORIGINS=https://aerowake.vercel.app,https://aerowake.com
