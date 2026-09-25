@@ -264,9 +264,11 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         if rest_hours is not None and rest_hours < self.SPLIT_REST_HOURS:
             return self._split_strategy(duty, previous_duty, rest_hours)
 
-        # 4. Early bedtime — report before 06:00 local.
+        # 4. Early bedtime — report 04:00–05:59 local.
         #    Pilot goes to bed earlier; circadian opposition limits advance.
-        if report_hour < self.EARLY_REPORT_THRESHOLD:
+        #    Reports 00:00–03:59 are night departures (step 5): pilots sleep
+        #    the previous night and nap before, not advance bedtime to ~21:30.
+        if 4 <= report_hour < self.EARLY_REPORT_THRESHOLD:
             return self._early_morning_strategy(duty, previous_duty)
 
         # 5. Nap — night departure (report ≥20:00 or <04:00).

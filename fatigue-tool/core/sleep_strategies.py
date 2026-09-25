@@ -73,8 +73,12 @@ class SleepStrategyMixin:
 
         report_local = duty.report_time_utc.astimezone(sleep_tz)
 
-        morning_sleep_start = report_local.replace(hour=self.NORMAL_BEDTIME_HOUR, minute=0) - timedelta(days=1)
-        morning_sleep_end = report_local.replace(hour=7, minute=0)
+        # For an after-midnight report the main sleep is the night before the
+        # previous evening (e.g. 00:20 report on D → sleep D-2 23:00 → D-1 07:00),
+        # otherwise it would be placed after the report.
+        anchor = report_local if report_local.hour >= 12 else report_local - timedelta(days=1)
+        morning_sleep_start = anchor.replace(hour=self.NORMAL_BEDTIME_HOUR, minute=0) - timedelta(days=1)
+        morning_sleep_end = anchor.replace(hour=7, minute=0)
 
         morning_sleep_start_utc, morning_sleep_end_utc, morning_warnings = self._validate_sleep_no_overlap(
             morning_sleep_start.astimezone(pytz.utc), morning_sleep_end.astimezone(pytz.utc), duty, previous_duty

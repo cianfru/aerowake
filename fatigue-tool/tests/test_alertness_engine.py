@@ -134,3 +134,14 @@ def test_overlapping_sleep_is_not_double_counted():
     a = aw.SleepInterval(at - timedelta(hours=10), at - timedelta(hours=2))
     b = aw.SleepInterval(at - timedelta(hours=6), at - timedelta(hours=1))
     assert aw.sleep_in_window([a, b], at - timedelta(hours=24), at) == pytest.approx(9)
+
+
+def test_after_midnight_report_gets_previous_night_and_nap():
+    # 00:20 report: sleep must be the previous night plus an evening nap,
+    # not an "advanced bedtime" of under an hour before report.
+    m, res = run([duty('late_night', 10, 0.33, RT)])
+    t = res.duty_timelines[0]
+    assert t.prior_sleep_hours >= 6.0
+    report = res.duty_timelines[0].timeline[0].timestamp_utc
+    sleeps = m.sleep_strategies['late_night']['sleep_blocks']
+    assert all(b['sleep_end_utc'] <= report.isoformat() for b in sleeps)
