@@ -284,10 +284,14 @@ def _finding(severity, category, title, detail, when=None, reference=None, tz=No
                 reference=reference)
 
 
+def _duty_route(d: DutyIn) -> str:
+    if d.sectors:
+        return ' → '.join([d.sectors[0].departure] + [s.arrival for s in d.sectors])
+    return d.description or d.duty_type.replace('_', ' ').title()
+
+
 def _duty_label(d: DutyIn, tz: str) -> str:
-    route = ' → '.join([d.sectors[0].departure] + [s.arrival for s in d.sectors]) if d.sectors else \
-        (d.description or d.duty_type.replace('_', ' ').title())
-    return f'{_fmt(d.report_utc, tz)} {route}'
+    return f'{_fmt(d.report_utc, tz)} {_duty_route(d)}'
 
 
 def _duty_patterns(d: DutyIn, tz: str) -> Dict[str, bool]:
@@ -458,7 +462,7 @@ def analyse(inp: ReportInput) -> Dict:
     disruptive_run = 0
     for d in duties:
         pat = _duty_patterns(d, tz)
-        row = dict(id=d.id, label=_duty_label(d, tz), status=d.status, duty_type=d.duty_type,
+        row = dict(id=d.id, label=_duty_label(d, tz), route=_duty_route(d), status=d.status, duty_type=d.duty_type,
                    report_utc=d.report_utc.isoformat(), release_utc=d.release_utc.isoformat(),
                    report_local=_fmt(d.report_utc, tz), release_local=_fmt(d.release_utc, tz),
                    report_z=_fmt_z(d.report_utc), release_z=_fmt_z(d.release_utc),

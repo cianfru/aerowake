@@ -96,19 +96,31 @@ The `UnifiedSleepCalculator.estimate_sleep_blocks()` routes to one of 5 strategi
 | Recovery | Post-duty hotel/home | Environment-adjusted sleep block |
 | Normal | Default | 23:00-07:00 home bed |
 
-### Performance Calculation
-Per 15-minute interval:
+### Alertness Calculation (engine `aerowake-4.0-kss`, `core/alertness.py`)
+Open Three Process Model as validated on airline crew (Ingre et al. 2014, model 5c):
 ```
-Performance = 20 + 80 * [(1-S) * (1-C) * (1-time_on_task) * workload_factor]
+X   = S_B + C + U            # homeostat with brake + circadian + ultradian
+KSS = 9.68 − 0.46·X          # Karolinska Sleepiness Scale 1–9
+P(KSS ≥ 7) = logistic(−0.599·X + 4.30)
+performance index = 110 − 10·KSS   # legacy 20–100 field, linear in KSS
 ```
-Result on 0-100 scale with 5 risk levels: Low (75-100), Moderate (65-75), High (55-65), Critical (45-55), Extreme (0-45).
+Bands (index): low ≥55 (KSS<5.5), moderate 45–55, high 35–45, critical 25–35, extreme <25.
+Acclimatization: body clock closes 30 %/day of the gap to local time (process A).
+Workload, time-on-task, hypoxia, inertia and "resilience" are NOT in the score.
+Cumulative restriction (7-day deficit) and the Dawson & McCulloch prior sleep/wake
+check are reported separately. Audit and rationale: `docs/MODEL_VALIDATION.md`.
+
+### Fatigue report (`reports/`, `POST /api/fatigue-report`)
+Stateless report from pilot-supplied duties, actual sleep and self-rating. See
+`docs/FATIGUE_REPORT.md`. The pilot's own assessment is never contradicted.
 
 ### Configuration Presets
-Four presets in `core/parameters.py` via `ModelConfig`:
-- `default_easa_config()` - Balanced (recommended)
-- `conservative_config()` - Stricter thresholds
-- `liberal_config()` - Airline-friendly assumptions
-- `research_config()` - Pure Borbely, 50/50 S/C weighting
+Presets in `core/parameters.py` via `ModelConfig`. Since 4.0 the KSS core is identical
+across presets; they differ only in sleep-estimation assumptions and risk bands:
+- `operational_config()` - Default (API "default"/"operational")
+- `default_easa_config()` - Literature sleep-quality values
+- `conservative_config()` - Bands 0.5 KSS earlier, stricter sleep assumptions
+- `research_config()` - Legacy research knobs (no effect on the KSS core)
 
 ## Code Conventions
 

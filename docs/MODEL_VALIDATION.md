@@ -2,18 +2,38 @@
 
 ## Status
 
-Engine version: `aerowake-3.2-stateful`. Independent operational validation and BAM agreement have not been established. Citations support model concepts, not the assembled software's predictive accuracy. The 20–100 alertness index is not a measured percentage of cognitive ability, accident probability, or alcohol-equivalent impairment.
+Engine version: `aerowake-4.0-kss` (September 2026). Independent operational validation of AeroWake as assembled software has not been established. The scoring core is the open, peer-reviewed Three Process Model as validated on airline crew (Ingre et al. 2014, https://doi.org/10.1371/journal.pone.0108679); AeroWake's roster-based sleep inference, band policy and report rules are our own and still need prospective evaluation (see the pilot study). The index is not a measured percentage of cognitive ability, accident probability or alcohol-equivalent impairment.
 
-## Reproducible research core
+## Why 3.x was replaced (audit, September 2026)
 
-The research preset disables workload scaling, resilience boosts, second harmonic, sleep inertia, time-on-task, debt-score and hypoxia adjustments. Its core uses configured exponential sleep-pressure buildup and recovery and a single circadian harmonic. The output transformation and risk thresholds remain experimental. This is not a claimed replication of BAM or the published Three Process Model's fitted sleepiness scale.
+The 3.x index `20 + 80·[w_S(1−S) + w_C·C]` (plus workload, resilience, hypoxia, time-on-task and debt multipliers) compressed realistic operations into a narrow band. `C` never exceeded ≈0.8 and rested `S` never fell below 0.1, so a rested pilot could barely reach "low". Meanwhile, repeated short sleep hardly moved the score:
 
-Wake: S(t+h) = Smax − (Smax − S(t)) exp(−h/tau_i).
-Sleep: S(t+h) = Smin + (S(t) − Smin) exp(−h*q/tau_d).
+| Scenario (full `simulate_roster` path, LGW base) | 3.2 operational | 4.0 (predicted peak KSS) |
+|---|---|---|
+| Rested, report 09:00, 2 sectors | 70 — moderate | 4.3 — low |
+| Single early, report 05:30, 4 sectors | 60 — high | 5.3 — low |
+| 5th consecutive early (5.5 h sleep/night) | 57 — high (−2 vs day 1) | 6.1 — moderate (+0.9 KSS vs day 1) |
+| Night duty, report 23:00, rested | 50 — high | 6.8 — high |
+| DOH–SIN day return after 2.5-day layover | — | 7.1 — high (body clock +3.0 h of +5 h) |
 
-q is an estimated sleep-quality multiplier, not a measured biological parameter. On the first duty, initial pressure is anchored to the earliest included sleep start (or eight hours before report if no sleep exists). Later duties inherit pressure and its timestamp at prior release. Every intervening sleep block, including naps, updates that state. Initial conditions require sensitivity analysis; they are not evidence that a user was rested.
+The audit also found a sign error: an east-adapted body clock was read backwards (`home − shift` instead of `home + shift`).
 
-The operational preset remains an experimental alternative with aviation adjustments. Changing its settings changes the model, not merely presentation. Circadian amplitude and phase now use the configured values without hidden offsets.
+## Scoring core (4.0)
+
+* Homeostat with brake `S_B`, circadian `C` and ultradian `U`: model 5c, eq. 1.1, 1.3–1.5, 1.7–1.8. Parameters are those in `core/published_tpm.py`, shared with the pilot study.
+* `KSS = 9.68 − 0.46·(S + C + U)`. Residual SD is 1.42 KSS; the between-pilot SD of the intercept is 0.84.
+* `P(KSS > k) = logistic(−0.599·(S+C+U) − K_k + offset)` (eq. 1.17). The duty summary carries `P(KSS ≥ 7)`. The legacy `microsleep_probability` field now carries `P(KSS = 9)`, "fighting sleep".
+* 90th-percentile pilot: KSS + 1.07 (eq. 1.16).
+* Acclimatization, process A (eq. 1.10): each day the body clock closes 30% of the remaining gap to local time. This is the empirically optimal rate reported by Ingre et al.
+* The 20–100 index is kept for API compatibility and is linear in KSS: `index = 110 − 10·KSS`.
+* Bands sit at the midpoints between KSS verbal anchors: low < 5.5 ≤ moderate < 6.5 ≤ high < 7.5 ≤ critical < 8.5 ≤ extreme. On the index these are 55 / 45 / 35 / 25. The conservative preset shifts every band by 0.5 KSS.
+* Sleep efficiency is the block's quality factor bounded to 0.6–1.0; bunk rest defaults to 0.70 (Signal et al. 2013).
+* Removed from the score because this model family has not validated them: workload acceleration of `S`, the "resilience" boost, cabin hypoxia, time-on-task, and sleep inertia (the paper found the default inertia function worsened fit). The first hour after waking is therefore not modelled.
+* Reported separately, never folded into KSS:
+  * a 7-day rolling sleep deficit against 8 h/day. Subjective sleepiness plateaus under chronic restriction while performance keeps declining (Van Dongen 2003; Belenky 2003).
+  * the Dawson & McCulloch (2005) prior sleep/wake check.
+
+Known limitations: the model underpredicts somewhat at very long wake durations and heavy restriction (paper, Fig. 3). The default phase (16.8 h) was ~1.8 h later than the best fit in the paper's data. There is no chronotype input yet. Roster-inferred sleep adds error: residual SD 1.46 with generated sleep vs 1.42 with observed sleep.
 
 ## Accounting and traceability
 
@@ -37,7 +57,7 @@ Relevant foundation: Ingre et al. (2014), https://doi.org/10.1371/journal.pone.0
 
 ## Regression checks
 
-Backend: `python -m pytest tests/test_model_integrity.py tests/test_sleep_regressions.py -q`.
+Backend: `python -m pytest tests -q` (engine anchors: `tests/test_alertness_engine.py`; report rules: `tests/test_fatigue_report.py`).
 Frontend: `npm test` and `npm run build`.
 
 Regression checks establish implementation consistency, not biological predictive validity. Existing crew-detection tests based on duration-only inference conflict with the current parser policy and remain a separate issue.
