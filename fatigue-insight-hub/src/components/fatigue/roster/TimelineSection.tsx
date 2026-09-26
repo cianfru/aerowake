@@ -5,9 +5,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { Chronogram } from '../Chronogram';
 import { DutyKssChart } from './DutyKssChart';
+import { MonthlyAlertnessChart } from './MonthlyAlertnessChart';
 import { SleepDebtTrendChart } from '../SleepDebtTrendChart';
 import { BodyClockDriftChart } from '../BodyClockDriftChart';
-import { RouteNetworkMapbox } from '../RouteNetworkMapbox';
+import { RouteNetwork } from './RouteNetwork';
 import type { AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 
 interface TimelineSectionProps {
@@ -65,9 +66,9 @@ export function TimelineSection({ results, pilotId, homeBase, theme, selectedDut
             />
           </div>
 
-          <Tabs defaultValue="alertness" className="w-full min-w-0">
+          <Tabs defaultValue="month" className="w-full min-w-0">
             <TabsList className="h-auto w-full justify-start gap-5 rounded-none border-b border-border bg-transparent p-0">
-              {[['alertness', 'Sleepiness'], ['sleepdebt', 'Sleep debt'], ['bodyclock', 'Body clock']].map(([v, l]) => (
+              {[['month', 'Through the month'], ['alertness', 'By duty'], ['sleepdebt', 'Sleep debt'], ['bodyclock', 'Body clock']].map(([v, l]) => (
                 <TabsTrigger
                   key={v}
                   value={v}
@@ -77,6 +78,14 @@ export function TimelineSection({ results, pilotId, homeBase, theme, selectedDut
                 </TabsTrigger>
               ))}
             </TabsList>
+            <TabsContent value="month" className="mt-5">
+              <MonthlyAlertnessChart
+                samples={results.alertnessTimeline ?? []}
+                duties={results.duties}
+                month={results.month}
+                homeTz={results.homeBaseTimezone || 'UTC'}
+              />
+            </TabsContent>
             <TabsContent value="alertness" className="mt-5">
               <DutyKssChart duties={results.duties} month={results.month} />
             </TabsContent>
@@ -93,8 +102,7 @@ export function TimelineSection({ results, pilotId, homeBase, theme, selectedDut
             </TabsContent>
           </Tabs>
 
-          {/* Renders nothing without a Mapbox token. */}
-          <RouteNetworkMapbox duties={results.duties} homeBase={results.pilotBase || homeBase} theme={theme} />
+          <RouteNetwork duties={results.duties} homeBase={results.pilotBase || homeBase} />
         </CollapsibleContent>
       </section>
     </Collapsible>

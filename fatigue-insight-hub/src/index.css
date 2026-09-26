@@ -4,26 +4,26 @@
 
 @layer base {
   :root {
-    --background: 240 10% 4%;
-    --foreground: 240 5% 96%;
+    --background: 222 42% 6%;
+    --foreground: 214 32% 96%;
 
-    --card: 240 8% 7%;
-    --card-foreground: 240 5% 96%;
+    --card: 222 38% 9%;
+    --card-foreground: 214 32% 96%;
 
-    --popover: 240 8% 8%;
-    --popover-foreground: 240 5% 96%;
+    --popover: 222 40% 9%;
+    --popover-foreground: 214 32% 96%;
 
     --primary: 198 93% 60%;
-    --primary-foreground: 240 10% 4%;
+    --primary-foreground: 222 47% 7%;
 
-    --secondary: 240 5% 11%;
+    --secondary: 222 32% 13%;
     --secondary-foreground: 240 5% 96%;
 
-    --muted: 240 5% 15%;
-    --muted-foreground: 240 5% 64%;
+    --muted: 222 26% 17%;
+    --muted-foreground: 215 18% 66%;
 
     --accent: 198 93% 60%;
-    --accent-foreground: 240 10% 4%;
+    --accent-foreground: 222 47% 7%;
 
     --destructive: 344 74% 56%;
     --destructive-foreground: 210 40% 98%;
@@ -48,8 +48,8 @@
     --ground-training: 215 30% 55%;
     --ground-training-foreground: 210 40% 98%;
 
-    --border: 240 5% 17%;
-    --input: 240 5% 13%;
+    --border: 220 26% 19%;
+    --input: 222 30% 13%;
     --ring: 198 93% 60%;
 
     --radius: 0.625rem;
@@ -60,19 +60,19 @@
     --chart-4: 344 74% 56%;
     --chart-5: 280 65% 60%;
 
-    --sidebar-background: 240 10% 4%;
+    --sidebar-background: 222 42% 5%;
     --sidebar-foreground: 210 40% 98%;
     --sidebar-primary: 198 93% 60%;
     --sidebar-primary-foreground: 222 47% 6%;
-    --sidebar-accent: 240 5% 11%;
+    --sidebar-accent: 222 32% 13%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 240 5% 15%;
+    --sidebar-border: 220 26% 17%;
     --sidebar-ring: 198 93% 60%;
 
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(198 93% 60%), hsl(200 90% 48%));
-    --gradient-card: linear-gradient(180deg, hsl(240 8% 8%), hsl(240 8% 6%));
-    --gradient-glow: radial-gradient(ellipse at center, hsl(198 93% 60% / 0.08), transparent 70%);
+    --gradient-card: linear-gradient(180deg, hsl(222 38% 10%), hsl(222 42% 7%));
+    --gradient-glow: radial-gradient(ellipse at center, hsl(198 93% 60% / 0.12), transparent 70%);
 
     /* Shadows */
     --shadow-glow: 0 0 0 1px hsl(198 93% 60% / 0.25);
@@ -81,23 +81,23 @@
   }
 
   .light {
-    --background: 240 10% 98%;
-    --foreground: 240 10% 7%;
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 7%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 7%;
+    --popover-foreground: 222 47% 11%;
 
     --primary: 200 98% 39%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 5% 95%;
+    --secondary: 214 32% 94%;
     --secondary-foreground: 240 10% 7%;
 
-    --muted: 240 5% 94%;
-    --muted-foreground: 240 4% 38%;
+    --muted: 214 30% 93%;
+    --muted-foreground: 215 20% 38%;
 
     --accent: 200 98% 39%;
     --accent-foreground: 0 0% 100%;
@@ -125,17 +125,17 @@
     --ground-training: 215 30% 40%;
     --ground-training-foreground: 0 0% 100%;
 
-    --border: 240 6% 88%;
-    --input: 240 6% 90%;
+    --border: 214 28% 86%;
+    --input: 214 28% 89%;
     --ring: 200 98% 39%;
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 222 47% 11%;
     --sidebar-primary: 200 98% 39%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 5% 95%;
+    --sidebar-accent: 214 32% 94%;
     --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 240 6% 90%;
+    --sidebar-border: 214 28% 88%;
     --sidebar-ring: 200 98% 39%;
 
     /* Light-mode shadows */
@@ -350,11 +350,11 @@
 
 /* Aurora Background Effect */
 .aurora-bg {
-  opacity: 0.35;
+  opacity: 0.6;
 }
 
 .light .aurora-bg {
-  opacity: 0.25;
+  opacity: 0.4;
 }
 
 .aurora-blob {
@@ -384,7 +384,7 @@
   height: 55vh;
   top: 25%;
   right: -10%;
-  background: radial-gradient(circle, hsl(280 65% 60% / 0.35) 0%, transparent 60%);
+  background: radial-gradient(circle, hsl(222 80% 58% / 0.32) 0%, transparent 60%);
   animation: aurora-drift-2 22s ease-in-out infinite;
 }
 
@@ -393,7 +393,7 @@
   height: 50vh;
   bottom: -5%;
   left: 15%;
-  background: radial-gradient(circle, hsl(160 70% 50% / 0.25) 0%, transparent 60%);
+  background: radial-gradient(circle, hsl(190 80% 50% / 0.2) 0%, transparent 60%);
   animation: aurora-drift-3 25s ease-in-out infinite;
 }
 
@@ -402,11 +402,11 @@
 }
 
 .light .aurora-blob-2 {
-  background: radial-gradient(circle, hsl(280 65% 70% / 0.10) 0%, transparent 65%);
+  background: radial-gradient(circle, hsl(222 80% 60% / 0.10) 0%, transparent 65%);
 }
 
 .light .aurora-blob-3 {
-  background: radial-gradient(circle, hsl(160 70% 50% / 0.08) 0%, transparent 65%);
+  background: radial-gradient(circle, hsl(190 80% 50% / 0.08) 0%, transparent 65%);
 }
 
 @keyframes aurora-drift-1 {

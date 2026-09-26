@@ -468,6 +468,7 @@ class AnalysisResponse(BaseModel):
     easa_findings: List[dict] = []         # ORO.FTL.210 / .235 / .205 roster checks
     easa_summary: Optional[dict] = None    # rolling duty / block totals vs limits
     standby_periods: List[dict] = []       # home standby (not scored; 25% duty)
+    alertness_timeline: List[dict] = []    # predicted KSS through the month: {t, kss, asleep, on_duty}
 
     # Fatigue continuity (multi-roster chaining)
     continuity_from_month: Optional[str] = None   # "2026-01" if prior state was injected
@@ -731,7 +732,8 @@ def _roster_insights(roster, duties_response) -> dict:
             'counted_duty_hours': round(s.duty_hours * HOME_STANDBY_FACTOR, 2),
         })
     return dict(duties_to_watch=[d.duty_id for d in watch], easa_findings=easa['findings'],
-                easa_summary=easa['summary'], standby_periods=standbys)
+                easa_summary=easa['summary'], standby_periods=standbys,
+                alertness_timeline=getattr(roster, 'alertness_timeline', []) or [])
 
 
 def _risk_reasons(duty_timeline, duty, roster) -> List[str]:
@@ -759,7 +761,11 @@ def _risk_reasons(duty_timeline, duty, roster) -> List[str]:
             reasons.append((4, "On duty during the body-clock low (02:00–06:00)"))
     awake = duty_timeline.max_hours_awake
     if awake is not None and awake >= 16:
-        reasons.append((4 if awake >= 18 else 3, f"About {awake:.0f}h awake by the end of the duty"))
+        text = f"About {awake:.0f}h awake by the end of the duty"
+        report_hour = duty.report_time_utc.astimezone(home_tz).hour
+        if 12 <= report_hour < 20:
+            text += " — a 1–2h nap before report would reduce this"
+        reasons.append((4 if awake >= 18 else 3, text))
     if duty_timeline.prior_sleep_hours is not None and duty_timeline.prior_sleep_hours < 6:
         reasons.append((3, f"Only about {duty_timeline.prior_sleep_hours:.1f}h estimated sleep in the 24h before report"))
     idx = roster.get_duty_index(duty.duty_id)

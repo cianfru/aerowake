@@ -31,7 +31,7 @@ _IATA_DB = airportsdata.load('IATA')
 # ============================================================================
 # Simulator codes: Full Flight Simulator (FFS), OPC training (OPTR), etc.
 # These are high-cognitive-load sessions in a motion simulator.
-_SIMULATOR_CODES = {'OPTR', 'FFS', 'FS1', 'AFTD', '77LP', 'AW8'}
+_SIMULATOR_CODES = {'OPTR', 'FFS', 'FS1', 'AFTD', '77LP', 'AW8', 'PSIM'}
 
 # Ground training codes: Classroom, meetings, assessments.
 # Lower cognitive intensity than simulator, but still constrain sleep.

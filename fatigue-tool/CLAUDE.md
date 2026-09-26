@@ -127,13 +127,21 @@ CrewLink PSBY/HSBY/SBY → `DutyType.HOME_STANDBY` on `Roster.standbys`: not sco
 `RATE_LIMIT_PER_MINUTE` (20, POST analyze/what-if/fatigue-report/reanalyze),
 `CORS_ORIGINS`. See `api/hardening.py`.
 
-### Configuration Presets
-Presets in `core/parameters.py` via `ModelConfig`. Since 4.0 the KSS core is identical
-across presets; they differ only in sleep-estimation assumptions and risk bands:
-- `operational_config()` - Default (API "default"/"operational")
-- `default_easa_config()` - Literature sleep-quality values
-- `conservative_config()` - Bands 0.5 KSS earlier, stricter sleep assumptions
-- `research_config()` - Legacy research knobs (no effect on the KSS core)
+### Model configuration (single model)
+One model only: `ModelConfig.aerowake()` in `core/parameters.py`. The old preset
+names (`operational`, `default_easa`, `conservative`, `liberal`, `research`) and
+`from_preset()` are kept as aliases so old clients don't break; they all return
+the same configuration.
+
+### Sleep-estimation rules worth knowing
+- Late reports (12:00–20:00 home time): normal night sleep only, **no pre-duty nap
+  assumed** (Signal et al. 2014). The ≥16h-awake risk reason suggests a 1–2h nap.
+- After-midnight reports anchor the previous night's sleep (night-departure strategy).
+- `Roster.alertness_timeline` (API `alertness_timeline`): 30-min KSS samples across the
+  month from the same engine; `kss=None` while asleep; ends at the last estimated
+  sleep / last release + 2h — no points without a sleep estimate behind them.
+- Qatar CrewLink simulator codes: OPTR, FFS, FS1, AFTD, 77LP, AW8, PSIM (bare `SIM`
+  is an annotation, not a duty).
 
 ## Code Conventions
 

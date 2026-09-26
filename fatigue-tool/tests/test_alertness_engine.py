@@ -145,3 +145,35 @@ def test_after_midnight_report_gets_previous_night_and_nap():
     report = res.duty_timelines[0].timeline[0].timestamp_utc
     sleeps = m.sleep_strategies['late_night']['sleep_blocks']
     assert all(b['sleep_end_utc'] <= report.isoformat() for b in sleeps)
+
+
+def test_first_late_of_block_scores_the_same_after_days_off():
+    # Reported on a real roster: an identical 17:15-00:45 late scored 6.3 as
+    # the roster's first duty but 6.8 after days off, because only the first
+    # path assumed a pre-duty nap. Both are "first late of a block".
+    lates = [duty('A', 10, 17.25, RT), duty('B', 17, 17.25, RT)]
+    _, res = run(lates)
+    a, b = (t.max_kss for t in res.duty_timelines)
+    assert a == pytest.approx(b, abs=0.1)
+
+
+def test_continuous_timeline_is_real_model_output():
+    m, res = run([duty('mid', 10, 9, RT), duty('late', 12, 17.25, RT)])
+    tl = res.roster.alertness_timeline
+    assert tl and all(p['kss'] is None for p in tl if p['asleep'])
+    awake = [p for p in tl if not p['asleep']]
+    assert all(1 <= p['kss'] <= 9 for p in awake)
+    # Curve agrees with the duty scores (30-min sampling may miss the exact peak minute).
+    for t, d in zip(res.duty_timelines, res.roster.duties):
+        on = [p['kss'] for p in awake if d.report_time_utc.isoformat() <= p['t'] <= d.release_time_utc.isoformat()]
+        assert max(on) == pytest.approx(t.max_kss, abs=0.2)
+
+
+def test_continuous_timeline_stops_where_sleep_estimates_stop():
+    """No invented all-nighter after the month's last duty."""
+    m, res = run([duty('mid', 10, 9, RT), duty('late', 12, 17.25, RT)])
+    tl = res.roster.alertness_timeline
+    last_release = max(d.release_time_utc for d in res.roster.duties)
+    last_sleep_end = max(b.end_utc for b in res.roster.sleep_blocks) if getattr(res.roster, 'sleep_blocks', None) else last_release
+    horizon = max(last_release, last_sleep_end) + timedelta(hours=2)
+    assert tl[-1]['t'] <= horizon.isoformat()

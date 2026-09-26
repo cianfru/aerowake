@@ -421,6 +421,8 @@ export interface AnalysisResults {
   easaFindings?: EasaFinding[];
   easaSummary?: EasaSummary;
   standbyPeriods?: StandbyPeriod[];
+  /** Predicted KSS through the month from the backend model (no interpolation). */
+  alertnessTimeline?: AlertnessSample[];
   // Fatigue continuity (multi-roster chaining)
   continuityFromMonth?: string;    // "2026-01" if prior state was injected
   initialConditions?: {
@@ -439,3 +441,11 @@ export interface BodyClockTimelineEntry {
   referenceTimezone: string;  // IANA tz the pilot is physically in
 }
 
+
+/** One sample of the monthly alertness curve (backend, 30-min steps). */
+export interface AlertnessSample {
+  t: number;            // epoch ms
+  kss: number | null;   // null while asleep
+  asleep: boolean;
+  onDuty: boolean;
+}

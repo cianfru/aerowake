@@ -528,6 +528,9 @@ export function transformAnalysisResult(
     easaFindings: transformEasaFindings(result.easa_findings),
     easaSummary: transformEasaSummary(result.easa_summary),
     standbyPeriods: transformStandbyPeriods(result.standby_periods),
+    alertnessTimeline: (result.alertness_timeline ?? [])
+      .map((p) => ({ t: Date.parse(p.t), kss: p.kss, asleep: !!p.asleep, onDuty: !!p.on_duty }))
+      .filter((p) => Number.isFinite(p.t)),
     continuityFromMonth: result.continuity_from_month ?? undefined,
     initialConditions: result.initial_conditions
       ? {

@@ -217,34 +217,26 @@ class TestNapStrategy:
         assert len(strategy.sleep_blocks) == 2
 
 
-class TestAfternoonNapStrategy:
-    """Late report (14:00-20:00 local) → afternoon_nap strategy."""
+class TestLateReportStrategy:
+    """Late report (14:00-20:00 local): normal night, no assumed pre-duty nap.
 
-    def test_1500_report_gets_afternoon_nap(self):
-        """Report at 15:00 local → afternoon_nap."""
-        # 15:00 local DOH = 12:00 UTC
-        report = datetime(2025, 3, 10, 12, 0, tzinfo=pytz.utc)
-        release = report + timedelta(hours=6)
-        duty = _make_duty('D013', report, release, DOH, DXB)
-        strategy = _get_strategy(duty)
-        assert strategy.strategy_type == 'afternoon_nap'
+    Policy: only about half of crews nap before late departures (Signal et
+    al. 2014). Assuming a nap on the first duty but not on inter-duty days
+    made identical late duties score inconsistently, so no nap is assumed.
+    """
 
-    def test_1800_report_gets_afternoon_nap(self):
-        """Report at 18:00 local → afternoon_nap."""
-        # 18:00 local DOH = 15:00 UTC
-        report = datetime(2025, 3, 10, 15, 0, tzinfo=pytz.utc)
-        release = report + timedelta(hours=6)
-        duty = _make_duty('D014', report, release, DOH, DXB)
-        strategy = _get_strategy(duty)
-        assert strategy.strategy_type == 'afternoon_nap'
+    def test_1500_report_gets_normal_night_only(self):
+        report = datetime(2025, 3, 10, 12, 0, tzinfo=pytz.utc)   # 15:00 DOH
+        strategy = _get_strategy(_make_duty('D013', report, report + timedelta(hours=6), DOH, DXB))
+        assert strategy.strategy_type == 'normal'
+        assert len(strategy.sleep_blocks) == 1
 
-    def test_afternoon_nap_has_two_blocks(self):
-        """Afternoon nap strategy: night sleep + afternoon nap."""
-        report = datetime(2025, 3, 10, 12, 0, tzinfo=pytz.utc)
-        release = report + timedelta(hours=6)
-        duty = _make_duty('D015', report, release, DOH, DXB)
-        strategy = _get_strategy(duty)
-        assert len(strategy.sleep_blocks) == 2
+    def test_1800_report_night_ends_in_morning(self):
+        report = datetime(2025, 3, 10, 15, 0, tzinfo=pytz.utc)   # 18:00 DOH
+        strategy = _get_strategy(_make_duty('D014', report, report + timedelta(hours=6), DOH, DXB))
+        wake_local = strategy.sleep_blocks[-1].end_utc.astimezone(pytz.timezone('Asia/Qatar'))
+        assert strategy.strategy_type == 'normal'
+        assert 6 <= wake_local.hour <= 9
 
 
 class TestExtendedStrategy:
@@ -359,11 +351,6 @@ class TestAllStrategiesReachable:
         d5 = _make_duty('S5', r5, r5 + timedelta(hours=8), DOH, DXB)
         strategy_types_seen.add(_get_strategy(d5).strategy_type)
 
-        # afternoon_nap: 15:00 local report
-        r6 = datetime(2025, 3, 10, 12, 0, tzinfo=pytz.utc)
-        d6 = _make_duty('S6', r6, r6 + timedelta(hours=6), DOH, DXB)
-        strategy_types_seen.add(_get_strategy(d6).strategy_type)
-
         # extended: 16h rest
         prev_rel7 = datetime(2025, 3, 9, 14, 0, tzinfo=pytz.utc)
         prev7 = _make_duty('SP7', prev_rel7 - timedelta(hours=6), prev_rel7, DOH, DXB)
@@ -377,7 +364,7 @@ class TestAllStrategiesReachable:
         strategy_types_seen.add(_get_strategy(d8).strategy_type)
 
         expected = {'anchor', 'restricted', 'split', 'early_bedtime',
-                    'nap', 'afternoon_nap', 'extended', 'normal'}
+                    'nap', 'extended', 'normal'}
         assert strategy_types_seen == expected, (
             f"Missing strategies: {expected - strategy_types_seen}, "
             f"Got: {strategy_types_seen}"

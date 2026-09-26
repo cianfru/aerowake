@@ -1018,6 +1018,8 @@ class BorbelyFatigueModel:
             duty_timelines.append(timeline_obj)
             previous_duty = duty
         
+        roster.alertness_timeline = self._continuous_alertness(
+            roster, all_sleep, duty_timelines, body_clock_timeline)
         return self._build_monthly_analysis(roster, duty_timelines, body_clock_timeline, all_sleep)
     
     def _extract_sleep_from_roster(
@@ -2033,6 +2035,68 @@ class BorbelyFatigueModel:
     @staticmethod
     def _get_strategy_references(strategy_type: str) -> list:
         return get_strategy_references(strategy_type)
+
+    def _continuous_alertness(self, roster: Roster, all_sleep: List[SleepBlock],
+                              duty_timelines: List[DutyTimeline], body_clock_timeline,
+                              step_minutes: int = 30) -> List[Dict[str, Any]]:
+        """Predicted KSS across the whole roster month, including days off.
+
+        Same model, parameters and estimated sleep as the duty scores; points
+        during sleep carry kss=None. Nothing is interpolated or invented
+        between duties — every awake point is a model prediction.
+        """
+        home_tz = pytz.timezone(roster.home_base_timezone)
+        intervals = [aw.SleepInterval(b.start_utc, b.end_utc, self._sleep_efficiency(b)) for b in all_sleep]
+        for t in duty_timelines:
+            intervals += [aw.SleepInterval(b.start_utc, b.end_utc, b.quality_factor or 0.7)
+                          for b in (t.inflight_rest_blocks or [])]
+        merged = aw.merge_intervals(intervals)
+        if not merged or not roster.duties:
+            return []
+        try:
+            year, month = (int(x) for x in roster.month.split('-')[:2])
+            month_start = home_tz.localize(datetime(year, month, 1)).astimezone(pytz.utc)
+            nxt = datetime(year + (month == 12), month % 12 + 1, 1)
+            month_end = home_tz.localize(nxt).astimezone(pytz.utc)
+        except (ValueError, AttributeError):
+            month_start = roster.duties[0].report_time_utc - timedelta(days=1)
+            month_end = roster.duties[-1].release_time_utc + timedelta(days=1)
+        # Stop where sleep estimates stop: after the last duty no recovery sleep
+        # is estimated, so later points would show an invented all-nighter.
+        last_release = max(d.release_time_utc for d in roster.duties)
+        month_end = min(month_end, max(merged[-1].end_utc, last_release + timedelta(hours=2)))
+        duty_windows = [(d.report_time_utc, d.release_time_utc) for d in roster.duties]
+
+        first = merged[0]
+        state = aw.AlertnessState(
+            aw.initial_s_at_sleep_onset(first.start_utc, roster.home_base_timezone,
+                                        self._get_phase_shift_at_time(first.start_utc, body_clock_timeline)),
+            first.start_utc)
+        step = timedelta(minutes=step_minutes)
+        t = min(first.start_utc, month_start)
+        t = t.replace(minute=0, second=0, microsecond=0)
+        idx, out = 0, []
+        while t <= month_end:
+            while idx < len(merged) and merged[idx].start_utc < t:
+                iv = merged[idx]
+                if iv.end_utc <= t:
+                    state.apply_sleep(iv)
+                    idx += 1
+                else:
+                    state.apply_sleep(aw.SleepInterval(iv.start_utc, t, iv.efficiency))
+                    break
+            asleep = idx < len(merged) and merged[idx].start_utc <= t < merged[idx].end_utc
+            if t >= month_start and t >= first.end_utc:
+                point = {'t': t.isoformat(), 'asleep': asleep,
+                         'on_duty': any(a <= t <= b for a, b in duty_windows), 'kss': None}
+                if not asleep:
+                    state.advance_awake(t)
+                    ap = aw.predict_point(t, state.s, roster.home_base_timezone,
+                                          self._get_phase_shift_at_time(t, body_clock_timeline))
+                    point['kss'] = round(ap.kss, 2)
+                out.append(point)
+            t += step
+        return out
 
     def _get_phase_shift_at_time(
         self,

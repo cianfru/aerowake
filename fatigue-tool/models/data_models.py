@@ -298,6 +298,8 @@ class Roster:
     # Home standby periods (ORO.FTL.225): not scored, count 25% toward
     # cumulative duty (CS FTL.1.225). Airport standby stays in ``duties``.
     standbys: List['Duty'] = field(default_factory=list)
+    # Predicted KSS through the month (30-min steps), set by simulate_roster.
+    alertness_timeline: List[Dict[str, Any]] = field(default_factory=list)
 
     # Initial conditions (defaults = well-rested; overridden by fatigue continuity)
     initial_sleep_pressure: float = 0.15

@@ -26,7 +26,7 @@ The audit also found a sign error: an east-adapted body clock was read backwards
 * 90th-percentile pilot: KSS + 1.07 (eq. 1.16).
 * Acclimatization, process A (eq. 1.10): each day the body clock closes 30% of the remaining gap to local time. This is the empirically optimal rate reported by Ingre et al.
 * The 20–100 index is kept for API compatibility and is linear in KSS: `index = 110 − 10·KSS`.
-* Bands sit at the midpoints between KSS verbal anchors: low < 5.5 ≤ moderate < 6.5 ≤ high < 7.5 ≤ critical < 8.5 ≤ extreme. On the index these are 55 / 45 / 35 / 25. The conservative preset shifts every band by 0.5 KSS.
+* Bands sit at the midpoints between KSS verbal anchors: low < 5.5 ≤ moderate < 6.5 ≤ high < 7.5 ≤ critical < 8.5 ≤ extreme. On the index these are 55 / 45 / 35 / 25.
 * Sleep efficiency is the block's quality factor bounded to 0.6–1.0; bunk rest defaults to 0.70 (Signal et al. 2013).
 * Removed from the score because this model family has not validated them: workload acceleration of `S`, the "resilience" boost, cabin hypoxia, time-on-task, and sleep inertia (the paper found the default inertia function worsened fit). The first hour after waking is therefore not modelled.
 * Reported separately, never folded into KSS:

@@ -54,7 +54,7 @@ export const LANDING_ROUTES: LandingRoute[] = [
   { from: 'DOH', to: 'FCO', performance: 48.2 },
 ];
 
-// Get route color based on performance — matches RouteNetworkMapbox.tsx
+// Route colour by risk band (same scale as the roster route network)
 export const getRouteColor = (performance: number): string => performanceHex(performance);
 
 // Aggregate routes by unique pair (for display, take worst performance)

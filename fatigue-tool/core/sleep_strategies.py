@@ -1205,60 +1205,24 @@ class SleepStrategyMixin:
             sleep_end_hour=nte_hour
         )
 
-        nap_end = report_local - timedelta(hours=self.MIN_WAKE_BEFORE_REPORT)
-        nap_start = nap_end - timedelta(hours=1.5)
-
-        nap_start_utc, nap_end_utc, nap_warnings = self._validate_sleep_no_overlap(
-            nap_start.astimezone(pytz.utc), nap_end.astimezone(pytz.utc), duty, previous_duty
-        )
-        nap_start = nap_start_utc.astimezone(sleep_tz)
-        nap_end = nap_end_utc.astimezone(sleep_tz)
-
-        nap_quality = self.calculate_sleep_quality(
-            sleep_start=nap_start,
-            sleep_end=nap_end,
-            location=sleep_location,
-            previous_duty_end=night_end.astimezone(pytz.utc),
-            next_event=report_local,
-            is_nap=True,
-            location_timezone=sleep_tz.zone,
-            biological_timezone=bio_tz
-        )
-
-        nps_day, nps_hour = self._home_tz_day_hour(nap_start)
-        npe_day, npe_hour = self._home_tz_day_hour(nap_end)
-        nap_block = SleepBlock(
-            start_utc=nap_start.astimezone(pytz.utc),
-            end_utc=nap_end.astimezone(pytz.utc),
-            location_timezone=sleep_tz.zone,
-            duration_hours=nap_quality.actual_sleep_hours,
-            quality_factor=nap_quality.sleep_efficiency,
-            effective_sleep_hours=nap_quality.effective_sleep_hours,
-            is_anchor_sleep=False,
-            environment=sleep_location,
-            sleep_start_day=nps_day,
-            sleep_start_hour=nps_hour,
-            sleep_end_day=npe_day,
-            sleep_end_hour=npe_hour
-        )
-
-        total_effective = night_quality.effective_sleep_hours + nap_quality.effective_sleep_hours
-        confidence = 0.60 if not (night_warnings or nap_warnings) else 0.45
+        # No pre-duty nap is assumed: only about half of crews nap before late
+        # departures (Signal et al. 2014), and assuming one here but not on
+        # inter-duty days made identical late duties score inconsistently.
+        # The duty's risk reasons suggest a nap when time awake is long.
+        confidence = 0.65 if not night_warnings else 0.50
         if self.is_layover:
             confidence *= 0.90
 
         location_desc = f"{sleep_location} (layover)" if self.is_layover else sleep_location
         return SleepStrategy(
-            strategy_type='afternoon_nap',
-            sleep_blocks=[night_sleep, nap_block],
+            strategy_type='normal',
+            sleep_blocks=[night_sleep],
             confidence=confidence,
             explanation=(
-                f"Afternoon nap at {location_desc}: "
-                f"{night_quality.actual_sleep_hours:.1f}h night + "
-                f"{nap_quality.actual_sleep_hours:.1f}h nap = "
-                f"{total_effective:.1f}h effective (late {report_local.strftime('%H:%M')} report)"
+                f"Normal night at {location_desc}: {night_quality.actual_sleep_hours:.1f}h before a late "
+                f"{report_local.strftime('%H:%M')} report; no pre-duty nap assumed"
             ),
-            quality_analysis=[night_quality, nap_quality]
+            quality_analysis=[night_quality]
         )
 
     def _extended_strategy(

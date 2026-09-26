@@ -2,7 +2,7 @@ import { AlertTriangle, BarChart3, Activity, Clock, TrendingDown } from 'lucide-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatisticsCards } from '@/components/fatigue/StatisticsCards';
-import { RouteNetworkMapbox } from '@/components/fatigue/RouteNetworkMapbox';
+import { RouteNetwork } from '@/components/fatigue/roster/RouteNetwork';
 import { PerformanceTimeline } from '@/components/fatigue/PerformanceTimeline';
 import { BodyClockDriftChart } from '@/components/fatigue/BodyClockDriftChart';
 import { SleepDebtTrendChart } from '@/components/fatigue/SleepDebtTrendChart';
@@ -61,7 +61,7 @@ export function InsightsContent() {
         </Card>
 
         {/* Route Network Map */}
-        <RouteNetworkMapbox duties={analysisResults.duties} homeBase={settings.homeBase} theme={settings.theme} />
+        <RouteNetwork duties={analysisResults.duties} homeBase={analysisResults.pilotBase || settings.homeBase} />
 
         {/* Analytics Charts */}
         <Tabs defaultValue="performance" className="w-full">

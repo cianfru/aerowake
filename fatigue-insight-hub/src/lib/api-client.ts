@@ -417,6 +417,8 @@ export interface AnalysisResult {
   easa_findings?: EasaFindingResponse[] | null;
   easa_summary?: EasaSummaryResponse | null;
   standby_periods?: StandbyPeriodResponse[] | null;
+  /** Predicted KSS through the month (30-min steps); kss is null while asleep. */
+  alertness_timeline?: Array<{ t: string; kss: number | null; asleep: boolean; on_duty: boolean }> | null;
 
   // Fatigue continuity (multi-roster chaining)
   continuity_from_month?: string | null;
