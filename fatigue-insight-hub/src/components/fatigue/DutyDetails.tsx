@@ -209,8 +209,8 @@ export function DutyDetails({ duty, dutyCrewOverride, onCrewChange, onCrewReset 
           <CardContent>
             <div className="rounded-xl border border-border/50 bg-secondary/30 p-3 md:p-4 space-y-2.5">
               <div className="flex items-center gap-3">
-                <span className="font-mono text-xs md:text-sm font-semibold px-2 py-0.5 rounded"
-                  style={{ backgroundColor: `${getTrainingDutyColor(duty.dutyType!)}20`, color: getTrainingDutyColor(duty.dutyType!) }}>
+                <span className="font-mono text-xs md:text-sm font-semibold px-2 py-0.5 rounded-[4px] border"
+                  style={{ borderColor: `color-mix(in srgb, ${getTrainingDutyColor(duty.dutyType!)} 30%, transparent)`, color: getTrainingDutyColor(duty.dutyType!) }}>
                   {duty.trainingCode}
                 </span>
                 <Badge variant="outline">{getTrainingDutyLabel(duty.dutyType!)}</Badge>
@@ -267,16 +267,16 @@ export function DutyDetails({ duty, dutyCrewOverride, onCrewChange, onCrewReset 
                     {/* Row 1: Flight number + Route + Performance */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <span className="font-mono text-xs md:text-sm font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded">
+                        <span className="font-mono text-xs md:text-sm font-semibold text-primary border border-primary/30 px-2 py-0.5 rounded-[4px]">
                           {segment.flightNumber}
                         </span>
                         {segment.activityCode && (
-                          <span className={`text-[10px] md:text-xs font-semibold px-1.5 py-0.5 rounded ${
+                          <span className={`text-[10px] md:text-[11px] font-medium uppercase tracking-[0.06em] px-1.5 py-0.5 rounded-[4px] border ${
                             segment.activityCode === 'DH'
-                              ? 'bg-muted text-muted-foreground'
+                              ? 'border-border text-muted-foreground'
                               : segment.activityCode === 'IR'
-                                ? 'bg-blue-500/15 text-blue-400'
-                                : 'bg-muted text-muted-foreground'
+                                ? 'border-blue-500/30 text-blue-400'
+                                : 'border-border text-muted-foreground'
                           }`}>
                             {segment.activityCode === 'DH' ? '🪑 DH' :
                              segment.activityCode === 'IR' ? '🛏️ IR' :

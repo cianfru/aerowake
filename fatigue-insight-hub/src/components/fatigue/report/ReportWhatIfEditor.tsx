@@ -275,7 +275,7 @@ function SliderRow({ label, originalValue, shiftMinutes, onShift, min, max, step
         step={step}
         value={shiftMinutes}
         onChange={(e) => onShift(Number(e.target.value))}
-        className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-secondary
+        className="w-full h-1.5 rounded-[2px] appearance-none cursor-pointer bg-secondary
                    [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
                    [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:cursor-pointer
                    [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:rounded-full

@@ -258,57 +258,60 @@ export function FatigueReportPage() {
   const tzLabel = inputTz === 'UTC' ? 'UTC' : `${homeTz} (home-base local)`;
 
   return (
-    <section className="mx-auto max-w-4xl space-y-6 px-4 py-8">
-      <header className="space-y-2">
-        <p className="flex items-center gap-2 text-sm font-medium text-primary">
-          <FileWarning className="h-4 w-4" /> Fatigue report
-        </p>
-        <h1 className="text-3xl font-semibold">Report fatigue</h1>
-        <p className="text-muted-foreground">
-          Describe what happened in a few steps. AeroWake checks your sleep and duties against published
+    <section className="mx-auto max-w-4xl space-y-10 px-4 py-10 md:px-8 md:py-12">
+      <header className="space-y-3">
+        <p className="eyebrow">Fatigue report</p>
+        <h1 className="text-3xl md:text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.025em]">Report fatigue</h1>
+        <p className="max-w-2xl text-[15px] text-muted-foreground">
+          Describe what happened in four short steps. AeroWake checks your sleep and duties against published
           sleep science and EASA rest rules, then writes a structured report you can submit through your
           operator&apos;s fatigue reporting system. Nothing is stored on our servers.
         </p>
-        {results ? (
-          <p className="text-sm text-muted-foreground">
-            Duties and estimated sleep will be pre-filled from your loaded roster
-            {results.month ? ` (${results.month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })})` : ''}.
-            Please correct the sleep times to what actually happened.
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No roster loaded — enter duties manually, or upload a roster first to pre-fill them.
-          </p>
-        )}
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          {results
+            ? `Duties and estimated sleep are pre-filled from your loaded roster${results.month ? ` (${results.month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })})` : ''}. Correct the sleep times to what actually happened.`
+            : 'No roster loaded — enter duties manually, or upload a roster first to pre-fill them.'}
+        </p>
       </header>
 
-      {/* Stepper */}
-      <ol className="grid grid-cols-4 gap-2" aria-label="Report steps">
-        {STEPS.map((s, i) => (
-          <li key={s.id}>
-            <button
-              type="button"
-              onClick={() => (i <= step || eventValid) && goTo(i)}
-              className={cn(
-                'flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs sm:text-sm transition-colors',
-                i === step ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:bg-muted/50',
-              )}
-              aria-current={i === step ? 'step' : undefined}
-            >
-              <s.icon className="h-4 w-4 shrink-0" />
-              <span className="truncate">{i + 1}. {s.label}</span>
-            </button>
-          </li>
-        ))}
-      </ol>
+      {/* Stepper: underline tabs on wide screens; "Step n of 4" with segments on phones */}
+      <nav aria-label="Report steps" className="space-y-3">
+        <p className="text-[13px] text-muted-foreground sm:hidden">
+          Step {step + 1} of {STEPS.length} · <span className="text-foreground">{STEPS[step].label}</span>
+        </p>
+        <ol className="grid grid-cols-4 gap-1.5 sm:gap-6">
+          {STEPS.map((s, i) => (
+            <li key={s.id} className="min-w-0">
+              <button
+                type="button"
+                onClick={() => (i <= step || eventValid) && goTo(i)}
+                className={cn(
+                  'group w-full text-left focus-visible:outline-none',
+                  i <= step || eventValid ? 'cursor-pointer' : 'cursor-default',
+                )}
+                aria-current={i === step ? 'step' : undefined}
+                aria-label={`Step ${i + 1}: ${s.label}`}
+              >
+                <span className={cn('block h-[2px] w-full transition-colors', i <= step ? 'bg-foreground' : 'bg-border group-hover:bg-muted-foreground/50')} />
+                <span className={cn(
+                  'mt-2 hidden truncate text-[13px] sm:block',
+                  i === step ? 'font-medium text-foreground' : 'text-muted-foreground group-hover:text-foreground',
+                )}>
+                  <span className="font-mono text-[11px] text-muted-foreground">0{i + 1}</span>&nbsp;&nbsp;{s.label}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      </nav>
 
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <span className="text-muted-foreground">Enter times in</span>
-        <div className="inline-flex rounded-md border p-0.5" role="group" aria-label="Time entry mode">
+        <div className="inline-flex rounded-md border border-border p-0.5" role="group" aria-label="Time entry mode">
           {(['local', 'utc'] as const).map((m) => (
             <button key={m} type="button" disabled={m === 'local' && !homeTz}
               onClick={() => setTimeMode(m)}
-              className={cn('rounded px-3 py-1', timeMode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground')}>
+              className={cn('rounded-[4px] px-3 py-1 text-[13px] transition-colors', timeMode === m ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground')}>
               {m === 'local' ? 'Home-base local' : 'UTC'}
             </button>
           ))}
@@ -316,8 +319,8 @@ export function FatigueReportPage() {
         <span className="text-xs text-muted-foreground">Showing: {tzLabel}</span>
       </div>
 
-      <Card>
-        <CardContent className="space-y-6 p-6">
+      <Card variant="glass">
+        <CardContent className="space-y-6 p-5 md:p-8">
           {step === 0 && (
             <div className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">

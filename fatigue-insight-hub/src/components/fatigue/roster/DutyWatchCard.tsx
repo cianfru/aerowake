@@ -1,17 +1,9 @@
-import { FileWarning, Info } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  RISK_LEVEL_LABELS,
-  formatKss,
-  kssLabel,
-  riskBadgeVariant,
-  riskClasses,
-} from '@/lib/risk-scale';
+import { kssLabel, riskClasses } from '@/lib/risk-scale';
 import type { DutyAnalysis } from '@/types/fatigue';
 import { dutyDateLabel, dutyPeakKss, dutyRiskLevel, dutyRoute, dutyTimes } from './roster-utils';
+import { RiskLabel, SeverityRule, TextAction } from './primitives';
 
 interface DutyWatchCardProps {
   duty: DutyAnalysis;
@@ -19,7 +11,10 @@ interface DutyWatchCardProps {
   onReportFatigue: (duty: DutyAnalysis) => void;
 }
 
-/** One duty the model flags (high / critical / extreme): the facts and two actions. */
+/**
+ * One flagged duty as an editorial row: severity rule · date/route/times ·
+ * reasons · predicted peak KSS as the headline figure · two text actions.
+ */
 export function DutyWatchCard({ duty, onDetails, onReportFatigue }: DutyWatchCardProps) {
   const level = dutyRiskLevel(duty);
   const rc = riskClasses(level);
@@ -30,63 +25,53 @@ export function DutyWatchCard({ duty, onDetails, onReportFatigue }: DutyWatchCar
   const reasons = (duty.riskReasons ?? []).slice(0, 3);
 
   return (
-    <Card variant="glass" className={cn('border-l-4', rc.border)} data-testid="duty-watch-card">
-      <CardContent className="p-4 space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold">{date}</h3>
-            <p className="text-sm text-foreground/90 break-words">{route}</p>
-            {times && (
-              <p className="text-xs text-muted-foreground">
-                <span className="font-mono">{times}</span> home time
-              </p>
-            )}
+    <article className="group flex gap-4 py-5 first:pt-4" data-testid="duty-watch-card">
+      <SeverityRule level={level} />
+      <div className="grid min-w-0 flex-1 grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="min-w-0 space-y-1.5 md:col-start-1 md:row-start-1">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h3 className="text-[15px] font-semibold">{date}</h3>
+            <p className="text-[15px] text-foreground/90 break-words">{route}</p>
           </div>
-          <Badge variant={riskBadgeVariant(level)} className="flex-shrink-0 text-[10px]">
-            {RISK_LEVEL_LABELS[level]}
-          </Badge>
+          {times && (
+            <p className="font-mono text-xs text-muted-foreground tabular">{times} <span className="font-sans">home-base time</span></p>
+          )}
         </div>
 
         {kss != null && (
-          <p className="text-sm">
-            <span className="text-muted-foreground">Predicted peak: </span>
-            <span className={cn('font-semibold', rc.text)}>{formatKss(kss)}</span>
-            <span className="text-muted-foreground"> · {kssLabel(kss)}</span>
-          </p>
+          <div className="flex items-center gap-4 md:col-start-2 md:row-span-2 md:row-start-1 md:flex-col md:items-end md:gap-1.5 md:text-right">
+            <p className={cn('font-mono text-3xl font-medium leading-none tabular', rc.text)}>
+              {kss.toFixed(1)}
+              <span className="ml-1 font-sans text-xs font-normal text-muted-foreground">KSS</span>
+            </p>
+            <div className="space-y-1 md:text-right">
+              <RiskLabel level={level} />
+              <p className="max-w-[14rem] text-xs text-muted-foreground">{kssLabel(kss)}</p>
+            </div>
+          </div>
         )}
 
-        {reasons.length > 0 && (
-          <ul className="space-y-1 text-sm text-foreground/85" aria-label="Why this duty is flagged">
-            {reasons.map((r, i) => (
-              <li key={i} className="flex gap-2">
-                <span className={cn('mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full', rc.fill)} aria-hidden="true" />
-                <span>{r}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onDetails(duty)}
-            aria-label={`Details for duty on ${date}`}
-          >
-            <Info className="h-3.5 w-3.5 mr-1.5" />
-            Details
-          </Button>
-          <Button
-            variant="glow"
-            size="sm"
-            onClick={() => onReportFatigue(duty)}
-            aria-label={`Report fatigue for duty on ${date}`}
-          >
-            <FileWarning className="h-3.5 w-3.5 mr-1.5" />
-            Report fatigue
-          </Button>
+        <div className="min-w-0 space-y-2 md:col-start-1 md:row-start-2">
+          {reasons.length > 0 && (
+            <ul className="space-y-1 text-sm text-foreground/80" aria-label="Why this duty is flagged">
+              {reasons.map((r, i) => (
+                <li key={i} className="flex gap-2.5">
+                  <span aria-hidden="true" className="mt-[9px] h-px w-3 flex-shrink-0 bg-muted-foreground/60" />
+                  <span>{r}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="-ml-2 flex flex-wrap gap-1 pt-1">
+            <TextAction onClick={() => onDetails(duty)} ariaLabel={`Details for duty on ${date}`}>
+              Details
+            </TextAction>
+            <TextAction onClick={() => onReportFatigue(duty)} ariaLabel={`Report fatigue for duty on ${date}`} emphasis>
+              Report fatigue <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </TextAction>
+          </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </article>
   );
 }

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Calendar, CalendarPlus, Apple, Loader2 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { downloadIcsFile, openGoogleCalendarBatch } from '@/lib/calendar-export';
 import { DutyAnalysis } from '@/types/fatigue';
@@ -42,56 +41,20 @@ export function ExportOptions({ duties = [] }: ExportOptionsProps) {
   };
 
   return (
-    <Card variant="glass">
-      <CardHeader className="pb-2 md:pb-4">
-        <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-          <CalendarPlus className="h-4 w-4 md:h-5 md:w-5 text-primary" />
-          Add to calendar
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4 md:space-y-6">
-        {/* Export Grid */}
-        <div className="grid gap-3 md:gap-4 grid-cols-2">
-          {/* Apple Calendar / iCal Export */}
-          <Button
-            variant="outline"
-            className="h-auto flex-col gap-1.5 md:gap-2 p-4 md:p-6"
-            onClick={handleIcsExport}
-            disabled={isExportingIcs || duties.length === 0}
-          >
-            {isExportingIcs ? (
-              <Loader2 className="h-6 w-6 md:h-8 md:w-8 text-primary animate-spin" />
-            ) : (
-              <Apple className="h-6 w-6 md:h-8 md:w-8 text-primary" />
-            )}
-            <div className="text-center">
-              <p className="font-medium text-xs md:text-sm">Apple Calendar</p>
-              <p className="text-[10px] md:text-xs text-muted-foreground hidden sm:block">Download .ics file</p>
-            </div>
-          </Button>
-
-          {/* Google Calendar Export */}
-          <Button
-            variant="outline"
-            className="h-auto flex-col gap-1.5 md:gap-2 p-4 md:p-6"
-            onClick={handleGoogleCalendarExport}
-            disabled={duties.length === 0}
-          >
-            <Calendar className="h-6 w-6 md:h-8 md:w-8 text-primary" />
-            <div className="text-center">
-              <p className="font-medium text-xs md:text-sm">Google Calendar</p>
-              <p className="text-[10px] md:text-xs text-muted-foreground hidden sm:block">Add to Google</p>
-            </div>
-          </Button>
-
-        </div>
-
-        {duties.length > 0 && (
-          <p className="text-[10px] md:text-xs text-muted-foreground text-center">
-            {duties.length} duties available for export
-          </p>
-        )}
-      </CardContent>
-    </Card>
+    <section className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5" aria-label="Add to calendar">
+      <p className="text-[13px] text-muted-foreground">
+        Add {duties.length} {duties.length === 1 ? 'duty' : 'duties'} to your calendar
+      </p>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={handleIcsExport} disabled={isExportingIcs || duties.length === 0}>
+          {isExportingIcs ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Apple className="h-3.5 w-3.5" />}
+          Apple (.ics)
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleGoogleCalendarExport} disabled={duties.length === 0}>
+          <Calendar className="h-3.5 w-3.5" />
+          Google
+        </Button>
+      </div>
+    </section>
   );
 }

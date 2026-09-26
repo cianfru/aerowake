@@ -136,8 +136,8 @@ export function DutyInfoColumn({ duty, dutyCrewOverride, onCrewChange, onCrewRes
 
                   {(isDH || isIR) && (
                     <span className={cn(
-                      'text-[9px] font-bold px-1.5 py-0.5 rounded-md',
-                      isDH ? 'bg-muted/60 text-muted-foreground' : 'bg-blue-500/15 text-blue-400'
+                      'text-[9px] font-semibold uppercase tracking-[0.06em] px-1.5 py-0.5 rounded-[4px] border',
+                      isDH ? 'border-border text-muted-foreground' : 'border-blue-500/30 text-blue-400'
                     )}>
                       {isDH ? 'DH' : 'IR'}
                     </span>
@@ -227,10 +227,10 @@ export function DutyInfoColumn({ duty, dutyCrewOverride, onCrewChange, onCrewRes
           </div>
           {/* Sleep bar */}
           <div className="space-y-1">
-            <div className="h-1.5 rounded-full bg-secondary/50 overflow-hidden">
+            <div className="h-1.5 rounded-[2px] bg-secondary/50 overflow-hidden">
               <div
                 className={cn(
-                  'h-full rounded-full transition-all duration-500 ease-out',
+                  'h-full rounded-[2px] transition-all duration-500 ease-out',
                   duty.priorSleep >= 7 ? 'bg-success' :
                   duty.priorSleep >= 5 ? 'bg-warning' :
                   'bg-critical',
@@ -323,27 +323,6 @@ export function DutyInfoColumn({ duty, dutyCrewOverride, onCrewChange, onCrewRes
           </div>
         </div>
 
-        {/* Risk Assessment */}
-        <div className="border-t border-border/30 pt-3 space-y-2.5">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">Risk Assessment</span>
-            <div className="h-px flex-1 bg-border/30" />
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <RiskCell label="Overall" badge={getRiskBadge(duty.overallRisk)} />
-            <RiskCell
-              label={peakKss != null ? `Peak KSS ${peakKss.toFixed(1)}` : 'Peak KSS'}
-              badge={getRiskBadge(classifyPerformance(duty.minPerformance, duty.riskThresholds))}
-            />
-            <RiskCell
-              label={landingKss != null ? `Landing KSS ${landingKss.toFixed(1)}` : 'Landing'}
-              badge={getRiskBadge(duty.landingPerformance != null ? classifyPerformance(duty.landingPerformance, duty.riskThresholds) : duty.landingRisk)}
-            />
-          </div>
-          {peakKss != null && (
-            <p className="text-[10px] text-muted-foreground">{kssLabel(peakKss)} at the worst point{duty.maxKss90 != null ? ` · 90th-pct pilot KSS ${duty.maxKss90.toFixed(1)}` : ''}</p>
-          )}
-        </div>
       </div>
 
       {/* 4. Crew & Compliance (collapsible) */}
@@ -515,10 +494,10 @@ function FactorBar({
     <div className="flex items-center gap-2 text-xs">
       <span className="text-muted-foreground">{icon}</span>
       <span className="text-muted-foreground w-20 truncate">{label}</span>
-      <div className="flex-1 h-1.5 rounded-full bg-secondary/50 overflow-hidden">
+      <div className="flex-1 h-1.5 rounded-[2px] bg-secondary/50 overflow-hidden">
         <div
           className={cn(
-            'h-full rounded-full transition-all duration-500 ease-out',
+            'h-full rounded-[2px] transition-all duration-500 ease-out',
             color === 'success' && 'bg-success',
             color === 'warning' && 'bg-warning',
             color === 'critical' && 'bg-critical',

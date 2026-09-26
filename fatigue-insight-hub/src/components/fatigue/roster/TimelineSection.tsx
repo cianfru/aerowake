@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { ChevronDown, LineChart, Activity, Clock, TrendingDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { Chronogram } from '../Chronogram';
-import { PerformanceTimeline } from '../PerformanceTimeline';
+import { DutyKssChart } from './DutyKssChart';
 import { SleepDebtTrendChart } from '../SleepDebtTrendChart';
 import { BodyClockDriftChart } from '../BodyClockDriftChart';
 import { RouteNetworkMapbox } from '../RouteNetworkMapbox';
@@ -33,17 +33,17 @@ export function TimelineSection({ results, pilotId, homeBase, theme, selectedDut
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} asChild>
-      <section aria-label="Timeline and charts" className="space-y-3">
+      <section aria-label="Timeline and charts" className="space-y-5">
         <CollapsibleTrigger asChild>
           <button
             type="button"
-            className="flex w-full items-center justify-between gap-2 rounded-lg px-1 py-2 text-left text-sm font-semibold text-muted-foreground hover:text-foreground"
+            className="flex w-full items-baseline justify-between gap-2 border-b border-border pb-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
-            <span className="flex items-center gap-2">
-              <LineChart className="h-4 w-4" aria-hidden="true" />
-              Timeline &amp; charts
+            <span className="text-[13px] font-semibold">Timeline &amp; charts</span>
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              {open ? 'Hide' : 'Show'}
+              <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')} aria-hidden="true" />
             </span>
-            <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} aria-hidden="true" />
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-4 min-w-0">
@@ -66,22 +66,19 @@ export function TimelineSection({ results, pilotId, homeBase, theme, selectedDut
           </div>
 
           <Tabs defaultValue="alertness" className="w-full min-w-0">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="alertness" className="text-xs">
-                <Activity className="h-3 w-3 mr-1" aria-hidden="true" />
-                Alertness
-              </TabsTrigger>
-              <TabsTrigger value="sleepdebt" className="text-xs">
-                <TrendingDown className="h-3 w-3 mr-1" aria-hidden="true" />
-                Sleep debt
-              </TabsTrigger>
-              <TabsTrigger value="bodyclock" className="text-xs">
-                <Clock className="h-3 w-3 mr-1" aria-hidden="true" />
-                Body clock
-              </TabsTrigger>
+            <TabsList className="h-auto w-full justify-start gap-5 rounded-none border-b border-border bg-transparent p-0">
+              {[['alertness', 'Sleepiness'], ['sleepdebt', 'Sleep debt'], ['bodyclock', 'Body clock']].map(([v, l]) => (
+                <TabsTrigger
+                  key={v}
+                  value={v}
+                  className="-mb-px rounded-none border-b-2 border-transparent px-0 pb-2 pt-0 text-[13px] text-muted-foreground shadow-none data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                >
+                  {l}
+                </TabsTrigger>
+              ))}
             </TabsList>
-            <TabsContent value="alertness" className="mt-4">
-              <PerformanceTimeline duties={results.duties} month={results.month} />
+            <TabsContent value="alertness" className="mt-5">
+              <DutyKssChart duties={results.duties} month={results.month} />
             </TabsContent>
             <TabsContent value="sleepdebt" className="mt-4">
               <SleepDebtTrendChart duties={results.duties} month={results.month} />

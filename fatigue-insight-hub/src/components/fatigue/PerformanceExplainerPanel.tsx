@@ -184,7 +184,7 @@ function KssBar({ decomp }: { decomp: PerformanceDecomposition }) {
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-0.5 h-3 rounded-full overflow-hidden bg-secondary">
+      <div className="flex items-center gap-0.5 h-3 rounded-[2px] overflow-hidden bg-secondary">
         {segments.map((seg) => (
           <div
             key={seg.label}

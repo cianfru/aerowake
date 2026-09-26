@@ -450,10 +450,10 @@ function MetricCard({
 
             {/* Visual bar */}
             {!isRate && value !== null && groupVal !== null && groupVal > 0 && (
-              <div className="relative h-1.5 rounded-full bg-muted/30 overflow-hidden">
+              <div className="relative h-1.5 rounded-[2px] bg-muted/30 overflow-hidden">
                 <div
                   className={cn(
-                    'absolute top-0 left-0 h-full rounded-full transition-all',
+                    'absolute top-0 left-0 h-full rounded-[2px] transition-all',
                     deltaIsGood ? 'bg-emerald-500/60' : delta !== null ? 'bg-amber-500/60' : 'bg-primary/40',
                   )}
                   style={{ width: `${Math.min(100, (value / groupVal) * 50)}%` }}

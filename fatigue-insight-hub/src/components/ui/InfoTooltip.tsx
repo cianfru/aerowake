@@ -95,12 +95,12 @@ export function InfoTooltip({
         {(entry.reference || entry.regulation) && (
           <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
             {entry.reference && (
-              <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+              <span className="inline-flex items-center rounded-[4px] border border-primary/30 bg-primary/[0.04] px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.06em] text-primary">
                 {entry.reference}
               </span>
             )}
             {entry.regulation && (
-              <span className="inline-flex items-center rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
+              <span className="inline-flex items-center rounded-[4px] border border-warning/30 bg-warning/[0.04] px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.06em] text-warning">
                 {entry.regulation}
               </span>
             )}

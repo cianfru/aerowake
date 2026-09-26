@@ -149,10 +149,10 @@ export function SleepQualityInfo({
                 </Badge>
               </div>
               {/* Confidence bar */}
-              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+              <div className="h-1.5 rounded-[2px] bg-muted overflow-hidden">
                 <div 
                   className={cn(
-                    "h-full rounded-full transition-all duration-500",
+                    "h-full rounded-[2px] transition-all duration-500",
                     confidencePercent >= 70 && "bg-success",
                     confidencePercent >= 50 && confidencePercent < 70 && "bg-warning",
                     confidencePercent < 50 && "bg-high"

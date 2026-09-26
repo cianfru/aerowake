@@ -197,11 +197,13 @@ export interface RiskClasses {
 }
 
 const RISK_CLASSES: Record<RiskLevel, RiskClasses> = {
-  low: { text: 'text-success', bg: 'bg-success/10', border: 'border-success/30', fill: 'bg-success' },
+  // Low risk carries no signal colour: neutral ink keeps attention on real risk.
+  low: { text: 'text-muted-foreground', bg: 'bg-muted/40', border: 'border-border', fill: 'bg-muted-foreground/45' },
   moderate: { text: 'text-warning', bg: 'bg-warning/10', border: 'border-warning/30', fill: 'bg-warning' },
   high: { text: 'text-high', bg: 'bg-high/10', border: 'border-high/30', fill: 'bg-high' },
   critical: { text: 'text-critical', bg: 'bg-critical/10', border: 'border-critical/30', fill: 'bg-critical' },
-  extreme: { text: 'text-critical', bg: 'bg-critical/20', border: 'border-critical/60', fill: 'bg-critical' },
+  // Extreme shares the critical hue (validated separation limit); its label distinguishes it.
+  extreme: { text: 'text-critical', bg: 'bg-critical/15', border: 'border-critical/60', fill: 'bg-critical' },
   unknown: { text: 'text-muted-foreground', bg: 'bg-muted/30', border: 'border-border', fill: 'bg-muted-foreground' },
 };
 
@@ -225,7 +227,7 @@ export type RiskBadgeVariant = 'success' | 'warning' | 'high' | 'critical' | 'de
 /** shadcn Badge variant for a risk level (extreme = solid destructive). */
 export function riskBadgeVariant(level: RiskLevel): RiskBadgeVariant {
   switch (level) {
-    case 'low': return 'success';
+    case 'low': return 'outline';
     case 'moderate': return 'warning';
     case 'high': return 'high';
     case 'critical': return 'critical';
@@ -236,11 +238,11 @@ export function riskBadgeVariant(level: RiskLevel): RiskBadgeVariant {
 
 /** CSS colour using theme variables (for SVG/Recharts inside the themed app). */
 const RISK_CSS: Record<RiskLevel, string> = {
-  low: 'hsl(var(--success))',
+  low: 'hsl(var(--muted-foreground) / 0.55)',
   moderate: 'hsl(var(--warning))',
   high: 'hsl(var(--high))',
   critical: 'hsl(var(--critical))',
-  extreme: 'hsl(0 75% 38%)',
+  extreme: 'hsl(var(--critical))',
   unknown: 'hsl(var(--muted-foreground))',
 };
 
@@ -250,12 +252,13 @@ export function riskCssColor(level: RiskLevel): string {
 
 /** Static hex colours matching the design tokens (for canvas/PDF/Mapbox). */
 const RISK_HEX: Record<RiskLevel, string> = {
-  low: '#16a34a',
-  moderate: '#f59e0b',
-  high: '#f97316',
-  critical: '#ef4444',
-  extreme: '#991b1b',
-  unknown: '#94a3b8',
+  // Validated with the dataviz palette checker on the dark surface.
+  low: '#8e8e98',
+  moderate: '#f6c453',
+  high: '#ee7d33',
+  critical: '#e23a67',
+  extreme: '#e23a67',
+  unknown: '#71717a',
 };
 
 export function riskHex(level: RiskLevel): string {

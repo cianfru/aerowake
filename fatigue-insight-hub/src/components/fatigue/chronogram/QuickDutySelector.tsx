@@ -18,21 +18,20 @@ export function QuickDutySelector({ duties, selectedDuty, onDutySelect }: QuickD
             key={index}
             onClick={() => onDutySelect(duty)}
             className={cn(
-              "rounded-lg px-3 py-2 text-xs font-medium transition-all duration-200 text-foreground relative",
-              duty.overallRisk === 'LOW' && "bg-success hover:bg-success/80",
-              duty.overallRisk === 'MODERATE' && "bg-warning hover:bg-warning/80",
-              duty.overallRisk === 'HIGH' && "bg-high hover:bg-high/80",
-              (duty.overallRisk === 'CRITICAL' || duty.overallRisk === 'EXTREME') && "bg-critical hover:bg-critical/80",
-              duty.overallRisk === 'UNKNOWN' && "bg-muted hover:bg-muted/80",
-              selectedDuty?.date.getTime() === duty.date.getTime()
-                ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background'
-                : 'hover:scale-105'
+              "inline-flex items-center gap-1.5 rounded-md border border-border/60 border-l-2 bg-transparent px-3 py-2 text-xs font-medium text-foreground transition-colors duration-200 hover:bg-muted/40",
+              duty.overallRisk === 'LOW' && "border-l-success",
+              duty.overallRisk === 'MODERATE' && "border-l-warning",
+              duty.overallRisk === 'HIGH' && "border-l-high",
+              (duty.overallRisk === 'CRITICAL' || duty.overallRisk === 'EXTREME') && "border-l-critical",
+              duty.overallRisk === 'UNKNOWN' && "border-l-muted-foreground/40",
+              selectedDuty?.date.getTime() === duty.date.getTime() &&
+                'bg-muted/60 ring-1 ring-foreground/40 hover:bg-muted/60'
             )}
           >
-            {duty.isUlr && (
-              <span className="absolute -top-1 -right-1 text-[8px] bg-primary text-primary-foreground rounded-full px-1 leading-tight">ULR</span>
-            )}
             {duty.dayOfWeek}, {format(duty.date, 'MMM dd')}
+            {duty.isUlr && (
+              <span className="rounded-[2px] border border-primary/30 px-1 text-[9px] font-medium uppercase leading-tight tracking-[0.06em] text-primary">ULR</span>
+            )}
           </button>
         ))}
       </div>

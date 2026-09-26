@@ -54,29 +54,27 @@ export function Chronogram({ duties, statistics, month, pilotName, pilotBase, pi
   }), [statistics]);
 
   return (
-    <Card variant="glass">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-primary" />
-          Monthly Chronogram
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">
-          High-resolution timeline showing duty timing, WOCL exposure, and fatigue patterns
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <section className="space-y-4">
+      <div className="space-y-4">
         {/* Tab selector for timeline type */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ChronogramTab)}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="homebase" className="text-xs">
-              <Home className="h-3.5 w-3.5 mr-1 sm:h-3 sm:w-3" />
-              Home base
-            </TabsTrigger>
-            <TabsTrigger value="utc" className="text-xs">
-              <Globe className="h-3.5 w-3.5 mr-1 sm:h-3 sm:w-3" />
-              UTC (Zulu)
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-[13px] font-semibold">Monthly timeline</p>
+              <p className="text-xs text-muted-foreground">Duties, estimated sleep and the window of circadian low (WOCL)</p>
+            </div>
+            <TabsList className="h-auto gap-4 rounded-none bg-transparent p-0">
+              {([['homebase', 'Home base'], ['utc', 'UTC']] as const).map(([v, l]) => (
+                <TabsTrigger
+                  key={v}
+                  value={v}
+                  className="rounded-none border-b-2 border-transparent px-0 pb-1 pt-0 text-[13px] text-muted-foreground shadow-none data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                >
+                  {l}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
 
           {/* Home-Base Timeline Tab — editable sleep */}
           <TabsContent value="homebase" className="mt-4 space-y-4">
@@ -159,7 +157,7 @@ export function Chronogram({ duties, statistics, month, pilotName, pilotBase, pi
             </Button>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

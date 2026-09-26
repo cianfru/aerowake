@@ -64,87 +64,87 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 border-b border-border/50 glass-strong relative z-20">
-        <div className="flex items-center justify-between px-4 py-2 md:px-6 md:py-2.5">
-          {/* Left: Hamburger + Logo */}
-          <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+      <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 md:px-8">
+          {/* Left: menu (mobile) + logo + inline nav (desktop) */}
+          <div className="flex min-w-0 items-center gap-2 md:gap-8">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="flex items-center justify-center h-8 w-8 rounded-lg bg-secondary/40 hover:bg-secondary/70 transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground md:hidden"
               aria-label="Open navigation"
             >
-              <Menu className="h-4.5 w-4.5 text-foreground" />
+              <Menu className="h-4 w-4" />
             </button>
             <button
               onClick={() => { setActiveTab('roster'); setSidebarOpen(false); }}
-              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+              className="flex-shrink-0 rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               aria-label="Go to Roster"
             >
-              <img
-                src={logoDark}
-                alt="Aerowake Logo"
-                className="h-8 w-auto object-contain md:h-10 cursor-pointer logo-themed"
-              />
+              <img src={logoDark} alt="Aerowake Logo" className="h-7 w-auto cursor-pointer object-contain logo-themed" />
             </button>
+            <nav className="hidden h-14 items-stretch gap-6 md:flex" aria-label="Sections">
+              {navItems.map((item) => {
+                const isActive = state.activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavClick(item.id)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={cn(
+                      '-mb-px border-b-2 text-[13px] transition-colors focus-visible:outline-none focus-visible:text-foreground',
+                      isActive
+                        ? 'border-foreground font-medium text-foreground'
+                        : 'border-transparent text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </nav>
           </div>
 
-          {/* Right: Auth + Badge + theme toggle */}
-          <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-            <Badge variant="success" className="hidden lg:inline-flex text-[10px]">EASA ORO.FTL</Badge>
-
+          {/* Right: account + theme */}
+          <div className="flex flex-shrink-0 items-center gap-1">
             {isAuthenticated ? (
-              <div className="flex items-center gap-1.5">
-                <span className="hidden md:inline text-xs text-muted-foreground truncate max-w-[100px]">
+              <>
+                <span className="hidden max-w-[160px] truncate px-2 text-[13px] text-muted-foreground md:inline">
                   {user?.display_name || user?.email?.split('@')[0] || 'User'}
+                  {user?.company_name ? ` · ${user.company_name}` : ''}
                 </span>
-                {user?.company_name && (
-                  <Badge variant="outline" className="hidden lg:inline-flex text-[10px]">
-                    {user.company_name}
-                  </Badge>
-                )}
                 {user?.is_admin && (
                   <a
                     href="/admin"
-                    className="flex items-center justify-center h-7 w-7 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors"
+                    className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                     title="Admin Dashboard"
                   >
-                    <Shield className="h-3.5 w-3.5 text-primary" />
+                    <Shield className="h-4 w-4" />
                   </a>
                 )}
                 <button
                   onClick={handleSignOut}
-                  className="flex items-center justify-center h-7 w-7 rounded-full bg-secondary/40 hover:bg-secondary/70 transition-colors"
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                   title="Sign out"
+                  aria-label="Sign out"
                 >
-                  <LogOut className="h-3.5 w-3.5 text-muted-foreground" />
+                  <LogOut className="h-4 w-4" />
                 </button>
-              </div>
+              </>
             ) : (
               <button
                 onClick={() => setAuthSheetOpen(true)}
-                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                className="flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-foreground/90 transition-colors hover:bg-muted/60"
               >
-                <LogIn className="h-3.5 w-3.5" />
-                <span className="hidden md:inline">Sign In</span>
+                <LogIn className="h-4 w-4" />
+                <span className="hidden md:inline">Sign in</span>
               </button>
             )}
-
             <button
               onClick={() => onThemeChange(theme === 'dark' ? 'light' : 'dark')}
-              className="relative h-7 w-12 rounded-full bg-secondary/60 backdrop-blur-sm p-1 transition-all duration-300 hover:bg-secondary/80 md:h-7 md:w-13 border border-border/50"
-              aria-label="Toggle theme"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
             >
-              <div
-                className={`flex h-5 w-5 items-center justify-center rounded-full bg-foreground/10 backdrop-blur-sm shadow-sm transition-all duration-300 ${
-                  theme === 'dark' ? 'translate-x-0' : 'translate-x-5 md:translate-x-5'
-                }`}
-              >
-                {theme === 'dark' ? (
-                  <Moon className="h-3 w-3 text-primary" />
-                ) : (
-                  <Sun className="h-3 w-3 text-warning" />
-                )}
-              </div>
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
           </div>
         </div>
@@ -187,10 +187,10 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
                     onClick={() => handleNavClick(item.id)}
                     aria-current={isActive ? 'page' : undefined}
                     className={cn(
-                      'flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm transition-colors',
+                      'flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-sm transition-colors',
                       isActive
-                        ? 'bg-primary/10 text-primary font-medium'
-                        : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
+                        ? 'bg-muted/70 text-foreground font-medium'
+                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
                     )}
                   >
                     <Icon className="h-4 w-4 flex-shrink-0" />

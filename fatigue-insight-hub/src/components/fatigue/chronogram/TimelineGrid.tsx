@@ -6,6 +6,7 @@
  * component. Used by all three grid-based chronogram views (homebase, utc, elapsed).
  */
 
+import { RISK_LEVEL_KSS_RANGE, riskCssColor } from '@/lib/risk-scale';
 import { useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { SleepBarPopover } from './SleepBarPopover';
@@ -363,19 +364,16 @@ export function TimelineGrid({
           className="flex gap-1"
           style={{ height: `${data.totalRows * rowHeight}px` }}
         >
-          <div className="w-2.5 rounded-sm overflow-hidden">
-            <div
-              className="h-full w-full"
-              style={{
-                background:
-                  'linear-gradient(to bottom, hsl(120, 70%, 45%), hsl(90, 70%, 50%), hsl(55, 90%, 55%), hsl(40, 95%, 50%), hsl(25, 95%, 50%), hsl(0, 80%, 50%))',
-              }}
-            />
+          {/* Stepped key matching the risk bands (low → extreme), no gradient */}
+          <div className="flex w-[3px] flex-col gap-[2px]" aria-hidden="true">
+            {(['low', 'moderate', 'high', 'critical'] as const).map((level) => (
+              <div key={level} className="flex-1" style={{ backgroundColor: riskCssColor(level) }} />
+            ))}
           </div>
-          <div className="flex flex-col justify-between text-[9px] text-muted-foreground">
-            <span>100</span>
-            <span>60</span>
-            <span>0</span>
+          <div className="flex flex-col text-[9px] leading-none text-muted-foreground">
+            {(['low', 'moderate', 'high', 'critical'] as const).map((level) => (
+              <span key={level} className="flex flex-1 items-start pt-0.5 font-mono">{RISK_LEVEL_KSS_RANGE[level].replace('KSS ', '')}</span>
+            ))}
           </div>
         </div>
       </div>

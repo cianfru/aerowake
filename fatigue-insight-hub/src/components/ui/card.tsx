@@ -11,7 +11,7 @@ const cardVariants = cva(
         default: "glass",
         glass: "glass",
         elevated: "glass-strong",
-        glow: "glass border-primary/30 shadow-[0_0_30px_hsl(var(--primary)/0.12)]",
+        glow: "glass border-primary/30",
         success: "glass border-success/30",
         warning: "glass border-warning/30",
         critical: "glass border-critical/30",

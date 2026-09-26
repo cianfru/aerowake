@@ -175,7 +175,7 @@ export function SleepBarPopover({
               {bar.isPreDuty ? <BedDouble className="h-4 w-4" /> : <BatteryCharging className="h-4 w-4" />}
               <span>{bar.isPreDuty ? 'Pre-Duty Sleep' : 'Recovery Sleep'}</span>
               {hasEdit && (
-                <span className="text-[9px] font-medium text-warning bg-warning/10 px-1.5 py-0.5 rounded">
+                <span className="text-[9px] font-medium uppercase tracking-[0.06em] text-warning border border-warning/30 px-1.5 py-0.5 rounded-[4px]">
                   Modified
                 </span>
               )}
@@ -184,9 +184,9 @@ export function SleepBarPopover({
               {/* Confidence badge (inline) */}
               {bar.confidence != null && (
                 <span className={cn(
-                  "text-[9px] font-mono font-medium px-1 py-0.5 rounded",
-                  bar.confidence >= 0.7 ? "bg-success/10 text-success" :
-                  bar.confidence >= 0.5 ? "bg-warning/10 text-warning" : "bg-high/10 text-high"
+                  "text-[9px] font-mono font-medium px-1 py-0.5 rounded-[4px] border",
+                  bar.confidence >= 0.7 ? "border-success/30 text-success" :
+                  bar.confidence >= 0.5 ? "border-warning/30 text-warning" : "border-high/30 text-high"
                 )}>
                   {Math.round(bar.confidence * 100)}%
                 </span>
@@ -393,7 +393,7 @@ export function SleepBarPopover({
                         {bar.references.map((ref, i) => (
                           <Tooltip key={i}>
                             <TooltipTrigger asChild>
-                              <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary cursor-help">
+                              <span className="inline-flex items-center rounded-[4px] border border-primary/30 px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.06em] text-primary cursor-help">
                                 {ref.short}
                               </span>
                             </TooltipTrigger>

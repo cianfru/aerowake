@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { format } from 'date-fns';
-import { CheckCircle2, Eye, RotateCcw } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { RotateCcw } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { riskClasses } from '@/lib/risk-scale';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import type { AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { DutyDetailsDialog } from '../DutyDetailsDialog';
@@ -13,7 +13,8 @@ import { EasaChecksCard } from './EasaChecksCard';
 import { AllDutiesList } from './AllDutiesList';
 import { TimelineSection } from './TimelineSection';
 import { AirlineDetectionPrompt } from './AirlineDetectionPrompt';
-import { selectDutiesToWatch } from './roster-utils';
+import { dutyPeakKss, dutyRiskLevel, formatLimit, selectDutiesToWatch } from './roster-utils';
+import { Eyebrow, Figure, SectionHeading } from './primitives';
 
 function monthLabel(results: AnalysisResults): string {
   try {
@@ -23,38 +24,66 @@ function monthLabel(results: AnalysisResults): string {
   }
 }
 
-/** Verdict: month · duties · how many to watch; pilot details underneath. */
-function VerdictLine({ results, watchCount, onNewRoster }: {
-  results: AnalysisResults; watchCount: number; onNewRoster: () => void;
+/** Verdict: the month's headline, then the facts that support it. */
+function VerdictHeader({ results, watch, onNewRoster }: {
+  results: AnalysisResults; watch: DutyAnalysis[]; onNewRoster: () => void;
 }) {
   const n = results.duties.length;
   const pilotLine = [results.pilotName, results.pilotBase, results.pilotAircraft].filter(Boolean).join(' · ');
+  const peak = results.duties.reduce<DutyAnalysis | null>(
+    (a, d) => ((dutyPeakKss(d) ?? 0) > (a ? dutyPeakKss(a) ?? 0 : -1) ? d : a), null);
+  const peakKss = peak ? dutyPeakKss(peak) : null;
+  const summary = results.easaSummary;
+
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0 space-y-1">
-        <h1 className="text-lg md:text-2xl font-semibold leading-snug">
-          {monthLabel(results)}
-          <span className="text-muted-foreground font-normal"> · {n} {n === 1 ? 'duty' : 'duties'}</span>
-          {watchCount > 0 && (
-            <>
-              <span className="text-muted-foreground font-normal"> · </span>
-              <span className="text-high">{watchCount} to watch</span>
-            </>
-          )}
-        </h1>
-        {watchCount === 0 && (
-          <p className="flex items-center gap-1.5 text-sm text-success">
-            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-            No duties need special attention this month
+    <header className="space-y-8">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 space-y-3">
+          <Eyebrow>Roster · {monthLabel(results)}</Eyebrow>
+          <h1 className="text-3xl md:text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.025em]">
+            {watch.length > 0 ? (
+              <span className="text-foreground">{watch.length} to watch</span>
+            ) : (
+              <span>No duties need special attention this month</span>
+            )}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {n} {n === 1 ? 'duty' : 'duties'}{pilotLine ? ` · ${pilotLine}` : ''}
           </p>
-        )}
-        {pilotLine && <p className="text-xs text-muted-foreground">{pilotLine}</p>}
+        </div>
+        <button
+          type="button"
+          onClick={onNewRoster}
+          className="flex flex-shrink-0 items-center gap-1.5 rounded-[5px] px-2 py-1 text-[13px] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+          New roster
+        </button>
       </div>
-      <Button variant="ghost" size="sm" className="flex-shrink-0 text-xs text-muted-foreground" onClick={onNewRoster}>
-        <RotateCcw className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
-        New roster
-      </Button>
-    </div>
+
+      <div className="grid grid-cols-2 gap-x-6 gap-y-6 border-y border-border py-5 md:grid-cols-4 md:divide-x md:divide-border md:gap-0">
+        <Figure className="md:px-5 md:first:pl-0" label="Duties" value={n} />
+        <Figure
+          className="md:px-5"
+          label="To watch"
+          value={watch.length}
+          valueClassName={watch.length ? riskClasses('high').text : undefined}
+        />
+        <Figure
+          className="md:px-5"
+          label="Peak sleepiness"
+          value={peakKss != null ? peakKss.toFixed(1) : '—'}
+          valueClassName={peak ? riskClasses(dutyRiskLevel(peak)).text : undefined}
+          sub="KSS, worst duty"
+        />
+        <Figure
+          className="md:px-5"
+          label="Duty · 28 days"
+          value={summary ? formatLimit(summary.duty28dMax, summary.limits.duty28d) : '—'}
+          sub="EASA limit 190h"
+        />
+      </div>
+    </header>
   );
 }
 
@@ -77,7 +106,7 @@ export function RosterPage() {
 
   if (!results) {
     return (
-      <div className="flex-1 p-4 md:p-6">
+      <div className="flex-1 px-4 py-10 md:py-16">
         <div className="mx-auto max-w-xl space-y-4 animate-fade-in">
           <RosterUploadCard />
           <AirlineDetectionPrompt />
@@ -87,18 +116,18 @@ export function RosterPage() {
   }
 
   return (
-    <div className="flex-1 p-4 md:p-6">
-      <div className="mx-auto max-w-3xl space-y-6 animate-fade-in min-w-0">
-        <VerdictLine results={results} watchCount={watch.length} onNewRoster={removeFile} />
+    <div className="flex-1 px-4 py-8 md:px-8 md:py-12">
+      <div className="mx-auto max-w-5xl min-w-0 space-y-12 animate-fade-in">
+        <VerdictHeader results={results} watch={watch} onNewRoster={removeFile} />
 
-        {/* Duties to watch */}
-        <section aria-labelledby="watch-heading" className="space-y-2">
-          <h2 id="watch-heading" className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-            <Eye className="h-4 w-4" aria-hidden="true" />
-            Duties to watch
-          </h2>
+        <section aria-labelledby="watch-heading" className="space-y-1">
+          <SectionHeading
+            id="watch-heading"
+            title="Duties to watch"
+            aside={watch.length ? 'Predicted KSS 6.5 or higher, worst first' : undefined}
+          />
           {watch.length > 0 ? (
-            <div className="grid gap-3 md:grid-cols-2" data-testid="duties-to-watch">
+            <div className="divide-y divide-border/70" data-testid="duties-to-watch">
               {watch.map((d, i) => (
                 <DutyWatchCard
                   key={d.dutyId ?? i}
@@ -109,12 +138,10 @@ export function RosterPage() {
               ))}
             </div>
           ) : (
-            <Card variant="glass" data-testid="duties-to-watch-empty">
-              <CardContent className="p-4 text-sm text-muted-foreground">
-                The model predicts no duty this month reaching high sleepiness (KSS 6.5 or more).
-                You can still report fatigue whenever you feel it — how you feel always comes first.
-              </CardContent>
-            </Card>
+            <p className="max-w-2xl py-4 text-sm text-muted-foreground" data-testid="duties-to-watch-empty">
+              The model predicts no duty this month reaching high sleepiness (KSS 6.5 or more).
+              You can still report fatigue whenever you feel it — how you feel always comes first.
+            </p>
           )}
         </section>
 

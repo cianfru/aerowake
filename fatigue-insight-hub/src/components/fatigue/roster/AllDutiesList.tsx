@@ -1,10 +1,8 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, ListOrdered } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { RISK_LEVEL_LABELS, formatKss, riskBadgeVariant, riskClasses } from '@/lib/risk-scale';
+import { RISK_LEVEL_LABELS, riskClasses } from '@/lib/risk-scale';
 import type { DutyAnalysis, StandbyPeriod } from '@/types/fatigue';
 import {
   buildRosterRows, dutyDateLabel, dutyPeakKss, dutyRiskLevel, dutyRoute, dutyTimes, standbyLabel,
@@ -25,7 +23,9 @@ function standbyDate(s: StandbyPeriod): string {
   }
 }
 
-/** Every duty as one compact row (no per-sector rows); standby shown muted. Collapsed by default. */
+const ROW = 'grid grid-cols-[5.75rem_minmax(0,1fr)_auto] items-center gap-x-4 px-1 py-2.5';
+
+/** Every duty as one row (no per-sector rows); standby muted. Collapsed by default. */
 export function AllDutiesList({ duties, standbyPeriods, onSelect }: AllDutiesListProps) {
   const [open, setOpen] = useState(false);
   const rows = useMemo(() => buildRosterRows(duties, standbyPeriods), [duties, standbyPeriods]);
@@ -36,58 +36,57 @@ export function AllDutiesList({ duties, standbyPeriods, onSelect }: AllDutiesLis
         <CollapsibleTrigger asChild>
           <button
             type="button"
-            className="flex w-full items-center justify-between gap-2 rounded-lg px-1 py-2 text-left text-sm font-semibold text-muted-foreground hover:text-foreground"
+            className="flex w-full items-baseline justify-between gap-2 border-b border-border pb-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
-            <span className="flex items-center gap-2">
-              <ListOrdered className="h-4 w-4" aria-hidden="true" />
-              All duties ({duties.length})
+            <span className="text-[13px] font-semibold">All duties ({duties.length})</span>
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              {open ? 'Hide' : 'Show'}
+              <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')} aria-hidden="true" />
             </span>
-            <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} aria-hidden="true" />
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <Card variant="glass" className="overflow-hidden">
-            <ul className="divide-y divide-border/40">
-              {rows.map((row) => {
-                if (row.kind === 'standby') {
-                  return (
-                    <li key={row.key} className="flex items-center gap-3 px-3 py-2 text-xs text-muted-foreground" data-testid="standby-row">
-                      <span className="w-[5.5rem] flex-shrink-0">{standbyDate(row.standby)}</span>
-                      <span className="italic">{standbyLabel(row.standby)}</span>
-                    </li>
-                  );
-                }
-                const d = row.duty;
-                const level = dutyRiskLevel(d);
-                const kss = dutyPeakKss(d);
-                const times = dutyTimes(d);
+          <ul className="divide-y divide-border/70">
+            {rows.map((row) => {
+              if (row.kind === 'standby') {
                 return (
-                  <li key={row.key}>
-                    <button
-                      type="button"
-                      onClick={() => onSelect(d)}
-                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-secondary/40 focus-visible:bg-secondary/40 focus-visible:outline-none"
-                      aria-label={`${dutyDateLabel(d)}, ${dutyRoute(d)}, ${RISK_LEVEL_LABELS[level]} — open details`}
-                    >
-                      <span className="w-[5.5rem] flex-shrink-0 text-xs font-medium">{dutyDateLabel(d)}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm">{dutyRoute(d)}</span>
-                        {times && <span className="block font-mono text-[11px] text-muted-foreground">{times}</span>}
-                      </span>
-                      <span className="flex flex-shrink-0 flex-col items-end gap-1">
-                        {kss != null && (
-                          <span className={cn('font-mono text-[11px]', riskClasses(level).text)}>{formatKss(kss)}</span>
-                        )}
-                        <Badge variant={riskBadgeVariant(level)} className="px-1.5 py-0 text-[10px]">
-                          {RISK_LEVEL_LABELS[level]}
-                        </Badge>
-                      </span>
-                    </button>
+                  <li key={row.key} className={cn(ROW, 'text-xs text-muted-foreground')} data-testid="standby-row">
+                    <span>{standbyDate(row.standby)}</span>
+                    <span>{standbyLabel(row.standby)}</span>
+                    <span />
                   </li>
                 );
-              })}
-            </ul>
-          </Card>
+              }
+              const d = row.duty;
+              const level = dutyRiskLevel(d);
+              const rc = riskClasses(level);
+              const kss = dutyPeakKss(d);
+              const times = dutyTimes(d);
+              return (
+                <li key={row.key}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(d)}
+                    className={cn(ROW, 'w-full text-left transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none')}
+                    aria-label={`${dutyDateLabel(d)}, ${dutyRoute(d)}, ${RISK_LEVEL_LABELS[level]} — open details`}
+                  >
+                    <span className="text-[13px] font-medium">{dutyDateLabel(d)}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm">{dutyRoute(d)}</span>
+                      {times && <span className="block font-mono text-[11px] text-muted-foreground tabular">{times}</span>}
+                    </span>
+                    <span className="flex items-center gap-2.5">
+                      {kss != null && (
+                        <span className={cn('font-mono text-sm tabular', rc.text)}>{kss.toFixed(1)}</span>
+                      )}
+                      <span aria-hidden="true" className={cn('h-[7px] w-[7px] rounded-[1px]', rc.fill)} />
+                      <span className="sr-only">{RISK_LEVEL_LABELS[level]}</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         </CollapsibleContent>
       </section>
     </Collapsible>

@@ -111,9 +111,9 @@ export function DutyDetailsHeader({ duty, onGenerateReport, onReportFatigue, rep
 
 function StatChip({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-md bg-secondary/40 px-2 py-0.5">
-      <span className="text-[10px] text-muted-foreground">{label}</span>
-      <span className="text-[11px] font-medium font-mono text-foreground">{value}</span>
+    <span className="inline-flex items-baseline gap-1.5">
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className="font-mono text-[13px] font-medium text-foreground tabular">{value}</span>
     </span>
   );
 }
@@ -135,11 +135,11 @@ function StatKssChip({
   const color = level === 'low' ? 'text-foreground' : riskColorClass(level);
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-md bg-secondary/40 px-2 py-0.5"
+      className="inline-flex items-baseline gap-1.5"
       title={`${kssLabel(k)} · index ${Math.round(index ?? 0)}`}
     >
-      <span className="text-[10px] text-muted-foreground">{label}</span>
-      <span className={cn('text-[11px] font-medium font-mono', color)}>{k.toFixed(1)}</span>
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className={cn('font-mono text-[13px] font-medium tabular', color)}>{k.toFixed(1)}</span>
     </span>
   );
 }

@@ -62,10 +62,10 @@ const COLORS = {
 };
 
 const SERIES_META = {
-  sleepPressure: { label: 'Sleep Pressure (S)', color: COLORS.sleepPressure, bg: 'hsla(0,80%,60%,0.15)' },
-  circadian: { label: 'Circadian (C)', color: COLORS.circadian, bg: 'hsla(220,80%,60%,0.15)' },
-  kss: { label: 'Predicted KSS', color: COLORS.kss, bg: 'hsla(195,100%,50%,0.15)' },
-  kss90: { label: 'KSS 90th pct', color: COLORS.kss90, bg: 'hsla(280,60%,65%,0.15)' },
+  sleepPressure: { label: 'Sleep Pressure (S)', color: COLORS.sleepPressure, bg: 'hsla(0,80%,60%,0.05)', border: 'hsla(0,80%,60%,0.4)' },
+  circadian: { label: 'Circadian (C)', color: COLORS.circadian, bg: 'hsla(220,80%,60%,0.05)', border: 'hsla(220,80%,60%,0.4)' },
+  kss: { label: 'Predicted KSS', color: COLORS.kss, bg: 'hsla(195,100%,50%,0.05)', border: 'hsla(195,100%,50%,0.4)' },
+  kss90: { label: 'KSS 90th pct', color: COLORS.kss90, bg: 'hsla(280,60%,65%,0.05)', border: 'hsla(280,60%,65%,0.4)' },
 } as const;
 
 /**
@@ -159,9 +159,9 @@ export function ProcessBreakdownChart({
                   type="button"
                   onClick={() => toggleSeries(key)}
                   aria-pressed={visible}
-                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border transition-colors"
+                  className="inline-flex items-center gap-1 rounded-[4px] px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.06em] border transition-colors"
                   style={{
-                    borderColor: visible ? meta.color : 'hsl(var(--border))',
+                    borderColor: visible ? meta.border : 'hsl(var(--border))',
                     backgroundColor: visible ? meta.bg : 'transparent',
                     color: visible ? meta.color : 'hsl(var(--muted-foreground))',
                   }}

@@ -183,33 +183,12 @@ export function TimelineRenderer({
             width: `${100 / zoom.scaleX}%`,
           }}
         >
-          {/* Header with pilot info */}
-          <div className="mb-4 text-center">
-            {pilotName && (
-              <h2 className="text-lg font-semibold text-foreground">{pilotName}</h2>
-            )}
-            {(pilotBase || pilotAircraft) && (
-              <div className="text-sm text-muted-foreground">
-                <span>{[pilotBase, pilotAircraft].filter(Boolean).join(' | ')}</span>
-              </div>
-            )}
-            <div className="mt-1 text-sm font-medium">
-              {format(month, 'MMMM yyyy')} {titleSuffix}
-            </div>
-          </div>
-
-          {/* Stats ribbon */}
-          <div className="mb-3 flex items-center justify-center gap-4 text-[11px] flex-wrap">
-            <span>Duties: <strong>{statistics.totalDuties}</strong></span>
-            <span>High Risk: <strong className="text-high">{statistics.highRiskDuties}</strong></span>
-            <span>Critical: <strong className="text-critical">{statistics.criticalRiskDuties}</strong></span>
-            {discretionCount > 0 && (
-              <Badge variant="destructive" className="flex items-center gap-1 text-[10px]">
-                <AlertTriangle className="h-3 w-3" />
-                {discretionCount} Discretion
-              </Badge>
-            )}
-          </div>
+          {discretionCount > 0 && (
+            <p className="mb-3 flex items-center gap-1.5 text-xs text-critical">
+              <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+              {discretionCount} {discretionCount === 1 ? 'duty uses' : 'duties use'} commander&apos;s discretion
+            </p>
+          )}
 
           {/* The actual grid */}
           <TimelineGrid
@@ -233,12 +212,6 @@ export function TimelineRenderer({
         </div>
       </div>
 
-      {/* Quick duty selection grid */}
-      <QuickDutySelector
-        duties={duties}
-        selectedDuty={selectedDuty}
-        onDutySelect={onDutySelect}
-      />
     </div>
   );
 }

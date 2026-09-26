@@ -58,10 +58,10 @@ export function FDPUtilizationBar({
         </div>
 
         {/* Progress bar */}
-        <div className="relative h-3 rounded-full overflow-hidden bg-secondary/50">
+        <div className="relative h-3 rounded-[2px] overflow-hidden bg-secondary/50">
           {/* Green zone: 0 → base limit */}
           <div
-            className="absolute inset-y-0 left-0 bg-success/20 rounded-l-full"
+            className="absolute inset-y-0 left-0 bg-success/20"
             style={{ width: `${basePos}%` }}
           />
 
@@ -76,14 +76,14 @@ export function FDPUtilizationBar({
           {/* Red zone: beyond extended */}
           {actualFdpHours > effectiveExtended && (
             <div
-              className="absolute inset-y-0 bg-critical/20 rounded-r-full"
+              className="absolute inset-y-0 bg-critical/20"
               style={{ left: `${extendedPos}%`, right: 0 }}
             />
           )}
 
           {/* Filled bar (actual FDP) */}
           <div
-            className={cn('absolute inset-y-0 left-0 rounded-full transition-all', color.bar)}
+            className={cn('absolute inset-y-0 left-0 rounded-[2px] transition-all', color.bar)}
             style={{ width: `${actualPos}%`, opacity: 0.7 }}
           />
 

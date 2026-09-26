@@ -224,36 +224,6 @@ export function PerformanceSummaryCard({ duty }: PerformanceSummaryCardProps) {
               infoKey="hoursAwake"
             />
           )}
-          {fha != null && fha > 0 && fhaSeverity && (
-            <ScaleBadge
-              icon={<AlertTriangle className="h-3 w-3" />}
-              label="FHA"
-              value={`${fha.toFixed(1)}`}
-              sublabel={`${fhaSeverity.label} (KSS-h)`}
-              variant={fhaSeverity.variant}
-              infoKey="fha"
-            />
-          )}
-          {worstPoint?.microsleep_probability != null && worstPoint.microsleep_probability > 0.01 && (
-            <ScaleBadge
-              icon={<Zap className="h-3 w-3" />}
-              label="P(KSS 9)"
-              value={`${(worstPoint.microsleep_probability * 100).toFixed(1)}%`}
-              sublabel="Fighting sleep"
-              variant={worstPoint.microsleep_probability < 0.02 ? 'success' : worstPoint.microsleep_probability < 0.05 ? 'warning' : 'critical'}
-              infoKey="microsleepProbability"
-            />
-          )}
-          {worstPoint?.pvt_lapses != null && (
-            <ScaleBadge
-              icon={<Eye className="h-3 w-3" />}
-              label="PVT lapses (heuristic)"
-              value={worstPoint.pvt_lapses.toFixed(1)}
-              sublabel="Legacy estimate"
-              variant={worstPoint.pvt_lapses <= 2 ? 'success' : worstPoint.pvt_lapses <= 5 ? 'warning' : 'critical'}
-              infoKey="pvtLapses"
-            />
-          )}
         </div>
       </div>
 
@@ -430,9 +400,9 @@ function FactorBar({
           +{kssPoints.toFixed(1)} KSS
         </span>
       </div>
-      <div className="h-1.5 rounded-full bg-secondary/60 overflow-hidden">
+      <div className="h-1.5 rounded-[2px] bg-secondary/60 overflow-hidden">
         <div
-          className="h-full rounded-full transition-all duration-500 ease-out"
+          className="h-full rounded-[2px] transition-all duration-500 ease-out"
           style={{ width: `${barWidth}%`, backgroundColor: barColor }}
         />
       </div>
@@ -453,11 +423,11 @@ function KssBuildUpBar({ decomp }: { decomp: ReturnType<typeof decomposePerforma
 
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center gap-[2px] h-2.5 rounded-full overflow-hidden bg-secondary/40">
+      <div className="flex items-center gap-[2px] h-2.5 rounded-[2px] overflow-hidden bg-secondary/40">
         {segments.map((seg) => (
           <div
             key={seg.label}
-            className="h-full first:rounded-l-full last:rounded-r-full transition-all duration-500"
+            className="h-full transition-all duration-500"
             style={{ width: `${seg.width}%`, backgroundColor: seg.color }}
             title={`${seg.label}: ${((seg.width / 100) * 8).toFixed(1)} KSS`}
           />

@@ -233,9 +233,9 @@ export function SleepRecoveryIndicator({ duty, variant = 'compact' }: SleepRecov
           <span className="text-muted-foreground">Sleep Efficiency</span>
           <span className="font-medium">{Math.round(estimate.sleepEfficiency * 100)}%</span>
         </div>
-        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+        <div className="h-1.5 rounded-[2px] bg-muted overflow-hidden">
           <div 
-            className="h-full rounded-full transition-all duration-300"
+            className="h-full rounded-[2px] transition-all duration-300"
             style={{ 
               width: `${estimate.sleepEfficiency * 100}%`,
               backgroundColor: status.color,

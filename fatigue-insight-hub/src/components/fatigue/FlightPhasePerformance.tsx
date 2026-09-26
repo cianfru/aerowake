@@ -73,7 +73,7 @@ function FlightPhaseBar({ phase }: { phase: PhaseData }) {
           <span className="text-[10px] text-critical">●</span>
         )}
       </div>
-      <div className="flex-1 h-5 bg-secondary/50 rounded-full overflow-hidden relative">
+      <div className="flex-1 h-5 bg-secondary/50 rounded-[2px] overflow-hidden relative">
         <div
           className={`h-full ${getPerformanceColor(phase.performance)} transition-all duration-500`}
           style={{ width: `${barPct(phase.performance)}%` }}

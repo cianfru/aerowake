@@ -138,9 +138,9 @@ function ScaleCard({
           {badge}
         </Badge>
       </div>
-      <div className="relative h-1.5 rounded-full bg-secondary overflow-hidden">
+      <div className="relative h-1.5 rounded-[2px] bg-secondary overflow-hidden">
         <div
-          className={cn('absolute inset-y-0 left-0 rounded-full transition-all', fillClass(variant))}
+          className={cn('absolute inset-y-0 left-0 rounded-[2px] transition-all', fillClass(variant))}
           style={{ width: `${Math.max(0, Math.min(1, fill)) * 100}%` }}
         />
       </div>

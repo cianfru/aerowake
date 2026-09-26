@@ -67,7 +67,7 @@ export function PasswordGateSection({ onEnter }: PasswordGateSectionProps) {
           {authenticated ? (
             /* Success state */
             <div className="mt-8 flex flex-col items-center gap-4">
-              <div className="flex items-center gap-2 rounded-full bg-green-500/10 px-4 py-1.5 text-sm text-green-400 border border-green-500/20">
+              <div className="flex items-center gap-2 rounded-[4px] border border-green-500/30 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.06em] text-green-400">
                 <ShieldCheck className="h-4 w-4" />
                 Access Granted
               </div>

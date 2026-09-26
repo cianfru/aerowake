@@ -182,15 +182,14 @@ export function WorkloadPhaseIndicator({
           <div
             key={`${seg.phase}-${i}`}
             className={cn(
-              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border',
+              'inline-flex items-center gap-1 rounded-[4px] px-1.5 py-0.5 text-[10px] font-medium border',
               seg.isCritical ? 'border-critical/50' : 'border-border/50',
             )}
             style={{
-              backgroundColor: `${seg.color}15`,
               color: seg.color,
             }}
           >
-            <span className="font-semibold">{seg.short}</span>
+            <span className="font-semibold tracking-[0.06em]">{seg.short}</span>
             <span className="text-muted-foreground">{seg.durationMin}m</span>
             <span className="font-mono" style={{ color: getPerformanceColor(seg.avgPerformance) }}>
               KSS {indexToKss(seg.avgPerformance).toFixed(1)}
