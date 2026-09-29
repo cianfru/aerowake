@@ -75,7 +75,7 @@ describe('RosterPage', () => {
 
   it('shows a calm empty state when nothing needs attention', async () => {
     render(<AnalysisProvider><Loaded results={{ ...results, duties: results.duties.filter(d => (d.maxKss ?? 9) < 6.5), dutiesToWatch: [], easaFindings: [] }} /></AnalysisProvider>);
-    expect(await screen.findByText('No duties need special attention this month')).toBeInTheDocument();
+    expect(await screen.findByText('No duties reach the model watch band')).toBeInTheDocument();
     expect(screen.getByTestId('duties-to-watch-empty')).toBeInTheDocument();
     expect(screen.getByText('No exceedances found in the supplied activities')).toBeInTheDocument();
   });
@@ -84,5 +84,16 @@ describe('RosterPage', () => {
     render(<AnalysisProvider><RosterPage /></AnalysisProvider>);
     expect(screen.getByLabelText(/Home base \(IATA\)/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Review roster/ })).toBeDisabled();
+  });
+
+  it('preserves model warnings when a pilot raises their personal watch level and carries it to a concern', async () => {
+    render(<AnalysisProvider><Loaded results={results} /></AnalysisProvider>);
+    await screen.findByText('2 to watch');
+    fireEvent.change(screen.getByLabelText('My watch level (KSS)'), { target: { value: '9' } });
+    expect(screen.getByText('No crossing in assessed duties')).toBeInTheDocument();
+    expect(within(screen.getByTestId('duties-to-watch')).getAllByTestId('duty-watch-card')).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Raise roster concern for/ })[0]);
+    expect(prefillSpy).toEqual({ dutyId: 'D1', purpose: 'roster_concern', watchReference: 9 });
+    expect(tabSpy).toBe('fatigue-report');
   });
 });

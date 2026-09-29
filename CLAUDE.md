@@ -12,6 +12,10 @@ Use [launch hardening](docs/LAUNCH_HARDENING.md) and [roster reference](docs/ROS
 - Schema migrations run before API startup; never restore ad-hoc startup DDL. PostgreSQL test fixtures require a disposable test database and delete its schema.
 
 
+## Pilot-facing workflow
+
+Roster outlook compares existing model outputs in chronological order; personal KSS watch references never modify model bands. Reports distinguish `roster_concern` scenarios from experienced fatigue. Roster duties remain planned until the pilot confirms operations, and sleep estimates become reported only through explicit confirmation. See `docs/FATIGUE_REPORT.md` for report 1.2 / input schema 2.
+
 ## Project Overview
 
 Aerowake is a comprehensive fatigue risk management system for airline pilots, organized as a monorepo with two complementary applications:

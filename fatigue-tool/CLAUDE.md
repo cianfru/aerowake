@@ -119,7 +119,7 @@ Cumulative restriction (7-day deficit) and the Dawson & McCulloch prior sleep/wa
 check are reported separately. Audit and rationale: `docs/MODEL_VALIDATION.md`.
 
 ### Fatigue report (`reports/`, `POST /api/fatigue-report`)
-Stateless report from pilot-supplied duties, actual sleep and self-rating. See
+Stateless report from pilot-supplied duties, sleep and self-rating. Report 1.2 also supports `roster_concern` scenarios with planned travel, clearly identified sleep estimates and a personal watch reference. Input provenance schema 2 retains the full request; watch references never alter model scores. See
 `docs/FATIGUE_REPORT.md`. The pilot's own assessment is never contradicted.
 
 ### EASA roster checks (`core/easa_checks.py`)

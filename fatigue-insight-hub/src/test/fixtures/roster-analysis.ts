@@ -5,6 +5,7 @@ function duty(id: string, date: string, report: string, release: string, risk: D
   segs: Array<[string, string, string, string]>, reasons?: string[]): Duty {
   return {
     duty_id: id,
+    model_version: 'aerowake-4.0-kss',
     date,
     report_time_utc: `${date}T${report}:00Z`,
     release_time_utc: `${date}T${release}:00Z`,

@@ -95,7 +95,7 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
     const d = new Date(chart.t0 + x * 3600e3);
     const local = new Date(d.getTime() + tzOffsetMinutes(d, tz) * 60000);
     const hh = String(local.getUTCHours()).padStart(2, '0');
-    return hh === '00' ? `${local.getUTCDate()}/${local.getUTCMonth() + 1}` : `${hh}:00`;
+    return `${local.getUTCDate()}/${local.getUTCMonth() + 1} ${hh}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
   };
 
   const download = () => {
@@ -132,7 +132,7 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
       </div>
 
       <section className="space-y-3 border-b border-border pb-6">
-        <p className="eyebrow">Fatigue report</p>
+        <p className="eyebrow">{report.event.type === 'roster_concern' ? 'Prospective roster concern' : 'Fatigue report'}</p>
         <h1 className="text-2xl md:text-3xl font-semibold leading-tight tracking-[-0.02em]">
           {report.event.affected_duty_label ?? `Fatigue reported ${report.event.time_local}`}
         </h1>
@@ -163,16 +163,24 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
                   {SEVERITY_STYLE[s].label.toLowerCase()}
                 </span>
               ))}
-            <span className="whitespace-nowrap">Data confidence: <span className="text-foreground">{report.data_quality.confidence}</span></span>
+            <span className="whitespace-nowrap">Record coverage: <span className="text-foreground">{report.data_quality.confidence}</span></span>
           </p>
         </div>
       </section>
 
-      <aside className="space-y-2 border-l-2 border-border pl-4 text-sm" aria-label="Evidence coverage"><p className="font-medium">Evidence coverage · {report.data_quality.confidence} confidence</p>{report.data_quality.notes.map((note, i) => <p key={i} className="text-muted-foreground">{note}</p>)}</aside>
+      <aside className="space-y-2 border-l-2 border-border pl-4 text-sm" aria-label="Evidence coverage"><p className="font-medium">Evidence coverage · {report.data_quality.confidence}</p>{report.data_quality.notes.map((note, i) => <p key={i} className="text-muted-foreground">{note}</p>)}</aside>
 
 
 
       <div className="report-appendix border-t border-border pt-6"><h2 className="text-lg font-semibold">Supporting detail</h2><p className="mt-2 text-sm text-muted-foreground">Duty and sleep records, supporting findings and optional model estimates. These estimates do not replace your declaration.</p></div>
+
+      <section aria-label="Three sources of evidence" className="grid gap-5 sm:grid-cols-3">
+        <div><h3 className="text-sm font-semibold">Roster records</h3><p className="mt-2 text-sm text-muted-foreground">{report.duties.length} duties supplied; {report.duties.filter(d => d.status === 'operated').length} marked operated and {report.duties.filter(d => d.status === 'planned').length} planned. Imported times need confirmation against actual operations.</p></div>
+        <div><h3 className="text-sm font-semibold">Scientific estimates</h3><p className="mt-2 text-sm text-muted-foreground">{report.data_quality.reported_sleeps} reported sleep periods and {report.data_quality.estimated_sleeps} estimated. {report.data_quality.model_available ? 'Predictions use this supplied pattern.' : 'Sleep-dependent predictions are unavailable.'}</p></div>
+        <div><h3 className="text-sm font-semibold">Pilot experience</h3><p className="mt-2 text-sm text-muted-foreground">{report.pilot_narrative ? 'Pilot statement included.' : 'No pilot statement supplied.'} {report.self_assessment ? 'Self-ratings are recorded separately from predictions.' : 'No self-rating supplied; none has been inferred.'}</p></div>
+      </section>
+
+      {report.watch_reference && <p className="text-sm text-muted-foreground">Personal watch reference: KSS {report.watch_reference.kss.toFixed(1)}. {report.watch_reference.duty_ids.length} assessed duties reach this reference. {report.watch_reference.explanation}</p>}
 
       <section className="grid grid-cols-2 gap-x-6 gap-y-6 border-y border-border py-5 sm:grid-cols-4 sm:gap-x-0 sm:divide-x sm:divide-border">
         <Stat label="Sleep, prior 24 h" value={fmtH(sw?.sleep_24h)} hint="5h or more recommended" tone={sw && sw.sleep_24h < 5 ? 'bad' : undefined} />
@@ -205,8 +213,9 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
                 ))}
                 <ReferenceLine y={7} stroke="hsl(var(--high))" strokeDasharray="3 3" strokeOpacity={0.8}
                   label={{ value: 'Sleepy (7)', position: 'insideTopLeft', fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                {report.watch_reference && report.watch_reference.kss !== 7 && <ReferenceLine y={report.watch_reference.kss} stroke="hsl(var(--primary))" strokeDasharray="6 4" label={{ value: 'Personal watch', position: 'insideBottomRight', fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />}
                 <ReferenceLine x={chart.eventX} stroke="hsl(var(--critical))" strokeOpacity={0.8}
-                  label={{ value: 'Event', fontSize: 10, position: 'top', fill: 'hsl(var(--muted-foreground))' }} />
+                  label={{ value: report.event.type === 'roster_concern' ? 'Assessment' : 'Event', fontSize: 10, position: 'insideTopLeft', fill: 'hsl(var(--muted-foreground))' }} />
                 <Area dataKey="kss" stroke="none" fill="hsl(var(--foreground))" fillOpacity={0.05} connectNulls={false} isAnimationActive={false} />
                 <Line dataKey="kss" stroke="hsl(var(--foreground))" dot={false} strokeWidth={2} connectNulls={false} isAnimationActive={false} />
                 <Line dataKey="kss90" stroke="hsl(var(--muted-foreground))" dot={false} strokeWidth={1} strokeDasharray="4 3" connectNulls={false} isAnimationActive={false} />
@@ -313,6 +322,11 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
           <p className="text-xs text-muted-foreground">{sw.source}</p>
         </section>
       )}
+
+      {report.scientific_basis && <section className="space-y-3" aria-label="Scientific basis">
+        <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Scientific basis</h2>
+        {report.scientific_basis.map(source => <div key={source.url} className="text-sm"><a href={source.url} target="_blank" rel="noreferrer" className="font-medium underline">{source.citation}</a><p className="mt-1 text-muted-foreground">{source.application}</p></div>)}
+      </section>}
 
       <section className="report-limitations space-y-2">
         <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Data quality and limitations</h2>
