@@ -3,11 +3,11 @@ import { getRosters, deleteRoster, reanalyzeRoster, type RosterSummary } from '@
 import { useAuth } from '@/contexts/AuthContext';
 
 export function useRosterHistory() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const queryClient = useQueryClient();
 
   const rostersQuery = useQuery<RosterSummary[]>({
-    queryKey: ['rosters'],
+    queryKey: ['rosters', user?.id],
     queryFn: getRosters,
     enabled: isAuthenticated,
     staleTime: 30_000, // 30 seconds
@@ -16,14 +16,14 @@ export function useRosterHistory() {
   const deleteMutation = useMutation({
     mutationFn: deleteRoster,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rosters'] });
+      queryClient.invalidateQueries({ queryKey: ['rosters', user?.id] });
     },
   });
 
   const reanalyzeMutation = useMutation({
     mutationFn: ({ rosterId }: { rosterId: string }) => reanalyzeRoster(rosterId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rosters'] });
+      queryClient.invalidateQueries({ queryKey: ['rosters', user?.id] });
     },
   });
 

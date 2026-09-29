@@ -17,7 +17,7 @@ export interface AnalysisState {
   /** Sub-tab inside the History / Learn hubs. */
   activeSubTab: SubTab | null;
   /** One-shot prefill for the fatigue-report wizard ("Report fatigue" on a duty). */
-  fatigueReportPrefill: { dutyId: string } | null;
+  fatigueReportPrefill: { dutyId: string; purpose?: 'roster_concern'; watchReference?: number } | null;
   dutyCrewOverrides: Map<string, 'crew_a' | 'crew_b'>;
   showLanding: boolean;
 }
@@ -60,7 +60,7 @@ type AnalysisAction =
   | { type: 'TOGGLE_DRAWER'; payload?: boolean }
   | { type: 'SET_ACTIVE_TAB'; payload: string }
   | { type: 'SET_SUB_TAB'; payload: SubTab }
-  | { type: 'SET_FATIGUE_REPORT_PREFILL'; payload: { dutyId: string } | null }
+  | { type: 'SET_FATIGUE_REPORT_PREFILL'; payload: AnalysisState['fatigueReportPrefill'] }
   | { type: 'SET_CREW_OVERRIDE'; payload: { dutyId: string; crewSet: 'crew_a' | 'crew_b' } }
   | { type: 'CLEAR_CREW_OVERRIDE'; payload: { dutyId: string } }
   | { type: 'REMOVE_FILE' }
@@ -180,7 +180,7 @@ interface AnalysisContextValue {
   setActiveTab: (tab: string) => void;
   setSubTab: (sub: SubTab) => void;
   /** Open the fatigue-report wizard pre-filled for a duty. */
-  openFatigueReportForDuty: (dutyId: string) => void;
+  openFatigueReportForDuty: (dutyId: string, options?: { purpose: 'roster_concern'; watchReference: number }) => void;
   clearFatigueReportPrefill: () => void;
   setCrewOverride: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
   clearCrewOverride: (dutyId: string) => void;
@@ -211,8 +211,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setDrawerOpen: (open) => dispatch({ type: 'TOGGLE_DRAWER', payload: open }),
     setActiveTab: (tab) => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab }),
     setSubTab: (sub) => dispatch({ type: 'SET_SUB_TAB', payload: sub }),
-    openFatigueReportForDuty: (dutyId) => {
-      dispatch({ type: 'SET_FATIGUE_REPORT_PREFILL', payload: { dutyId } });
+    openFatigueReportForDuty: (dutyId, options) => {
+      dispatch({ type: 'SET_FATIGUE_REPORT_PREFILL', payload: { dutyId, ...options } });
       dispatch({ type: 'CLEAR_SELECTED_DUTY' });
       dispatch({ type: 'SET_ACTIVE_TAB', payload: 'fatigue-report' });
     },

@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/auth-session';
 /**
  * Automatic fatigue report — client, types and helpers.
  *
@@ -12,7 +13,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://aerowake-productio
 // ── Request types ────────────────────────────────────────────
 
 export type DutyStatus = 'operated' | 'planned' | 'cancelled_fatigue' | 'not_operated';
-export type EventType = 'fatigue_call_before_duty' | 'fatigue_during_duty' | 'fatigue_after_duty';
+export type EventType = 'roster_concern' | 'fatigue_call_before_duty' | 'fatigue_during_duty' | 'fatigue_after_duty';
 export type SleepKind = 'main' | 'nap' | 'inflight_rest';
 export type SleepLocation = 'home' | 'hotel' | 'crew_rest' | 'other';
 
@@ -26,12 +27,14 @@ export interface ReportSector {
 }
 
 export interface ReportDuty {
+  crew_composition?: 'standard' | 'augmented_3' | 'augmented_4' | 'unknown';
+  acclimatization?: 'acclimatized' | 'unknown';
   id: string;
   report_utc: string;
   release_utc: string;
   sectors: ReportSector[];
   status: DutyStatus;
-  duty_type: 'flight' | 'standby' | 'simulator' | 'ground' | 'positioning' | 'other';
+  duty_type: 'flight' | 'standby' | 'home_standby' | 'airport_standby' | 'simulator' | 'ground' | 'positioning' | 'other';
   description?: string;
   source: 'roster' | 'manual';
 }
@@ -46,6 +49,8 @@ export interface ReportSleep {
 }
 
 export interface FatigueReportRequest {
+  watch_reference_kss?: number;
+  diary_complete?: boolean;
   home_base?: string | null;
   home_timezone?: string | null;
   event_type: EventType;
@@ -109,6 +114,8 @@ export interface SleepWakeCheck {
 }
 
 export interface FatigueReport {
+  watch_reference?: { kss: number; kind: string; duty_ids: string[]; explanation: string };
+  scientific_basis?: { title: string; citation: string; url: string; application: string }[];
   report_id: string;
   report_version: string;
   engine_version: string;
@@ -133,9 +140,10 @@ export interface FatigueReport {
     nights_without_sleep: string[];
     notes: string[];
     model_available: boolean;
+    prediction_basis?: 'reported_sleep' | 'estimated_sleep' | 'mixed_sleep' | 'unavailable';
   };
   summary: {
-    overall_level: 'low' | 'moderate' | 'high' | 'critical';
+    overall_level: 'low' | 'moderate' | 'high' | 'critical' | 'unknown';
     objective_support: boolean;
     headline: string;
     counts: Record<Severity, number>;
@@ -173,7 +181,7 @@ export interface FatigueReport {
 }
 
 export async function generateFatigueReport(body: FatigueReportRequest): Promise<FatigueReport> {
-  const response = await fetch(`${API_BASE_URL}/api/fatigue-report`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/fatigue-report`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(body),
@@ -248,10 +256,11 @@ export function localInputToUtcIso(value: string, tz: string): string | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value);
   if (!m) return null;
   const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
-  // Two passes resolve the offset across DST transitions.
-  let guess = wall - tzOffsetMinutes(new Date(wall), tz) * 60000;
-  guess = wall - tzOffsetMinutes(new Date(guess), tz) * 60000;
-  return new Date(guess).toISOString();
+  // Reject skipped and repeated wall times: the pilot must use UTC to disambiguate.
+  const offsets = new Set([-2, -1, 0, 1, 2].map(day => tzOffsetMinutes(new Date(wall + day * 86400000), tz)));
+  const candidates = [...offsets].map(offset => new Date(wall - offset * 60000).toISOString())
+    .filter(iso => utcIsoToLocalInput(iso, tz) === value.slice(0, 16));
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
 /** ISO UTC → "YYYY-MM-DDTHH:mm" wall-clock in `tz`. */
@@ -302,16 +311,18 @@ export function dutyFromAnalysis(duty: DutyAnalysis, index: number): ReportDuty 
     cursor = arr;
   }
   const dutyType = duty.dutyType === 'simulator' ? 'simulator'
-    : duty.dutyType === 'ground_training' ? 'ground' : 'flight';
+    : duty.dutyType === 'ground_training' ? 'ground' : duty.dutyType === 'airport_standby' ? 'airport_standby' : 'flight';
   return {
     id: duty.dutyId ?? `duty-${index + 1}`,
     report_utc: report,
     release_utc: release,
     sectors,
-    status: 'operated',
+    status: 'planned',
     duty_type: sectors.length ? 'flight' : dutyType,
     description: duty.trainingCode ?? '',
     source: 'roster',
+    crew_composition: duty.crewComposition ?? 'unknown',
+    acclimatization: 'unknown',
   };
 }
 
@@ -370,11 +381,12 @@ export function dutiesInPeriod(results: AnalysisResults, startIso: string, endIs
 /** Plain-text export suitable for pasting into an operator's FRMS form. */
 export function reportToText(r: FatigueReport): string {
   const lines: string[] = [];
-  lines.push('FATIGUE REPORT', `Generated ${r.generated_at} · ${r.report_version} · ${r.engine_version}`, '');
+  lines.push(r.event?.type === 'roster_concern' ? 'PROSPECTIVE ROSTER CONCERN' : 'FATIGUE REPORT', `Generated ${r.generated_at} · ${r.report_version} · ${r.engine_version}`, '');
   const pilot = Object.entries(r.pilot).map(([k, v]) => `${k.replace('_', ' ')}: ${v}`).join(' · ');
   if (pilot) lines.push(pilot, '');
   lines.push(`SUMMARY: ${r.summary.headline}`, `Data confidence: ${r.data_quality.confidence}`, '');
   for (const p of r.narrative) lines.push(`${p.title.toUpperCase()}`, p.text, '');
+  if (r.watch_reference) lines.push('PERSONAL WATCH REFERENCE', `KSS ${r.watch_reference.kss.toFixed(1)}; ${r.watch_reference.duty_ids.length} assessed duties reach this reference. ${r.watch_reference.explanation}`, '');
   if (r.findings.length) {
     lines.push('FINDINGS');
     for (const f of r.findings) {
@@ -383,6 +395,7 @@ export function reportToText(r: FatigueReport): string {
     lines.push('');
   }
   if (r.pilot_narrative) lines.push('PILOT STATEMENT', r.pilot_narrative, '');
+  if (r.scientific_basis?.length) lines.push('SCIENTIFIC BASIS', ...r.scientific_basis.map(s => `${s.citation}: ${s.application} ${s.url}`), '');
   lines.push('LIMITATIONS', ...r.limitations.map((l) => `- ${l}`));
   return lines.join('\n');
 }

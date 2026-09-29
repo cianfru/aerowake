@@ -254,6 +254,8 @@ export function transformEasaSummary(raw: AnalysisResult['easa_summary']): EasaS
   if (!raw || typeof raw !== 'object') return undefined;
   const l = raw.limits ?? ({} as NonNullable<AnalysisResult['easa_summary']>['limits']);
   return {
+    status: raw.status,
+    coverage: raw.coverage,
     duty7dMax: num(raw.duty_7d_max) ?? 0,
     duty14dMax: num(raw.duty_14d_max) ?? 0,
     duty28dMax: num(raw.duty_28d_max) ?? 0,
@@ -527,6 +529,8 @@ export function transformAnalysisResult(
       : undefined,
     easaFindings: transformEasaFindings(result.easa_findings),
     easaSummary: transformEasaSummary(result.easa_summary),
+    legacyModel: result.duties.some(d => d.model_version !== "aerowake-4.0-kss"),
+    persistenceStatus: result.persistence_status,
     standbyPeriods: transformStandbyPeriods(result.standby_periods),
     alertnessTimeline: (result.alertness_timeline ?? [])
       .map((p) => ({ t: Date.parse(p.t), kss: p.kss, asleep: !!p.asleep, onDuty: !!p.on_duty }))

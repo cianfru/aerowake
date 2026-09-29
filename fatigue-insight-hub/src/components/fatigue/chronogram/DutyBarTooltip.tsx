@@ -465,30 +465,18 @@ export function DutyBarTooltip({
               </div>
             )}
 
-            {/* PVT Lapses + Microsleep probability */}
+            {/* Published-model sleepiness probability, not a PVT performance estimate. */}
             {(() => {
               const wp = bar.duty.timelinePoints?.[0];
               if (!wp) return null;
-              const pvt = wp.pvt_lapses;
               const micro = wp.microsleep_probability;
-              if (pvt == null && micro == null) return null;
+              if (micro == null) return null;
               return (
                 <div className="border-t border-border pt-2 mt-2 space-y-1">
                   <span className="text-[10px] font-medium text-muted-foreground">
                     Alertness Indicators
                   </span>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
-                    {pvt != null && (
-                      <>
-                        <span className="text-muted-foreground">PVT lapses (heuristic)</span>
-                        <span className={cn(
-                          'font-medium',
-                          pvt <= 2 ? 'text-success' : pvt <= 5 ? 'text-warning' : 'text-critical',
-                        )}>
-                          ~{pvt.toFixed(1)}/10min
-                        </span>
-                      </>
-                    )}
                     {micro != null && micro > 0.01 && (
                       <>
                         <span className="text-muted-foreground">P(KSS 9)</span>

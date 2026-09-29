@@ -67,3 +67,7 @@ bun.lockb
 *.sw?
 *.swp
 *.swo
+
+# Browser test artifacts
+playwright-report/
+test-results/

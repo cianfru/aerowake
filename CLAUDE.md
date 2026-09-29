@@ -1,10 +1,26 @@
 # CLAUDE.md - AI Assistant Guide for Aerowake Project
 
+## Current launch contracts (September 2026)
+
+Use [launch hardening](docs/LAUNCH_HARDENING.md) and [roster reference](docs/ROSTER_REFERENCE.md) for current deployment and input contracts. Older explanatory notes below must not override these contracts.
+
+- Store aware UTC instants; resolve home zones from verified airport codes. Distinguish reported sleep from inferred opportunities.
+- Current KSS is 1–9; index = 110 − 10 × KSS. Higher bands begin at KSS 5.5/6.5/7.5/8.5. Duty headline risk uses peak KSS, not landing alone. Never convert an unidentified legacy model index into KSS.
+- Scope checks to available records and disclose missing history/context. Independent FTL/scientific evaluation remains a release gate.
+- Owner authorization precedes both cache and database reads. Report JSON carries normalized inputs and provenance; source rosters and personal data must stay out of Git/logs.
+- Python 3.12 with requirements.lock; Node22 with npm ci. Backend: python -m pytest tests -q. Frontend: npm run typecheck, npm run lint, npm test, npm run build.
+- Schema migrations run before API startup; never restore ad-hoc startup DDL. PostgreSQL test fixtures require a disposable test database and delete its schema.
+
+
+## Pilot-facing workflow
+
+Roster outlook compares existing model outputs in chronological order; personal KSS watch references never modify model bands. Reports distinguish `roster_concern` scenarios from experienced fatigue. Roster duties remain planned until the pilot confirms operations, and sleep estimates become reported only through explicit confirmation. See `docs/FATIGUE_REPORT.md` for report 1.2 / input schema 2.
+
 ## Project Overview
 
 Aerowake is a comprehensive fatigue risk management system for airline pilots, organized as a monorepo with two complementary applications:
 
-1. **fatigue-tool/** - Python/FastAPI backend implementing EASA-compliant biomathematical fatigue modeling
+1. **fatigue-tool/** - Python/FastAPI backend implementing sleepiness estimates and scoped EASA checks
 2. **fatigue-insight-hub/** - React/TypeScript frontend providing interactive fatigue analysis and visualization
 
 **Repository**: `github.com/cianfru/aerowake` (unified monorepo)
@@ -16,12 +32,12 @@ Aerowake is a comprehensive fatigue risk management system for airline pilots, o
 ```
 Aerowake/
 ├── fatigue-tool/              # Backend API (Python/FastAPI)
-│   ├── core/                  # Fatigue model engine (Borbely Two-Process Model)
+│   ├── core/                  # Fatigue model engine (Three Process Model (core/alertness.py))
 │   ├── models/                # Data structures (Duty, Roster, SleepBlock, Airport)
 │   ├── api/                   # FastAPI REST endpoints
 │   ├── parsers/               # Roster file parsing (PDF/CSV)
 │   ├── visualization/         # Plotly/Matplotlib charts
-│   ├── tests/                 # Print-based test suite
+│   ├── tests/                 # pytest assertion suite
 │   ├── requirements.txt       # Python dependencies
 │   └── CLAUDE.md              # Backend-specific documentation
 │
@@ -42,7 +58,7 @@ Aerowake/
 ## Tech Stack
 
 ### Backend (fatigue-tool)
-- **Language**: Python 3.8+
+- **Language**: Python 3.12
 - **Framework**: FastAPI + Uvicorn
 - **Data validation**: Pydantic v2
 - **Time handling**: pytz (UTC storage)
@@ -61,7 +77,7 @@ Aerowake/
 - **Routing**: React Router DOM
 - **Forms**: React Hook Form + Zod validation
 - **Charts**: Recharts
-- **Maps**: Mapbox GL
+- **Maps**: d3-geo + bundled Natural Earth
 - **Date handling**: date-fns
 - **Deployment**: Vercel (Root Directory: `fatigue-insight-hub`)
 
@@ -74,7 +90,7 @@ Aerowake/
 cd fatigue-tool
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r requirements.lock
 
 # Run API server (development)
 uvicorn api.api_server:app --reload --host 0.0.0.0 --port 8000
@@ -83,10 +99,7 @@ uvicorn api.api_server:app --reload --host 0.0.0.0 --port 8000
 # Available at http://localhost:8000/docs
 
 # Run tests
-python tests/test_sleep_strategies.py
-python tests/test_sleep_efficiency.py
-python tests/test_comprehensive_improvements.py
-python tests/test_performance_improvements.py
+python -m pytest tests -q
 ```
 
 ### Frontend (fatigue-insight-hub)
@@ -159,7 +172,7 @@ npm run preview
 
 4. **Visualization**
    - Recharts for fatigue timeline graphs
-   - Mapbox for flight route visualization
+   - Keyless SVG globe / flat routes / accessible list
    - Three.js for 3D aircraft visualizations
 
 ## Code Conventions
@@ -175,12 +188,11 @@ npm run preview
 #### Parameters and Configuration
 - All model parameters live in `core/parameters.py`
 - Every parameter must cite its peer-reviewed source in the docstring
-- Four presets available: default_easa, conservative, liberal, research
+- Production uses ModelConfig.aerowake(); historical preset names are compatibility aliases.
 
 #### Testing
-- Tests use print-based validation (not pytest)
-- Each test file runs standalone
-- Expected output: `✅ TEST PASSED` or `❌ TEST FAILED`
+- Run pytest; assertions determine success. Printing a failure or returning False does not fail a test.
+- Run `python -m pytest tests -q` from fatigue-tool. PostgreSQL integration tests need a disposable TEST_DATABASE_URL.
 
 ### Frontend Conventions
 

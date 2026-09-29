@@ -107,6 +107,8 @@ async def get_comparative_metrics(
     if db is None:
         raise HTTPException(503, "Database not available")
 
+    if not user.metrics_consent:
+        raise HTTPException(403, "Comparisons are an optional, self-declared cohort. Opt in from your account first.")
     if not user.company_id:
         raise HTTPException(400, "No company assigned. Upload a roster first to detect your airline.")
 
@@ -213,6 +215,8 @@ async def get_comparative_trend(
     if db is None:
         raise HTTPException(503, "Database not available")
 
+    if not user.metrics_consent:
+        raise HTTPException(403, "Comparisons are an optional, self-declared cohort. Opt in from your account first.")
     if not user.company_id:
         raise HTTPException(400, "No company assigned.")
 
@@ -244,6 +248,8 @@ async def get_comparative_trend(
         analysis = roster.analyses[0]
         aj = analysis.analysis_json or {}
         duties = aj.get("duties", [])
+        if not duties or any(d.get("model_version") != "aerowake-4.0-kss" for d in duties):
+            continue
         all_perf = [d.get("avg_performance") for d in duties if d.get("avg_performance") is not None]
         pilot_perf = round(sum(all_perf) / len(all_perf), 1) if all_perf else None
 
@@ -305,9 +311,11 @@ async def _get_pilot_metrics(db: AsyncSession, user_id, month: str) -> PilotMetr
     analysis = roster.analyses[0]
     aj = analysis.analysis_json or {}
     duties = aj.get("duties", [])
+    if not duties or any(d.get("model_version") != "aerowake-4.0-kss" for d in duties):
+        return PilotMetrics()
 
     all_perf = [d.get("avg_performance") for d in duties if d.get("avg_performance") is not None]
-    high_risk = sum(1 for d in duties if d.get("risk_level") in ("high", "critical", "extreme"))
+    high_risk = sum(1 for d in duties if (d.get("max_kss") or 0) >= 6.5)
 
     return PilotMetrics(
         avg_performance=round(sum(all_perf) / len(all_perf), 1) if all_perf else None,

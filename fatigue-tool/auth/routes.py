@@ -17,6 +17,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,16 +51,16 @@ class RegisterRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(..., max_length=128)
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    refresh_token: str = Field(..., max_length=2048)
 
 
 class TokenResponse(BaseModel):
     access_token: str
-    refresh_token: str
+    refresh_token: str = Field(..., max_length=2048)
     token_type: str = "bearer"
 
 
@@ -70,6 +71,8 @@ class UserResponse(BaseModel):
     pilot_id: Optional[str]
     home_base: Optional[str]
     auth_provider: str
+    email_verified: bool = False
+    metrics_consent: bool = False
     is_admin: bool = False
     company_id: Optional[str] = None
     company_name: Optional[str] = None
@@ -98,12 +101,7 @@ async def _store_refresh_token(db: AsyncSession, user_id, raw_token: str):
 
 
 def _is_admin(user: User) -> bool:
-    """Check if user is admin via DB flag or ADMIN_EMAILS env var."""
-    if getattr(user, "is_admin", False):
-        return True
-    admin_emails_raw = os.environ.get("ADMIN_EMAILS", "")
-    admin_emails = [e.strip().lower() for e in admin_emails_raw.split(",") if e.strip()]
-    return bool(user.email and user.email.lower() in admin_emails)
+    return bool(user.is_admin)
 
 
 def _user_to_response(user: User) -> UserResponse:
@@ -124,6 +122,8 @@ def _user_to_response(user: User) -> UserResponse:
         home_base=user.home_base,
         auth_provider=user.auth_provider,
         is_admin=_is_admin(user),
+        email_verified=bool(user.email_verified),
+        metrics_consent=bool(user.metrics_consent),
         company_id=str(user.company_id) if user.company_id else None,
         company_name=company_name,
         company_role=user.company_role or "pilot",
@@ -151,7 +151,7 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     # Create user
     user = User(
         email=body.email,
-        password_hash=hash_password(body.password),
+        password_hash=await run_in_threadpool(hash_password, body.password),
         display_name=body.display_name,
         auth_provider="email",
         pilot_id=body.pilot_id,
@@ -162,11 +162,11 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     await db.refresh(user)
 
     # Generate tokens
-    access = create_access_token(str(user.id))
-    refresh = create_refresh_token(str(user.id))
+    access = create_access_token(str(user.id), auth_version=user.auth_version or 0)
+    refresh = create_refresh_token(str(user.id), auth_version=user.auth_version or 0)
     await _store_refresh_token(db, user.id, refresh)
 
-    logger.info(f"New user registered: {body.email}")
+    logger.info("New user registered")
 
     return TokenResponse(access_token=access, refresh_token=refresh)
 
@@ -186,7 +186,7 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
             detail="Invalid email or password",
         )
 
-    if not verify_password(body.password, user.password_hash):
+    if not await run_in_threadpool(verify_password, body.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -199,8 +199,8 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
         )
 
     # Generate tokens
-    access = create_access_token(str(user.id))
-    refresh = create_refresh_token(str(user.id))
+    access = create_access_token(str(user.id), auth_version=user.auth_version or 0)
+    refresh = create_refresh_token(str(user.id), auth_version=user.auth_version or 0)
     await _store_refresh_token(db, user.id, refresh)
 
     return TokenResponse(access_token=access, refresh_token=refresh)
@@ -225,7 +225,8 @@ async def refresh_tokens(body: RefreshRequest, db: AsyncSession = Depends(get_db
     # Verify token exists in DB (not revoked)
     hashed = hash_token(body.refresh_token)
     result = await db.execute(
-        select(RefreshToken).where(RefreshToken.token_hash == hashed)
+        select(RefreshToken).where(RefreshToken.token_hash == hashed,
+                                   RefreshToken.expires_at > datetime.now(timezone.utc)).with_for_update()
     )
     stored_token = result.scalar_one_or_none()
 
@@ -238,12 +239,12 @@ async def refresh_tokens(body: RefreshRequest, db: AsyncSession = Depends(get_db
     # Verify user still exists and is active
     user_result = await db.execute(select(User).where(User.id == user_id))
     user = user_result.scalar_one_or_none()
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or payload.get("version", 0) != (user.auth_version or 0):
         raise HTTPException(401, "User not found or disabled")
 
     # Issue new tokens
-    access = create_access_token(str(user.id))
-    refresh = create_refresh_token(str(user.id))
+    access = create_access_token(str(user.id), auth_version=user.auth_version or 0)
+    refresh = create_refresh_token(str(user.id), auth_version=user.auth_version or 0)
     await _store_refresh_token(db, user.id, refresh)
 
     return TokenResponse(access_token=access, refresh_token=refresh)

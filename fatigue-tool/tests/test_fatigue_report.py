@@ -29,7 +29,7 @@ def sleep(d, h, m, d2, h2, m2, **kw):
 def base_request(**changes):
     """Pilot calls fatigue before an early on 8 Sep after a late finish on the 7th."""
     body = dict(
-        home_base='LGW', event_type='fatigue_call_before_duty', event_time_utc=t(8, 4, 30),
+        diary_complete=True, home_base='LGW', event_type='fatigue_call_before_duty', event_time_utc=t(8, 4, 30),
         period_start_utc=t(5, 0), period_end_utc=t(8, 12), affected_duty_id='D8',
         duties=[
             dict(id='D6', report_utc=t(6, 6, 0), release_utc=t(6, 14, 30), source='roster',
@@ -122,8 +122,99 @@ def test_invalid_inputs_are_rejected(change):
     assert client.post('/api/fatigue-report', json=base_request(**change)).status_code == 422
 
 
-def test_unknown_airport_is_disclosed():
+def test_unknown_airport_is_rejected():
     body = base_request()
     body['duties'][0]['sectors'][0]['arrival'] = 'QQZ'
+    response = client.post('/api/fatigue-report', json=body)
+    assert response.status_code == 422
+    assert 'Unknown airport QQZ' in response.text
+
+
+def planning_request(**changes):
+    body = base_request(event_type='roster_concern', self_assessment={}, narrative='Early duties have been difficult for me previously.')
+    for duty in body['duties']:
+        duty['status'] = 'planned'
+    for item in body['sleeps']:
+        item['source'] = 'estimated'
+    body.update(changes)
+    return body
+
+
+def test_roster_concern_combines_planned_records_and_estimates_without_inventing_experience():
+    r = post(planning_request())
+    assert r['assessment'] and r['data_quality']['prediction_basis'] == 'estimated_sleep'
+    assert r['self_assessment'] is None
+    assert all(d['status'] == 'planned' for d in r['duties'])
+    assert 'Rest shorter than the regulatory minimum' in titles(r)
+    assert r['duties'][-1]['rest_before_hours'] == pytest.approx(4.75)
+    narrative = ' '.join(p['text'] for p in r['narrative'])
+    assert 'prospective fatigue concern' in narrative
+    assert 'declared unfit' not in narrative
+    assert 'If this duty and sleep scenario occur' in narrative
+    assert r['scientific_basis'][0]['url'].endswith('journal.pone.0108679')
+
+
+def test_personal_reference_changes_watch_dates_not_prediction_or_findings():
+    low = post(planning_request(watch_reference_kss=1))
+    high = post(planning_request(watch_reference_kss=9))
+    assert low['watch_reference']['duty_ids']
+    assert not high['watch_reference']['duty_ids']
+    assert low['assessment'] == high['assessment']
+    assert low['findings'] == high['findings']
+    assert low['provenance']['input_sha256'] != high['provenance']['input_sha256']
+
+
+def test_planning_requires_review_of_complete_sleep_scenario():
+    r = post(planning_request(diary_complete=False))
+    assert r['assessment'] is None and r['timeline'] == []
+    assert r['watch_reference']['duty_ids'] == []
+    assert r['pilot_narrative']
+
+
+def test_actual_report_retains_roster_pattern_evidence_without_claiming_duties_were_flown():
+    body = base_request()
+    for duty in body['duties'][:-1]:
+        duty['status'] = 'planned'
     r = post(body)
-    assert any('QQZ' in n for n in r['data_quality']['notes'])
+    assert 'Rest shorter than the regulatory minimum' in titles(r)
+    assert 'Late finish followed by early start' in titles(r)
+    assert r['duties'][0]['status'] == 'planned'
+
+
+def test_planning_rejects_sleep_during_operating_duty():
+    body = planning_request()
+    body['sleeps'].append(sleep(6, 8, 0, 6, 9, 0, source='estimated'))
+    response = client.post('/api/fatigue-report', json=body)
+    assert response.status_code == 422
+    assert 'overlaps planned duty' in response.text
+
+
+def test_planned_travel_affects_location_only_for_prospective_scenario():
+    from reports.engine import LocationTrack
+    from reports.routes import FatigueReportRequest, to_input
+    body = planning_request()
+    body['duties'][0]['sectors'] = [sector('LGW', 'DOH', 6, 7, 0, 6, 13, 0)]
+    inp = to_input(FatigueReportRequest(**body))
+    when = datetime.fromisoformat(t(6, 14))
+    assert LocationTrack(inp.home_timezone, inp.duties).tz_at(when) == 'Europe/London'
+    assert LocationTrack(inp.home_timezone, inp.duties, include_planned=True).tz_at(when) == 'Asia/Qatar'
+
+
+@pytest.mark.parametrize('value', [0, 9.1])
+def test_personal_reference_must_be_on_kss_scale(value):
+    assert client.post('/api/fatigue-report', json=planning_request(watch_reference_kss=value)).status_code == 422
+
+
+def test_future_observations_cannot_be_manufactured_by_a_planning_report():
+    body = planning_request()
+    for key in ('event_time_utc', 'period_start_utc', 'period_end_utc'):
+        body[key] = body[key].replace('2026', '2099')
+    body.update(duties=[], sleeps=[], affected_duty_id=None, self_assessment={'kss': 8, 'rated_at_utc': body['event_time_utc']})
+    response = client.post('/api/fatigue-report', json=body)
+    assert response.status_code == 422 and 'not future fatigue' in response.text
+    body['self_assessment'] = {}
+    body['sleeps'] = [sleep(7, 23, 0, 8, 4, 0, source='reported')]
+    for key in ('start_utc', 'end_utc'):
+        body['sleeps'][0][key] = body['sleeps'][0][key].replace('2026', '2099')
+    response = client.post('/api/fatigue-report', json=body)
+    assert response.status_code == 422 and 'Future sleep must be marked estimated' in response.text

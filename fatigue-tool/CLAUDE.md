@@ -1,8 +1,20 @@
 # CLAUDE.md - AI Assistant Guide
 
+## Current launch contracts (September 2026)
+
+Use [launch hardening](../docs/LAUNCH_HARDENING.md) and [roster reference](../docs/ROSTER_REFERENCE.md) for current deployment and input contracts. Older explanatory notes below must not override these contracts.
+
+- Store aware UTC instants; resolve home zones from verified airport codes. Distinguish reported sleep from inferred opportunities.
+- Current KSS is 1–9; index = 110 − 10 × KSS. Higher bands begin at KSS 5.5/6.5/7.5/8.5. Duty headline risk uses peak KSS, not landing alone. Never convert an unidentified legacy model index into KSS.
+- Scope checks to available records and disclose missing history/context. Independent FTL/scientific evaluation remains a release gate.
+- Owner authorization precedes both cache and database reads. Report JSON carries normalized inputs and provenance; source rosters and personal data must stay out of Git/logs.
+- Python 3.12 with requirements.lock; Node22 with npm ci. Backend: python -m pytest tests -q. Frontend: npm run typecheck, npm run lint, npm test, npm run build.
+- Schema migrations run before API startup; never restore ad-hoc startup DDL. PostgreSQL test fixtures require a disposable test database and delete its schema.
+
+
 ## Project Overview
 
-EASA-compliant biomathematical fatigue risk assessment tool for airline pilots. Implements the Borbely Two-Process Model (homeostatic Process S + circadian Process C) with aviation workload integration and realistic sleep behavior modeling.
+Roster analysis and fatigue reporting for airline pilots. The current engine is aerowake-4.0-kss (Three Process Model, Ingre et al. 2014). Predictions and scoped checks are not operational fitness or compliance certification.
 
 **Purpose**: Predict pilot fatigue across multi-day rosters, identify WOCL (Window of Circadian Low, 02:00-05:59) risks, calculate sleep debt, and generate safety recommendations aligned with EU Regulation 965/2012 (EASA ORO.FTL).
 
@@ -32,7 +44,7 @@ fatigue-tool/
 │   └── aviation_calendar.py       # Monthly heatmap
 ├── scripts/                       # Utility scripts
 │   └── analyze_sleep_debt.py
-├── tests/                         # Print-based test suite
+├── tests/                         # pytest assertion suite
 │   ├── test_sleep_strategies.py
 │   ├── test_sleep_efficiency.py
 │   ├── test_comprehensive_improvements.py
@@ -45,7 +57,7 @@ fatigue-tool/
 
 ## Tech Stack
 
-- **Language**: Python 3.8+
+- **Language**: Python 3.12
 - **Web framework**: FastAPI + Uvicorn
 - **Data validation**: Pydantic v2
 - **Timezone handling**: pytz (all storage in UTC)
@@ -53,7 +65,7 @@ fatigue-tool/
 - **Numerics**: NumPy, Pandas
 - **PDF parsing**: pdfplumber (no Java dependency)
 - **Visualization**: Plotly, Matplotlib, Pillow
-- **Deployment**: Railway.app (NIXPACKS builder)
+- **Deployment**: Railway.app (Dockerfile with locked dependencies)
 
 ## Development Commands
 
@@ -65,13 +77,13 @@ OpenAPI docs available at `http://localhost:8000/docs`
 
 ### Run tests
 ```bash
-pip install -r requirements.txt -r requirements-dev.txt
+pip install -r requirements.lock
 python -m pytest tests -q      # CI runs this on every PR (.github/workflows/ci.yml)
 ```
 
 ### Install dependencies
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.lock
 ```
 
 ## Key Architecture Concepts
@@ -107,7 +119,7 @@ Cumulative restriction (7-day deficit) and the Dawson & McCulloch prior sleep/wa
 check are reported separately. Audit and rationale: `docs/MODEL_VALIDATION.md`.
 
 ### Fatigue report (`reports/`, `POST /api/fatigue-report`)
-Stateless report from pilot-supplied duties, actual sleep and self-rating. See
+Stateless report from pilot-supplied duties, sleep and self-rating. Report 1.2 also supports `roster_concern` scenarios with planned travel, clearly identified sleep estimates and a personal watch reference. Input provenance schema 2 retains the full request; watch references never alter model scores. See
 `docs/FATIGUE_REPORT.md`. The pilot's own assessment is never contradicted.
 
 ### EASA roster checks (`core/easa_checks.py`)
@@ -170,24 +182,24 @@ Seven multiplicative factors applied to raw sleep duration in `SleepBlock.effect
 
 ### Testing Conventions
 - Tests manually construct `Duty` objects with UTC datetimes
-- No pytest, no fixtures, no test discovery - each file runs standalone
-- Direct assertions on model outputs with explicit pass/fail printing
+- Pytest discovers tests and fixtures; use assertions for every expected outcome.
+- Assert model invariants and independently reviewed fixtures; never treat printed status as a test result.
 - Test pattern:
   ```python
   from models.data_models import Duty, FlightSegment, Airport
   duty = Duty(duty_id='D001', segments=[segment], ...)
   model = BorbelyFatigueModel()
   timeline = model.simulate_duty(duty)
-  assert timeline.landing_performance > 55
-  print("✅ TEST PASSED")
+  assert 20 <= timeline.landing_performance <= 100
   ```
 
 ### API Response Contract
 All `/api/analyze` responses include:
-- `duties[]` with nested `sleep_blocks[]` and `performance_points[]`
-- `rest_days[]` with recovery sleep
-- `summary.risk_assessment` with EASA regulatory references
-- `time_validation_warnings[]` for data quality issues
+- `duties[]` with sleep and performance fields defined by DutyResponse
+- `rest_days_sleep[]` with inferred recovery sleep
+- `easa_findings[]` and `easa_summary` with explicit assessment coverage
+- `persistence_status` indicating saved, failed or session_only
+- Import warnings and source reconciliation are returned by `/api/roster/preview`.
 
 Frontend expects ISO format datetimes and specific field names defined in Pydantic models (`api/api_server.py`).
 
@@ -203,8 +215,8 @@ Frontend expects ISO format datetimes and specific field names defined in Pydant
 ## Regulatory Context (EASA FTL)
 
 When implementing features, reference these regulations:
-- **ORO.FTL.120** - Rest requirements (12h minimum, 8h sleep opportunity)
-- **ORO.FTL.235** - Cumulative duty hours, standby periods
+- **ORO.FTL.235** - Rest periods (requirements depend on home/away context)
+- **ORO.FTL.210 / .225** - Cumulative limits / standby
 - **AMC1 ORO.FTL.105(10)** - WOCL definition (02:00-05:59 home base time)
 - **AMC1 ORO.FTL.105(1)** - Acclimatization (±2h timezone band, 3 local nights)
 

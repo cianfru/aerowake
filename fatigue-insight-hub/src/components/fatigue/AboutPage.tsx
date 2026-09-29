@@ -85,7 +85,7 @@ export function AboutPage() {
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
               Python · FastAPI · NumPy · React · TypeScript · Vite ·
-              Tailwind CSS · shadcn/ui · Recharts · Mapbox
+              Tailwind CSS · shadcn/ui · Recharts · d3-geo / Natural Earth
             </p>
           </div>
 

@@ -159,7 +159,7 @@ export interface DutyAnalysis {
       // Additional backend strategies
       | 'early_bedtime'
       | 'afternoon_nap'
-      | 'post_duty_recovery';
+      | 'ulr_pre_duty' | 'post_duty_recovery';
     confidence: number;
     warnings: string[];
     // Sleep timing (HH:mm in home base timezone)
@@ -340,7 +340,7 @@ export interface RestDaySleep {
   totalSleepHours: number;
   effectiveSleepHours: number;
   sleepEfficiency: number;
-  strategyType: 'recovery' | 'normal' | 'post_duty_recovery';
+  strategyType: 'recovery' | 'normal' | 'ulr_pre_duty' | 'post_duty_recovery';
   confidence: number;
   // Quality factor breakdown from backend
   explanation?: string;
@@ -364,6 +364,9 @@ export interface EasaFinding {
 }
 
 export interface EasaSummary {
+  status?: string;
+  coverage?: Record<string, { status: string; reason: string }>;
+
   duty7dMax: number;
   duty14dMax: number;
   duty28dMax: number;
@@ -397,6 +400,8 @@ export interface CompanyDetection {
 }
 
 export interface AnalysisResults {
+  legacyModel?: boolean;
+  persistenceStatus?: string;
   statistics: DutyStatistics;
   duties: DutyAnalysis[];
   generatedAt: Date;

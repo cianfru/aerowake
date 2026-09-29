@@ -8,6 +8,7 @@ import type { AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { DutyDetailsDialog } from '../DutyDetailsDialog';
 import { ExportOptions } from '../ExportOptions';
 import { RosterUploadCard } from './RosterUploadCard';
+import { RosterForecast } from './RosterForecast';
 import { DutyWatchCard } from './DutyWatchCard';
 import { EasaChecksCard } from './EasaChecksCard';
 import { AllDutiesList } from './AllDutiesList';
@@ -44,7 +45,7 @@ function VerdictHeader({ results, watch, onNewRoster }: {
             {watch.length > 0 ? (
               <span className="text-foreground">{watch.length} to watch</span>
             ) : (
-              <span>No duties need special attention this month</span>
+              <span>No duties reach the model watch band</span>
             )}
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -119,6 +120,10 @@ export function RosterPage() {
     <div className="flex-1 px-4 py-8 md:px-8 md:py-12">
       <div className="mx-auto max-w-5xl min-w-0 space-y-12 animate-fade-in">
         <VerdictHeader results={results} watch={watch} onNewRoster={removeFile} />
+
+        <RosterForecast results={results} onDetails={selectDuty} onConcern={(duty, watchReference) => {
+          if (duty.dutyId) openFatigueReportForDuty(duty.dutyId, { purpose: 'roster_concern', watchReference });
+        }} />
 
         <section aria-labelledby="watch-heading" className="space-y-1">
           <SectionHeading

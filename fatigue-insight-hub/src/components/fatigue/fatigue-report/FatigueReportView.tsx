@@ -26,11 +26,30 @@ const LEVEL_RULE: Record<string, string> = {
 
 const PRINT_CSS = `
 @media print {
+  @page { size: A4; margin: 14mm; }
+  body { background: white !important; }
   body * { visibility: hidden !important; }
   #fatigue-report-print, #fatigue-report-print * { visibility: visible !important; }
-  #fatigue-report-print { position: absolute; inset: 0 auto auto 0; width: 100%; padding: 0 12mm; color: #000; }
+  #fatigue-report-print { position: absolute; inset: 0 auto auto 0; width: 100%; max-width: none; padding: 0; }
+  #fatigue-report-print, #fatigue-report-print * { color: #111 !important; background-color: transparent !important; border-color: #bbb !important; box-shadow: none !important; text-shadow: none !important; }
   #fatigue-report-print .no-print { display: none !important; }
-  #fatigue-report-print section { break-inside: avoid; }
+  #fatigue-report-print section { break-inside: auto; margin-top: 6mm; }
+  #fatigue-report-print h1, #fatigue-report-print h2, #fatigue-report-print h3 { break-after: avoid; }
+  #fatigue-report-print .report-appendix { break-before: page; padding-top: 0; border: 0; }
+  #fatigue-report-print { font-size: 9.5pt; line-height: 1.4; --foreground: 220 10% 10%; --muted-foreground: 220 5% 35%; --border: 220 5% 70%; --popover: 0 0% 100%; }
+  #fatigue-report-print > * { margin-top: 4mm !important; margin-bottom: 0 !important; }
+  #fatigue-report-print .text-sm { font-size: 9.5pt; }
+  #fatigue-report-print section.grid { break-inside: avoid; }
+  #fatigue-report-print th { white-space: nowrap !important; font-size: 8pt; }
+  #fatigue-report-print table { width: 100%; font-size: 9pt; }
+  #fatigue-report-print td { white-space: normal !important; overflow-wrap: anywhere; }
+  #fatigue-report-print thead { display: table-header-group; }
+  #fatigue-report-print .recharts-tooltip-wrapper { display: none !important; }
+  #fatigue-report-print svg text { font-size: 16px !important; }
+  #fatigue-report-print li { padding-top: 1mm; padding-bottom: 1mm; }
+  #fatigue-report-print .report-limitations { break-inside: avoid; }
+  #fatigue-report-print li, #fatigue-report-print tr, #fatigue-report-print figure { break-inside: avoid; }
+  #fatigue-report-print .overflow-x-auto { overflow: visible !important; }
 }`;
 
 function fmtH(h: number | null | undefined): string {
@@ -76,7 +95,7 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
     const d = new Date(chart.t0 + x * 3600e3);
     const local = new Date(d.getTime() + tzOffsetMinutes(d, tz) * 60000);
     const hh = String(local.getUTCHours()).padStart(2, '0');
-    return hh === '00' ? `${local.getUTCDate()}/${local.getUTCMonth() + 1}` : `${hh}:00`;
+    return `${local.getUTCDate()}/${local.getUTCMonth() + 1} ${hh}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
   };
 
   const download = () => {
@@ -113,7 +132,7 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
       </div>
 
       <section className="space-y-3 border-b border-border pb-6">
-        <p className="eyebrow">Fatigue report</p>
+        <p className="eyebrow">{report.event.type === 'roster_concern' ? 'Prospective roster concern' : 'Fatigue report'}</p>
         <h1 className="text-2xl md:text-3xl font-semibold leading-tight tracking-[-0.02em]">
           {report.event.affected_duty_label ?? `Fatigue reported ${report.event.time_local}`}
         </h1>
@@ -122,6 +141,13 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
           Event {report.event.time_local} ({report.event.time_z}) · Period {report.period.start_local} – {report.period.end_local} ·
           Times in {tz} · Generated {new Date(report.generated_at).toUTCString()} · {report.report_version} / {report.engine_version}
         </p>
+      </section>
+
+      <section className="space-y-3" aria-label="Submission summary">
+        <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Submission summary</h2>
+        {report.pilot_narrative && <div><h3 className="text-sm font-semibold">Pilot statement</h3><p className="whitespace-pre-wrap text-sm leading-relaxed">{report.pilot_narrative}</p></div>}
+        {report.narrative.filter(p => p.title !== 'Conclusion' && p.title !== 'Pilot assessment').map(p => <div key={p.title}><h3 className="text-sm font-semibold">{p.title}</h3><p className="text-sm leading-relaxed text-foreground/90">{p.text}</p></div>)}
+        {report.self_assessment && <p className="text-sm">Pilot self-rating at {report.self_assessment.rated_at_local}: {report.self_assessment.kss != null && `KSS ${report.self_assessment.kss}/9 (${report.self_assessment.kss_label})`} {report.self_assessment.samn_perelli != null && `· Samn-Perelli ${report.self_assessment.samn_perelli}/7`}. These are the pilot's observations.</p>}
       </section>
 
       <section className="flex gap-4">
@@ -137,10 +163,24 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
                   {SEVERITY_STYLE[s].label.toLowerCase()}
                 </span>
               ))}
-            <span className="whitespace-nowrap">Data confidence: <span className="text-foreground">{report.data_quality.confidence}</span></span>
+            <span className="whitespace-nowrap">Record coverage: <span className="text-foreground">{report.data_quality.confidence}</span></span>
           </p>
         </div>
       </section>
+
+      <aside className="space-y-2 border-l-2 border-border pl-4 text-sm" aria-label="Evidence coverage"><p className="font-medium">Evidence coverage · {report.data_quality.confidence}</p>{report.data_quality.notes.map((note, i) => <p key={i} className="text-muted-foreground">{note}</p>)}</aside>
+
+
+
+      <div className="report-appendix border-t border-border pt-6"><h2 className="text-lg font-semibold">Supporting detail</h2><p className="mt-2 text-sm text-muted-foreground">Duty and sleep records, supporting findings and optional model estimates. These estimates do not replace your declaration.</p></div>
+
+      <section aria-label="Three sources of evidence" className="grid gap-5 sm:grid-cols-3">
+        <div><h3 className="text-sm font-semibold">Roster records</h3><p className="mt-2 text-sm text-muted-foreground">{report.duties.length} duties supplied; {report.duties.filter(d => d.status === 'operated').length} marked operated and {report.duties.filter(d => d.status === 'planned').length} planned. Imported times need confirmation against actual operations.</p></div>
+        <div><h3 className="text-sm font-semibold">Scientific estimates</h3><p className="mt-2 text-sm text-muted-foreground">{report.data_quality.reported_sleeps} reported sleep periods and {report.data_quality.estimated_sleeps} estimated. {report.data_quality.model_available ? 'Predictions use this supplied pattern.' : 'Sleep-dependent predictions are unavailable.'}</p></div>
+        <div><h3 className="text-sm font-semibold">Pilot experience</h3><p className="mt-2 text-sm text-muted-foreground">{report.pilot_narrative ? 'Pilot statement included.' : 'No pilot statement supplied.'} {report.self_assessment ? 'Self-ratings are recorded separately from predictions.' : 'No self-rating supplied; none has been inferred.'}</p></div>
+      </section>
+
+      {report.watch_reference && <p className="text-sm text-muted-foreground">Personal watch reference: KSS {report.watch_reference.kss.toFixed(1)}. {report.watch_reference.duty_ids.length} assessed duties reach this reference. {report.watch_reference.explanation}</p>}
 
       <section className="grid grid-cols-2 gap-x-6 gap-y-6 border-y border-border py-5 sm:grid-cols-4 sm:gap-x-0 sm:divide-x sm:divide-border">
         <Stat label="Sleep, prior 24 h" value={fmtH(sw?.sleep_24h)} hint="5h or more recommended" tone={sw && sw.sleep_24h < 5 ? 'bad' : undefined} />
@@ -173,8 +213,9 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
                 ))}
                 <ReferenceLine y={7} stroke="hsl(var(--high))" strokeDasharray="3 3" strokeOpacity={0.8}
                   label={{ value: 'Sleepy (7)', position: 'insideTopLeft', fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                {report.watch_reference && report.watch_reference.kss !== 7 && <ReferenceLine y={report.watch_reference.kss} stroke="hsl(var(--primary))" strokeDasharray="6 4" label={{ value: 'Personal watch', position: 'insideBottomRight', fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />}
                 <ReferenceLine x={chart.eventX} stroke="hsl(var(--critical))" strokeOpacity={0.8}
-                  label={{ value: 'Event', fontSize: 10, position: 'top', fill: 'hsl(var(--muted-foreground))' }} />
+                  label={{ value: report.event.type === 'roster_concern' ? 'Assessment' : 'Event', fontSize: 10, position: 'insideTopLeft', fill: 'hsl(var(--muted-foreground))' }} />
                 <Area dataKey="kss" stroke="none" fill="hsl(var(--foreground))" fillOpacity={0.05} connectNulls={false} isAnimationActive={false} />
                 <Line dataKey="kss" stroke="hsl(var(--foreground))" dot={false} strokeWidth={2} connectNulls={false} isAnimationActive={false} />
                 <Line dataKey="kss90" stroke="hsl(var(--muted-foreground))" dot={false} strokeWidth={1} strokeDasharray="4 3" connectNulls={false} isAnimationActive={false} />
@@ -218,21 +259,6 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
         </ul>
       </section>
 
-      <section className="space-y-3">
-        <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Report</h2>
-        {report.narrative.map((p) => (
-          <div key={p.title}>
-            <h3 className="text-sm font-semibold">{p.title}</h3>
-            <p className="text-sm leading-relaxed text-foreground/90">{p.text}</p>
-          </div>
-        ))}
-        {report.pilot_narrative && (
-          <div>
-            <h3 className="text-sm font-semibold">Pilot statement</h3>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{report.pilot_narrative}</p>
-          </div>
-        )}
-      </section>
 
       <section className="space-y-2">
         <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Duties</h2>
@@ -297,7 +323,12 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
         </section>
       )}
 
-      <section className="space-y-2">
+      {report.scientific_basis && <section className="space-y-3" aria-label="Scientific basis">
+        <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Scientific basis</h2>
+        {report.scientific_basis.map(source => <div key={source.url} className="text-sm"><a href={source.url} target="_blank" rel="noreferrer" className="font-medium underline">{source.citation}</a><p className="mt-1 text-muted-foreground">{source.application}</p></div>)}
+      </section>}
+
+      <section className="report-limitations space-y-2">
         <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Data quality and limitations</h2>
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
           {report.data_quality.notes.map((n) => <li key={n}>{n}</li>)}

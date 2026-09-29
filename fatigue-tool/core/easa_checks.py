@@ -84,7 +84,7 @@ def duty_intervals(roster: Roster) -> List[Interval]:
 def block_intervals(roster: Roster) -> List[Interval]:
     return [Interval(seg.scheduled_departure_utc, seg.scheduled_arrival_utc)
             for d in roster.duties for seg in d.segments
-            if not seg.is_deadhead and not seg.is_inflight_rest]
+            if not seg.is_deadhead]
 
 
 def _local_nights(start: datetime, end: datetime, tz: str) -> int:
@@ -153,8 +153,10 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
 
     # ---- ORO.FTL.235 minimum rest before each duty -------------------------
     for prev, nxt in zip(duties, duties[1:]):
+        if not roster.pilot_base:
+            continue
         rest = (nxt.report_time_utc - prev.release_time_utc).total_seconds() / 3600
-        at_home = not prev.segments or prev.segments[-1].arrival_airport.timezone == tz
+        at_home = bool(roster.pilot_base) and (not prev.segments or prev.segments[-1].arrival_airport.code == roster.pilot_base)
         minimum = max(prev.duty_hours, 12.0 if at_home else 10.0)
         if rest < minimum:
             findings.append(_finding(
@@ -169,7 +171,8 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
     for prev, nxt in zip(activities, activities[1:]):
         start, end = prev.release_time_utc, nxt.report_time_utc
         hours = (end - start).total_seconds() / 3600
-        if hours >= RECOVERY_REST_HOURS and _local_nights(start, end, tz) >= 2:
+        rest_tz = prev.segments[-1].arrival_airport.timezone if prev.segments else tz
+        if hours >= RECOVERY_REST_HOURS and _local_nights(start, end, rest_tz) >= 2:
             recovery.append((start, end))
     for (a_start, a_end), (b_start, _) in zip(recovery, recovery[1:]):
         gap = (b_start - a_end).total_seconds() / 3600
@@ -184,6 +187,17 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
         findings.append(_finding('recovery_rest', 'ORO.FTL.235(d)', 'warning',
                                  'No extended recovery rest in the roster',
                                  'No rest of at least 36 h including 2 local nights was found.'))
+    # Known leading/trailing spans are lower bounds; unknown history cannot make them shorter.
+    if activities and recovery:
+        boundaries = [(activities[0].report_time_utc, recovery[0][0]),
+                      (recovery[-1][1], activities[-1].release_time_utc)]
+        for start, end in boundaries:
+            gap = (end - start).total_seconds() / 3600
+            if gap > RECOVERY_MAX_GAP_HOURS:
+                findings.append(_finding('recovery_rest', 'ORO.FTL.235(d)', 'warning',
+                    'Extended recovery rest missing at a roster boundary',
+                    f'At least {_h(gap)} without qualifying recovery rest in the supplied activities.',
+                    start, end, gap, RECOVERY_MAX_GAP_HOURS))
     summary['recovery_rests'] = len(recovery)
 
     # ---- ORO.FTL.205 FDP above the table maximum ---------------------------
@@ -202,5 +216,21 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
                                      f'{_h(d.max_fdp_hours)} — an extension or commander’s discretion is needed.',
                                      d.report_time_utc, d.release_time_utc, fdp, d.max_fdp_hours))
 
+    # This is a scoped checker, never a compliance certificate. Prior roster history is unknown.
+    coverage = {}
+    for rule in ('duty_7d', 'duty_14d', 'duty_28d', 'block_28d', 'min_rest', 'recovery_rest'):
+        failed = any(f['rule'] == rule and f['severity'] == 'warning' for f in findings)
+        coverage[rule] = {'status': 'failed' if failed else 'incomplete_history',
+                          'reason': 'Only supplied activities were assessed; boundary history is unknown.'}
+    flights = [d for d in duties if d.duty_type == DutyType.FLIGHT and d.segments]
+    assessed = sum(d.max_fdp_hours is not None for d in flights)
+    coverage['fdp_max'] = {'status': 'not_assessed' if assessed < len(flights) or not flights else
+                         ('failed' if any(f['rule'] == 'fdp_max' for f in findings) else 'passed'),
+                         'assessed': assessed, 'eligible': len(flights),
+                         'reason': 'Crew/acclimatization context is required; operator approval is outside this check.'}
+    if not roster.pilot_base:
+        coverage['min_rest'] = {'status': 'not_assessed', 'reason': 'Home base identity is missing.'}
+    summary['coverage'] = coverage
+    summary['status'] = 'findings' if any(f['severity'] == 'warning' for f in findings) else 'partial'
     findings.sort(key=lambda f: (f['severity'] != 'warning', f['window_start_utc'] or ''))
     return dict(findings=findings, summary=summary)

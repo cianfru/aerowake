@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { geoDistance, geoGraticule10, geoOrthographic, geoPath } from 'd3-geo';
+import { useEffect, useMemo, useRef, useState, useId } from 'react';
+import { geoDistance, geoGraticule10, geoOrthographic, geoPath, geoNaturalEarth1 } from 'd3-geo';
 import { feature } from 'topojson-client';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import type { GeometryCollection, Topology } from 'topojson-specification';
@@ -31,6 +31,7 @@ interface GlobeProps {
   routes: GlobeRoute[];
   center?: [number, number]; // [lng, lat]
   autoRotate?: boolean;
+  flat?: boolean;
   interactive?: boolean;
   showLabels?: boolean;
   className?: string;
@@ -53,8 +54,18 @@ function prefersReducedMotion() {
 
 export function Globe({
   airports, routes, center = [51.6, 25.3], autoRotate = false, interactive = true, showLabels = true,
-  className, ariaLabel = 'Route globe',
+  className, ariaLabel = 'Route globe', flat = false,
 }: GlobeProps) {
+  const oceanId = useId();
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    const node = svgRef.current;
+    if (!node || !('IntersectionObserver' in window)) return;
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting));
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
   // d3 rotation is the negative of the centre point.
   const [rotation, setRotation] = useState<[number, number]>([-center[0], -Math.max(-60, Math.min(60, center[1]))]);
   const drag = useRef<{ x: number; y: number; r: [number, number] } | null>(null);
@@ -65,31 +76,31 @@ export function Globe({
   }, [center[0], center[1]]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!autoRotate || prefersReducedMotion()) return;
+    if (!autoRotate || !visible || flat || prefersReducedMotion()) return;
     let last = performance.now();
     // ~30 fps is smooth at this speed and halves the SVG re-render cost.
     const tick = (now: number) => {
       const dt = now - last;
       if (dt >= 33) {
         last = now;
-        if (!drag.current) setRotation(([l, p]) => [l + Math.min(dt, 100) * 0.004, p]);
+        if (!document.hidden && !drag.current) setRotation(([l, p]) => [l + Math.min(dt, 100) * 0.004, p]);
       }
       frame.current = requestAnimationFrame(tick);
     };
     frame.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame.current);
-  }, [autoRotate]);
+  }, [autoRotate, visible, flat]);
 
   const projection = useMemo(
-    () => geoOrthographic().scale(SIZE / 2 - 8).translate([SIZE / 2, SIZE / 2]).rotate(rotation).clipAngle(90),
-    [rotation],
+    () => flat ? geoNaturalEarth1().fitExtent([[8, 20], [SIZE - 8, 360]], { type: 'Sphere' }) : geoOrthographic().scale(SIZE / 2 - 8).translate([SIZE / 2, SIZE / 2]).rotate(rotation).clipAngle(90),
+    [rotation, flat],
   );
   const path = useMemo(() => geoPath(projection), [projection]);
   const visibleCentre: [number, number] = [-rotation[0], -rotation[1]];
-  const isVisible = (lng: number, lat: number) => geoDistance([lng, lat], visibleCentre) < Math.PI / 2 - 0.02;
+  const isVisible = (lng: number, lat: number) => flat || geoDistance([lng, lat], visibleCentre) < Math.PI / 2 - 0.02;
 
   const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!interactive) return;
+    if (!interactive || flat) return;
     (e.target as Element).setPointerCapture?.(e.pointerId);
     drag.current = { x: e.clientX, y: e.clientY, r: rotation };
   };
@@ -103,23 +114,32 @@ export function Globe({
 
   return (
     <svg
-      viewBox={`0 0 ${SIZE} ${SIZE}`}
-      className={cn('h-auto w-full select-none', interactive && 'cursor-grab active:cursor-grabbing', className)}
+      ref={svgRef}
+      viewBox={`0 0 ${SIZE} ${flat ? 380 : SIZE}`}
+      className={cn('h-auto w-full select-none', interactive && 'cursor-grab active:cursor-grabbing focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary', className)}
       role="img"
+      tabIndex={interactive ? 0 : undefined}
+      onKeyDown={e => {
+        if (!interactive || flat) return;
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home'].includes(e.key)) return;
+        e.preventDefault();
+        if (e.key === 'Home') setRotation(center ? [-center[0], -center[1]] : [0, -20]);
+        else setRotation(([x, y]) => [x + (e.key === 'ArrowLeft' ? -10 : e.key === 'ArrowRight' ? 10 : 0), Math.max(-75, Math.min(75, y + (e.key === 'ArrowUp' ? 10 : e.key === 'ArrowDown' ? -10 : 0)))]);
+      }}
       aria-label={ariaLabel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
       onPointerLeave={endDrag}
-      style={{ touchAction: interactive ? 'none' : undefined }}
+      style={{ touchAction: interactive ? 'pan-y' : undefined }}
     >
       <defs>
-        <radialGradient id="globe-ocean" cx="40%" cy="35%" r="75%">
+        <radialGradient id={oceanId} cx="40%" cy="35%" r="75%">
           <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.16} />
           <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.03} />
         </radialGradient>
       </defs>
-      <path d={path({ type: 'Sphere' }) ?? undefined} fill="url(#globe-ocean)" stroke="hsl(var(--primary))" strokeOpacity={0.35} strokeWidth={1} />
+      <path d={path({ type: 'Sphere' }) ?? undefined} fill={`url(#${oceanId})`} stroke="hsl(var(--primary))" strokeOpacity={0.35} strokeWidth={1} />
       <path d={path(GRATICULE) ?? undefined} fill="none" stroke="hsl(var(--primary))" strokeOpacity={0.08} strokeWidth={0.6} />
       {LAND.features.map((f: Feature<Geometry>, i: number) => (
         <path key={i} d={path(f) ?? undefined} fill="hsl(var(--primary))" fillOpacity={0.14} stroke="hsl(var(--primary))" strokeOpacity={0.3} strokeWidth={0.5} />

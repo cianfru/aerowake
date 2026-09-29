@@ -1,3 +1,4 @@
+import type { TooltipProps } from 'recharts';
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -37,7 +38,7 @@ export function SleepInertiaChart({ compact = false }: SleepInertiaChartProps) {
     return points;
   }, []);
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
     if (active && payload && payload.length) {
       const d = payload[0].payload;
       return (

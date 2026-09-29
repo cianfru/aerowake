@@ -26,7 +26,7 @@ function Gauge({ label, value, limit }: { label: string; value: number; limit: n
 
 /** Roster-level EASA ORO.FTL checks: warnings listed, gauges for rolling totals. */
 export function EasaChecksCard({ findings, summary }: EasaChecksCardProps) {
-  if (!findings && !summary) return null;
+
   const warnings = (findings ?? []).filter((f) => f.severity === 'warning');
   const infos = (findings ?? []).filter((f) => f.severity !== 'warning');
 
@@ -40,8 +40,8 @@ export function EasaChecksCard({ findings, summary }: EasaChecksCardProps) {
 
       {warnings.length === 0 ? (
         <p className="flex items-center gap-2 text-sm">
-          <Check className="h-4 w-4 flex-shrink-0 text-success" aria-hidden="true" />
-          All EASA cumulative duty and rest checks met
+          <Check className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+          {!summary || summary.status === 'unavailable' ? 'FTL checks unavailable' : 'No exceedances found in the supplied activities'}
         </p>
       ) : (
         <ul className="space-y-3">
@@ -58,7 +58,9 @@ export function EasaChecksCard({ findings, summary }: EasaChecksCardProps) {
         </ul>
       )}
 
-      {summary && (
+      <p className="text-sm text-muted-foreground">These checks have limited coverage. Prior history and operator approvals are not verified.</p>
+      {summary?.coverage && <details><summary className="cursor-pointer py-2 text-sm text-primary">Check coverage and missing information</summary><ul className="space-y-1 text-sm text-muted-foreground">{Object.entries(summary.coverage).filter(([, c]) => c.status !== 'passed').map(([rule, c]) => <li key={rule}><span className="font-medium text-foreground">{rule.replace(/_/g, ' ')}: {c.status.replace(/_/g, ' ')}</span> — {c.reason}</li>)}</ul></details>}
+      {summary && summary.status !== 'unavailable' && (
         <div className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-4" aria-label="Highest rolling totals versus EASA limits">
           <Gauge label="Duty · 7 days" value={summary.duty7dMax} limit={summary.limits.duty7d} />
           <Gauge label="Duty · 14 days" value={summary.duty14dMax} limit={summary.limits.duty14d} />

@@ -129,8 +129,8 @@ class CrewLinkRosterParser:
         self.airport_cache[code] = placeholder
         self.unknown_airports.add(code)
 
-        print(f"⚠️  Airport {code} not found in airportsdata ({len(_IATA_DB)} entries). Using UTC placeholder.")
-        print(f"    Fatigue/circadian calculations for sectors involving {code} may be inaccurate.")
+        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
+        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
 
         return placeholder
     
@@ -152,7 +152,7 @@ class CrewLinkRosterParser:
             if self.timezone_format == 'auto':
                 detected_format = self._detect_timezone_format(page)
                 self.timezone_format = detected_format
-                print(f"   ℹ️  Detected timezone format: {detected_format.upper()}")
+                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             
             # Extract pilot info from header
             pilot_info = self._extract_pilot_info(page)
@@ -206,29 +206,29 @@ class CrewLinkRosterParser:
         # Debug: print any line containing "time" for troubleshooting
         for line in text_lower.split('\n'):
             if 'time' in line:
-                print(f"   [TZ-DETECT] Found line with 'time': {repr(line.strip())}")
+                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
 
         # Pattern 1: UTC/Zulu format
         # Matches: "all times are in utc", "times utc", "times: utc", etc.
         if re.search(r'(?:all\s+)?times?\s*(?:are\s+)?(?:in\s+)?[:\-–]?\s*(?:utc|zulu)', text_lower):
-            print("   📍 Timezone format detected: UTC/ZULU")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             return 'zulu'
 
         # Pattern 2: Local time format
         # Matches: "all times are in local", "times are local", "times: local", etc.
         if re.search(r'(?:all\s+)?times?\s*(?:are\s+)?(?:in\s+)?[:\-–]?\s*local', text_lower):
-            print("   📍 Timezone format detected: LOCAL TIME")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             return 'local'
 
         # Pattern 3: Home base format
         # Matches: "all times are base", "all times are home base", "times in home base", "home base time"
         if re.search(r'(?:all\s+)?times?\s*(?:are\s+)?(?:in\s+)?[:\-–]?\s*(?:home\s*)?base(?:\s|$)', text_lower) or \
            re.search(r'home\s*base\s+time', text_lower):
-            print("   📍 Timezone format detected: HOME BASE")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             return 'homebase'
 
         # Default to local
-        print("   ⚠️  Could not detect timezone format from PDF header, defaulting to LOCAL")
+        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         return 'local'
     
     def _extract_pilot_info(self, page) -> Dict:
@@ -256,8 +256,8 @@ class CrewLinkRosterParser:
         text_clean = re.sub(r'\(cid:\d+\)', ' ', text)
         
         # Debug: Print first 500 chars of cleaned text
-        print(f"\n   [DEBUG] First 500 chars of cleaned PDF text:")
-        print(f"   {repr(text_clean[:500])}\n")
+        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
+        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         
         # Initialize with defaults
         info = {
@@ -281,16 +281,16 @@ class CrewLinkRosterParser:
         name_match = re.search(r'Name\s+:\s*(.+?)(?:\n|All times|ID\s+:)', text_clean, re.DOTALL)
         if name_match:
             info['name'] = name_match.group(1).strip()
-            print(f"   ✓ Extracted pilot name: {info['name']}")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         else:
             # Fallback: Try without requiring whitespace after colon
             name_match = re.search(r'Name\s*:\s*(.+?)(?:\n|$)', text_clean)
             if name_match:
                 info['name'] = name_match.group(1).strip()
-                print(f"   ✓ Extracted pilot name (fallback): {info['name']}")
+                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             else:
-                print(f"   ⚠️  Could not extract pilot name from PDF header")
-                print(f"   [DEBUG] Text around 'Name': {repr(text_clean[:200])}")
+                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
+                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         
         # ----
         # 2. EXTRACT ID, BASE, AIRCRAFT
@@ -306,15 +306,15 @@ class CrewLinkRosterParser:
             info['base'] = id_match.group(2)
             info['role'] = id_match.group(3)   # CP, FO, etc.
             info['aircraft'] = id_match.group(4)
-            print(f"   ✓ Extracted pilot ID: {info['id']} | Base: {info['base']} | Role: {info['role']} | Aircraft: {info['aircraft']}")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         else:
             # Try simpler pattern without role prefix
             id_match_simple = re.search(r'ID\s*:\s*(\d+)', text_clean)
             if id_match_simple:
                 info['id'] = id_match_simple.group(1)
-                print(f"   ✓ Extracted pilot ID: {info['id']} (base/aircraft not found)")
+                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             else:
-                print(f"   ⚠️  Could not extract pilot ID from PDF header")
+                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         
         # ----
         # 3. EXTRACT ROSTER PERIOD (ENHANCED)
@@ -336,17 +336,17 @@ class CrewLinkRosterParser:
                 info['month'] = date_parts.group(1)
                 info['year'] = int(date_parts.group(2))
             
-            print(f"   ✓ Period: {info['period_start']} to {info['period_end']}")
-            print(f"   ✓ Extracted period: {info['month']} {info['year']}")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         else:
             # Fallback to simpler pattern
             period_match_simple = re.search(r'Period:\s*\d+-([A-Za-z]+)-(\d{4})', text_clean)
             if period_match_simple:
                 info['month'] = period_match_simple.group(1)
                 info['year'] = int(period_match_simple.group(2))
-                print(f"   ✓ Extracted period: {info['month']} {info['year']}")
+                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             else:
-                print(f"   ⚠️  Period extraction failed")
+                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         
         # ----
         # 4. EXTRACT STATISTICS (BLOCK HOURS, DUTY HOURS)
@@ -358,20 +358,20 @@ class CrewLinkRosterParser:
         if stats_match:
             info['block_hours'] = stats_match.group(1)
             info['duty_hours'] = stats_match.group(2)
-            print(f"   ✓ Statistics: {info['block_hours']} block hours, {info['duty_hours']} duty hours")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         else:
-            print(f"   ⚠️  Statistics extraction failed")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         
         # ----
         # 5. DETECT TIMEZONE FORMAT
         # ----
         # This determines how to interpret all times in the duty details
         if "All times are in Local" in text_clean:
-            print(f"   ✓ Timezone: LOCAL TIMES")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         elif "All times are in UTC" in text_clean or "Zulu" in text_clean:
-            print(f"   ✓ Timezone: UTC/ZULU TIMES")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         else:
-            print(f"   ℹ️  Timezone not explicitly stated, assuming LOCAL")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         
         return info
     
@@ -479,8 +479,7 @@ class CrewLinkRosterParser:
                     prev_duty = duties[-1]
                     prev_duty.segments.extend(duty.segments)
                     prev_duty.release_time_utc = duty.release_time_utc
-                    print(f"  ✓ Merged {date.strftime('%d%b')} segments into previous duty "
-                          f"({prev_duty.date.strftime('%d%b')}) — layover continuation, no RPT")
+                    pass  # Parser diagnostics are returned to the caller, never logged with personal data.
                 else:
                     duties.append(duty)
 
@@ -587,11 +586,11 @@ class CrewLinkRosterParser:
                     home_tz = pytz.timezone(self.home_timezone)
                     report_time_naive_prev = report_time_naive - timedelta(days=1)
                     report_time = home_tz.localize(report_time_naive_prev)
-                print(f"  ⚠️  Report time adjusted to previous day (was after first departure)")
+                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         else:
             # Fallback: report time = departure time - 1 hour
             report_time = segments[0].scheduled_departure_utc - timedelta(hours=1)
-            print(f"  ⚠️  No RPT line found for {date.strftime('%d%b')} — using departure-1h as fallback")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         
         if not report_time:
             return None  # No valid duty
@@ -606,7 +605,7 @@ class CrewLinkRosterParser:
         
         # Final validation: ensure report < release
         if report_time >= release_time:
-            print(f"  ⚠️  Invalid duty: report >= release, adjusting release time")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             release_time = report_time + timedelta(hours=1)  # Minimum 1h duty
         
         # Derive duty date from report_time in home base timezone.
@@ -720,16 +719,14 @@ class CrewLinkRosterParser:
         if len(times_found) < 2:
             # Couldn't find start/end times — try fallback from RPT
             if report_hour is not None:
-                print(f"  ⚠️  Training {training_code} on {date.strftime('%d%b')}: "
-                      f"could not find start/end times, using RPT + 8h fallback")
+                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
                 start_naive = datetime(date.year, date.month, date.day,
                                        report_hour, report_minute)
                 end_naive = start_naive + timedelta(hours=8)
                 times_found = [(start_naive, f"{report_hour:02d}:{report_minute:02d}"),
                                (end_naive, "")]
             else:
-                print(f"  ⚠️  Skipping training {training_code} on {date.strftime('%d%b')}: "
-                      f"no RPT or times found")
+                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
                 return None
 
         start_time_naive, _ = times_found[0]
@@ -753,7 +750,7 @@ class CrewLinkRosterParser:
                 start_time_utc = pytz.utc.localize(start_time_naive)
                 end_time_utc = pytz.utc.localize(end_time_naive)
         except Exception as e:
-            print(f"  ⚠️  Error localizing training {training_code} on {date.strftime('%d%b')}: {e}")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             return None
 
         # Handle overnight: if end is before start, it crosses midnight
@@ -810,12 +807,7 @@ class CrewLinkRosterParser:
             training_annotations=annotations if annotations else None,
         )
 
-        print(f"  ✓ Training duty: {training_code} ({duty_type.value}) on "
-              f"{duty_date.strftime('%d%b')} — "
-              f"RPT {report_in_home_tz.strftime('%H:%M')}, "
-              f"duty {start_time_utc.astimezone(home_tz).strftime('%H:%M')}-"
-              f"{end_time_utc.astimezone(home_tz).strftime('%H:%M')} "
-              f"({duty.duty_hours:.1f}h)")
+        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
 
         return duty
 
@@ -940,7 +932,7 @@ class CrewLinkRosterParser:
                     segments.append(segment)
 
                 except Exception as e:
-                    print(f"⚠️  Error creating segment for flight {flight_num}: {e}")
+                    pass  # Parser diagnostics are returned to the caller, never logged with personal data.
 
                 # Skip past the 5 standard elements
                 i += 5

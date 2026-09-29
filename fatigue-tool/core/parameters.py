@@ -391,7 +391,7 @@ class RiskThresholds:
         if performance is None or not 0 <= performance <= 100:
             return 'unknown'
         for level, (low, high) in self.thresholds.items():
-            if low <= performance < high or (performance == 100 and high == 100):
+            if low < performance <= high or (performance == 0 and low == 0):
                 return level
         return 'extreme'
 

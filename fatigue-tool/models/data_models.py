@@ -209,33 +209,20 @@ class Duty:
     
     @property
     def fdp_hours(self) -> float:
+        """ORO.FTL.105(12): report to the end of the last operating sector.
+
+        Scheduled arrival is used as an approximation for on-block time.
+        Post-flight duty and positioning after the final operating sector are excluded.
         """
-        Flight Duty Period per EASA ORO.FTL.205
-        
-        FDP = Report time to end of last flight + 30 minutes post-flight
-        
-        Note: This is different from duty period which includes 
-        additional time after FDP ends (typically 30-60 min for debriefing, 
-        transport to release point, etc.)
-        """
-        if not self.segments:
+        operating = [s for s in self.segments if not s.is_deadhead]
+        if not operating:
             return 0.0
-        
-        fdp_start = self.report_time_utc
-        # FDP ends 30 minutes after last flight lands
-        fdp_end = self.segments[-1].scheduled_arrival_utc + timedelta(minutes=30)
-        
-        return (fdp_end - fdp_start).total_seconds() / 3600
-    
+        return (operating[-1].scheduled_arrival_utc - self.report_time_utc).total_seconds() / 3600
+
     @property
     def post_fdp_time_hours(self) -> float:
-        """Time between FDP end and duty release (typically debriefing, etc.)"""
-        if not self.segments:
-            return self.duty_hours
-        
-        fdp_end = self.segments[-1].scheduled_arrival_utc + timedelta(minutes=30)
-        return (self.release_time_utc - fdp_end).total_seconds() / 3600
-    
+        return max(0.0, self.duty_hours - self.fdp_hours)
+
     @property
     def report_time_local(self) -> datetime:
         if self.segments:

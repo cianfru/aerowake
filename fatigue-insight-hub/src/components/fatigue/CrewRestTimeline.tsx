@@ -34,8 +34,7 @@ function parseUtcTime(utcStr: string): number {
 export function CrewRestTimeline({ duty }: CrewRestTimelineProps) {
   const [hoveredBlock, setHoveredBlock] = useState<RestBlock | null>(null);
 
-  const blocks = duty.inflightRestBlocks;
-  if (!blocks || blocks.length === 0) return null;
+  const blocks = duty.inflightRestBlocks ?? [];
 
   // Parse duty timespan
   const dutyStart = useMemo(() => {
@@ -96,6 +95,7 @@ export function CrewRestTimeline({ duty }: CrewRestTimelineProps) {
     return d.toISOString().slice(11, 16) + 'Z';
   };
 
+  if (!blocks.length) return null;
   const dutyHours = totalDuration / 3600000;
 
   return (

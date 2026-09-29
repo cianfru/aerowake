@@ -1,31 +1,7 @@
-import { APP_VERSION } from '@/lib/version';
-
+import { Link } from 'react-router-dom';
 export function ScienceFooter() {
-  return (
-    <footer className="relative bg-[#000408] py-16 md:py-20">
-      <div className="mx-auto max-w-7xl px-6 md:px-10 lg:px-16">
-        {/* Top separator */}
-        <div className="h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent mb-12" />
-
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-8">
-          {/* Left — brand + description */}
-          <div className="max-w-sm">
-            <p className="text-[13px] font-medium text-white/60 tracking-wide mb-2">
-              Aerowake
-            </p>
-            <p className="text-[12px] text-white/35 leading-[1.7] font-light">
-              Biomathematical Fatigue Prediction Model for Aviation Professionals
-            </p>
-          </div>
-
-          {/* Right — version */}
-          <div className="md:text-right">
-            <p className="text-[10px] text-white/20 font-mono">
-              v{APP_VERSION} &middot; &copy; {new Date().getFullYear()} Aerowake
-            </p>
-          </div>
-        </div>
-      </div>
-    </footer>
-  );
+  return <footer className="border-t border-slate-800 bg-[#000408] px-6 py-14 text-slate-300"><div className="mx-auto flex max-w-6xl flex-wrap justify-between gap-8">
+    <div className="max-w-lg space-y-3"><p className="font-medium text-white">AeroWake</p><p className="text-sm leading-6">Built on published sleepiness research. AeroWake's parsing, sleep assumptions and reporting features require independent evaluation. Always follow your operator's fatigue reporting process.</p><p className="text-xs text-slate-400">© {new Date().getFullYear()} AeroWake</p></div>
+    <nav aria-label="Footer" className="flex flex-wrap items-start gap-6 text-sm"><Link to="/privacy" className="hover:text-white">Privacy & data</Link><Link to="/learn" className="hover:text-white">Methods & limitations</Link><Link to="/account" className="hover:text-white">Your account</Link><a href="https://github.com/cianfru/aerowake/issues" className="hover:text-white">Support</a></nav>
+  </div></footer>;
 }

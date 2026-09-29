@@ -1,3 +1,4 @@
+import type { TooltipProps } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -19,7 +20,7 @@ function formatMonth(month: string): string {
   }
 }
 
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label }: TooltipProps<number, string>) {
   if (active && payload?.length) {
     return (
       <div className="rounded-lg border border-border bg-card p-3 shadow-lg">

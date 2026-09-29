@@ -68,14 +68,14 @@ describe('risk scale (aerowake-4.0-kss)', () => {
     expect(kssToIndex(6.2)).toBeCloseTo(48);
     expect(performanceToKSS(48)).toBeCloseTo(6.2);
   });
-  it('classifies with lower-bound-inclusive default bands', () => {
-    expect(classifyPerformance(55)).toBe('low');
+  it('classifies with upper-index-inclusive default bands', () => {
+    expect(classifyPerformance(55)).toBe('moderate');
     expect(classifyPerformance(54.9)).toBe('moderate');
-    expect(classifyPerformance(45)).toBe('moderate');
+    expect(classifyPerformance(45)).toBe('high');
     expect(classifyPerformance(44.9)).toBe('high');
-    expect(classifyPerformance(35)).toBe('high');
+    expect(classifyPerformance(35)).toBe('critical');
     expect(classifyPerformance(34.9)).toBe('critical');
-    expect(classifyPerformance(25)).toBe('critical');
+    expect(classifyPerformance(25)).toBe('extreme');
     expect(classifyPerformance(24.9)).toBe('extreme');
     expect(classifyPerformance(NaN)).toBe('unknown');
     expect(classifyPerformance(undefined)).toBe('unknown');
@@ -105,7 +105,7 @@ describe('risk scale (aerowake-4.0-kss)', () => {
   });
   it('computes FHA in KSS-hours above the low band, excluding rest', () => {
     // 12 × 5-min samples at KSS 6.5 (1 KSS above 5.5) = 1 KSS-hour
-    const pts = Array.from({length: 12}, () => ({performance: 45}));
+    const pts = Array.from({length: 12}, () => ({performance: 45, kss: 6.5}));
     expect(calculateFHA(pts)).toBeCloseTo(1);
     expect(calculateFHA(pts.map(p => ({...p, is_in_rest: true})))).toBe(0);
   });

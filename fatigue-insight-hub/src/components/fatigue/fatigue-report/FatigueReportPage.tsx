@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { getAirportCoordinatesAsync } from '@/lib/airport-api';
 import { cn } from '@/lib/utils';
+import { DEFAULT_WATCH_KSS, watchReference } from '@/lib/roster-forecast';
 import {
   FACTOR_OPTIONS, KSS_OPTIONS, SAMN_PERELLI_OPTIONS,
   dutiesInPeriod, dutyFromAnalysis, estimatedSleepsFromAnalysis, generateFatigueReport, localInputToUtcIso, utcIsoToLocalInput,
@@ -54,6 +55,7 @@ function fmtH(h: number | null): string {
 function TimeInput({ value, onChange, tz, label, required }: {
   value: string; onChange: (iso: string) => void; tz: string; label: string; required?: boolean;
 }) {
+  const [timeError, setTimeError] = useState('');
   return (
     <label className={field}>
       <span className="text-muted-foreground">{label}</span>
@@ -64,9 +66,11 @@ function TimeInput({ value, onChange, tz, label, required }: {
         value={value ? utcIsoToLocalInput(value, tz) : ''}
         onChange={(e) => {
           const iso = localInputToUtcIso(e.target.value, tz);
+          setTimeError(iso ? '' : 'This local time is invalid or ambiguous. Switch to UTC to enter it.');
           if (iso) onChange(iso);
         }}
       />
+      {timeError && <span role="alert" className="text-xs text-destructive">{timeError}</span>}
     </label>
   );
 }
@@ -74,8 +78,11 @@ function TimeInput({ value, onChange, tz, label, required }: {
 export function FatigueReportPage() {
   const { state, clearFatigueReportPrefill } = useAnalysis();
   const { fatigueReportPrefill } = state;
-  const results = state.analysisResults;
+  const results = state.analysisResults?.legacyModel ? null : state.analysisResults;
+  const [diaryComplete, setDiaryComplete] = useState(false);
 
+  const [saveDraft, setSaveDraft] = useState(false);
+  const [draftLoaded, setDraftLoaded] = useState(false);
   const [step, setStep] = useState(0);
   const [report, setReport] = useState<FatigueReport | null>(null);
   const [busy, setBusy] = useState(false);
@@ -90,6 +97,8 @@ export function FatigueReportPage() {
   // Event
   const now = useMemo(() => new Date(Math.floor(Date.now() / 60000) * 60000).toISOString(), []);
   const [eventType, setEventType] = useState<EventType>('fatigue_call_before_duty');
+  const [watchKss, setWatchKss] = useState(DEFAULT_WATCH_KSS);
+  const prospective = eventType === 'roster_concern';
   const [eventTime, setEventTime] = useState(now);
   const [periodStart, setPeriodStart] = useState(new Date(Date.now() - 3 * 86400e3).toISOString());
   const [periodEnd, setPeriodEnd] = useState(new Date(Date.now() + 12 * 3600e3).toISOString());
@@ -102,39 +111,77 @@ export function FatigueReportPage() {
 
   // Self assessment
   const [kss, setKss] = useState<number | null>(null);
+  const [ratedAt, setRatedAt] = useState('');
+  const [sleepDay, setSleepDay] = useState('');
   const [sp, setSp] = useState<number | null>(null);
   const [factors, setFactors] = useState<string[]>([]);
   const [narrative, setNarrative] = useState('');
   const [pilot, setPilot] = useState({ name: state.analysisResults?.pilotName ?? '', staff_number: '', rank: '', fleet: '', operator: '' });
 
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('aerowake-report-draft-v1');
+      if (raw) {
+        const draft = JSON.parse(raw);
+        if (draft.version === 1 && Array.isArray(draft.duties) && Array.isArray(draft.sleeps)) {
+          setHomeBase(draft.homeBase); setTimeMode(draft.timeMode); setEventType(draft.eventType);
+          setWatchKss(watchReference(draft.watchKss));
+          setEventTime(draft.eventTime); setPeriodStart(draft.periodStart); setPeriodEnd(draft.periodEnd);
+          setDuties(draft.duties); setSleeps(draft.sleeps); setAffectedId(draft.affectedId);
+          setKss(draft.kss); setSp(draft.sp); setRatedAt(draft.ratedAt ?? ''); setFactors(draft.factors); setNarrative(draft.narrative);
+          setPilot(draft.pilot); setDiaryComplete(draft.diaryComplete); setPrefilledFor('restored');
+          setSaveDraft(true);
+        }
+      }
+    } catch { setError('The saved draft could not be restored.'); }
+    setDraftLoaded(true);
+  }, []);
+  useEffect(() => {
+    if (!draftLoaded) return;
+    try {
+      if (saveDraft) sessionStorage.setItem('aerowake-report-draft-v1', JSON.stringify({
+        version: 1, homeBase, timeMode, eventType, eventTime, periodStart, periodEnd, duties, sleeps,
+        affectedId, kss, sp, ratedAt, factors, narrative, pilot, diaryComplete, watchKss,
+      }));
+      else sessionStorage.removeItem('aerowake-report-draft-v1');
+    } catch { setError('This browser could not save the draft. Keep this tab open.'); }
+  }, [draftLoaded, saveDraft, homeBase, timeMode, eventType, eventTime, periodStart, periodEnd,
+      duties, sleeps, affectedId, kss, sp, ratedAt, factors, narrative, pilot, diaryComplete, watchKss]);
+  useEffect(() => {
+    if (saveDraft || (!duties.length && !sleeps.length && !narrative)) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [saveDraft, duties.length, sleeps.length, narrative]);
+
   // Resolve the home-base time zone for manual entry.
   useEffect(() => {
-    if (results?.homeBaseTimezone) return;
+    setHomeTz('');
     const code = homeBase.trim().toUpperCase();
-    if (code.length < 3) return;
+    if (code.length !== 3) return;
     let cancelled = false;
     getAirportCoordinatesAsync(code).then((a) => {
-      if (!cancelled && a?.timezone) setHomeTz(a.timezone);
-    }).catch(() => undefined);
+      if (!cancelled) { setHomeTz(a?.timezone ?? ''); if (!a) setError('Home airport not found. Check its IATA code.'); }
+    }).catch(() => { if (!cancelled) setError('Unable to look up the home airport. Check your connection and try again.'); });
     return () => { cancelled = true; };
   }, [homeBase, results?.homeBaseTimezone]);
 
   // Pre-fill duties and estimated sleep from the loaded roster when entering step 2.
   const periodKey = `${periodStart}|${periodEnd}`;
   const runPrefill = (opts: {
-    start: string; end: string; event: string; type: EventType; affected?: string | null;
+    start: string; end: string; event: string; type: EventType; affected?: string | null; replacementConfirmed?: boolean;
   }) => {
     if (!results) return;
+    if (!opts.replacementConfirmed && (duties.length || sleeps.length || narrative) && !window.confirm('Replace the current duties and sleep entries with estimates from the roster?')) return;
     const found = dutiesInPeriod(results, opts.start, opts.end);
     const eventMs = new Date(opts.event).getTime();
     const target = opts.affected
       ? found.find((d) => d.id === opts.affected)
       : found.find((d) => new Date(d.release_utc).getTime() >= eventMs);
-    setDuties(target && opts.type === 'fatigue_call_before_duty'
-      ? found.map((d) => (d.id === target.id ? { ...d, status: 'cancelled_fatigue' } : d))
-      : found);
+    setDuties(found); // Roster entries are planned until the pilot confirms what happened.
     setSleeps(estimatedSleepsFromAnalysis(results, opts.start, opts.end).map((s) => ({ ...s, key: newId('s') })));
     setAffectedId(target?.id ?? null);
+    setDiaryComplete(false);
     setPrefilledFor(`${opts.start}|${opts.end}`);
   };
   const prefill = () => runPrefill({ start: periodStart, end: periodEnd, event: eventTime, type: eventType });
@@ -142,34 +189,40 @@ export function FatigueReportPage() {
   // "Report fatigue" on a duty (Roster page): pre-select that duty once, then clear the request.
   useEffect(() => {
     const req = fatigueReportPrefill;
-    if (!req) return;
+    if (!req || !draftLoaded) return;
     clearFatigueReportPrefill();
     if (!results) return;
     const idx = results.duties.findIndex((d) => d.dutyId === req.dutyId);
     const rd = idx >= 0 ? dutyFromAnalysis(results.duties[idx], idx) : null;
     if (!rd) return;
+    if ((duties.length || sleeps.length || narrative) && !window.confirm('Replace the current event, duties and sleep entries with this roster duty?')) return;
+    setHomeBase(results.pilotBase || homeBase);
+    setReport(null);
     const reportMs = new Date(rd.report_utc).getTime();
-    const event = new Date(reportMs - 3600e3).toISOString();
+    const type = req.purpose ?? 'fatigue_call_before_duty';
+    const event = new Date(reportMs - (type === 'roster_concern' ? 0 : 3600e3)).toISOString();
     const start = new Date(reportMs - 3 * 86400e3).toISOString();
-    const end = new Date(reportMs + 18 * 3600e3).toISOString();
-    setEventType('fatigue_call_before_duty');
+    const end = new Date(Math.max(reportMs + 18 * 3600e3, Date.parse(rd.release_utc))).toISOString();
+    setEventType(type);
+    setWatchKss(watchReference(req.watchReference ?? DEFAULT_WATCH_KSS));
+    setKss(null); setSp(null); setRatedAt(''); setFactors([]); setNarrative('');
     setEventTime(event);
     setPeriodStart(start);
     setPeriodEnd(end);
-    runPrefill({ start, end, event, type: 'fatigue_call_before_duty', affected: rd.id });
+    runPrefill({ start, end, event, type, affected: rd.id, replacementConfirmed: true });
     setStep(0);
     // Run once per prefill request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fatigueReportPrefill]);
+  }, [fatigueReportPrefill, draftLoaded]);
 
   const goTo = (n: number) => {
     setError('');
-    if (n === 1 && results && prefilledFor !== periodKey) prefill();
+    if (n === 1 && results && !prefilledFor && !duties.length && !sleeps.length) prefill();
     setStep(n);
     window.scrollTo?.({ top: 0, behavior: 'smooth' });
   };
 
-  const eventValid = !!homeTz && !!eventTime && !!periodStart && !!periodEnd && periodEnd > periodStart;
+  const eventValid = !!homeTz && !!eventTime && !!periodStart && !!periodEnd && periodEnd > periodStart && eventTime >= periodStart && eventTime <= periodEnd;
 
   // ── Duty editing ──
   const updateDuty = (id: string, patch: Partial<ReportDuty>) =>
@@ -181,7 +234,7 @@ export function FatigueReportPage() {
     const report = eventTime;
     const release = new Date(new Date(report).getTime() + 8 * 3600e3).toISOString();
     const duty: ReportDuty = {
-      id: newId('d'), report_utc: report, release_utc: release, sectors: [], status: 'operated',
+      id: newId('d'), report_utc: report, release_utc: release, sectors: [], status: prospective ? 'planned' : 'operated',
       duty_type: 'flight', source: 'manual',
     };
     setDuties((ds) => [...ds, duty].sort((a, b) => a.report_utc.localeCompare(b.report_utc)));
@@ -199,7 +252,7 @@ export function FatigueReportPage() {
 
   // ── Sleep editing ──
   const updateSleep = (key: string, patch: Partial<ReportSleep>) =>
-    setSleeps((ss) => ss.map((s) => (s.key === key ? { ...s, ...patch, source: 'reported' } : s)));
+    setSleeps((ss) => ss.map((s) => (s.key === key ? { ...s, ...patch } : s)));
   const addSleep = (kind: 'main' | 'nap') => {
     const last = sleeps[sleeps.length - 1];
     const start = last ? new Date(new Date(last.end_utc).getTime() + 16 * 3600e3) : new Date(periodStart);
@@ -207,7 +260,7 @@ export function FatigueReportPage() {
     const entry: ReportSleep & { key: string } = {
       key: newId('s'), start_utc: start.toISOString(),
       end_utc: new Date(start.getTime() + hours * 3600e3).toISOString(),
-      kind, location: 'home', quality: null, source: 'reported',
+      kind, location: 'home', quality: null, source: prospective ? 'estimated' : 'reported',
     };
     setSleeps((ss) => [...ss, entry].sort((a, b) => a.start_utc.localeCompare(b.start_utc)));
   };
@@ -222,9 +275,14 @@ export function FatigueReportPage() {
     return issues;
   }, [sleeps]);
 
+  const sleepDays = [...new Set(sleeps.map(s => utcIsoToLocalInput(s.start_utc, inputTz).slice(0, 10)))].sort();
+  const visibleSleepDay = sleepDays.includes(sleepDay) ? sleepDay : sleepDays[0];
+  const ratingNeedsTime = (kss !== null || sp !== null) && !ratedAt;
+
   const unconfirmed = sleeps.filter((s) => s.source === 'estimated').length;
 
   async function submit() {
+    if (ratingNeedsTime) { setError('Confirm when you recorded your self-rating.'); return; }
     setBusy(true);
     setError('');
     try {
@@ -232,13 +290,15 @@ export function FatigueReportPage() {
         home_base: homeBase.trim() ? homeBase.trim().toUpperCase() : null,
         home_timezone: homeTz || null,
         event_type: eventType,
+        watch_reference_kss: watchKss,
         event_time_utc: eventTime,
         period_start_utc: periodStart,
         period_end_utc: periodEnd,
         affected_duty_id: affectedId,
+        diary_complete: diaryComplete,
         duties,
         sleeps: sleeps.map(({ key: _key, ...s }) => s),
-        self_assessment: { kss, samn_perelli: sp, rated_at_utc: eventTime },
+        self_assessment: { kss, samn_perelli: sp, rated_at_utc: ratedAt || null },
         contributing_factors: factors,
         narrative,
         pilot,
@@ -261,19 +321,20 @@ export function FatigueReportPage() {
     <section className="mx-auto max-w-4xl space-y-10 px-4 py-10 md:px-8 md:py-12">
       <header className="space-y-3">
         <p className="eyebrow">Fatigue report</p>
-        <h1 className="text-3xl md:text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.025em]">Report fatigue</h1>
+        <h1 className="text-3xl md:text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.025em]">{prospective ? 'Raise a roster concern' : 'Report fatigue'}</h1>
         <p className="max-w-2xl text-[15px] text-muted-foreground">
-          Describe what happened in four short steps. AeroWake checks your sleep and duties against published
-          sleep science and EASA rest rules, then writes a structured report you can submit through your
-          operator&apos;s fatigue reporting system. Nothing is stored on our servers.
+          Bring together your roster, scientific estimates and your own experience. Record a future roster concern
+          or fatigue you experienced, then review a structured report you can submit through your
+          operator&apos;s fatigue reporting system. Generated reports are not saved on our servers. Saved roster history is separate.
         </p>
         <p className="max-w-2xl text-sm text-muted-foreground">
           {results
-            ? `Duties and estimated sleep are pre-filled from your loaded roster${results.month ? ` (${results.month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })})` : ''}. Correct the sleep times to what actually happened.`
+            ? `Duties and estimated sleep are pre-filled from your loaded roster${results.month ? ` (${results.month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })})` : ''}. Review the assumptions and confirm actual duty and sleep records where available.`
             : 'No roster loaded — enter duties manually, or upload a roster first to pre-fill them.'}
         </p>
       </header>
 
+      <label className="flex items-start gap-3 rounded-md border border-border p-4 text-sm"><input type="checkbox" checked={saveDraft} onChange={e => setSaveDraft(e.target.checked)} className="mt-1" /><span>Save this draft in this browser tab, including personal details, until I sign out or close the tab. Uncheck to remove the saved copy.</span></label>
       {/* Stepper: underline tabs on wide screens; "Step n of 4" with segments on phones */}
       <nav aria-label="Report steps" className="space-y-3">
         <p className="text-[13px] text-muted-foreground sm:hidden">
@@ -334,14 +395,20 @@ export function FatigueReportPage() {
                 </label>
                 <label className={field}>
                   <span className="text-muted-foreground">What happened?</span>
-                  <select className={select} value={eventType} onChange={(e) => setEventType(e.target.value as EventType)}>
+                  <select className={select} value={eventType} onChange={(e) => { setEventType(e.target.value as EventType); setDiaryComplete(false); }}>
+                    <option value="roster_concern">I am concerned about a planned roster</option>
                     <option value="fatigue_call_before_duty">I called fatigue before a duty</option>
                     <option value="fatigue_during_duty">I became fatigued during a duty</option>
                     <option value="fatigue_after_duty">I am reporting fatigue after a duty</option>
                   </select>
                 </label>
               </div>
-              <TimeInput label="When did you call / feel fatigued?" tz={inputTz} value={eventTime} onChange={setEventTime} required />
+              <TimeInput label={prospective ? 'When is the duty or period of concern?' : 'When did you call / feel fatigued?'} tz={inputTz} value={eventTime} onChange={setEventTime} required />
+              <label className={field}><span className="text-muted-foreground">Personal watch reference (KSS)</span>
+                <select className={select} value={watchKss} onChange={e => setWatchKss(Number(e.target.value))}>
+                  {Array.from({ length: 17 }, (_, i) => 1 + i * 0.5).map(n => <option value={n} key={n}>{n.toFixed(1)}</option>)}
+                </select><span className="text-xs text-muted-foreground">A review prompt recorded in your report. It does not change the scientific model or regulatory checks.</span>
+              </label>
               <div className="space-y-2">
                 <p className="text-sm font-medium">Days to include</p>
                 <p className="text-xs text-muted-foreground">
@@ -371,7 +438,7 @@ export function FatigueReportPage() {
                 <div>
                   <h2 className="text-lg font-semibold">Duties in this period</h2>
                   <p className="text-sm text-muted-foreground">
-                    Mark the duty you were due to operate (or were operating) when fatigue occurred.
+                    Select the duty of concern. Imported entries are planned; confirm which duties were actually operated and correct any times that changed.
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -419,6 +486,12 @@ export function FatigueReportPage() {
                           </select>
                         </label>
                       </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className={field}><span>Activity</span><select className={select} value={d.duty_type} onChange={e => updateDuty(d.id, { duty_type: e.target.value as ReportDuty['duty_type'] })}><option value="flight">Flight duty</option><option value="home_standby">Home standby</option><option value="airport_standby">Airport standby</option><option value="standby">Standby · type unconfirmed</option><option value="simulator">Simulator</option><option value="ground">Ground duty</option><option value="positioning">Positioning</option><option value="other">Other duty</option></select></label>
+                        <label className={field}><span>Crew composition</span><select className={select} value={d.crew_composition ?? 'unknown'} onChange={e => updateDuty(d.id, { crew_composition: e.target.value as ReportDuty['crew_composition'] })}><option value="unknown">Not confirmed</option><option value="standard">Standard · 2 pilots</option><option value="augmented_3">Augmented · 3 pilots</option><option value="augmented_4">Augmented · 4 pilots</option></select></label>
+                        <label className={field}><span>Acclimatization</span><select className={select} value={d.acclimatization ?? 'unknown'} onChange={e => updateDuty(d.id, { acclimatization: e.target.value as ReportDuty['acclimatization'] })}><option value="unknown">Not confirmed</option><option value="acclimatized">Acclimatized to home reference time</option></select></label>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Basic FDP is assessed for confirmed standard, acclimatized crew. Augmented and operator-specific limits need specialist review.</p>
                       <div className="space-y-2">
                         {d.sectors.map((s, i) => (
                           <div key={i} className="grid items-end gap-2 sm:grid-cols-[5rem_4.5rem_4.5rem_1fr_1fr_auto]">
@@ -449,12 +522,12 @@ export function FatigueReportPage() {
 
           {step === 2 && (
             <div className="space-y-5">
+              <label className="flex items-start gap-3 rounded-md border border-border p-4 text-sm"><input type="checkbox" checked={diaryComplete} onChange={e => setDiaryComplete(e.target.checked)} className="mt-1" /><span>{prospective ? 'I have reviewed all sleep windows in this scenario, including naps. Unlisted periods are modelled as awake. Estimated sleep remains an assumption.' : 'I have entered every sleep period and nap in this diary. Missing days mean I did not sleep. Without this confirmation, sleep-dependent predictions will be withheld.'}</span></label>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h2 className="text-lg font-semibold">Your actual sleep</h2>
+                  <h2 className="text-lg font-semibold">{prospective ? 'Sleep assumptions and actual records' : 'Your actual sleep'}</h2>
                   <p className="text-sm text-muted-foreground">
-                    Enter when you actually fell asleep and woke up (not time in bed), including naps. The more
-                    complete this is, the more reliable the report.
+                    {prospective ? 'Review the expected sleep pattern. Keep future sleep estimated; mark only sleep that actually occurred as reported.' : 'Enter when you actually fell asleep and woke up, including naps. Keep estimates labelled until you can confirm actual sleep.'}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -466,8 +539,7 @@ export function FatigueReportPage() {
                 <div className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                   <span>
-                    {unconfirmed} sleep period(s) are estimates from the roster. Edit them to match what happened,
-                    or confirm them. Unconfirmed estimates are labelled as such in the report.
+                    {unconfirmed} sleep period(s) are estimates. {prospective ? 'Adjust them to a realistic scenario; they remain assumptions in the report.' : 'Edit them to match what happened, then mark them as actual sleep. Estimates remain labelled in the report.'}
                   </span>
                 </div>
               )}
@@ -476,7 +548,8 @@ export function FatigueReportPage() {
                   No sleep entered. At least two sleep periods are needed to model alertness.
                 </p>
               )}
-              {sleeps.map((s, i) => (
+              {sleepDays.length > 0 && <label className={field}><span className="text-muted-foreground">Sleep diary day ({tzLabel})</span><select className={select} value={visibleSleepDay} onChange={e => setSleepDay(e.target.value)}>{sleepDays.map(day => <option key={day} value={day}>{day}</option>)}</select><span className="text-xs text-muted-foreground">Review each day; all {sleeps.length} entries remain in your report.</span></label>}
+              {sleeps.map((s, i) => utcIsoToLocalInput(s.start_utc, inputTz).startsWith(visibleSleepDay) && (
                 <div key={s.key} className={cn('rounded-lg border p-4 space-y-3', s.source === 'estimated' && 'border-dashed')}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-medium">
@@ -487,9 +560,9 @@ export function FatigueReportPage() {
                       {s.source === 'estimated' ? (
                         <>
                           <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">Estimated</Badge>
-                          <Button type="button" size="sm" variant="outline" onClick={() => updateSleep(s.key, {})}>Confirm</Button>
+                          <Button type="button" size="sm" variant="outline" disabled={Date.parse(s.end_utc) > Date.now()} onClick={() => updateSleep(s.key, { source: 'reported' })}>Mark as actual sleep</Button>
                         </>
-                      ) : <Badge variant="outline">Reported</Badge>}
+                      ) : <><Badge variant="outline">Reported</Badge><Button type="button" size="sm" variant="ghost" onClick={() => updateSleep(s.key, { source: 'estimated' })}>Mark as estimated</Button></>}
                       <Button type="button" size="icon" variant="ghost" aria-label="Remove sleep"
                         onClick={() => setSleeps(sleeps.filter((x) => x.key !== s.key))}>
                         <Trash2 className="h-4 w-4" />
@@ -522,6 +595,7 @@ export function FatigueReportPage() {
 
           {step === 3 && (
             <div className="space-y-6">
+              {prospective && <p className="border-l-2 border-primary pl-4 text-sm text-muted-foreground">Describe why this pattern concerns you, including experience of similar duties. Ratings are optional and must describe how you actually felt at a recorded time; leave them blank for future fatigue.</p>}
               <fieldset className="space-y-2">
                 <legend className="text-lg font-semibold">How sleepy did you feel? (KSS)</legend>
                 <p className="text-sm text-muted-foreground">Karolinska Sleepiness Scale, at the time you called or felt fatigued.</p>
@@ -547,6 +621,11 @@ export function FatigueReportPage() {
                   ))}
                 </div>
               </fieldset>
+              {(kss !== null || sp !== null) && <div className="space-y-3 border-l-2 border-primary pl-4">
+                <TimeInput label="When did you record these ratings?" value={ratedAt} onChange={setRatedAt} tz={inputTz} required />
+                <Button type="button" variant="outline" size="sm" onClick={() => setRatedAt(eventTime)}>Use the fatigue event time</Button>
+                <p className="text-xs text-muted-foreground">Confirm the original rating time. A rating recorded now should not be assigned to a past event.</p>
+              </div>}
               <fieldset className="space-y-2">
                 <legend className="text-lg font-semibold">What contributed?</legend>
                 <div className="grid gap-1.5 sm:grid-cols-2">
@@ -580,7 +659,7 @@ export function FatigueReportPage() {
 
       {error && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
 
-      <div className="flex items-center justify-between">
+      <div className="sticky bottom-0 z-20 flex items-center justify-between border-t border-border bg-background/95 py-3 backdrop-blur">
         <Button type="button" variant="ghost" disabled={step === 0} onClick={() => goTo(step - 1)}>
           <ArrowLeft className="mr-1 h-4 w-4" />Back
         </Button>
@@ -590,7 +669,7 @@ export function FatigueReportPage() {
             Next<ArrowRight className="ml-1 h-4 w-4" />
           </Button>
         ) : (
-          <Button type="button" disabled={busy || sleepIssues.length > 0} onClick={submit}>
+          <Button type="button" disabled={busy || sleepIssues.length > 0 || ratingNeedsTime} onClick={submit}>
             {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardList className="mr-2 h-4 w-4" />}
             Generate report
           </Button>

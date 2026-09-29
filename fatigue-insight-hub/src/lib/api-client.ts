@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/auth-session';
 // src/lib/api-client.ts
 
 import { getAuthHeaders } from '@/contexts/AuthContext';
@@ -283,6 +284,9 @@ export interface EasaFindingResponse {
 }
 
 export interface EasaSummaryResponse {
+  status?: string;
+  coverage?: Record<string, { status: string; reason: string }>;
+
   duty_7d_max: number;
   duty_14d_max: number;
   duty_28d_max: number;
@@ -365,6 +369,7 @@ export interface RestDaySleep {
 }
 
 export interface AnalysisResult {
+  persistence_status?: string;
   analysis_id: string;
   roster_id: string;
   pilot_id: string;
@@ -464,7 +469,7 @@ export async function analyzeRoster(
     formData.append('duty_crew_overrides', JSON.stringify(overridesObj));
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/analyze`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/analyze`, {
     method: 'POST',
     headers: { ...getAuthHeaders() },
     body: formData,
@@ -483,7 +488,7 @@ export async function getDutyDetail(
   dutyId: string
 ) {
   
-  const response = await fetch(
+  const response = await apiFetch(
     `${API_BASE_URL}/api/duty/${analysisId}/${dutyId}`,
     { headers: { ...getAuthHeaders() } },
   );
@@ -497,7 +502,7 @@ export async function getDutyDetail(
 
 export async function healthCheck(): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE_URL}/health`);
+    const response = await apiFetch(`${API_BASE_URL}/health`);
     return response.ok;
   } catch {
     return false;
@@ -511,7 +516,7 @@ export async function getAirportsBatch(codes: string[]): Promise<Array<{
   latitude: number;
   longitude: number;
 }>> {
-  const response = await fetch(`${API_BASE_URL}/api/airports/batch`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/airports/batch`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ codes }),
@@ -546,7 +551,7 @@ export interface RosterDetail extends RosterSummary {
 }
 
 export async function getRosters(): Promise<RosterSummary[]> {
-  const response = await fetch(`${API_BASE_URL}/api/rosters`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/rosters`, {
     headers: { ...getAuthHeaders() },
   });
 
@@ -559,7 +564,7 @@ export async function getRosters(): Promise<RosterSummary[]> {
 }
 
 export async function getRoster(rosterId: string): Promise<RosterDetail> {
-  const response = await fetch(`${API_BASE_URL}/api/rosters/${rosterId}`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/rosters/${rosterId}`, {
     headers: { ...getAuthHeaders() },
   });
 
@@ -568,7 +573,7 @@ export async function getRoster(rosterId: string): Promise<RosterDetail> {
 }
 
 export async function deleteRoster(rosterId: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/rosters/${rosterId}`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/rosters/${rosterId}`, {
     method: 'DELETE',
     headers: { ...getAuthHeaders() },
   });
@@ -581,7 +586,7 @@ export async function reanalyzeRoster(
 ): Promise<AnalysisResult> {
   const formData = new FormData();
 
-  const response = await fetch(`${API_BASE_URL}/api/rosters/${rosterId}/reanalyze`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/rosters/${rosterId}/reanalyze`, {
     method: 'POST',
     headers: { ...getAuthHeaders() },
     body: formData,
@@ -648,7 +653,7 @@ export interface YearlyDashboardData {
 }
 
 export async function getYearlyDashboard(): Promise<YearlyDashboardData> {
-  const response = await fetch(`${API_BASE_URL}/api/dashboard/yearly`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/dashboard/yearly`, {
     headers: { ...getAuthHeaders() },
   });
 
@@ -688,7 +693,7 @@ export interface WhatIfRequest {
 }
 
 export async function runWhatIf(request: WhatIfRequest): Promise<AnalysisResult> {
-  const response = await fetch(`${API_BASE_URL}/api/what-if`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/what-if`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -769,7 +774,7 @@ export interface TrendData {
 
 export async function getComparativeMetrics(month?: string): Promise<ComparativeMetrics> {
   const params = month ? `?month=${month}` : '';
-  const response = await fetch(`${API_BASE_URL}/api/metrics/comparative${params}`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/metrics/comparative${params}`, {
     headers: { ...getAuthHeaders() },
   });
 
@@ -786,7 +791,7 @@ export async function getComparativeMetrics(month?: string): Promise<Comparative
 }
 
 export async function getComparativeTrend(): Promise<TrendData> {
-  const response = await fetch(`${API_BASE_URL}/api/metrics/comparative/trend`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/metrics/comparative/trend`, {
     headers: { ...getAuthHeaders() },
   });
 
@@ -796,4 +801,20 @@ export async function getComparativeTrend(): Promise<TrendData> {
   }
 
   return response.json();
+}
+
+export interface RosterPreview {
+  month: string; home_base: string; home_timezone: string; time_convention: string;
+  total_duties: number; total_sectors: number; standby_periods: number;
+  whole_duty_block_hours: number; calendar_month_block_hours: number;
+  source_block_hours: number | null; source_duty_hours: number | null;
+  block_total_matches_source: boolean | null; warnings: string[];
+  duties: Array<{ id: string; report_utc: string; release_utc: string; type: string; route: string }>;
+}
+export async function previewRoster(file: File, homeBase: string): Promise<RosterPreview> {
+  const form = new FormData(); form.append('file', file); form.append('home_base', homeBase);
+  const response = await apiFetch(`${API_BASE_URL}/api/roster/preview`, { method: 'POST', headers: getAuthHeaders(), body: form });
+  const body = await response.json();
+  if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : 'Roster could not be read.');
+  return body;
 }

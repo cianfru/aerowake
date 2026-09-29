@@ -1,4 +1,5 @@
-import { useCallback, useId, useState } from 'react';
+import { previewRoster, type RosterPreview } from '@/lib/api-client';
+import { useCallback, useEffect, useId, useState, useRef } from 'react';
 import { Upload, FileText, X, Play, Loader2, MapPin } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,10 +26,16 @@ export function RosterUploadCard() {
   const { state, uploadFile, removeFile, setSettings } = useAnalysis();
   const { user } = useAuth();
   const { runAnalysis, isAnalyzing } = useAnalyzeRoster();
+  const [preview, setPreview] = useState<RosterPreview | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [homeBase, setHomeBase] = useState(
     (state.settings.homeBase || user?.home_base || '').toUpperCase(),
   );
+  const previewGeneration = useRef(0);
+  useEffect(() => { previewGeneration.current++; setPreview(null); setConfirmed(false); setPreviewBusy(false); setPreviewError(''); }, [state.actualFileObject, homeBase]);
   const baseId = useId();
   const fileId = useId();
 
@@ -50,8 +57,17 @@ export function RosterUploadCard() {
     else if (e.type === 'dragleave') setIsDragging(false);
   };
 
-  const onRun = () => {
-    if (!baseValid) return;
+  const onRun = async () => {
+    if (!baseValid || !state.actualFileObject) return;
+    if (!preview) {
+      setPreviewBusy(true); setPreviewError('');
+      const generation = ++previewGeneration.current;
+      try { const value = await previewRoster(state.actualFileObject, homeBase); if (generation === previewGeneration.current) setPreview(value); }
+      catch (e) { if (generation === previewGeneration.current) setPreviewError(e instanceof Error ? e.message : 'Preview failed.'); }
+      finally { if (generation === previewGeneration.current) setPreviewBusy(false); }
+      return;
+    }
+    if (!confirmed) return;
     setSettings({ homeBase });
     runAnalysis({ homeBase });
   };
@@ -62,8 +78,7 @@ export function RosterUploadCard() {
         <div className="space-y-1">
           <h1 className="text-lg md:text-xl font-semibold">Check your roster</h1>
           <p className="text-sm text-muted-foreground">
-            Upload your monthly roster (PDF or CSV). You will see which duties need attention and whether
-            the EASA cumulative duty and rest limits are met.
+            Upload your monthly roster (PDF or CSV). You will see which duties need attention and which scoped duty and rest checks need review.
           </p>
         </div>
 
@@ -130,17 +145,27 @@ export function RosterUploadCard() {
           </p>
         </div>
 
+        {previewError && <p role="alert" className="text-sm text-destructive">{previewError}</p>}
+        {preview && <section className="space-y-4 rounded-lg border border-border p-4" aria-label="Review parsed roster">
+          <h2 className="text-lg font-medium">Review the import</h2>
+          <p className="text-sm">{preview.month} · {preview.home_base} · {preview.home_timezone} · {preview.time_convention}</p>
+          <p className="font-mono text-sm">{preview.total_duties} duties · {preview.total_sectors} sectors · {preview.standby_periods} standby periods</p>
+          <p className="text-sm">Block hours: {preview.whole_duty_block_hours.toFixed(2)} for whole duties; {preview.calendar_month_block_hours.toFixed(2)} within the UTC month{preview.source_block_hours != null ? `; source total ${preview.source_block_hours.toFixed(2)}` : ''}.</p>
+          <ul className="space-y-2 text-sm text-muted-foreground">{preview.warnings.map(w => <li key={w}>{w}</li>)}</ul>
+          <details><summary className="cursor-pointer text-sm text-primary">Check parsed duty times (UTC)</summary><ul className="mt-3 max-h-64 space-y-3 overflow-auto text-sm">{preview.duties.map(d => <li key={d.id}><span className="font-medium">{d.route}</span><br /><span className="font-mono text-xs">{d.report_utc.slice(0,16).replace('T',' ')} → {d.release_utc.slice(0,16).replace('T',' ')} UTC</span></li>)}</ul></details>
+          <label className="flex items-start gap-3 text-sm"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} /><span>I have reviewed the dates, time zones, and assumptions. Continue with these inputs.</span></label>
+        </section>}
         {/* Step 3: run */}
         <Button
           variant="glow"
           className="w-full sm:w-auto"
           onClick={onRun}
-          disabled={!uploadedFile || !baseValid || isAnalyzing}
+          disabled={!uploadedFile || !baseValid || isAnalyzing || previewBusy || (!!preview && !confirmed)}
         >
-          {isAnalyzing ? (
-            <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Analysing…</>
+          {isAnalyzing || previewBusy ? (
+            <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{previewBusy ? "Reading roster…" : "Analysing…"}</>
           ) : (
-            <><Play className="mr-2 h-4 w-4" />Run analysis</>
+            <><Play className="mr-2 h-4 w-4" />{preview ? "Run analysis" : "Review roster"}</>
           )}
         </Button>
       </CardContent>

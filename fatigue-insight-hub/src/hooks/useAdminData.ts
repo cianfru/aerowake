@@ -19,7 +19,7 @@ export function useAdminData() {
   const isAdmin = user?.is_admin ?? false;
 
   const statsQuery = useQuery<PlatformStats>({
-    queryKey: ['admin', 'stats'],
+    queryKey: ['admin', user?.id, 'stats'],
     queryFn: getAdminStats,
     enabled: isAdmin,
     staleTime: 60_000,
@@ -27,7 +27,7 @@ export function useAdminData() {
   });
 
   const usersQuery = useQuery<AdminUser[]>({
-    queryKey: ['admin', 'users'],
+    queryKey: ['admin', user?.id, 'users'],
     queryFn: getAdminUsers,
     enabled: isAdmin,
     staleTime: 60_000,
@@ -35,7 +35,7 @@ export function useAdminData() {
   });
 
   const rostersQuery = useQuery<AdminRoster[]>({
-    queryKey: ['admin', 'rosters'],
+    queryKey: ['admin', user?.id, 'rosters'],
     queryFn: () => getAdminRosters(200, 0),
     enabled: isAdmin,
     staleTime: 60_000,
@@ -43,7 +43,7 @@ export function useAdminData() {
   });
 
   const activityQuery = useQuery<ActivityEvent[]>({
-    queryKey: ['admin', 'activity'],
+    queryKey: ['admin', user?.id, 'activity'],
     queryFn: () => getAdminActivity(50),
     enabled: isAdmin,
     staleTime: 30_000,

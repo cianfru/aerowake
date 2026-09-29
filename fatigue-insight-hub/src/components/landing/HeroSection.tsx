@@ -1,15 +1,14 @@
 import { useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import { LandingGlobe } from './LandingGlobe';
 import { useScrollProgress } from './useScrollProgress';
 
 interface HeroSectionProps {
   onScrollToContent: () => void;
+  onEnter: () => void;
 }
 
-export function HeroSection({ onScrollToContent }: HeroSectionProps) {
-  const navigate = useNavigate();
+export function HeroSection({ onScrollToContent, onEnter }: HeroSectionProps) {
   const heroRef = useRef<HTMLElement>(null);
   const progress = useScrollProgress(heroRef);
 
@@ -18,8 +17,8 @@ export function HeroSection({ onScrollToContent }: HeroSectionProps) {
   const contentTranslate = scrollFade * 60;
 
   return (
-    <section ref={heroRef} className="relative h-screen overflow-hidden bg-[#000408]">
-      {/* Mapbox Globe Background */}
+    <section ref={heroRef} className="relative min-h-[720px] h-[100svh] overflow-hidden bg-[#000408]">
+      {/* Keyless route globe */}
       <LandingGlobe />
 
       {/* Gradient overlays */}
@@ -67,33 +66,32 @@ export function HeroSection({ onScrollToContent }: HeroSectionProps) {
 
             {/* Headline — large, confident, clean */}
             <h1 className="font-serif text-[clamp(2.5rem,6vw,4.5rem)] font-light leading-[1.05] tracking-[-0.02em] text-white">
-              Know your fatigue
+              Understand your roster.
               <br />
-              <span className="text-white/65">before you fly.</span>
+              <span className="text-white/65">Report fatigue clearly.</span>
             </h1>
 
             {/* Body copy — warm, supportive, not confrontational */}
-            <p className="mt-6 max-w-md text-[15px] leading-[1.7] text-white/60 font-light">
-              Aerowake uses a published, airline-validated alertness model to
-              predict how sleepy you are likely to be on every duty. See which
-              duties need attention and report fatigue in a few taps.
+            <p className="mt-6 max-w-md text-[15px] leading-[1.7] text-white/75 font-light">
+              Review predicted sleepiness across your duties, understand the
+              assumptions, and prepare a report using your own sleep and experience.
             </p>
 
             {/* CTAs */}
-            <div className="mt-10 flex items-center gap-4">
+            <div className="mt-10 flex flex-wrap items-center gap-4">
               <button
-                onClick={() => navigate('/login')}
+                onClick={onEnter}
                 className="border-beam-wrapper cursor-pointer"
               >
                 <div className="beam-border"><div className="beam-gradient" /></div>
                 <span className="beam-inner block bg-[#5bb8e8]/20 px-7 py-3 text-[13px] font-semibold text-white tracking-wide backdrop-blur-md">
-                  Get Started
+                  Analyse a roster
                 </span>
               </button>
               <div className="flex items-center gap-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/60" />
-                <span className="text-[12px] text-white/50 tracking-wide">
-                  Includes EASA FTL checks
+                <span className="text-[12px] text-white/70 tracking-wide">
+                  Try it without an account
                 </span>
               </div>
             </div>
@@ -105,7 +103,7 @@ export function HeroSection({ onScrollToContent }: HeroSectionProps) {
       {/* Scroll indicator */}
       <button
         onClick={onScrollToContent}
-        className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center gap-1 text-white/30 transition-colors hover:text-white/50"
+        className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center gap-1 text-white/30 transition-colors hover:text-white/70"
         style={{ opacity: contentOpacity }}
       >
         <span className="text-[10px] tracking-[0.15em] uppercase">Scroll</span>

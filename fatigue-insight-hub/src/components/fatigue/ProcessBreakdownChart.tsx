@@ -1,3 +1,4 @@
+import type { TooltipProps } from 'recharts';
 import { useState, useMemo, useCallback } from 'react';
 import {
   ComposedChart,
@@ -303,7 +304,7 @@ export function ProcessBreakdownChart({
 // ---------------------------------------------------------------------------
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload }: any) {
+function CustomTooltip({ active, payload }: TooltipProps<number, string>) {
   if (!active || !payload || !payload.length) return null;
   const d: ChartDataPoint = payload[0]?.payload;
   if (!d) return null;

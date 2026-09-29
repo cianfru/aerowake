@@ -1,3 +1,4 @@
+import type { TooltipProps } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import {
   ComposedChart, Line, XAxis, YAxis, CartesianGrid,
@@ -21,13 +22,13 @@ function formatMonth(month: string): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label }: TooltipProps<number, string>) {
   if (active && payload?.length) {
     return (
       <div className="rounded-lg border border-border bg-card p-3 shadow-lg">
         <p className="text-xs font-medium mb-1.5">{label}</p>
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        {payload.map((entry: any, i: number) => (
+        {payload.map((entry, i: number) => (
           <p key={i} className="text-xs">
             <span className="text-muted-foreground">{entry.name}: </span>
             <span className="font-mono font-medium" style={{ color: entry.color }}>

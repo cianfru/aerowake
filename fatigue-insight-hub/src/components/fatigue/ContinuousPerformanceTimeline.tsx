@@ -1,3 +1,4 @@
+import type { TooltipProps } from 'recharts';
 import { useState, useCallback } from 'react';
 import {
   ComposedChart,
@@ -60,7 +61,7 @@ const formatXAxis = (ms: number) => {
   return format(d, 'dd');
 };
 
-function CustomTooltip({ active, payload }: any) {
+function CustomTooltip({ active, payload }: TooltipProps<number, string>) {
   if (!active || !payload || !payload.length) return null;
   const d: ContinuousTimelinePoint = payload[0]?.payload;
   if (!d) return null;
@@ -167,7 +168,7 @@ export function ContinuousPerformanceTimeline({
   });
 
   // Click handler to find nearest duty
-  const handleChartClick = useCallback((chartData: any) => {
+  const handleChartClick = useCallback((chartData: { activePayload?: Array<{ payload: ContinuousTimelinePoint }> }) => {
     if (!chartData?.activePayload?.[0]) return;
     const point: ContinuousTimelinePoint = chartData.activePayload[0].payload;
     if (point.dutyId) {

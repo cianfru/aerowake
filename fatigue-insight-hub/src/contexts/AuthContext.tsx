@@ -1,3 +1,6 @@
+import { getStoredToken, getStoredRefreshToken, storeTokens, clearTokens, getAuthHeaders, apiFetch, sessionChanged, sessionGeneration } from '@/lib/auth-session';
+export { getAuthHeaders } from '@/lib/auth-session';
+import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://aerowake-production.up.railway.app';
@@ -12,6 +15,8 @@ export interface UserProfile {
   home_base: string | null;
   auth_provider: string;
   is_admin: boolean;
+  email_verified?: boolean;
+  metrics_consent?: boolean;
   company_id: string | null;
   company_name: string | null;
   company_role: string;
@@ -41,103 +46,51 @@ interface AuthContextValue extends AuthState {
 
 // ── Token Helpers ────────────────────────────────────────────
 
-function getStoredToken(): string | null {
-  return localStorage.getItem('aerowake-token');
-}
-
-function getStoredRefreshToken(): string | null {
-  return localStorage.getItem('aerowake-refresh');
-}
-
-function storeTokens(access: string, refresh: string) {
-  localStorage.setItem('aerowake-token', access);
-  localStorage.setItem('aerowake-refresh', refresh);
-}
-
-function clearTokens() {
-  localStorage.removeItem('aerowake-token');
-  localStorage.removeItem('aerowake-refresh');
-}
-
-/** Exposed to api-client.ts for attaching Bearer token to requests. */
-export function getAuthHeaders(): Record<string, string> {
-  const token = getStoredToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 // ── Context ──────────────────────────────────────────────────
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
+  const clearPrivateData = useCallback(() => {
+    void queryClient.cancelQueries();
+    queryClient.clear();
+    sessionStorage.removeItem('aerowake-guest');
+    localStorage.removeItem('aerowake-pilot-settings');
+    for (const key of Object.keys(sessionStorage)) if (key.startsWith('aerowake-report-')) sessionStorage.removeItem(key);
+  }, [queryClient]);
   const [state, setState] = useState<AuthState>({
     user: null,
     isAuthenticated: false,
     isLoading: true,
   });
 
-  // ── Fetch Profile ──
   const fetchProfile = useCallback(async () => {
+    const started = sessionGeneration();
     const token = getStoredToken();
-    if (!token) {
-      setState({ user: null, isAuthenticated: false, isLoading: false });
-      return;
-    }
-
+    if (!token) { setState({ user: null, isAuthenticated: false, isLoading: false }); return; }
     try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (res.ok) {
-        const user: UserProfile = await res.json();
-        setState({ user, isAuthenticated: true, isLoading: false });
-      } else if (res.status === 401) {
-        // Try refresh
-        const refreshed = await tryRefresh();
-        if (!refreshed) {
-          clearTokens();
-          setState({ user: null, isAuthenticated: false, isLoading: false });
-        }
-      } else {
-        setState({ user: null, isAuthenticated: false, isLoading: false });
-      }
+      const res = await apiFetch(`${API_BASE_URL}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+      const user = res.ok ? await res.json() as UserProfile : null;
+      if (started !== sessionGeneration()) return;
+      if (!res.ok) clearPrivateData();
+      setState({ user, isAuthenticated: !!user, isLoading: false });
     } catch {
-      setState({ user: null, isAuthenticated: false, isLoading: false });
+      if (started === sessionGeneration()) { clearPrivateData(); setState({ user: null, isAuthenticated: false, isLoading: false }); }
     }
-  }, []);
-
-  // ── Refresh Token ──
-  const tryRefresh = async (): Promise<boolean> => {
-    const refresh = getStoredRefreshToken();
-    if (!refresh) return false;
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refresh }),
-      });
-
-      if (res.ok) {
-        const tokens: TokenResponse = await res.json();
-        storeTokens(tokens.access_token, tokens.refresh_token);
-
-        // Re-fetch profile with new token
-        const profileRes = await fetch(`${API_BASE_URL}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${tokens.access_token}` },
-        });
-        if (profileRes.ok) {
-          const user: UserProfile = await profileRes.json();
-          setState({ user, isAuthenticated: true, isLoading: false });
-          return true;
-        }
-      }
-    } catch {
-      // Refresh failed
-    }
-    return false;
-  };
+  }, [clearPrivateData]);
+  useEffect(() => {
+    const expire = () => { clearPrivateData(); setState({ user: null, isAuthenticated: false, isLoading: false }); };
+    const switched = (event: StorageEvent) => {
+      if (event.key !== 'aerowake-token' && event.key !== null) return;
+      sessionChanged(); clearPrivateData();
+      setState({ user: null, isAuthenticated: false, isLoading: true });
+      void fetchProfile();
+    };
+    window.addEventListener('aerowake-session-expired', expire);
+    window.addEventListener('storage', switched);
+    return () => { window.removeEventListener('aerowake-session-expired', expire); window.removeEventListener('storage', switched); };
+  }, [clearPrivateData, fetchProfile]);
 
   // ── Init: Check auth on mount ──
   useEffect(() => {
@@ -148,16 +101,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.isAuthenticated) return;
 
-    const interval = setInterval(async () => {
-      const refreshed = await tryRefresh();
-      if (!refreshed) {
-        clearTokens();
-        setState({ user: null, isAuthenticated: false, isLoading: false });
-      }
-    }, 25 * 60 * 1000);
-
+    const interval = setInterval(() => { void fetchProfile(); }, 25 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [state.isAuthenticated]);
+  }, [state.isAuthenticated, fetchProfile]);
 
   // ── Login ──
   const login = async (email: string, password: string) => {
@@ -173,6 +119,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const tokens: TokenResponse = await res.json();
+    clearPrivateData();
+    clearTokens();
     storeTokens(tokens.access_token, tokens.refresh_token);
     await fetchProfile();
   };
@@ -203,6 +151,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const tokens: TokenResponse = await res.json();
+    clearPrivateData();
+    clearTokens();
     storeTokens(tokens.access_token, tokens.refresh_token);
     await fetchProfile();
   };
@@ -210,6 +160,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── Logout ──
   const logout = async () => {
     const refresh = getStoredRefreshToken();
+    clearTokens();
+    clearPrivateData();
+    setState({ user: null, isAuthenticated: false, isLoading: false });
     if (refresh) {
       try {
         await fetch(`${API_BASE_URL}/api/auth/logout`, {
@@ -221,8 +174,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Best effort
       }
     }
-    clearTokens();
-    setState({ user: null, isAuthenticated: false, isLoading: false });
   };
 
   // ── Confirm Company (after airline detection) ──
@@ -230,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = getStoredToken();
     if (!token) throw new Error('Not authenticated');
 
-    const res = await fetch(`${API_BASE_URL}/api/companies/confirm`, {
+    const res = await apiFetch(`${API_BASE_URL}/api/companies/confirm`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -256,7 +207,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = getStoredToken();
     if (!token) throw new Error('Not authenticated');
 
-    const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+    const started = sessionGeneration();
+    const res = await apiFetch(`${API_BASE_URL}/api/auth/me`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -270,7 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const user: UserProfile = await res.json();
-    setState((prev) => ({ ...prev, user }));
+    if (started === sessionGeneration()) setState((prev) => ({ ...prev, user }));
   };
 
   return (

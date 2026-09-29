@@ -4,9 +4,10 @@ const ULR_DEFAULTS = {
   crewComposition: 'standard' as const,
   restFacilityClass: null,
   isUlr: false,
+  ulrCrewSet: null,
   acclimatizationState: 'acclimatized' as const,
   ulrCompliance: null,
-  inflightRestBlocks: [] as any[],
+  inflightRestBlocks: [] as DutyAnalysis['inflightRestBlocks'],
   returnToDeckPerformance: null,
   preDutyAwakeHours: 0,
 };

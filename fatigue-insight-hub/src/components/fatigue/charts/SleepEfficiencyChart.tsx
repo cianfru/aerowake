@@ -1,3 +1,4 @@
+import type { TooltipProps } from 'recharts';
 import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
@@ -37,7 +38,7 @@ export function SleepEfficiencyChart({ compact = false }: SleepEfficiencyChartPr
   const data = useMemo(() => {
     // Calculate each factor
     const baseEfficiency = LOCATION_EFFICIENCY[location];
-    
+
     // WOCL overlap (sleep from onset to onset + duration)
     const sleepEnd = (sleepOnsetHour + sleepDuration) % 24;
     let woclOverlap = 0;
@@ -46,50 +47,50 @@ export function SleepEfficiencyChart({ compact = false }: SleepEfficiencyChartPr
       if (hour >= 2 && hour < 6) woclOverlap++;
     }
     const woclPenalty = 1.0 - (woclOverlap * 0.05);
-    
+
     // Late onset penalty
     let lateOnsetPenalty = 1.0;
     if (sleepOnsetHour >= 1 && sleepOnsetHour < 4) lateOnsetPenalty = 0.93;
     else if (sleepOnsetHour >= 0 && sleepOnsetHour < 1) lateOnsetPenalty = 0.97;
-    
+
     // Duration penalty
     let durationPenalty = 1.0;
     if (sleepDuration < 4) durationPenalty = 0.75;
     else if (sleepDuration < 6) durationPenalty = 0.88;
-    
+
     // Combined
     const combinedEfficiency = baseEfficiency * woclPenalty * lateOnsetPenalty * durationPenalty;
     const clampedEfficiency = Math.max(0.50, Math.min(1.0, combinedEfficiency));
     const effectiveSleep = sleepDuration * clampedEfficiency;
 
     return [
-      { 
-        factor: 'Location', 
-        value: baseEfficiency, 
+      {
+        factor: 'Location',
+        value: baseEfficiency,
         impact: (baseEfficiency - 1) * 100,
         label: location.replace('_', ' '),
       },
-      { 
-        factor: 'WOCL', 
-        value: woclPenalty, 
+      {
+        factor: 'WOCL',
+        value: woclPenalty,
         impact: (woclPenalty - 1) * 100,
         label: `${woclOverlap}h overlap`,
       },
-      { 
-        factor: 'Onset', 
-        value: lateOnsetPenalty, 
+      {
+        factor: 'Onset',
+        value: lateOnsetPenalty,
         impact: (lateOnsetPenalty - 1) * 100,
         label: `${sleepOnsetHour}:00 start`,
       },
-      { 
-        factor: 'Duration', 
-        value: durationPenalty, 
+      {
+        factor: 'Duration',
+        value: durationPenalty,
         impact: (durationPenalty - 1) * 100,
         label: `${sleepDuration}h`,
       },
-      { 
-        factor: 'FINAL', 
-        value: clampedEfficiency, 
+      {
+        factor: 'FINAL',
+        value: clampedEfficiency,
         impact: 0,
         label: `${effectiveSleep.toFixed(1)}h effective`,
         isFinal: true,
@@ -105,7 +106,7 @@ export function SleepEfficiencyChart({ compact = false }: SleepEfficiencyChartPr
     return 'hsl(var(--destructive))';
   };
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
     if (active && payload && payload.length) {
       const d = payload[0].payload;
       return (
@@ -158,7 +159,7 @@ export function SleepEfficiencyChart({ compact = false }: SleepEfficiencyChartPr
             </div>
             <div className="space-y-2">
               <Label className="text-sm">Location</Label>
-              <Select value={location} onValueChange={(v: any) => setLocation(v)}>
+              <Select value={location} onValueChange={(v) => setLocation(v as typeof location)}>
                 <SelectTrigger className="h-8">
                   <SelectValue />
                 </SelectTrigger>
@@ -203,9 +204,9 @@ export function SleepEfficiencyChart({ compact = false }: SleepEfficiencyChartPr
               <ReferenceLine x={1} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
               <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                 {data.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
-                    fill={getBarColor(entry.value, (entry as any).isFinal)} 
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={getBarColor(entry.value, 'isFinal' in entry && !!entry.isFinal)}
                   />
                 ))}
               </Bar>
@@ -220,7 +221,7 @@ export function SleepEfficiencyChart({ compact = false }: SleepEfficiencyChartPr
               {sleepDuration}h × {(finalEfficiency * 100).toFixed(0)}% = {effectiveSleep.toFixed(1)}h effective
             </p>
           </div>
-          <Badge 
+          <Badge
             variant="outline"
             className={
               effectiveSleep >= 7 ? 'border-success text-success' :

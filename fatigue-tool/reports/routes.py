@@ -3,7 +3,7 @@
 The pilot keeps the generated report (print/PDF/JSON) and decides where to
 submit it. Inputs are validated for consistency before analysis.
 """
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Literal, Optional
 
 import pytz
@@ -41,9 +41,11 @@ class DutyModel(BaseModel):
     release_utc: AwareDatetime
     sectors: List[SectorIn] = Field(default_factory=list, max_length=12)
     status: Literal['operated', 'planned', 'cancelled_fatigue', 'not_operated'] = 'operated'
-    duty_type: Literal['flight', 'standby', 'simulator', 'ground', 'positioning', 'other'] = 'flight'
+    duty_type: Literal['flight', 'standby', 'home_standby', 'airport_standby', 'simulator', 'ground', 'positioning', 'other'] = 'flight'
     description: str = Field('', max_length=80)
     source: Literal['roster', 'manual'] = 'manual'
+    crew_composition: Literal['standard', 'augmented_3', 'augmented_4', 'unknown'] = 'unknown'
+    acclimatization: Literal['acclimatized', 'unknown'] = 'unknown'
 
     @model_validator(mode='after')
     def _order(self):
@@ -88,11 +90,13 @@ class PilotModel(BaseModel):
 class FatigueReportRequest(BaseModel):
     home_base: Optional[str] = Field(None, min_length=3, max_length=4)
     home_timezone: Optional[str] = None
-    event_type: Literal['fatigue_call_before_duty', 'fatigue_during_duty', 'fatigue_after_duty'] = \
+    event_type: Literal['roster_concern', 'fatigue_call_before_duty', 'fatigue_during_duty', 'fatigue_after_duty'] = \
         'fatigue_call_before_duty'
+    watch_reference_kss: float = Field(6.5, ge=1, le=9, allow_inf_nan=False)
     event_time_utc: AwareDatetime
     period_start_utc: AwareDatetime
     period_end_utc: AwareDatetime
+    diary_complete: bool = False
     affected_duty_id: Optional[str] = None
     duties: List[DutyModel] = Field(default_factory=list, max_length=80)
     sleeps: List[SleepModel] = Field(default_factory=list, max_length=120)
@@ -124,23 +128,59 @@ class FatigueReportRequest(BaseModel):
             if b.start_utc < a.end_utc:
                 raise ValueError('Sleep periods overlap: '
                                  f'{a.start_utc.isoformat()} and {b.start_utc.isoformat()}.')
+        if not self.period_start_utc <= self.event_time_utc <= self.period_end_utc:
+            raise ValueError('The fatigue event must be inside the selected period.')
+        # Seven days of initialization history and a single overnight duty are bounded explicitly.
+        lower, upper = self.period_start_utc - timedelta(days=7), self.period_end_utc + timedelta(hours=24)
+        for d in self.duties:
+            if d.report_utc < self.period_start_utc or d.release_utc > upper:
+                raise ValueError(f'Duty {d.id}: outside the selected period and overnight allowance.')
+            last = d.report_utc
+            for sector in sorted(d.sectors, key=lambda x: x.departure_utc):
+                if not last <= sector.departure_utc < sector.arrival_utc <= d.release_utc:
+                    raise ValueError(f'Duty {d.id}: sectors overlap or fall outside report/release.')
+                last = sector.arrival_utc
+        active = sorted((d for d in self.duties if d.status in ('operated', 'planned')), key=lambda d: d.report_utc)
+        for a, b in zip(active, active[1:]):
+            if b.report_utc < a.release_utc:
+                raise ValueError(f'Duties {a.id} and {b.id} overlap.')
+        for sleep in self.sleeps:
+            if sleep.start_utc < lower or sleep.end_utc > upper:
+                raise ValueError('Sleep falls outside the maximum report history/horizon.')
+            for d in active:
+                if (d.status != 'operated' and self.event_type != 'roster_concern') or sleep.start_utc >= d.release_utc or sleep.end_utc <= d.report_utc:
+                    continue
+                rest_allowed = (sleep.kind == 'inflight_rest' and sleep.location == 'crew_rest'
+                                and d.crew_composition in ('augmented_3', 'augmented_4')
+                                and any(x.departure_utc <= sleep.start_utc < sleep.end_utc <= x.arrival_utc for x in d.sectors))
+                if not rest_allowed and d.duty_type != 'home_standby':
+                    raise ValueError(f'Sleep overlaps {d.status} duty {d.id}. Confirm authorized crew rest or correct the times.')
+        rated = self.self_assessment.rated_at_utc
+        if rated and not self.period_start_utc <= rated <= self.period_end_utc:
+            raise ValueError('Self-rating time must be inside the selected period.')
+        latest_observation = datetime.now(timezone.utc) + timedelta(minutes=5)
+        if (self.self_assessment.kss is not None or self.self_assessment.samn_perelli is not None) and (rated or self.event_time_utc) > latest_observation:
+            raise ValueError('A self-rating must describe an observation already made, not future fatigue.')
+        if any(s.source == 'reported' and s.end_utc > latest_observation for s in self.sleeps):
+            raise ValueError('Future sleep must be marked estimated, not reported.')
         return self
 
 
 def _airport_tz(code: str, unknown: List[str]) -> str:
     code = code.upper()
     if code not in _IATA_DB and code not in AirportDatabase._custom_airports:
-        unknown.append(code)
-        return 'UTC'
+        raise ValueError(f'Unknown airport {code}; confirm the code before generating a report.')
     return AirportDatabase.get_airport(code).timezone
 
 
 def to_input(req: FatigueReportRequest) -> ReportInput:
     unknown: List[str] = []
-    home_tz = req.home_timezone or _airport_tz(req.home_base, unknown)
+    from parsers.validation import resolve_home_timezone
+    home_tz = resolve_home_timezone(req.home_base, req.home_timezone) if req.home_base else req.home_timezone
     duties = [DutyIn(
         id=d.id, report_utc=d.report_utc, release_utc=d.release_utc, status=d.status,
         duty_type=d.duty_type, description=d.description, source=d.source,
+        crew_composition=d.crew_composition, acclimatization=d.acclimatization,
         sectors=[Sector(s.flight_number, s.departure.upper(), s.arrival.upper(), s.departure_utc,
                         s.arrival_utc, _airport_tz(s.departure, unknown), _airport_tz(s.arrival, unknown),
                         s.is_deadhead) for s in sorted(d.sectors, key=lambda x: x.departure_utc)],
@@ -154,14 +194,23 @@ def to_input(req: FatigueReportRequest) -> ReportInput:
         self_kss=req.self_assessment.kss, self_samn_perelli=req.self_assessment.samn_perelli,
         self_rated_at=req.self_assessment.rated_at_utc, factors=list(dict.fromkeys(req.contributing_factors)),
         narrative=req.narrative.strip(), pilot={k: v for k, v in req.pilot.model_dump().items() if v},
-        unknown_airports=unknown,
+        unknown_airports=unknown, diary_complete=req.diary_complete,
+        watch_reference_kss=req.watch_reference_kss,
     )
 
 
 @router.post('')
-def create_report(req: FatigueReportRequest) -> Dict:
+async def create_report(req: FatigueReportRequest) -> Dict:
     try:
-        return analyse(to_input(req))
+        from api.hardening import run_compute
+        import hashlib, json
+        report = await run_compute(analyse, to_input(req))
+        inputs = req.model_dump(mode='json')
+        canonical = json.dumps(inputs, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+        report['provenance'] = {'input_schema': 2, 'parser_version': 'roster-1.1',
+                                'input_sha256': hashlib.sha256(canonical.encode()).hexdigest(),
+                                'inputs': inputs}
+        return report
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 

@@ -488,8 +488,7 @@ export function generateMitigations(
       priority: priority++,
       category: 'GENERAL',
       title: 'Fatigue Risk Awareness',
-      text: `This duty pattern reaches a predicted ${formatKssWithLabel(worstKss)}. While this ` +
-        `falls within operational limits, active fatigue countermeasures are recommended. If you experience ` +
+      text: `This duty pattern reaches a predicted ${formatKssWithLabel(worstKss)}. This is a model reference, not an operational limit; review the assumptions and appropriate mitigations. If you experience ` +
         `symptoms of significant fatigue, consider documenting through your operator's FRMS.`,
       reference: 'ICAO Doc 9966',
     });
@@ -501,7 +500,7 @@ export function generateMitigations(
       priority: 1,
       category: 'GENERAL',
       title: 'Standard Fatigue Awareness',
-      text: `Predicted fatigue levels for this duty fall within acceptable limits. Maintain standard fatigue ` +
+      text: `Predicted sleepiness for this duty stays below the model watch band. Maintain standard fatigue ` +
         `awareness practices: monitor subjective sleepiness using the KSS or Samn-Perelli scale, ` +
         `communicate openly about fatigue within the crew, and prioritize recovery sleep after duty.`,
       reference: 'ICAO Doc 9966 (FRMS Manual), 2016',

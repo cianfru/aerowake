@@ -7,20 +7,17 @@ import type { AnalysisResults, DutyAnalysis, StandbyPeriod } from '@/types/fatig
 import {
   classifyKss,
   isElevatedRisk,
-  normalizeRiskLevel,
   resolveKss,
   type RiskLevel,
 } from '@/lib/risk-scale';
 
 /** Predicted peak KSS for a duty (backend max_kss, else derived from the index). */
 export function dutyPeakKss(duty: DutyAnalysis): number | null {
-  return resolveKss(duty.maxKss, duty.minPerformance);
+  return resolveKss(duty.maxKss, duty.minPerformance, duty.modelVersion);
 }
 
 /** Risk level of a duty (backend risk_level, else classified from peak KSS). */
 export function dutyRiskLevel(duty: DutyAnalysis): RiskLevel {
-  const level = normalizeRiskLevel(duty.overallRisk);
-  if (level !== 'unknown') return level;
   return classifyKss(dutyPeakKss(duty));
 }
 
@@ -63,25 +60,10 @@ export function dutyDateLabel(duty: DutyAnalysis): string {
 /**
  * Duties the model thinks need special attention, worst first.
  *
- * Uses the backend `duties_to_watch` list when present (even if empty).
- * Older analyses without the field fall back to high/critical/extreme duties
- * sorted by predicted peak KSS.
+ * Recompute from canonical peak KSS so saved landing-risk lists cannot hide a demanding duty.
  */
 export function selectDutiesToWatch(results: Pick<AnalysisResults, 'duties' | 'dutiesToWatch'>): DutyAnalysis[] {
   const duties = results.duties ?? [];
-  if (Array.isArray(results.dutiesToWatch)) {
-    const byId = new Map(duties.filter((d) => d.dutyId).map((d) => [d.dutyId as string, d]));
-    const seen = new Set<string>();
-    const out: DutyAnalysis[] = [];
-    for (const id of results.dutiesToWatch) {
-      const d = byId.get(id);
-      if (d && !seen.has(id)) {
-        seen.add(id);
-        out.push(d);
-      }
-    }
-    return out;
-  }
   return duties
     .filter((d) => isElevatedRisk(dutyRiskLevel(d)))
     .sort((a, b) => (dutyPeakKss(b) ?? 0) - (dutyPeakKss(a) ?? 0));

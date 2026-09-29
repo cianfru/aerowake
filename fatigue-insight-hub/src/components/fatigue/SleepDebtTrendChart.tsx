@@ -1,3 +1,4 @@
+import type { TooltipProps } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DutyAnalysis } from '@/types/fatigue';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
@@ -63,7 +64,7 @@ export function SleepDebtTrendChart({ duties, month }: SleepDebtTrendChartProps)
     ? chartData[chartData.length - 1].sleepDebt - chartData[chartData.length - 7].sleepDebt
     : 0;
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       
@@ -182,7 +183,7 @@ export function SleepDebtTrendChart({ duties, month }: SleepDebtTrendChartProps)
                 fillOpacity={1}
                 fill="url(#colorDebt)"
                 strokeWidth={2}
-                dot={(props: any) => {
+                dot={(props) => {
                   const { cx, cy, payload } = props;
                   if (payload.isDuty) {
                     const color = payload.sleepDebt > 6 ? 'hsl(var(--critical))' : 

@@ -1,18 +1,31 @@
 name: CI
-
 on:
   pull_request:
   push:
     branches: [main]
-
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
-
+permissions:
+  contents: read
 jobs:
   backend:
-    name: Backend tests
+    name: Backend, PostgreSQL and migrations
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: aerowake
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: aerowake_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://aerowake:test-only-password@localhost:5432/aerowake_test
+      JWT_SECRET: ci-only-random-secret-not-for-any-production-environment
+      RATE_LIMIT_PER_MINUTE: '0'
     defaults:
       run:
         working-directory: fatigue-tool
@@ -20,16 +33,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: pip
-          cache-dependency-path: |
-            fatigue-tool/requirements.txt
-            fatigue-tool/requirements-dev.txt
-      - run: pip install -r requirements.txt -r requirements-dev.txt
+          cache-dependency-path: fatigue-tool/requirements.lock
+      - run: pip install -r requirements.lock
       - run: python -m pytest tests -q
-
+      - run: pip install pip-audit && pip-audit -r requirements.lock
   frontend:
-    name: Frontend tests and build
+    name: Frontend types, lint, tests and build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -42,5 +53,22 @@ jobs:
           cache: npm
           cache-dependency-path: fatigue-insight-hub/package-lock.json
       - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
       - run: npm test
       - run: npm run build
+      - run: npm audit --audit-level=moderate
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: fatigue-tool/requirements.lock
+      - run: pip install -r ../fatigue-tool/requirements.lock
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failure-traces
+          path: fatigue-insight-hub/test-results
+          retention-days: 7

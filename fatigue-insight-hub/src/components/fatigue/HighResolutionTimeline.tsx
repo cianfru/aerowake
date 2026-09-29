@@ -53,7 +53,7 @@ export function HighResolutionTimeline({ duties, statistics, month, pilotId }: H
         const [endH, endM] = lastSegment.arrivalTime.split(':').map(Number);
         
         const startHour = startH + startM / 60;
-        let endHour = endH + endM / 60;
+        const endHour = endH + endM / 60;
         
         // Get performance at start (first segment) and end (last segment/landing)
         const startPerformance = firstSegment.performance;

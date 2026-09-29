@@ -530,11 +530,11 @@ function TrendChart({ trend }: { trend: { months: Array<{ month: string; your_pe
                   return (
                     <div className="rounded-lg border border-border bg-card p-3 shadow-lg">
                       <p className="text-xs font-medium mb-1.5">{label}</p>
-                      {payload.map((entry: any, i: number) => (
+                      {payload.map((entry, i: number) => (
                         <p key={i} className="text-xs">
                           <span className="text-muted-foreground">{entry.name}: </span>
                           <span className="font-mono font-medium" style={{ color: entry.color }}>
-                            {entry.value != null ? `KSS ${indexToKss(entry.value).toFixed(1)}` : '—'}
+                            {entry.value != null ? `KSS ${indexToKss(Number(entry.value)).toFixed(1)}` : '—'}
                           </span>
                         </p>
                       ))}

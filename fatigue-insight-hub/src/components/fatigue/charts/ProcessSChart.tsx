@@ -1,3 +1,4 @@
+import type { TooltipProps } from 'recharts';
 import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
@@ -82,7 +83,7 @@ export function ProcessSChart({ compact = false }: ProcessSChartProps) {
     return `${actualHour.toString().padStart(2, '0')}:00`;
   };
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
     if (active && payload && payload.length) {
       const d = payload[0].payload;
       return (
