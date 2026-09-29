@@ -12,6 +12,7 @@ vi.mock('@/contexts/AuthContext', () => ({
   getAuthHeaders: () => ({}),
 }));
 // Heavy visual sections are covered elsewhere; keep this test on the page structure.
+vi.mock('@/components/fatigue/Chronogram', () => ({ Chronogram: () => <section aria-label="Roster calendar">calendar</section> }));
 vi.mock('@/components/fatigue/roster/TimelineSection', () => ({ TimelineSection: () => <div>timeline</div> }));
 vi.mock('@/components/fatigue/DutyDetailsDialog', () => ({
   DutyDetailsDialog: ({ open, duty }: { open: boolean; duty: { dutyId?: string } | null }) =>

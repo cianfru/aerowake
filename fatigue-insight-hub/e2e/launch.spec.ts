@@ -21,6 +21,24 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   await expect(page.getByRole('button',{name:'Run analysis',exact:true})).toBeDisabled();
   await page.getByLabel('I have reviewed the dates, time zones, and assumptions. Continue with these inputs.').check();
   await page.getByRole('button',{name:'Run analysis',exact:true}).click();
+  // The original calendar is a primary view, including on mobile; no disclosure to open.
+  const calendar=page.getByRole('region',{name:'Roster calendar',exact:true});
+  await expect(calendar.getByRole('heading',{name:'Roster calendar',exact:true})).toBeVisible();
+  await expect(calendar.getByRole('tab',{name:'Home base',exact:true})).toHaveAttribute('aria-selected','true');
+  expect(await calendar.evaluate(el => !el.closest('details') && Boolean(el.compareDocumentPosition(document.getElementById('fatigue-outlook')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  const dutyResponse=page.waitForResponse(r=>r.url().includes('/api/duty/') && r.request().method()==='GET');
+  await calendar.getByRole('button',{name:'Open duty on Sat 5 Sep: TEST1',exact:true}).click();
+  expect((await dutyResponse).status()).toBe(200);
+  const dutyDialog=page.getByRole('dialog',{name:'Duty Details — Sep 05, 2026',exact:true});
+  await expect(dutyDialog).toBeVisible();
+  await dutyDialog.getByRole('button',{name:'Close',exact:true}).click();
+  await calendar.getByRole('tab',{name:'UTC',exact:true}).click();
+  await expect(calendar.getByRole('tab',{name:'UTC',exact:true})).toHaveAttribute('aria-selected','true');
+  await calendar.getByRole('button',{name:'Open duty on Tue 8 Sep: TEST2',exact:true}).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog',{name:'Duty Details — Sep 08, 2026',exact:true})).toBeVisible();
+  await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
+  await calendar.getByRole('tab',{name:'Home base',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Duties to watch',exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Retry map'})).toBeVisible();
   airportOffline=false;

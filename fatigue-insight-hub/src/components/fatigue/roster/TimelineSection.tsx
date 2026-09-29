@@ -3,21 +3,16 @@ import { ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { Chronogram } from '../Chronogram';
 import { DutyKssChart } from './DutyKssChart';
 import { MonthlyAlertnessChart } from './MonthlyAlertnessChart';
 import { SleepDebtTrendChart } from '../SleepDebtTrendChart';
 import { BodyClockDriftChart } from '../BodyClockDriftChart';
 import { RouteNetwork } from './RouteNetwork';
-import type { AnalysisResults, DutyAnalysis } from '@/types/fatigue';
+import type { AnalysisResults } from '@/types/fatigue';
 
 interface TimelineSectionProps {
   results: AnalysisResults;
-  pilotId: string;
   homeBase: string;
-  theme: 'dark' | 'light';
-  selectedDuty: DutyAnalysis | null;
-  onDutySelect: (duty: DutyAnalysis) => void;
 }
 
 const isWide = () => {
@@ -28,14 +23,14 @@ const isWide = () => {
   }
 };
 
-/** Monthly chronogram + trend charts. Collapsed by default on mobile. */
-export function TimelineSection({ results, pilotId, homeBase, theme, selectedDuty, onDutySelect }: TimelineSectionProps) {
+/** Supporting trend charts. The interactive calendar is always visible above. */
+export function TimelineSection({ results, homeBase }: TimelineSectionProps) {
   const [open, setOpen] = useState(isWide);
 
   return (
     <>
     <Collapsible open={open} onOpenChange={setOpen} asChild>
-      <section aria-label="Timeline and charts" className="space-y-5">
+      <section id="roster-charts" aria-label="Timeline and charts" className="scroll-mt-24 space-y-5">
         <CollapsibleTrigger asChild>
           <button
             type="button"
@@ -49,25 +44,6 @@ export function TimelineSection({ results, pilotId, homeBase, theme, selectedDut
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-4 min-w-0">
-          {/* The chronogram scrolls horizontally inside its own container on small screens. */}
-          <details className="min-w-0">
-            <summary className="cursor-pointer py-3 text-sm font-medium">Detailed monthly chronogram</summary>
-            <Chronogram
-              duties={results.duties}
-              statistics={results.statistics}
-              month={results.month}
-              pilotId={pilotId}
-              pilotName={results.pilotName}
-              pilotBase={results.pilotBase}
-              pilotAircraft={results.pilotAircraft}
-              onDutySelect={onDutySelect}
-              selectedDuty={selectedDuty}
-              restDaysSleep={results.restDaysSleep}
-              analysisId={results.analysisId}
-              standbyPeriods={results.standbyPeriods}
-            />
-          </details>
-
           <Tabs defaultValue={isWide() ? "month" : "alertness"} className="w-full min-w-0">
             <TabsList className="h-auto w-full justify-start flex-wrap gap-x-5 gap-y-3 rounded-none border-b border-border bg-transparent p-0">
               {[['month', 'Through the month'], ['alertness', 'By duty'], ['sleepdebt', 'Sleep debt'], ['bodyclock', 'Body clock']].map(([v, l]) => (

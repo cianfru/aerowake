@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Home, Globe, BarChart3, Pencil } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Pencil } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { DutyAnalysis, DutyStatistics, RestDaySleep, StandbyPeriod } from '@/types/fatigue';
@@ -54,14 +53,15 @@ export function Chronogram({ duties, statistics, month, pilotName, pilotBase, pi
   }), [statistics]);
 
   return (
-    <section className="space-y-4">
+    <section id="roster-calendar" aria-labelledby="chronogram-heading" className="min-w-0 scroll-mt-24 space-y-4">
       <div className="space-y-4">
         {/* Tab selector for timeline type */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ChronogramTab)}>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="text-[13px] font-semibold">Monthly timeline</p>
-              <p className="text-xs text-muted-foreground">Duties, estimated sleep and the window of circadian low (WOCL)</p>
+              <h2 id="chronogram-heading" className="text-xl font-semibold">Roster calendar</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Your monthly chronogram. Select a flight or duty bar to open its details.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Duties, estimated sleep and the window of circadian low (WOCL). Swipe across the calendar on smaller screens.</p>
             </div>
             <TabsList className="h-auto gap-4 rounded-none bg-transparent p-0">
               {([['homebase', 'Home base'], ['utc', 'UTC']] as const).map(([v, l]) => (

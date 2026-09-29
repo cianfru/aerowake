@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import { format } from 'date-fns';
 import { RotateCcw } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { riskClasses } from '@/lib/risk-scale';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import type { AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { DutyDetailsDialog } from '../DutyDetailsDialog';
+import { Chronogram } from '../Chronogram';
 import { ExportOptions } from '../ExportOptions';
 import { RosterUploadCard } from './RosterUploadCard';
 import { RosterForecast } from './RosterForecast';
@@ -89,8 +89,8 @@ function VerdictHeader({ results, watch, onNewRoster }: {
 }
 
 /**
- * Roster (home): upload → verdict, duties to watch, EASA checks,
- * all duties (collapsed) and the timeline (collapsed on mobile).
+ * Roster (home): upload → summary and interactive calendar, then the forecast,
+ * duties to watch, EASA checks, and supporting charts.
  */
 export function RosterPage() {
   const {
@@ -121,11 +121,37 @@ export function RosterPage() {
       <div className="mx-auto max-w-5xl min-w-0 space-y-12 animate-fade-in">
         <VerdictHeader results={results} watch={watch} onNewRoster={removeFile} />
 
+        <nav aria-label="Roster sections" className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
+          {[
+            ['roster-calendar', 'Roster calendar'],
+            ['fatigue-outlook', 'Fatigue outlook'],
+            ['duties-to-watch', 'Duties to watch'],
+            ['roster-charts', 'Charts'],
+          ].map(([id, label]) => (
+            <a key={id} href={`#${id}`} className="font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{label}</a>
+          ))}
+        </nav>
+
+        <Chronogram
+          duties={results.duties}
+          statistics={results.statistics}
+          month={results.month}
+          pilotId={settings.pilotId}
+          pilotName={results.pilotName}
+          pilotBase={results.pilotBase}
+          pilotAircraft={results.pilotAircraft}
+          onDutySelect={selectDuty}
+          selectedDuty={selectedDuty}
+          restDaysSleep={results.restDaysSleep}
+          analysisId={results.analysisId}
+          standbyPeriods={results.standbyPeriods}
+        />
+
         <RosterForecast results={results} onDetails={selectDuty} onConcern={(duty, watchReference) => {
           if (duty.dutyId) openFatigueReportForDuty(duty.dutyId, { purpose: 'roster_concern', watchReference });
         }} />
 
-        <section aria-labelledby="watch-heading" className="space-y-1">
+        <section id="duties-to-watch" aria-labelledby="watch-heading" className="scroll-mt-24 space-y-1">
           <SectionHeading
             id="watch-heading"
             title="Duties to watch"
@@ -156,11 +182,7 @@ export function RosterPage() {
 
         <TimelineSection
           results={results}
-          pilotId={settings.pilotId}
           homeBase={settings.homeBase}
-          theme={settings.theme}
-          selectedDuty={selectedDuty}
-          onDutySelect={selectDuty}
         />
 
         <ExportOptions duties={results.duties} />

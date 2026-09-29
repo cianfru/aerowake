@@ -19,7 +19,7 @@ export function RosterForecast({ results, onDetails, onConcern }: {
   const assessed = rows.filter(row => row.peak != null);
   const highest = assessed.reduce<typeof first>((best, row) => !best || row.peak! > best.peak! ? row : best, undefined);
 
-  return <section aria-labelledby="forecast-heading" className="space-y-6">
+  return <section id="fatigue-outlook" aria-labelledby="forecast-heading" className="scroll-mt-24 space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-5">
       <div className="max-w-2xl space-y-2">
         <h2 id="forecast-heading" className="text-xl font-semibold">Your fatigue outlook</h2>
