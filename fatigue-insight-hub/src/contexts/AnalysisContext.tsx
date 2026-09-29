@@ -27,7 +27,7 @@ const DEFAULT_SETTINGS: PilotSettings = {
   homeBase: '', // never assume a base — the pilot confirms it before analysis
   analysisType: 'single',
   selectedMonth: new Date(2026, 1, 1),
-  theme: 'dark',
+  theme: 'light',
 };
 
 function buildInitialState(): AnalysisState {
@@ -35,7 +35,7 @@ function buildInitialState(): AnalysisState {
   // Once the user has dismissed the landing page, remember it
   const landingDismissed = localStorage.getItem('aerowake_landing_dismissed') === 'true';
   return {
-    settings: { ...DEFAULT_SETTINGS, ...persisted },
+    settings: { ...DEFAULT_SETTINGS, ...persisted, theme: localStorage.getItem('fatigue-theme') === 'dark' ? 'dark' : 'light' },
     uploadedFile: null,
     actualFileObject: null,
     analysisResults: null,

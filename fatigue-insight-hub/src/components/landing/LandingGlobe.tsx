@@ -14,8 +14,8 @@ export function LandingGlobe() {
   }, []);
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden opacity-70" aria-hidden="true">
-      <div className="w-[min(920px,130vw)]">
+    <div className="pointer-events-none relative flex items-center justify-center" aria-hidden="true">
+      <div className="w-full">
         <Globe
           airports={LANDING_AIRPORTS.map((a) => ({ code: a.code, lat: a.lat, lng: a.lng, emphasis: a.code === 'DOH' }))}
           routes={routes}

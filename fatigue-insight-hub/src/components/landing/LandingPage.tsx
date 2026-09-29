@@ -16,7 +16,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[#000408]">
+    <div className="light landing-daylight min-h-screen bg-[#f8fbfd] text-[#142e45]">
       <LandingHeader onEnter={onEnter} />
       <HeroSection onScrollToContent={scrollToContent} onEnter={onEnter} />
       <div ref={contentRef} />

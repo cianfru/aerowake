@@ -17,12 +17,14 @@ import {
   dutiesInPeriod, dutyFromAnalysis, estimatedSleepsFromAnalysis, generateFatigueReport, localInputToUtcIso, utcIsoToLocalInput,
   type DutyStatus, type EventType, type FatigueReport, type ReportDuty, type ReportSector, type ReportSleep,
 } from '@/lib/fatigue-report-api';
+import { buildDiaryDays, diaryDate, shiftDay, formatHours, overlaps, priorSleepHours } from '@/lib/report-diary';
+import { ReportDaybook } from './ReportDaybook';
 import { FatigueReportView } from './FatigueReportView';
 
 const STEPS = [
   { id: 'event', label: 'Event', icon: CalendarClock },
-  { id: 'duties', label: 'Duties', icon: Plane },
-  { id: 'sleep', label: 'Sleep', icon: BedDouble },
+  { id: 'duties', label: 'Recent duties', icon: Plane },
+  { id: 'sleep', label: 'Sleep & recovery', icon: BedDouble },
   { id: 'feel', label: 'How you feel', icon: UserRound },
 ] as const;
 
@@ -31,7 +33,7 @@ const select = 'w-full rounded-md border border-input bg-background px-3 py-2 te
 
 const STATUS_LABEL: Record<DutyStatus, string> = {
   operated: 'Operated',
-  planned: 'Planned (not yet flown)',
+  planned: 'Planned / not confirmed',
   cancelled_fatigue: 'Not operated — fatigue',
   not_operated: 'Not operated — other reason',
 };
@@ -112,7 +114,7 @@ export function FatigueReportPage() {
   // Self assessment
   const [kss, setKss] = useState<number | null>(null);
   const [ratedAt, setRatedAt] = useState('');
-  const [sleepDay, setSleepDay] = useState('');
+  const [selectedDay, setSelectedDay] = useState('all');
   const [sp, setSp] = useState<number | null>(null);
   const [factors, setFactors] = useState<string[]>([]);
   const [narrative, setNarrative] = useState('');
@@ -222,19 +224,42 @@ export function FatigueReportPage() {
     window.scrollTo?.({ top: 0, behavior: 'smooth' });
   };
 
-  const eventValid = !!homeTz && !!eventTime && !!periodStart && !!periodEnd && periodEnd > periodStart && eventTime >= periodStart && eventTime <= periodEnd;
+  const eventValid = !!homeTz && !!eventTime && !!periodStart && !!periodEnd && Date.parse(periodEnd) > Date.parse(periodStart) && Date.parse(eventTime) >= Date.parse(periodStart) && Date.parse(eventTime) <= Date.parse(periodEnd) && Date.parse(periodEnd) - Date.parse(periodStart) <= 31 * 86400e3;
+  const changeEventTime = (value: string) => {
+    const delta = Date.parse(value) - Date.parse(eventTime);
+    setEventTime(value);
+    if (Number.isFinite(delta)) {
+      setPeriodStart(new Date(Date.parse(periodStart) + delta).toISOString());
+      setPeriodEnd(new Date(Date.parse(periodEnd) + delta).toISOString());
+    }
+    setDiaryComplete(false);
+  };
+  const diaryDays = useMemo(() => buildDiaryDays(periodStart, periodEnd, eventTime, inputTz, duties, sleeps), [periodStart, periodEnd, eventTime, inputTz, duties, sleeps]);
+  const activeDay = diaryDays.find(d => d.date === selectedDay);
+  const dayFilter = activeDay ? selectedDay : 'all';
+  const includesDay = (start: string, end: string) => !activeDay || overlaps(start, end, activeDay.start, activeDay.end);
+  const sortedDuties = [...duties].sort((a, b) => a.report_utc.localeCompare(b.report_utc));
+  const visibleDuties = sortedDuties.filter(d => includesDay(d.report_utc, d.release_utc));
+  const visibleSleeps = [...sleeps].sort((a, b) => a.start_utc.localeCompare(b.start_utc)).filter(s => includesDay(s.start_utc, s.end_utc));
+  const entryDay = activeDay?.date ?? diaryDate(eventTime, inputTz);
+  const setPeriod = (setter: (value: string) => void, value: string) => { setter(value); setDiaryComplete(false); };
+
 
   // ── Duty editing ──
-  const updateDuty = (id: string, patch: Partial<ReportDuty>) =>
+  const updateDuty = (id: string, patch: Partial<ReportDuty>) => {
+    setDiaryComplete(false);
     setDuties((ds) => ds.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+  };
   const updateSector = (id: string, i: number, patch: Partial<ReportSector>) =>
     setDuties((ds) => ds.map((d) => (d.id === id
       ? { ...d, sectors: d.sectors.map((s, j) => (j === i ? { ...s, ...patch } : s)) } : d)));
   const addDuty = () => {
-    const report = eventTime;
+    const report = localInputToUtcIso(`${entryDay}T08:00`, inputTz);
+    if (!report) { setError('Choose UTC to enter a duty on this date.'); return; }
+    setDiaryComplete(false);
     const release = new Date(new Date(report).getTime() + 8 * 3600e3).toISOString();
     const duty: ReportDuty = {
-      id: newId('d'), report_utc: report, release_utc: release, sectors: [], status: prospective ? 'planned' : 'operated',
+      id: newId('d'), report_utc: report, release_utc: release, sectors: [], status: 'planned',
       duty_type: 'flight', source: 'manual',
     };
     setDuties((ds) => [...ds, duty].sort((a, b) => a.report_utc.localeCompare(b.report_utc)));
@@ -251,19 +276,37 @@ export function FatigueReportPage() {
   };
 
   // ── Sleep editing ──
-  const updateSleep = (key: string, patch: Partial<ReportSleep>) =>
+  const updateSleep = (key: string, patch: Partial<ReportSleep>) => {
+    setDiaryComplete(false);
     setSleeps((ss) => ss.map((s) => (s.key === key ? { ...s, ...patch } : s)));
+  };
   const addSleep = (kind: 'main' | 'nap') => {
-    const last = sleeps[sleeps.length - 1];
-    const start = last ? new Date(new Date(last.end_utc).getTime() + 16 * 3600e3) : new Date(periodStart);
-    const hours = kind === 'nap' ? 1 : 7.5;
+    const startIso = localInputToUtcIso(kind === 'nap' ? `${entryDay}T14:00` : `${shiftDay(entryDay, -1)}T23:00`, inputTz);
+    if (!startIso) { setError('Choose UTC to enter sleep on this date.'); return; }
+    const start = new Date(startIso);
+    const hours = kind === 'nap' ? 1 : 8;
+    setDiaryComplete(false);
     const entry: ReportSleep & { key: string } = {
       key: newId('s'), start_utc: start.toISOString(),
       end_utc: new Date(start.getTime() + hours * 3600e3).toISOString(),
-      kind, location: 'home', quality: null, source: prospective ? 'estimated' : 'reported',
+      kind, location: 'home', quality: null, source: 'estimated',
     };
     setSleeps((ss) => [...ss, entry].sort((a, b) => a.start_utc.localeCompare(b.start_utc)));
   };
+
+  const dutyIssues = useMemo(() => {
+    const issues: string[] = [];
+    const ordered = [...duties].sort((a, b) => a.report_utc.localeCompare(b.report_utc));
+    const active = ordered.filter(d => ['operated', 'planned'].includes(d.status));
+    ordered.forEach((d, index) => {
+      const duration = hoursBetween(d.report_utc, d.release_utc);
+      if (duration == null || duration <= 0) issues.push(`Duty ${index + 1}: release must be after report. For an overnight duty, move the release to the next date.`);
+      else if (duration > 24) issues.push(`Duty ${index + 1}: check the dates; a single duty cannot exceed 24 hours in this report.`);
+      if (Date.parse(d.report_utc) < Date.parse(periodStart) || Date.parse(d.release_utc) > Date.parse(periodEnd) + 86400e3) issues.push(`Duty ${index + 1}: extend the reporting period in step 1 to include this duty.`);
+    });
+    active.forEach((d, index) => { if (index && Date.parse(d.report_utc) < Date.parse(active[index - 1].release_utc)) issues.push('Two active duties overlap. Review their report and release dates.'); });
+    return [...new Set(issues)];
+  }, [duties, periodStart, periodEnd]);
 
   const sleepIssues = useMemo(() => {
     const issues: string[] = [];
@@ -275,13 +318,14 @@ export function FatigueReportPage() {
     return issues;
   }, [sleeps]);
 
-  const sleepDays = [...new Set(sleeps.map(s => utcIsoToLocalInput(s.start_utc, inputTz).slice(0, 10)))].sort();
-  const visibleSleepDay = sleepDays.includes(sleepDay) ? sleepDay : sleepDays[0];
   const ratingNeedsTime = (kss !== null || sp !== null) && !ratedAt;
 
   const unconfirmed = sleeps.filter((s) => s.source === 'estimated').length;
 
   async function submit() {
+    if (!eventValid) { setError('Review the event date and reporting period in step 1 (maximum 31 days).'); setStep(0); return; }
+    if (dutyIssues.length) { setError(dutyIssues.join(' ')); setStep(1); return; }
+    if (sleepIssues.length) { setError(sleepIssues.join(' ')); setStep(2); return; }
     if (ratingNeedsTime) { setError('Confirm when you recorded your self-rating.'); return; }
     setBusy(true);
     setError('');
@@ -318,18 +362,17 @@ export function FatigueReportPage() {
   const tzLabel = inputTz === 'UTC' ? 'UTC' : `${homeTz} (home-base local)`;
 
   return (
-    <section className="mx-auto max-w-4xl space-y-10 px-4 py-10 md:px-8 md:py-12">
+    <section className="mx-auto max-w-4xl space-y-6 px-4 py-8 md:px-8 md:py-10">
       <header className="space-y-3">
         <p className="eyebrow">Fatigue report</p>
         <h1 className="text-3xl md:text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.025em]">{prospective ? 'Raise a roster concern' : 'Report fatigue'}</h1>
         <p className="max-w-2xl text-[15px] text-muted-foreground">
-          Bring together your roster, scientific estimates and your own experience. Record a future roster concern
-          or fatigue you experienced, then review a structured report you can submit through your
-          operator&apos;s fatigue reporting system. Generated reports are not saved on our servers. Saved roster history is separate.
+          Start with the day that concerns you. Review recent duties and sleep, add your experience,
+          then export a report for your operator. Generated reports are not stored on our servers.
         </p>
         <p className="max-w-2xl text-sm text-muted-foreground">
           {results
-            ? `Duties and estimated sleep are pre-filled from your loaded roster${results.month ? ` (${results.month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })})` : ''}. Review the assumptions and confirm actual duty and sleep records where available.`
+            ? `Duties and estimated sleep are pre-filled from your loaded roster${results.month ? ` (${results.month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })})` : ''}. Confirm what actually happened.`
             : 'No roster loaded — enter duties manually, or upload a roster first to pre-fill them.'}
         </p>
       </header>
@@ -380,6 +423,7 @@ export function FatigueReportPage() {
         <span className="text-xs text-muted-foreground">Showing: {tzLabel}</span>
       </div>
 
+      {(step === 1 || step === 2) && <ReportDaybook days={diaryDays} selected={dayFilter} onSelect={setSelectedDay} mode={step === 1 ? 'duties' : 'sleep'} timezone={tzLabel} />}
       <Card variant="glass">
         <CardContent className="space-y-6 p-5 md:p-8">
           {step === 0 && (
@@ -403,7 +447,8 @@ export function FatigueReportPage() {
                   </select>
                 </label>
               </div>
-              <TimeInput label={prospective ? 'When is the duty or period of concern?' : 'When did you call / feel fatigued?'} tz={inputTz} value={eventTime} onChange={setEventTime} required />
+              <TimeInput label={prospective ? 'When is the duty or period of concern?' : 'When did you call / feel fatigued?'} tz={inputTz} value={eventTime} onChange={changeEventTime} required />
+              <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" onClick={() => changeEventTime(new Date(Math.floor(Date.now() / 60000) * 60000).toISOString())}>Now / today</Button><Button type="button" variant="outline" size="sm" onClick={() => changeEventTime(new Date(Math.floor(Date.now() / 60000) * 60000 - 86400e3).toISOString())}>24 hours ago</Button></div>
               <label className={field}><span className="text-muted-foreground">Personal watch reference (KSS)</span>
                 <select className={select} value={watchKss} onChange={e => setWatchKss(Number(e.target.value))}>
                   {Array.from({ length: 17 }, (_, i) => 1 + i * 0.5).map(n => <option value={n} key={n}>{n.toFixed(1)}</option>)}
@@ -415,18 +460,20 @@ export function FatigueReportPage() {
                   Include at least the 2–3 days before the event so the sleep history is complete (up to 31 days).
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <TimeInput label="From" tz={inputTz} value={periodStart} onChange={setPeriodStart} required />
-                  <TimeInput label="To" tz={inputTz} value={periodEnd} onChange={setPeriodEnd} required />
+                  <TimeInput label="From" tz={inputTz} value={periodStart} onChange={v => setPeriod(setPeriodStart, v)} required />
+                  <TimeInput label="To" tz={inputTz} value={periodEnd} onChange={v => setPeriod(setPeriodEnd, v)} required />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {[2, 3, 7].map((n) => (
                     <Button key={n} type="button" size="sm" variant="outline" onClick={() => {
+                      setDiaryComplete(false);
                       const ev = new Date(eventTime).getTime();
                       setPeriodStart(new Date(ev - n * 86400e3).toISOString());
                       setPeriodEnd(new Date(ev + 18 * 3600e3).toISOString());
                     }}>{n} days before event</Button>
                   ))}
                 </div>
+                {Date.parse(periodEnd) - Date.parse(periodStart) > 31 * 86400e3 && <p className="text-sm text-destructive">Choose a period of 31 days or less.</p>}
                 {periodEnd <= periodStart && <p className="text-sm text-destructive">The end must be after the start.</p>}
               </div>
             </div>
@@ -436,9 +483,9 @@ export function FatigueReportPage() {
             <div className="space-y-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h2 className="text-lg font-semibold">Duties in this period</h2>
+                  <h2 className="text-lg font-semibold">{activeDay ? `Duties · ${activeDay.label}` : 'Duties in this period'}</h2>
                   <p className="text-sm text-muted-foreground">
-                    Select the duty of concern. Imported entries are planned; confirm which duties were actually operated and correct any times that changed.
+                    Select the duty of concern. New and imported entries start as planned. Confirm which duties you worked and correct the suggested report and release times.
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -446,19 +493,22 @@ export function FatigueReportPage() {
                   <Button type="button" size="sm" onClick={addDuty}><Plus className="mr-1 h-4 w-4" />Add duty</Button>
                 </div>
               </div>
-              {duties.length === 0 && (
+              {prefilledFor && prefilledFor !== 'restored' && prefilledFor !== periodKey && <p className="text-sm text-muted-foreground">Your reporting dates have changed. Existing entries have been kept; review them or reload the roster for this period.</p>}
+              {visibleDuties.length === 0 && (
                 <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  No duties yet. Add the duties you worked in this period and the one affected by fatigue.
+                  No duties entered for {activeDay ? activeDay.label : 'this period'}. If you worked, add your report and release times. Leave days off empty.
                 </p>
               )}
-              {duties.map((d, idx) => {
-                const prev = duties[idx - 1];
-                const rest = prev ? hoursBetween(prev.release_utc, d.report_utc) : null;
+              {dutyIssues.map(message => <p key={message} role="alert" className="text-sm text-destructive">{message}</p>)}
+              {visibleDuties.map((d) => {
+                const previousActive = sortedDuties.filter(p => p.id !== d.id && ['operated', 'planned'].includes(p.status) && p.report_utc < d.report_utc);
+                const prev = previousActive[previousActive.length - 1];
+                const rest = prev && ['operated', 'planned'].includes(d.status) ? hoursBetween(prev.release_utc, d.report_utc) : null;
                 return (
                   <div key={d.id} className="space-y-2">
                     {rest != null && (
-                      <p className={cn('text-xs', rest < 12 ? 'text-destructive font-medium' : 'text-muted-foreground')}>
-                        Rest before this duty: {fmtH(rest)}
+                      <p className={cn('text-sm', rest < 0 ? 'text-destructive font-medium' : 'text-muted-foreground')}>
+                        {rest < 0 ? 'Overlaps previous duty by' : 'Gap after previous duty:'} {fmtH(Math.abs(rest))} · {prev?.status === 'planned' || d.status === 'planned' ? 'includes planned times' : 'reported times'}
                       </p>
                     )}
                     <div className={cn('rounded-lg border p-4 space-y-4', affectedId === d.id && 'border-primary ring-1 ring-primary/40')}>
@@ -471,7 +521,7 @@ export function FatigueReportPage() {
                         <div className="flex items-center gap-2">
                           <Badge variant="outline">{d.source === 'roster' ? 'From roster' : 'Manual'}</Badge>
                           <Button type="button" size="icon" variant="ghost" aria-label="Remove duty"
-                            onClick={() => { setDuties(duties.filter((x) => x.id !== d.id)); if (affectedId === d.id) setAffectedId(null); }}>
+                            onClick={() => { setDiaryComplete(false); setDuties(duties.filter((x) => x.id !== d.id)); if (affectedId === d.id) setAffectedId(null); }}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -481,18 +531,22 @@ export function FatigueReportPage() {
                         <TimeInput label="Release (off duty)" tz={inputTz} value={d.release_utc} onChange={(v) => updateDuty(d.id, { release_utc: v })} />
                         <label className={field}>
                           <span className="text-muted-foreground">Status</span>
-                          <select className={select} value={d.status} onChange={(e) => updateDuty(d.id, { status: e.target.value as DutyStatus })}>
+                          <select aria-label="Status" className={select} value={d.status} onChange={(e) => updateDuty(d.id, { status: e.target.value as DutyStatus })}>
                             {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                           </select>
                         </label>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <label className={field}><span>Activity</span><select className={select} value={d.duty_type} onChange={e => updateDuty(d.id, { duty_type: e.target.value as ReportDuty['duty_type'] })}><option value="flight">Flight duty</option><option value="home_standby">Home standby</option><option value="airport_standby">Airport standby</option><option value="standby">Standby · type unconfirmed</option><option value="simulator">Simulator</option><option value="ground">Ground duty</option><option value="positioning">Positioning</option><option value="other">Other duty</option></select></label>
+                      </div>
+                      <details className="rounded-md border p-3"><summary className="cursor-pointer text-sm font-medium">Crew and acclimatization (optional)</summary><div className="mt-3 grid gap-3 sm:grid-cols-2">
                         <label className={field}><span>Crew composition</span><select className={select} value={d.crew_composition ?? 'unknown'} onChange={e => updateDuty(d.id, { crew_composition: e.target.value as ReportDuty['crew_composition'] })}><option value="unknown">Not confirmed</option><option value="standard">Standard · 2 pilots</option><option value="augmented_3">Augmented · 3 pilots</option><option value="augmented_4">Augmented · 4 pilots</option></select></label>
                         <label className={field}><span>Acclimatization</span><select className={select} value={d.acclimatization ?? 'unknown'} onChange={e => updateDuty(d.id, { acclimatization: e.target.value as ReportDuty['acclimatization'] })}><option value="unknown">Not confirmed</option><option value="acclimatized">Acclimatized to home reference time</option></select></label>
-                      </div>
+                      </div></details>
                       <p className="text-xs text-muted-foreground">Basic FDP is assessed for confirmed standard, acclimatized crew. Augmented and operator-specific limits need specialist review.</p>
-                      <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Duty length: {fmtH(hoursBetween(d.report_utc, d.release_utc))}. Confirm the full dates for overnight duties.</p>
+                      <details className="rounded-md border border-border p-3" open={d.sectors.length > 0 ? true : undefined}><summary className="cursor-pointer text-sm font-medium">Flight sectors (optional for a basic duty record)</summary>
+                      <div className="mt-3 space-y-2">
                         {d.sectors.map((s, i) => (
                           <div key={i} className="grid items-end gap-2 sm:grid-cols-[5rem_4.5rem_4.5rem_1fr_1fr_auto]">
                             <label className={field}><span className="text-muted-foreground">Flight</span>
@@ -512,7 +566,7 @@ export function FatigueReportPage() {
                         <Button type="button" size="sm" variant="outline" onClick={() => addSector(d)}>
                           <Plus className="mr-1 h-4 w-4" />Add sector
                         </Button>
-                      </div>
+                      </div></details>
                     </div>
                   </div>
                 );
@@ -522,7 +576,6 @@ export function FatigueReportPage() {
 
           {step === 2 && (
             <div className="space-y-5">
-              <label className="flex items-start gap-3 rounded-md border border-border p-4 text-sm"><input type="checkbox" checked={diaryComplete} onChange={e => setDiaryComplete(e.target.checked)} className="mt-1" /><span>{prospective ? 'I have reviewed all sleep windows in this scenario, including naps. Unlisted periods are modelled as awake. Estimated sleep remains an assumption.' : 'I have entered every sleep period and nap in this diary. Missing days mean I did not sleep. Without this confirmation, sleep-dependent predictions will be withheld.'}</span></label>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h2 className="text-lg font-semibold">{prospective ? 'Sleep assumptions and actual records' : 'Your actual sleep'}</h2>
@@ -532,7 +585,7 @@ export function FatigueReportPage() {
                 </div>
                 <div className="flex gap-2">
                   <Button type="button" size="sm" variant="outline" onClick={() => addSleep('nap')}><Plus className="mr-1 h-4 w-4" />Nap</Button>
-                  <Button type="button" size="sm" onClick={() => addSleep('main')}><Plus className="mr-1 h-4 w-4" />Sleep</Button>
+                  <Button type="button" size="sm" onClick={() => addSleep('main')}><Plus className="mr-1 h-4 w-4" />Last night’s sleep</Button>
                 </div>
               </div>
               {unconfirmed > 0 && (
@@ -543,13 +596,16 @@ export function FatigueReportPage() {
                   </span>
                 </div>
               )}
-              {sleeps.length === 0 && (
+              {visibleSleeps.length === 0 && (
                 <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  No sleep entered. At least two sleep periods are needed to model alertness.
+                  No sleep entered {activeDay ? `for ${activeDay.label}` : 'yet'}. Add last night’s sleep or a nap, then correct the suggested times and mark actual sleep. Unconfirmed entries remain estimates.
                 </p>
               )}
-              {sleepDays.length > 0 && <label className={field}><span className="text-muted-foreground">Sleep diary day ({tzLabel})</span><select className={select} value={visibleSleepDay} onChange={e => setSleepDay(e.target.value)}>{sleepDays.map(day => <option key={day} value={day}>{day}</option>)}</select><span className="text-xs text-muted-foreground">Review each day; all {sleeps.length} entries remain in your report.</span></label>}
-              {sleeps.map((s, i) => utcIsoToLocalInput(s.start_utc, inputTz).startsWith(visibleSleepDay) && (
+              <div aria-label="Sleep before the event" className="grid gap-3 rounded-xl bg-muted/60 p-4 sm:grid-cols-2">
+                {[24, 48].map(h => <div key={h}><p className="text-sm text-muted-foreground">Reported sleep in the {h}h before the event</p><p className="mt-1 text-xl font-semibold tabular-nums">{sleeps.some(s => s.source === 'reported') ? formatHours(priorSleepHours(sleeps, eventTime, h)) : 'Not entered'}</p></div>)}
+                <p className="text-xs text-muted-foreground sm:col-span-2">Totals use reported sleep only. Until the diary is complete, these are recorded amounts, not a complete sleep history.</p>
+              </div>
+              {visibleSleeps.map((s, i) => (
                 <div key={s.key} className={cn('rounded-lg border p-4 space-y-3', s.source === 'estimated' && 'border-dashed')}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-medium">
@@ -564,14 +620,14 @@ export function FatigueReportPage() {
                         </>
                       ) : <><Badge variant="outline">Reported</Badge><Button type="button" size="sm" variant="ghost" onClick={() => updateSleep(s.key, { source: 'estimated' })}>Mark as estimated</Button></>}
                       <Button type="button" size="icon" variant="ghost" aria-label="Remove sleep"
-                        onClick={() => setSleeps(sleeps.filter((x) => x.key !== s.key))}>
+                        onClick={() => { setDiaryComplete(false); setSleeps(sleeps.filter((x) => x.key !== s.key)); }}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                    <div className="lg:col-span-1"><TimeInput label="Fell asleep" tz={inputTz} value={s.start_utc} onChange={(v) => updateSleep(s.key, { start_utc: v })} /></div>
-                    <div className="lg:col-span-1"><TimeInput label="Woke up" tz={inputTz} value={s.end_utc} onChange={(v) => updateSleep(s.key, { end_utc: v })} /></div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="min-w-0"><TimeInput label="Fell asleep" tz={inputTz} value={s.start_utc} onChange={(v) => updateSleep(s.key, { start_utc: v })} /></div>
+                    <div className="min-w-0"><TimeInput label="Woke up" tz={inputTz} value={s.end_utc} onChange={(v) => updateSleep(s.key, { end_utc: v })} /></div>
                     <label className={field}><span className="text-muted-foreground">Type</span>
                       <select className={select} value={s.kind} onChange={(e) => updateSleep(s.key, { kind: e.target.value as ReportSleep['kind'] })}>
                         <option value="main">Main sleep</option><option value="nap">Nap</option><option value="inflight_rest">In-flight rest</option>
@@ -590,6 +646,8 @@ export function FatigueReportPage() {
                 </div>
               ))}
               {sleepIssues.map((m) => <p key={m} className="text-sm text-destructive">{m}</p>)}
+              <label className="flex items-start gap-3 rounded-md border border-border p-4 text-sm"><input type="checkbox" checked={diaryComplete} onChange={e => setDiaryComplete(e.target.checked)} className="mt-1" /><span>{prospective ? 'I have reviewed all sleep windows in this scenario, including naps. Unlisted periods are modelled as awake. Estimated sleep remains an assumption.' : 'I have entered every sleep period and nap in this diary. Missing days mean I did not sleep. Without this confirmation, sleep-dependent predictions will be withheld.'}</span></label>
+
             </div>
           )}
 
@@ -638,11 +696,19 @@ export function FatigueReportPage() {
                   ))}
                 </div>
               </fieldset>
+              <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm leading-6"><p className="font-semibold">Make your account useful to the safety team</p><p className="mt-1 text-muted-foreground">Describe the sequence of duties, what limited your rest, what you noticed, any effect on your work, and actions you took or requested. Include only what you experienced; the report adds model estimates separately.</p></div>
               <label className={field}>
                 <span className="text-lg font-semibold text-foreground">Your account</span>
                 <Textarea rows={5} maxLength={5000} value={narrative} onChange={(e) => setNarrative(e.target.value)}
                   placeholder="What happened, how you felt, and anything the data above does not show (e.g. disturbed hotel room, illness, delays)." />
               </label>
+              <section aria-label="Before you generate" className="space-y-3 rounded-xl border p-4">
+                <h2 className="font-semibold">Before you generate</h2>
+                <p className="text-sm text-muted-foreground">{duties.length} duties · {sleeps.filter(s => s.source === 'reported').length} reported sleep periods · {unconfirmed} estimates</p>
+                {!affectedId && <p className="text-sm text-muted-foreground">No affected duty selected. This report will describe the event and period.</p>}
+                {!diaryComplete && <p className="text-sm text-muted-foreground">Sleep diary not confirmed complete: sleep-dependent predictions will be withheld. You can still document what happened.</p>}
+                <p className="text-sm text-muted-foreground">Review the generated report before copying the summary or saving a PDF for your SMS. Nothing is submitted automatically.</p>
+              </section>
               <fieldset className="space-y-2">
                 <legend className="text-sm font-semibold">Your details (optional — only printed on the report)</legend>
                 <div className="grid gap-3 sm:grid-cols-3">
@@ -664,7 +730,7 @@ export function FatigueReportPage() {
           <ArrowLeft className="mr-1 h-4 w-4" />Back
         </Button>
         {step < STEPS.length - 1 ? (
-          <Button type="button" disabled={(step === 0 && !eventValid) || (step === 2 && sleepIssues.length > 0)}
+          <Button type="button" disabled={(step === 0 && !eventValid) || (step === 1 && dutyIssues.length > 0) || (step === 2 && sleepIssues.length > 0)}
             onClick={() => goTo(step + 1)}>
             Next<ArrowRight className="ml-1 h-4 w-4" />
           </Button>

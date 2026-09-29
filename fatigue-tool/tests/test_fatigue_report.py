@@ -218,3 +218,16 @@ def test_future_observations_cannot_be_manufactured_by_a_planning_report():
         body['sleeps'][0][key] = body['sleeps'][0][key].replace('2026', '2099')
     response = client.post('/api/fatigue-report', json=body)
     assert response.status_code == 422 and 'Future sleep must be marked estimated' in response.text
+
+
+def test_after_duty_report_names_the_sleep_screening_reference_time():
+    body = base_request(event_type='fatigue_after_duty', event_time_utc=t(8, 16),
+                        period_end_utc=t(8, 18), self_assessment={})
+    body['duties'][-1]['status'] = 'operated'
+    report = post(body)
+    event = next(p['text'] for p in report['narrative'] if p['title'] == 'Event')
+    sleep_text = next(p['text'] for p in report['narrative'] if p['title'] == 'Sleep')
+    assert 'recorded event or concern time is Tue 08 Sep 16:00' in event
+    assert '24 h before duty report at Tue 08 Sep 05:30' in sleep_text
+    assert 'before the assessed point' not in sleep_text
+    assert report['prior_sleep_wake']['sleep_24h'] == pytest.approx(4.0)
