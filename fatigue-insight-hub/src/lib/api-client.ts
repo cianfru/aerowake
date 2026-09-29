@@ -814,7 +814,14 @@ export interface RosterPreview {
 export async function previewRoster(file: File, homeBase: string): Promise<RosterPreview> {
   const form = new FormData(); form.append('file', file); form.append('home_base', homeBase);
   const response = await apiFetch(`${API_BASE_URL}/api/roster/preview`, { method: 'POST', headers: getAuthHeaders(), body: form });
-  const body = await response.json();
+  // A stale deployment or unavailable proxy is a service failure, not a bad roster.
+  // Check before decoding: proxies may return HTML instead of JSON.
+  if (response.status === 404 || response.status >= 500) {
+    throw new Error('Roster import is temporarily unavailable. Please try again shortly. If this continues, contact support.');
+  }
+  const body = await response.json().catch(() => {
+    throw new Error('The roster service returned an unreadable response. Please try again.');
+  });
   if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : 'Roster could not be read.');
   return body;
 }

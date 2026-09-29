@@ -4,12 +4,18 @@ const csv='Date,Flight,Departure,Arrival,STD,STA,Report,Release\n2026-09-05,TEST
 test('guest import review, map recovery, report draft, print and navigation',async({page})=>{
   const errors: string[]=[]; page.on('pageerror',e=>errors.push(e.message));
   let airportOffline=true;
+  let previewUnavailable=true;
+  await page.route('**/api/roster/preview',route=>previewUnavailable ? route.fulfill({status:404,contentType:'application/json',body:'{"detail":"Not Found"}'}) : route.continue());
   await page.route('**/api/airports/batch**',route=>airportOffline ? route.fulfill({status:503,contentType:'application/json',body:'{"detail":"test offline"}'}) : route.continue());
   await page.goto('/');
   await page.getByRole('button',{name:'Analyse a roster',exact:true}).click();
   await expect(page).toHaveURL(/\/roster$/);
   await page.getByLabel('Home base (IATA)').fill('DOH');
   await page.getByLabel('Choose roster file (PDF or CSV)').setInputFiles({name:'synthetic.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});
+  await page.getByRole('button',{name:'Review roster',exact:true}).click();
+  await expect(page.getByRole('alert')).toContainText('Roster import is temporarily unavailable.');
+  await expect(page.getByRole('button',{name:'Run analysis',exact:true})).toHaveCount(0);
+  previewUnavailable=false;
   await page.getByRole('button',{name:'Review roster',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Review the import'})).toBeVisible();
   await expect(page.getByRole('button',{name:'Run analysis',exact:true})).toBeDisabled();
