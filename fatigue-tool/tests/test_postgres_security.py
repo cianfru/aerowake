@@ -108,12 +108,16 @@ def test_saved_csv_replays_after_cache_eviction_and_reanalysis(database_client):
     saved = response.json()
     assert saved['persistence_status'] == 'saved'
     assert saved['home_base_timezone'] == 'Europe/London'
+    uuid.UUID(saved['roster_id'])
     analysis_id = saved['analysis_id']
+    warm_result = c.get(f'/api/analysis/{analysis_id}', headers=headers(owner)).json()
+    assert warm_result == saved
     duty_id = saved['duties'][0]['duty_id']
     path = f'/api/duty/{analysis_id}/{duty_id}'
     warm = c.get(path, headers=headers(owner))
     assert warm.status_code == 200, warm.text
     analysis_store.clear()
+    assert c.get(f'/api/analysis/{analysis_id}', headers=headers(owner)).json() == saved
     cold = c.get(path, headers=headers(owner))
     assert cold.status_code == 200, cold.text
     assert cold.json() == warm.json()

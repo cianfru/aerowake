@@ -29,7 +29,7 @@ import os
 import json
 import logging
 from datetime import datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -1371,6 +1371,7 @@ async def analyze_roster(
         if _pending_db_roster is not None and db is not None:
             try:
                 response.persistence_status = "saved"
+                response.roster_id = str(_pending_db_roster.id)
                 db_analysis = Analysis(
                     id=analysis_id,
                     roster_id=_pending_db_roster.id,
@@ -1440,6 +1441,11 @@ async def get_analysis(analysis_id: str, db=Depends(get_db), principal=Depends(a
     """
 
     record = await authorize(analysis_id, principal, db)
+    # Saved response metadata is authoritative on both warm and cold reads.
+    if record is not None:
+        payload = {k: v for k, v in record.analysis_json.items() if k != '_replay'}
+        payload.update(roster_id=str(record.roster_id), persistence_status='saved')
+        return JSONResponse(content=payload)
     # 1. Try in-memory store (current session)
     if analysis_id in analysis_store:
         monthly_analysis, roster, sleep_strategies = analysis_store[analysis_id].value
@@ -1489,8 +1495,6 @@ async def get_analysis(analysis_id: str, db=Depends(get_db), principal=Depends(a
             ulr_violations=getattr(monthly_analysis, 'ulr_violations', []),
         )
 
-    if record is not None:
-        return JSONResponse(content={k: v for k, v in record.analysis_json.items() if k != '_replay'})
     raise HTTPException(404, "Analysis not found")
 
 
@@ -1669,7 +1673,7 @@ async def list_rosters(
 
 @app.get("/api/rosters/{roster_id}")
 async def get_roster(
-    roster_id: str,
+    roster_id: UUID,
     user: User = Depends(_get_current_user),
     db=Depends(get_db),
 ):
@@ -1693,7 +1697,8 @@ async def get_roster(
     analysis_json = None
     analysis_id = None
     if roster.analyses:
-        analysis_json = roster.analyses[0].analysis_json
+        analysis_json = {k: v for k, v in roster.analyses[0].analysis_json.items() if k != "_replay"}
+        analysis_json.update(roster_id=str(roster.id), persistence_status="saved")
         analysis_id = roster.analyses[0].id
 
     return {
@@ -1715,7 +1720,7 @@ async def get_roster(
 
 @app.delete("/api/rosters/{roster_id}", status_code=204)
 async def delete_roster(
-    roster_id: str,
+    roster_id: UUID,
     user: User = Depends(_get_current_user),
     db=Depends(get_db),
 ):
@@ -1749,7 +1754,7 @@ async def delete_roster(
 
 @app.post("/api/rosters/{roster_id}/reanalyze")
 async def reanalyze_roster(
-    roster_id: str,
+    roster_id: UUID,
     config_preset: str = Form("default"),
     crew_set: str = Form("crew_b"),
     user: User = Depends(_get_current_user),
@@ -1841,7 +1846,7 @@ async def reanalyze_roster(
 
     response = AnalysisResponse(
         analysis_id=analysis_id,
-        roster_id=roster_obj.roster_id,
+        roster_id=str(db_roster.id),
         pilot_id=roster_obj.pilot_id,
         pilot_name=roster_obj.pilot_name,
         pilot_base=roster_obj.pilot_base,
