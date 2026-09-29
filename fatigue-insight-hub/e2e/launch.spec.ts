@@ -31,6 +31,9 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   const calendar=page.getByRole('region',{name:'Roster calendar',exact:true});
   await expect(calendar.getByRole('heading',{name:'Roster calendar',exact:true})).toBeVisible();
   await expect(calendar.getByRole('tab',{name:'Home base',exact:true})).toHaveAttribute('aria-selected','true');
+  await expect(page.getByText('Analysis complete!',{exact:true})).toBeHidden();
+  await page.evaluate(()=>window.scrollTo(0,0));
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:testInfo.outputPath('roster-calendar.png'),fullPage:true});
   await expect(page.getByRole('heading',{name:'Your fatigue outlook'})).toBeHidden();
   const dutyResponse=page.waitForResponse(r=>r.url().includes('/api/duty/') && r.request().method()==='GET');
@@ -56,6 +59,8 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
   await page.getByRole('tab',{name:'Sleep & recovery',exact:true}).click();
   await expect(page.getByLabel('Predicted sleepiness through the month')).toBeVisible();
+  await page.evaluate(()=>window.scrollTo(0,0));
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:testInfo.outputPath('roster-recovery.png'),fullPage:true});
   await expect(calendar).toBeHidden();
   await page.getByRole('tab',{name:'FTL checks',exact:true}).click();

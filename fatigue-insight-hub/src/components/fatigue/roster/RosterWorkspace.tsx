@@ -63,7 +63,7 @@ export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDu
     <TabsContent value="outlook" forceMount hidden={view !== 'outlook'} className="mt-5 space-y-8">
       <RosterForecast results={results} reference={reference} onReferenceChange={setReference} onDetails={onDutySelect} onConcern={onConcern} />
       <section aria-labelledby="watch-heading" className="space-y-1">
-        <SectionHeading id="watch-heading" title="Duties to watch" aside={watch.length ? `${watch.length} duties · predicted KSS 6.5 or higher` : undefined} />
+        <SectionHeading id="watch-heading" title="Duties to watch" aside={watch.length ? `${watch.length} ${watch.length === 1 ? 'duty' : 'duties'} · predicted KSS 6.5 or higher` : undefined} />
         {watch.length ? <div className="divide-y divide-border/70" data-testid="duties-to-watch">
           {watch.map((duty, i) => <DutyWatchCard key={duty.dutyId ?? i} duty={duty} onDetails={onDutySelect} onReportFatigue={onReportFatigue} />)}
         </div> : <p className="py-4 text-sm text-muted-foreground" data-testid="duties-to-watch-empty">No duties reach the model watch band. You can still report fatigue whenever you feel it — how you feel always comes first.</p>}
