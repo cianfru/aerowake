@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 const csv='Date,Flight,Departure,Arrival,STD,STA,Report,Release\n2026-09-05,TEST1,DOH,DMM,23:00,00:15,22:00,03:00\n2026-09-08,TEST2,DOH,FCO,08:00,13:00,07:00,15:00\n';
 
-test('guest import review, map recovery, report draft, print and navigation',async({page})=>{
+test('guest import review, map recovery, report draft, print and navigation',async({page},testInfo)=>{
   const errors: string[]=[]; page.on('pageerror',e=>errors.push(e.message));
   let airportOffline=true;
   let previewUnavailable=true;
@@ -31,6 +31,7 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   const calendar=page.getByRole('region',{name:'Roster calendar',exact:true});
   await expect(calendar.getByRole('heading',{name:'Roster calendar',exact:true})).toBeVisible();
   await expect(calendar.getByRole('tab',{name:'Home base',exact:true})).toHaveAttribute('aria-selected','true');
+  await page.screenshot({path:testInfo.outputPath('roster-calendar.png'),fullPage:true});
   await expect(page.getByRole('heading',{name:'Your fatigue outlook'})).toBeHidden();
   const dutyResponse=page.waitForResponse(r=>r.url().includes('/api/duty/') && r.request().method()==='GET');
   await calendar.getByRole('button',{name:'Open duty on Sat 5 Sep: TEST1',exact:true}).click();
@@ -55,6 +56,7 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
   await page.getByRole('tab',{name:'Sleep & recovery',exact:true}).click();
   await expect(page.getByLabel('Predicted sleepiness through the month')).toBeVisible();
+  await page.screenshot({path:testInfo.outputPath('roster-recovery.png'),fullPage:true});
   await expect(calendar).toBeHidden();
   await page.getByRole('tab',{name:'FTL checks',exact:true}).click();
   await expect(page.getByRole('heading',{name:'EASA flight-time limitations',exact:true})).toBeVisible();

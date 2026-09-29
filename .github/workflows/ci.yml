@@ -67,8 +67,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
-          name: browser-failure-traces
+          name: browser-check-results
           path: fatigue-insight-hub/test-results
           retention-days: 7
