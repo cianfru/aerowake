@@ -21,11 +21,17 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   await expect(page.getByRole('button',{name:'Run analysis',exact:true})).toBeDisabled();
   await page.getByLabel('I have reviewed the dates, time zones, and assumptions. Continue with these inputs.').check();
   await page.getByRole('button',{name:'Run analysis',exact:true}).click();
-  // The original calendar is a primary view, including on mobile; no disclosure to open.
+  await expect(page.getByRole('heading',{name:'Your fatigue outlook'})).toBeVisible();
+  await expect(page.getByRole('region',{name:'Roster calendar',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Open navigation',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Navigation',exact:true})).toBeVisible();
+  await page.getByRole('dialog',{name:'Navigation',exact:true}).getByRole('button',{name:'Close',exact:true}).click();
+  await page.getByRole('tab',{name:'Calendar',exact:true}).click();
+  // The interactive calendar has its own visible view, on desktop and mobile.
   const calendar=page.getByRole('region',{name:'Roster calendar',exact:true});
   await expect(calendar.getByRole('heading',{name:'Roster calendar',exact:true})).toBeVisible();
   await expect(calendar.getByRole('tab',{name:'Home base',exact:true})).toHaveAttribute('aria-selected','true');
-  expect(await calendar.evaluate(el => !el.closest('details') && Boolean(el.compareDocumentPosition(document.getElementById('fatigue-outlook')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  await expect(page.getByRole('heading',{name:'Your fatigue outlook'})).toBeHidden();
   const dutyResponse=page.waitForResponse(r=>r.url().includes('/api/duty/') && r.request().method()==='GET');
   await calendar.getByRole('button',{name:'Open duty on Sat 5 Sep: TEST1',exact:true}).click();
   expect((await dutyResponse).status()).toBe(200);
@@ -39,7 +45,20 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   await expect(page.getByRole('dialog',{name:'Duty Details — Sep 08, 2026',exact:true})).toBeVisible();
   await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
   await calendar.getByRole('tab',{name:'Home base',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Duties to watch',exact:true})).toBeVisible();
+  const sleep=calendar.getByRole('button',{name:/^Inspect estimated sleep/}).first();
+  await sleep.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Estimated sleep from the roster, not a record of sleep taken.',{exact:true})).toBeVisible();
+  await page.keyboard.press('Escape');
+  await calendar.getByRole('button',{name:/^FDP limit for/}).first().click();
+  await expect(page.getByRole('dialog',{name:/^Duty Details/})).toBeVisible();
+  await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
+  await page.getByRole('tab',{name:'Sleep & recovery',exact:true}).click();
+  await expect(page.getByLabel('Predicted sleepiness through the month')).toBeVisible();
+  await expect(calendar).toBeHidden();
+  await page.getByRole('tab',{name:'FTL checks',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'EASA flight-time limitations',exact:true})).toBeVisible();
+  await page.getByRole('tab',{name:'Routes',exact:true}).click();
   await expect(page.getByRole('button',{name:'Retry map'})).toBeVisible();
   airportOffline=false;
   await page.getByRole('button',{name:'Retry map'}).click();
@@ -47,6 +66,7 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   await page.getByRole('button',{name:'Flat routes',exact:true}).click();
   await page.getByRole('button',{name:'list',exact:true}).click();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.getByRole('tab',{name:'Outlook',exact:true}).click();
   await page.getByRole('button',{name:/Report fatigue for duty/}).first().click();
   await expect(page).toHaveURL(/\/report$/);
   await page.getByLabel(/Save this draft in this browser tab/).check();

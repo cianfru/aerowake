@@ -60,7 +60,7 @@ export function RouteNetwork({ duties, homeBase }: { duties: DutyAnalysis[]; hom
     return () => { cancelled = true; };
   }, [codes, retry]);
 
-  if (!stats.length) return null;
+  if (!stats.length) return <section aria-labelledby="routes-heading" className="space-y-3"><h2 id="routes-heading" className="text-xl font-semibold">Route network</h2><p className="text-sm text-muted-foreground">No flight sectors were found in this roster. Training and standby remain available in the calendar.</p></section>;
 
   const base = airports.get(homeBase);
   const maxCount = Math.max(...stats.map((s) => s.count));
