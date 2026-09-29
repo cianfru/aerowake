@@ -29,9 +29,13 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   await page.getByRole('button',{name:'Next',exact:true}).click();
   await page.getByRole('button',{name:'Next',exact:true}).click();
   await page.getByRole('button',{name:'Next',exact:true}).click();
+  await page.getByRole('radio',{name:/8 Sleepy, some effort/}).check();
+  await expect(page.getByRole('button',{name:'Generate report',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'Use the fatigue event time'}).click();
   await page.getByRole('button',{name:'Generate report',exact:true}).click();
   await expect(page.getByRole('button',{name:'Print / PDF'})).toBeVisible();
   await expect(page.getByLabel('Evidence coverage')).toBeVisible();
+  await expect(page.getByLabel('Submission summary')).toBeVisible();
   await page.emulateMedia({media:'print'});
   await expect(page.locator('#fatigue-report-print h1')).toHaveCSS('color','rgb(17, 17, 17)');
   await page.emulateMedia({media:'screen'});

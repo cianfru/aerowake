@@ -35,6 +35,8 @@ const PRINT_CSS = `
   #fatigue-report-print .no-print { display: none !important; }
   #fatigue-report-print section { break-inside: auto; margin-top: 6mm; }
   #fatigue-report-print h1, #fatigue-report-print h2, #fatigue-report-print h3 { break-after: avoid; }
+  #fatigue-report-print .report-appendix { break-before: page; padding-top: 0; border: 0; }
+  #fatigue-report-print { font-size: 10pt; line-height: 1.35; }
   #fatigue-report-print table { width: 100%; font-size: 9pt; }
   #fatigue-report-print th, #fatigue-report-print td { white-space: normal !important; overflow-wrap: anywhere; }
   #fatigue-report-print thead { display: table-header-group; }
@@ -133,6 +135,13 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
         </p>
       </section>
 
+      <section className="space-y-3" aria-label="Submission summary">
+        <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Submission summary</h2>
+        {report.pilot_narrative && <div><h3 className="text-sm font-semibold">Pilot statement</h3><p className="whitespace-pre-wrap text-sm leading-relaxed">{report.pilot_narrative}</p></div>}
+        {report.narrative.filter(p => p.title !== 'Conclusion').map(p => <div key={p.title}><h3 className="text-sm font-semibold">{p.title}</h3><p className="text-sm leading-relaxed text-foreground/90">{p.text}</p></div>)}
+        {report.self_assessment && <p className="text-sm">Pilot self-rating at {report.self_assessment.rated_at_local}: {report.self_assessment.kss != null && `KSS ${report.self_assessment.kss}/9`} {report.self_assessment.samn_perelli != null && `· Samn-Perelli ${report.self_assessment.samn_perelli}/7`}. These are the pilot's observations.</p>}
+      </section>
+
       <section className="flex gap-4">
         <span aria-hidden="true" className={cn('w-[3px] rounded-[1px]', LEVEL_RULE[report.summary.overall_level] ?? 'bg-border')} />
         <div className="min-w-0 space-y-2">
@@ -160,6 +169,8 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
         <Stat label="Predicted peak KSS" value={a ? a.kss_max.toFixed(1) : '—'}
           hint={a ? `${a.kss_label} · 90th pct ${a.kss_max_90.toFixed(1)}` : 'Not modelled'} tone={a && a.kss_max >= 7 ? 'bad' : undefined} />
       </section>
+
+      <div className="report-appendix border-t border-border pt-6"><h2 className="text-lg font-semibold">Supporting detail</h2><p className="mt-2 text-sm text-muted-foreground">Duty and sleep records, supporting findings and optional model estimates. These estimates do not replace your declaration.</p></div>
 
       {report.timeline.length > 0 && (
         <section className="space-y-3">
@@ -229,21 +240,6 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
         </ul>
       </section>
 
-      <section className="space-y-3">
-        <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Report</h2>
-        {report.narrative.map((p) => (
-          <div key={p.title}>
-            <h3 className="text-sm font-semibold">{p.title}</h3>
-            <p className="text-sm leading-relaxed text-foreground/90">{p.text}</p>
-          </div>
-        ))}
-        {report.pilot_narrative && (
-          <div>
-            <h3 className="text-sm font-semibold">Pilot statement</h3>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{report.pilot_narrative}</p>
-          </div>
-        )}
-      </section>
 
       <section className="space-y-2">
         <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Duties</h2>

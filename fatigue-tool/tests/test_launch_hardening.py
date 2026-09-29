@@ -157,3 +157,13 @@ def test_optional_csv_dates_allow_blank_cells_but_reject_reversed_explicit_dates
     row['ArrivalDate'] = '2026-09-01'
     with pytest.raises(ValueError, match='Explicit arrival date'):
         parser._parse_csv_flight(row)
+
+
+def test_rating_during_reported_sleep_does_not_borrow_nearby_awake_prediction():
+    body = base_request(duties=[], affected_duty_id=None, event_time_utc=t(8, 9, 7),
+                        self_assessment=dict(kss=8, rated_at_utc=t(8, 4, 10)))
+    response = report_client.post('/api/fatigue-report', json=body)
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result['data_quality']['model_available'] is True
+    assert result['self_assessment']['model_kss_at_rating'] is None

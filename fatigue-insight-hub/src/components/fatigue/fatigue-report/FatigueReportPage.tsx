@@ -108,6 +108,8 @@ export function FatigueReportPage() {
 
   // Self assessment
   const [kss, setKss] = useState<number | null>(null);
+  const [ratedAt, setRatedAt] = useState('');
+  const [sleepDay, setSleepDay] = useState('');
   const [sp, setSp] = useState<number | null>(null);
   const [factors, setFactors] = useState<string[]>([]);
   const [narrative, setNarrative] = useState('');
@@ -122,7 +124,7 @@ export function FatigueReportPage() {
           setHomeBase(draft.homeBase); setTimeMode(draft.timeMode); setEventType(draft.eventType);
           setEventTime(draft.eventTime); setPeriodStart(draft.periodStart); setPeriodEnd(draft.periodEnd);
           setDuties(draft.duties); setSleeps(draft.sleeps); setAffectedId(draft.affectedId);
-          setKss(draft.kss); setSp(draft.sp); setFactors(draft.factors); setNarrative(draft.narrative);
+          setKss(draft.kss); setSp(draft.sp); setRatedAt(draft.ratedAt ?? ''); setFactors(draft.factors); setNarrative(draft.narrative);
           setPilot(draft.pilot); setDiaryComplete(draft.diaryComplete); setPrefilledFor('restored');
           setSaveDraft(true);
         }
@@ -135,12 +137,12 @@ export function FatigueReportPage() {
     try {
       if (saveDraft) sessionStorage.setItem('aerowake-report-draft-v1', JSON.stringify({
         version: 1, homeBase, timeMode, eventType, eventTime, periodStart, periodEnd, duties, sleeps,
-        affectedId, kss, sp, factors, narrative, pilot, diaryComplete,
+        affectedId, kss, sp, ratedAt, factors, narrative, pilot, diaryComplete,
       }));
       else sessionStorage.removeItem('aerowake-report-draft-v1');
     } catch { setError('This browser could not save the draft. Keep this tab open.'); }
   }, [draftLoaded, saveDraft, homeBase, timeMode, eventType, eventTime, periodStart, periodEnd,
-      duties, sleeps, affectedId, kss, sp, factors, narrative, pilot, diaryComplete]);
+      duties, sleeps, affectedId, kss, sp, ratedAt, factors, narrative, pilot, diaryComplete]);
   useEffect(() => {
     if (saveDraft || (!duties.length && !sleeps.length && !narrative)) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
@@ -267,9 +269,14 @@ export function FatigueReportPage() {
     return issues;
   }, [sleeps]);
 
+  const sleepDays = [...new Set(sleeps.map(s => utcIsoToLocalInput(s.start_utc, inputTz).slice(0, 10)))].sort();
+  const visibleSleepDay = sleepDays.includes(sleepDay) ? sleepDay : sleepDays[0];
+  const ratingNeedsTime = (kss !== null || sp !== null) && !ratedAt;
+
   const unconfirmed = sleeps.filter((s) => s.source === 'estimated').length;
 
   async function submit() {
+    if (ratingNeedsTime) { setError('Confirm when you recorded your self-rating.'); return; }
     setBusy(true);
     setError('');
     try {
@@ -284,7 +291,7 @@ export function FatigueReportPage() {
         diary_complete: diaryComplete,
         duties,
         sleeps: sleeps.map(({ key: _key, ...s }) => s),
-        self_assessment: { kss, samn_perelli: sp, rated_at_utc: eventTime },
+        self_assessment: { kss, samn_perelli: sp, rated_at_utc: ratedAt || null },
         contributing_factors: factors,
         narrative,
         pilot,
@@ -530,7 +537,8 @@ export function FatigueReportPage() {
                   No sleep entered. At least two sleep periods are needed to model alertness.
                 </p>
               )}
-              {sleeps.map((s, i) => (
+              {sleepDays.length > 0 && <label className={field}><span className="text-muted-foreground">Sleep diary day ({tzLabel})</span><select className={select} value={visibleSleepDay} onChange={e => setSleepDay(e.target.value)}>{sleepDays.map(day => <option key={day} value={day}>{day}</option>)}</select><span className="text-xs text-muted-foreground">Review each day; all {sleeps.length} entries remain in your report.</span></label>}
+              {sleeps.map((s, i) => utcIsoToLocalInput(s.start_utc, inputTz).startsWith(visibleSleepDay) && (
                 <div key={s.key} className={cn('rounded-lg border p-4 space-y-3', s.source === 'estimated' && 'border-dashed')}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-medium">
@@ -601,6 +609,11 @@ export function FatigueReportPage() {
                   ))}
                 </div>
               </fieldset>
+              {(kss !== null || sp !== null) && <div className="space-y-3 border-l-2 border-primary pl-4">
+                <TimeInput label="When did you record these ratings?" value={ratedAt} onChange={setRatedAt} tz={inputTz} required />
+                <Button type="button" variant="outline" size="sm" onClick={() => setRatedAt(eventTime)}>Use the fatigue event time</Button>
+                <p className="text-xs text-muted-foreground">Confirm the original rating time. A rating recorded now should not be assigned to a past event.</p>
+              </div>}
               <fieldset className="space-y-2">
                 <legend className="text-lg font-semibold">What contributed?</legend>
                 <div className="grid gap-1.5 sm:grid-cols-2">
@@ -644,7 +657,7 @@ export function FatigueReportPage() {
             Next<ArrowRight className="ml-1 h-4 w-4" />
           </Button>
         ) : (
-          <Button type="button" disabled={busy || sleepIssues.length > 0} onClick={submit}>
+          <Button type="button" disabled={busy || sleepIssues.length > 0 || ratingNeedsTime} onClick={submit}>
             {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardList className="mr-2 h-4 w-4" />}
             Generate report
           </Button>

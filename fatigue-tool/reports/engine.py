@@ -570,11 +570,9 @@ def analyse(inp: ReportInput) -> Dict:
         rated_at = inp.self_rated_at or inp.event_time_utc
         model_at = None
         if model_available:
-            near = [p for p in series if not p['asleep']]
-            if near:
-                model_at = min(near, key=lambda p: abs((p['time_utc'] - rated_at).total_seconds()))
-                if abs((model_at['time_utc'] - rated_at).total_seconds()) > 3600:
-                    model_at = None
+            # Rating instants are inserted into the simulation grid. Do not
+            # borrow an awake prediction from before/after reported sleep.
+            model_at = next((p for p in series if p['time_utc'] == rated_at and not p['asleep']), None)
         self_assessment = dict(
             kss=inp.self_kss, kss_label=aw.KSS_LABELS.get(inp.self_kss) if inp.self_kss else None,
             samn_perelli=inp.self_samn_perelli,

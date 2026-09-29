@@ -27,8 +27,8 @@ def database_client():
                 await conn.run_sync(Base.metadata.drop_all)
                 await conn.run_sync(Base.metadata.create_all)
             async with sessions() as db:
-                a=User(email='owner@example.test',password_hash=hash_password('a safe test password'))
-                b=User(email='other@example.test',password_hash=hash_password('a safe test password'))
+                a=User(email='owner@example.com',password_hash=hash_password('a safe test password'))
+                b=User(email='other@example.com',password_hash=hash_password('a safe test password'))
                 db.add_all([a,b]);await db.flush()
                 r=Roster(user_id=a.id,filename='synthetic.csv',month='2026-09')
                 db.add(r);await db.flush()
@@ -62,7 +62,7 @@ def test_cold_saved_result_requires_owner_and_deletion_revokes(database_client):
 
 def test_refresh_rotation_is_single_use_and_account_deletion_revokes(database_client):
     c,a,b,roster=database_client
-    login=c.post('/api/auth/login',json={'email':'owner@example.test','password':'a safe test password'})
+    login=c.post('/api/auth/login',json={'email':'owner@example.com','password':'a safe test password'})
     assert login.status_code==200,login.text
     tokens=login.json()
     body={'refresh_token':tokens['refresh_token']}
@@ -88,11 +88,11 @@ def test_verification_and_password_reset_are_one_use_and_revoke_sessions(databas
     assert c.post('/api/auth/verification/confirm',json={'token':token}).status_code==200
     assert c.post('/api/auth/verification/confirm',json={'token':token}).status_code==400
     assert c.get('/api/auth/me',headers=headers(a)).json()['email_verified'] is True
-    known=c.post('/api/auth/password-reset/request',json={'email':'owner@example.test'})
-    unknown=c.post('/api/auth/password-reset/request',json={'email':'absent@example.test'})
+    known=c.post('/api/auth/password-reset/request',json={'email':'owner@example.com'})
+    unknown=c.post('/api/auth/password-reset/request',json={'email':'absent@example.com'})
     assert known.json()==unknown.json() and known.status_code==unknown.status_code==200
     token,purpose=delivered.pop();assert purpose=='reset'
     assert c.post('/api/auth/password-reset/confirm',json={'token':token,'password':'a different safe password'}).status_code==200
     assert c.post('/api/auth/password-reset/confirm',json={'token':token,'password':'a different safe password'}).status_code==400
     assert c.get('/api/auth/me',headers=headers(a)).status_code==401
-    assert c.post('/api/auth/login',json={'email':'owner@example.test','password':'a different safe password'}).status_code==200
+    assert c.post('/api/auth/login',json={'email':'owner@example.com','password':'a different safe password'}).status_code==200
