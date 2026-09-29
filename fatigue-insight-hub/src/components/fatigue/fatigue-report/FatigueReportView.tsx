@@ -44,6 +44,9 @@ const PRINT_CSS = `
   #fatigue-report-print table { width: 100%; font-size: 9pt; }
   #fatigue-report-print td { white-space: normal !important; overflow-wrap: anywhere; }
   #fatigue-report-print thead { display: table-header-group; }
+  #fatigue-report-print .recharts-tooltip-wrapper { display: none !important; }
+  #fatigue-report-print svg text { font-size: 16px !important; }
+  #fatigue-report-print li { padding-top: 1mm; padding-bottom: 1mm; }
   #fatigue-report-print .report-limitations { break-inside: avoid; }
   #fatigue-report-print li, #fatigue-report-print tr, #fatigue-report-print figure { break-inside: avoid; }
   #fatigue-report-print .overflow-x-auto { overflow: visible !important; }
@@ -167,6 +170,10 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
 
       <aside className="space-y-2 border-l-2 border-border pl-4 text-sm" aria-label="Evidence coverage"><p className="font-medium">Evidence coverage · {report.data_quality.confidence} confidence</p>{report.data_quality.notes.map((note, i) => <p key={i} className="text-muted-foreground">{note}</p>)}</aside>
 
+
+
+      <div className="report-appendix border-t border-border pt-6"><h2 className="text-lg font-semibold">Supporting detail</h2><p className="mt-2 text-sm text-muted-foreground">Duty and sleep records, supporting findings and optional model estimates. These estimates do not replace your declaration.</p></div>
+
       <section className="grid grid-cols-2 gap-x-6 gap-y-6 border-y border-border py-5 sm:grid-cols-4 sm:gap-x-0 sm:divide-x sm:divide-border">
         <Stat label="Sleep, prior 24 h" value={fmtH(sw?.sleep_24h)} hint="5h or more recommended" tone={sw && sw.sleep_24h < 5 ? 'bad' : undefined} />
         <Stat label="Sleep, prior 48 h" value={fmtH(sw?.sleep_48h)} hint="12h or more recommended" tone={sw && sw.sleep_48h < 12 ? 'bad' : undefined} />
@@ -174,8 +181,6 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
         <Stat label="Predicted peak KSS" value={a ? a.kss_max.toFixed(1) : '—'}
           hint={a ? `${a.kss_label} · 90th pct ${a.kss_max_90.toFixed(1)}` : 'Not modelled'} tone={a && a.kss_max >= 7 ? 'bad' : undefined} />
       </section>
-
-      <div className="report-appendix border-t border-border pt-6"><h2 className="text-lg font-semibold">Supporting detail</h2><p className="mt-2 text-sm text-muted-foreground">Duty and sleep records, supporting findings and optional model estimates. These estimates do not replace your declaration.</p></div>
 
       {report.timeline.length > 0 && (
         <section className="space-y-3">
