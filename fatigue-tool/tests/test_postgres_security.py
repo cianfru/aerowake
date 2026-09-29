@@ -96,3 +96,30 @@ def test_verification_and_password_reset_are_one_use_and_revoke_sessions(databas
     assert c.post('/api/auth/password-reset/confirm',json={'token':token,'password':'a different safe password'}).status_code==400
     assert c.get('/api/auth/me',headers=headers(a)).status_code==401
     assert c.post('/api/auth/login',json={'email':'owner@example.com','password':'a different safe password'}).status_code==200
+
+
+def test_saved_csv_replays_after_cache_eviction_and_reanalysis(database_client):
+    c, owner, other, _ = database_client
+    csv = b'Date,Flight,Departure,Arrival,STD,STA,Report,Release\n2026-09-08,TEST1,LGW,FCO,08:00,11:00,07:00,12:00\n'
+    response = c.post('/api/analyze', headers=headers(owner),
+                      files={'file': ('synthetic.csv', csv, 'text/csv')},
+                      data={'home_base': 'LGW', 'month': '2026-09'})
+    assert response.status_code == 200, response.text
+    saved = response.json()
+    assert saved['persistence_status'] == 'saved'
+    assert saved['home_base_timezone'] == 'Europe/London'
+    analysis_id = saved['analysis_id']
+    duty_id = saved['duties'][0]['duty_id']
+    path = f'/api/duty/{analysis_id}/{duty_id}'
+    warm = c.get(path, headers=headers(owner))
+    assert warm.status_code == 200, warm.text
+    analysis_store.clear()
+    cold = c.get(path, headers=headers(owner))
+    assert cold.status_code == 200, cold.text
+    assert cold.json() == warm.json()
+    assert c.get(path, headers=headers(other)).status_code == 404
+    rerun = c.post(f"/api/rosters/{saved['roster_id']}/reanalyze", headers=headers(owner))
+    assert rerun.status_code == 200, rerun.text
+    assert rerun.json()['persistence_status'] == 'saved'
+    assert rerun.json()['duties'] == saved['duties']
+    assert c.get(f'/api/analysis/{analysis_id}', headers=headers(owner)).status_code == 200

@@ -579,7 +579,7 @@
 }
 .fatigue-report .text-muted-foreground { opacity: 1; }
 @media print {
-  .report-appendix:not([open]) { display: none; }
+  details.report-appendix:not([open]) { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

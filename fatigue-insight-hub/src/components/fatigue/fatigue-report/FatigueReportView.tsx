@@ -36,11 +36,16 @@ const PRINT_CSS = `
   #fatigue-report-print section { break-inside: auto; margin-top: 6mm; }
   #fatigue-report-print h1, #fatigue-report-print h2, #fatigue-report-print h3 { break-after: avoid; }
   #fatigue-report-print .report-appendix { break-before: page; padding-top: 0; border: 0; }
-  #fatigue-report-print { font-size: 10pt; line-height: 1.35; }
+  #fatigue-report-print { font-size: 9.5pt; line-height: 1.4; --foreground: 220 10% 10%; --muted-foreground: 220 5% 35%; --border: 220 5% 70%; --popover: 0 0% 100%; }
+  #fatigue-report-print > * { margin-top: 4mm !important; margin-bottom: 0 !important; }
+  #fatigue-report-print .text-sm { font-size: 9.5pt; }
+  #fatigue-report-print section.grid { break-inside: avoid; }
+  #fatigue-report-print th { white-space: nowrap !important; font-size: 8pt; }
   #fatigue-report-print table { width: 100%; font-size: 9pt; }
-  #fatigue-report-print th, #fatigue-report-print td { white-space: normal !important; overflow-wrap: anywhere; }
+  #fatigue-report-print td { white-space: normal !important; overflow-wrap: anywhere; }
   #fatigue-report-print thead { display: table-header-group; }
-  #fatigue-report-print tr, #fatigue-report-print figure { break-inside: avoid; }
+  #fatigue-report-print .report-limitations { break-inside: avoid; }
+  #fatigue-report-print li, #fatigue-report-print tr, #fatigue-report-print figure { break-inside: avoid; }
   #fatigue-report-print .overflow-x-auto { overflow: visible !important; }
 }`;
 
@@ -138,8 +143,8 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
       <section className="space-y-3" aria-label="Submission summary">
         <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Submission summary</h2>
         {report.pilot_narrative && <div><h3 className="text-sm font-semibold">Pilot statement</h3><p className="whitespace-pre-wrap text-sm leading-relaxed">{report.pilot_narrative}</p></div>}
-        {report.narrative.filter(p => p.title !== 'Conclusion').map(p => <div key={p.title}><h3 className="text-sm font-semibold">{p.title}</h3><p className="text-sm leading-relaxed text-foreground/90">{p.text}</p></div>)}
-        {report.self_assessment && <p className="text-sm">Pilot self-rating at {report.self_assessment.rated_at_local}: {report.self_assessment.kss != null && `KSS ${report.self_assessment.kss}/9`} {report.self_assessment.samn_perelli != null && `· Samn-Perelli ${report.self_assessment.samn_perelli}/7`}. These are the pilot's observations.</p>}
+        {report.narrative.filter(p => p.title !== 'Conclusion' && p.title !== 'Pilot assessment').map(p => <div key={p.title}><h3 className="text-sm font-semibold">{p.title}</h3><p className="text-sm leading-relaxed text-foreground/90">{p.text}</p></div>)}
+        {report.self_assessment && <p className="text-sm">Pilot self-rating at {report.self_assessment.rated_at_local}: {report.self_assessment.kss != null && `KSS ${report.self_assessment.kss}/9 (${report.self_assessment.kss_label})`} {report.self_assessment.samn_perelli != null && `· Samn-Perelli ${report.self_assessment.samn_perelli}/7`}. These are the pilot's observations.</p>}
       </section>
 
       <section className="flex gap-4">
@@ -304,7 +309,7 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
         </section>
       )}
 
-      <section className="space-y-2">
+      <section className="report-limitations space-y-2">
         <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Data quality and limitations</h2>
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
           {report.data_quality.notes.map((n) => <li key={n}>{n}</li>)}

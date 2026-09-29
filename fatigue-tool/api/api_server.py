@@ -1500,7 +1500,7 @@ async def get_duty_detail(analysis_id: str, duty_id: str, db=Depends(get_db), pr
     Get detailed timeline data for a single duty.
     Returns all performance points for interactive charting.
 
-    Falls back to re-analyzing from stored PDF if not in memory.
+    Replays versioned normalized inputs after cache eviction.
     """
 
     monthly_analysis, roster, _sleep_strategies = await load_analysis(analysis_id, principal, db)

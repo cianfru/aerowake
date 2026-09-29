@@ -28,6 +28,7 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   await page.getByLabel(/Save this draft in this browser tab/).check();
   await page.getByRole('button',{name:'Next',exact:true}).click();
   await page.getByRole('button',{name:'Next',exact:true}).click();
+  await page.getByLabel(/I have entered every sleep period and nap/).check();
   await page.getByRole('button',{name:'Next',exact:true}).click();
   await page.getByRole('radio',{name:/8 Sleepy, some effort/}).check();
   await expect(page.getByRole('button',{name:'Generate report',exact:true})).toBeDisabled();
@@ -36,7 +37,10 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   await expect(page.getByRole('button',{name:'Print / PDF'})).toBeVisible();
   await expect(page.getByLabel('Evidence coverage')).toBeVisible();
   await expect(page.getByLabel('Submission summary')).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Predicted sleepiness across the period'})).toBeVisible();
   await page.emulateMedia({media:'print'});
+  await expect(page.getByRole('heading',{name:'Supporting detail'})).toBeVisible();
+  await expect(page.locator('#fatigue-report-print .report-appendix')).toHaveCSS('break-before','page');
   await expect(page.locator('#fatigue-report-print h1')).toHaveCSS('color','rgb(17, 17, 17)');
   await page.emulateMedia({media:'screen'});
   await page.getByRole('button',{name:'Edit inputs'}).click();
