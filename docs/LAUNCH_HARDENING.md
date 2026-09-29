@@ -31,6 +31,8 @@ Visual changes retain the dark aviation identity: concise hero, readable synthet
 
 API: Python 3.12, PostgreSQL, `requirements.lock`. Frontend: Node22, `npm ci`. The backend Dockerfile and Railway configuration use the lock, `alembic upgrade head` as a release command, and `/ready` for deployment readiness. Review the service root (`fatigue-tool`) and dashboard overrides before deployment.
 
+Railway runs Docker start commands in exec form. Keep the explicit `sh -c` wrapper so the assigned `PORT` is expanded at runtime; `exec` forwards shutdown signals to Uvicorn. Both Railway and the Docker image use port 8000 when `PORT` is absent. See [Railway start commands](https://docs.railway.com/deployments/start-command).
+
 Required production values:
 
 - `ENVIRONMENT=production`, `DATABASE_URL`, a cryptographically random `JWT_SECRET` of at least 32 characters.
