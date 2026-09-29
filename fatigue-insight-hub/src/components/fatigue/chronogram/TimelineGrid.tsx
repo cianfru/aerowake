@@ -14,6 +14,8 @@ import { DutyBarTooltip } from './DutyBarTooltip';
 import { DayLabel } from './DayLabel';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { format } from 'date-fns';
 import type { TimelineData } from '@/lib/timeline-types';
 import type { DutyAnalysis } from '@/types/fatigue';
 import type { SleepEdit } from '@/hooks/useSleepEdits';
@@ -243,9 +245,9 @@ export function TimelineGrid({
               {(data.standbyBars ?? [])
                 .filter((bar) => bar.rowIndex === label.rowIndex)
                 .map((bar, i) => (
-                  <div
-                    key={`standby-${i}`}
-                    className="absolute rounded-sm border border-muted-foreground/40 pointer-events-auto"
+                  <Popover key={`standby-${i}`}><PopoverTrigger asChild><button
+                    type="button"
+                    className="absolute rounded-sm border border-muted-foreground/40 pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     style={{
                       top: 6,
                       bottom: 6,
@@ -257,8 +259,12 @@ export function TimelineGrid({
                     }}
                     title={`${bar.period.type === 'airport_standby' ? 'Airport standby' : 'Home standby'} ${bar.period.startHome}–${bar.period.endHome}`}
                     aria-label={`${bar.period.type === 'airport_standby' ? 'Airport standby' : 'Home standby'} ${bar.period.startHome} to ${bar.period.endHome}`}
-                    role="img"
-                  />
+                  /></PopoverTrigger><PopoverContent className="space-y-2 text-sm">
+                    <h3 className="font-semibold">{bar.period.type === 'airport_standby' ? 'Airport standby' : 'Home standby'}</h3>
+                    <p>{bar.period.date} · {bar.period.startHome}–{bar.period.endHome} home-base time</p>
+                    <p className="text-muted-foreground">Included as a standby period from the roster. It has no predicted duty KSS score.</p>
+                    <p className="text-xs text-muted-foreground">Counted duty time: {bar.period.countedDutyHours.toFixed(1)}h. Review the FTL checks for coverage and assumptions.</p>
+                  </PopoverContent></Popover>
                 ))}
 
               {/* Duty bars */}
@@ -342,12 +348,15 @@ export function TimelineGrid({
               {data.fdpMarkers
                 .filter((marker) => marker.rowIndex === label.rowIndex)
                 .map((marker, i) => (
-                  <div
+                  <button
                     key={`fdp-${i}`}
-                    className="absolute top-0 bottom-0 border-r-2 border-dashed border-muted-foreground/50 pointer-events-none z-30"
+                    type="button"
+                    className="absolute top-0 bottom-0 z-30 w-4 -translate-x-1/2 cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     style={{ left: `${(marker.hour / 24) * 100}%` }}
-                    title={`Max FDP: ${marker.maxFdp}h`}
-                  />
+                    title={`Calculated FDP limit: ${marker.maxFdp}h. Select to review this duty and its assumptions.`}
+                    aria-label={`FDP limit for ${format(marker.duty.date, 'EEE d MMM')}: ${marker.maxFdp} hours — open duty details`}
+                    onClick={() => onDutySelect(marker.duty)}
+                  ><span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-1/2 border-r-2 border-dashed border-muted-foreground/70" /></button>
                 ))}
             </div>
           ))}

@@ -80,9 +80,11 @@ export function DutyBarTooltip({
       <Tooltip>
         <TooltipTrigger asChild>
           <button
+            type="button"
+            aria-label={`Open duty on ${format(bar.duty.date, 'EEE d MMM')}: ${bar.duty.flightSegments.map(s => s.flightNumber).join(', ') || bar.duty.trainingCode || 'Duty'}${bar.isOvernightContinuation ? ' (continued)' : ''}`}
             onClick={() => onDutySelect(bar.duty)}
             className={cn(
-              "absolute z-10 transition-all hover:ring-2 cursor-pointer overflow-hidden flex",
+              "absolute z-10 transition-all hover:ring-2 cursor-pointer overflow-hidden flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               selectedDuty?.date.getTime() === bar.duty.date.getTime() && "ring-2 ring-foreground",
               usedDiscretion ? "ring-2 ring-critical hover:ring-critical/80" : "hover:ring-foreground"
             )}

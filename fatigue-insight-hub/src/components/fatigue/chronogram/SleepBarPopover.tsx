@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
@@ -57,6 +57,8 @@ export function SleepBarPopover({
   const [popoverOpen, setPopoverOpen] = useState(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => () => { if (clickTimer.current) clearTimeout(clickTimer.current); }, []);
+
   // Determine border radius based on overnight status
   const borderRadius = bar.isOvernightStart
     ? '2px 0 0 2px'
@@ -81,6 +83,7 @@ export function SleepBarPopover({
     e.preventDefault();
     e.stopPropagation();
     if (clickTimer.current) clearTimeout(clickTimer.current);
+    if (e.detail === 0) { setPopoverOpen(true); return; }
     clickTimer.current = setTimeout(() => {
       setPopoverOpen(true);
     }, 250);
@@ -130,11 +133,13 @@ export function SleepBarPopover({
         />
       </PopoverTrigger>
       {/* Visible bar — handles click/double-click without Radix interference */}
-      <div
-        role="button"
-        tabIndex={0}
+      <button
+        type="button"
+        aria-label={`Inspect estimated sleep ${decimalToHHmm(displayStartHour)} to ${decimalToHHmm(displayEndHour)}`}
+        aria-haspopup="dialog"
+        aria-expanded={popoverOpen}
         className={cn(
-          "absolute z-[5] flex items-center justify-end px-1 border cursor-pointer hover:brightness-110 transition-all",
+          "absolute z-[5] flex items-center justify-end px-1 border cursor-pointer hover:brightness-110 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           hasEdit
             ? "border-warning/60 bg-warning/10 border-solid"
             : "border-dashed border-primary/20 bg-primary/5"
@@ -166,9 +171,10 @@ export function SleepBarPopover({
         {hasEdit && widthPercent > 3 && (
           <span className="text-[7px] text-warning font-medium ml-0.5">{'\u270E'}</span>
         )}
-      </div>
+      </button>
       <PopoverContent align="start" side="top" className="max-w-xs p-3">
         <div className="space-y-2 text-xs">
+          <p className="text-muted-foreground">Estimated sleep from the roster, not a record of sleep taken.</p>
           {/* ── HEADER: Type + Score + Confidence ── */}
           <div className="flex items-center justify-between">
             <div className="font-semibold flex items-center gap-1.5">
@@ -272,9 +278,9 @@ export function SleepBarPopover({
 
           {/* ── Edit hint (homebase only) ── */}
           {canEdit && (
-            <div className="text-[10px] text-muted-foreground italic">
-              Double-click to adjust sleep times
-            </div>
+            <button type="button" className="rounded-md border border-border px-3 py-2 text-xs font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setPopoverOpen(false); onActivateEdit?.(bar.blockKey!); }}>
+              Adjust sleep times
+            </button>
           )}
 
           {/* ── COLLAPSIBLE: Score Breakdown ── */}

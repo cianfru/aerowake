@@ -66,12 +66,14 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
     <>
       <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 md:px-8">
-          {/* Left: menu (mobile) + logo + inline nav (desktop) */}
+          {/* Navigation remains available on desktop and mobile. */}
           <div className="flex min-w-0 items-center gap-2 md:gap-8">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground md:hidden"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
               aria-label="Open navigation"
+              aria-expanded={sidebarOpen}
+              aria-controls="app-navigation"
             >
               <Menu className="h-4 w-4" />
             </button>
@@ -152,7 +154,7 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
 
       {/* Navigation Sidebar */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SheetContent side="left" className="glass-strong border-r border-border/50 p-0 w-[min(280px,85vw)] sm:w-[280px]">
+        <SheetContent id="app-navigation" side="left" className="glass-strong border-r border-border/50 p-0 w-[min(280px,85vw)] sm:w-[280px]">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <div className="flex flex-col h-full overflow-y-auto">
             {/* Pilot card */}
