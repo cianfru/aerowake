@@ -19,9 +19,9 @@ export function AppShowcaseSection() {
         </div>
         <div className="overflow-hidden rounded-xl border border-[#c6dbe6] bg-[#edf5fa] shadow-[0_16px_48px_-32px_#285c76]">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#c6dbe6] px-5 py-4"><span className="text-sm font-medium text-[#142e45]">Your roster at a glance</span><span className="text-xs text-[#526579]">Illustrative data</span></div>
-          <div className="divide-y divide-[#c6dbe6] px-5">{example.map(d => <div key={d.date} className="grid grid-cols-[1fr_auto] items-center gap-4 py-6">
+          <div className="divide-y divide-[#c6dbe6] px-5">{example.map(d => <div key={d.date} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-6">
             <div className="space-y-2"><p className="font-mono text-xs tracking-wide text-[#526579]">{d.date}</p><p className="text-lg font-medium text-[#142e45]">{d.route}</p><p className="font-mono text-xs text-[#425d73]">{d.time}</p></div>
-            <div className="text-right"><p className={`font-mono text-2xl ${d.color}`}>{d.kss}<span className="ml-1 text-xs text-[#526579]">KSS</span></p><p className={`mt-1 text-xs ${d.color}`}>{d.label} · duty peak</p></div>
+            <div className="max-w-[7.5rem] text-right sm:max-w-none"><p className={`font-mono text-2xl ${d.color}`}>{d.kss}<span className="ml-1 text-xs text-[#526579]">KSS</span></p><p className={`mt-1 text-xs ${d.color}`}>{d.label} · duty peak</p></div>
           </div>)}</div>
           <p className="border-t border-[#c6dbe6] px-5 py-4 text-sm leading-6 text-[#425d73]"><span className="text-[#a6284d]">Wednesday needs review.</span> The duty runs through the body-clock low. Check your planned rest and how you actually feel.</p>
         </div>
