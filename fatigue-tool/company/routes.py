@@ -13,7 +13,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,8 +39,7 @@ class CompanyResponse(BaseModel):
     icao_code: Optional[str] = None
     member_count: int = 0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CompanyConfirmRequest(BaseModel):
@@ -149,10 +148,17 @@ async def confirm_company(
     company = await get_or_create_company(db, body.company_name, body.company_icao)
 
     # Assign user to company
+    old_company = user.company_id
     user.company_id = company.id
+    user.company_role = "pilot"
+    user.metrics_consent = False
+    if old_company:
+        from db.models import AggregateMetrics
+        from sqlalchemy import delete
+        await db.execute(delete(AggregateMetrics).where(AggregateMetrics.company_id == old_company))
     await db.commit()
 
-    logger.info(f"User {user.email} confirmed company: {company.name}")
+    logger.info("User updated self-declared airline")
 
     return CompanyConfirmResponse(
         company_id=str(company.id),

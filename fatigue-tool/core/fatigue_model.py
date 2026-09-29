@@ -2118,11 +2118,11 @@ class BorbelyFatigueModel:
         
         high_risk = sum(
             1 for dt in duty_timelines
-            if dt.landing_performance and risk_thresholds.classify(dt.landing_performance) == 'high'
+            if dt.min_performance is not None and risk_thresholds.classify(dt.min_performance) == 'high'
         )
         critical_risk = sum(
             1 for dt in duty_timelines
-            if dt.landing_performance and risk_thresholds.classify(dt.landing_performance) in ['critical', 'extreme']
+            if dt.min_performance is not None and risk_thresholds.classify(dt.min_performance) in ['critical', 'extreme']
         )
         
         total_pinch = sum(len(dt.pinch_events) for dt in duty_timelines)

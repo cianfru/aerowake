@@ -47,3 +47,17 @@ def test_rate_limit_only_on_heavy_posts():
     c = TestClient(app)
     assert [c.post('/api/fatigue-report').status_code for _ in range(3)] == [200, 200, 429]
     assert all(c.get('/health').status_code == 200 for _ in range(5))
+
+
+def test_request_body_limit_applies_before_route_and_to_chunked_requests():
+    from api.hardening import RequestBodyLimit
+    from fastapi import Request
+    app=FastAPI();app.add_middleware(RequestBodyLimit)
+    @app.post('/api/fatigue-report')
+    async def consume(request: Request):
+        await request.body()
+        return {'ok':True}
+    client=TestClient(app)
+    assert client.post('/api/fatigue-report',content=b'a'*300_000).status_code==413
+    assert client.post('/api/fatigue-report',content=iter([b'a'*140_000,b'b'*140_000])).status_code==413
+    assert client.post('/api/fatigue-report',content=b'{}').status_code==200

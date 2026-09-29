@@ -30,7 +30,7 @@ def flight_duty(day, rep_h, hours, did=None):
 
 
 def roster(duties, standbys=()):
-    return Roster('r', 'p', '2026-09', list(duties), 'Asia/Qatar', standbys=list(standbys))
+    return Roster('r', 'p', '2026-09', list(duties), 'Asia/Qatar', pilot_base='DOH', standbys=list(standbys))
 
 
 def rules(result, severity='warning'):

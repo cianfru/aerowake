@@ -65,7 +65,7 @@ def test_risk_boundaries_and_invalid_data():
     assert policy.classify(float('nan')) == 'unknown'
     assert policy.classify(None) == 'unknown'
     for name, (low, high) in policy.thresholds.items():
-        assert policy.classify(low) == name
+        assert policy.classify(high) == name
 
 
 def test_single_model_for_all_legacy_presets():

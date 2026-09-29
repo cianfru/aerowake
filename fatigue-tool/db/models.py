@@ -72,6 +72,9 @@ class User(Base):
     home_base = Column(String(10), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     is_admin = Column(Boolean, default=False, nullable=False)
+    email_verified = Column(Boolean, default=False, nullable=False)
+    metrics_consent = Column(Boolean, default=False, nullable=False)
+    auth_version = Column(Integer, default=0, nullable=False)
 
     # Company membership (auto-detected from roster, confirmed by pilot)
     company_id = Column(
@@ -127,7 +130,8 @@ class Roster(Base):
 
     # Relationships
     user = relationship("User", back_populates="rosters")
-    analyses = relationship("Analysis", back_populates="roster", cascade="all, delete-orphan")
+    analyses = relationship("Analysis", back_populates="roster", cascade="all, delete-orphan",
+                            order_by="(Analysis.created_at.desc(), Analysis.id.desc())")
     fatigue_states = relationship("FatigueState", back_populates="roster", cascade="all, delete-orphan")
 
     __table_args__ = (
@@ -177,6 +181,7 @@ class FatigueState(Base):
     )
     month = Column(String(7), nullable=False)                     # "2026-02"
     period_end_utc = Column(DateTime(timezone=True), nullable=False)  # last duty release time
+    engine_version = Column(String(40), nullable=True)
     final_process_s = Column(Float, nullable=False)               # homeostatic sleep pressure (0-1)
     final_sleep_debt = Column(Float, nullable=False)              # cumulative hours
     final_phase_shift = Column(Float, nullable=False)             # circadian phase shift hours
@@ -249,7 +254,7 @@ class RefreshToken(Base):
     user_id = Column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    token_hash = Column(String(255), nullable=False, index=True)
+    token_hash = Column(String(255), nullable=False, index=True, unique=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
@@ -266,3 +271,12 @@ class PilotObservation(Base):
     payload = Column(JSONB, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     __table_args__ = (UniqueConstraint('user_id', 'client_id'),)
+
+
+class AccountActionToken(Base):
+    __tablename__ = 'account_action_tokens'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    token_hash = Column(String(64), nullable=False, unique=True)
+    purpose = Column(String(20), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)

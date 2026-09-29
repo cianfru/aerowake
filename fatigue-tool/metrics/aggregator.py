@@ -21,7 +21,7 @@ from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from db.models import AggregateMetrics, Roster, Analysis
+from db.models import AggregateMetrics, Roster, Analysis, User
 
 logger = logging.getLogger(__name__)
 
@@ -45,10 +45,11 @@ async def compute_aggregate_metrics(
     try:
         # Fetch all rosters for this company+month that have analyses
         result = await db.execute(
-            select(Roster)
+            select(Roster).join(User).where(User.metrics_consent.is_(True), User.company_id == company_id)
             .where(Roster.company_id == company_id)
             .where(Roster.month == month)
             .options(selectinload(Roster.analyses))
+            .order_by(Roster.created_at.desc(), Roster.id.desc())
         )
         rosters = result.scalars().all()
 
@@ -66,8 +67,6 @@ async def compute_aggregate_metrics(
                 pilot_data.append(data)
                 seen_users.add(roster.user_id)
 
-        if not pilot_data:
-            return
 
         # Delete existing metrics for this company+month (replace all)
         await db.execute(
@@ -138,7 +137,7 @@ class _PilotMonthData:
 def _extract_pilot_data(roster: Roster, analysis: Analysis) -> Optional[_PilotMonthData]:
     """Extract aggregate metrics from a single roster+analysis pair."""
     aj = analysis.analysis_json
-    if not aj:
+    if not aj or not aj.get("duties") or any(d.get("model_version") != "aerowake-4.0-kss" for d in aj["duties"]):
         return None
 
     d = _PilotMonthData()

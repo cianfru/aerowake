@@ -9,6 +9,27 @@ tuned without code changes:
                             compute-heavy endpoints (default 20; 0 disables)
 """
 import os
+import asyncio
+from starlette.concurrency import run_in_threadpool
+
+_compute_slots = asyncio.Semaphore(int(os.environ.get('COMPUTE_CONCURRENCY', '2')))
+
+async def run_compute(fn, *args, **kwargs):
+    try:
+        await asyncio.wait_for(_compute_slots.acquire(), timeout=0.2)
+    except asyncio.TimeoutError:
+        raise HTTPException(503, 'Analysis capacity is busy. Please retry shortly.', headers={'Retry-After': '5'})
+    try:
+        return await run_in_threadpool(fn, *args, **kwargs)
+    finally:
+        _compute_slots.release()
+
+async def read_upload(file):
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, 'Roster exceeds the upload limit.')
+    return content
+
 import threading
 import time
 from collections import OrderedDict, deque
@@ -20,7 +41,7 @@ from starlette.responses import JSONResponse
 
 MAX_UPLOAD_BYTES = int(float(os.environ.get('MAX_UPLOAD_MB', '10')) * 1024 * 1024)
 RATE_LIMIT_PER_MINUTE = int(os.environ.get('RATE_LIMIT_PER_MINUTE', '20'))
-RATE_LIMITED_PREFIXES = ('/api/analyze', '/api/what-if', '/api/fatigue-report', '/api/rosters/')
+RATE_LIMITED_PREFIXES = ('/api/analyze', '/api/what-if', '/api/fatigue-report', '/api/rosters/', '/api/roster/', '/api/auth/', '/api/duty/', '/api/statistics/')
 
 
 class BoundedStore(OrderedDict):
@@ -63,9 +84,7 @@ def validate_upload(content: bytes, suffix: str) -> None:
 
 
 def client_ip(request) -> str:
-    forwarded = request.headers.get('x-forwarded-for')
-    if forwarded:
-        return forwarded.split(',')[0].strip()
+    # Proxy headers are accepted only by uvicorn's configured trusted proxies.
     return request.client.host if request.client else 'unknown'
 
 
@@ -84,7 +103,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._lock = threading.Lock()
 
     async def dispatch(self, request, call_next):
-        if (self.per_minute > 0 and request.method == 'POST'
+        if (self.per_minute > 0 and request.method in ('POST', 'GET')
                 and request.url.path.startswith(RATE_LIMITED_PREFIXES)):
             now = time.monotonic()
             key = client_ip(request)
@@ -101,3 +120,47 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     for ip in [ip for ip, w in self.hits.items() if not w or now - w[-1] > 60]:
                         del self.hits[ip]
         return await call_next(request)
+
+class RequestBodyLimit:
+    """Bound incoming bytes before multipart parsing can spool an unbounded file."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope['type'] != 'http' or scope['method'] not in ('POST', 'PUT', 'PATCH'):
+            return await self.app(scope, receive, send)
+        limit = MAX_UPLOAD_BYTES + 64 * 1024 if scope['path'] in ('/api/analyze', '/api/roster/preview') else 256 * 1024
+        headers = dict(scope.get('headers', []))
+        try:
+            declared = int(headers.get(b'content-length', b'0'))
+        except ValueError:
+            declared = limit + 1
+        if declared > limit:
+            return await JSONResponse({'detail': 'Request body is too large.'}, status_code=413)(scope, receive, send)
+        count = 0
+        async def bounded_receive():
+            nonlocal count
+            message = await receive()
+            count += len(message.get('body', b''))
+            if count > limit:
+                # FastAPI/Starlette handles this before route execution.
+                raise HTTPException(413, 'Request body is too large.')
+            return message
+        await self.app(scope, bounded_receive, send)
+
+
+class RequestTelemetry(BaseHTTPMiddleware):
+    """Log only operation, status and latency; never request bodies or token headers."""
+    async def dispatch(self, request, call_next):
+        import logging
+        import uuid
+        request_id=uuid.uuid4().hex
+        started=time.monotonic()
+        response=await call_next(request)
+        response.headers['X-Request-ID']=request_id
+        route=request.scope.get('route')
+        logging.getLogger('aerowake.requests').info(
+            'request_id=%s method=%s operation=%s status=%s duration_ms=%.1f',
+            request_id,request.method,getattr(route,'path','unmatched'),response.status_code,
+            (time.monotonic()-started)*1000)
+        return response

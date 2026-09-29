@@ -29,7 +29,7 @@ def sleep(d, h, m, d2, h2, m2, **kw):
 def base_request(**changes):
     """Pilot calls fatigue before an early on 8 Sep after a late finish on the 7th."""
     body = dict(
-        home_base='LGW', event_type='fatigue_call_before_duty', event_time_utc=t(8, 4, 30),
+        diary_complete=True, home_base='LGW', event_type='fatigue_call_before_duty', event_time_utc=t(8, 4, 30),
         period_start_utc=t(5, 0), period_end_utc=t(8, 12), affected_duty_id='D8',
         duties=[
             dict(id='D6', report_utc=t(6, 6, 0), release_utc=t(6, 14, 30), source='roster',
@@ -122,8 +122,9 @@ def test_invalid_inputs_are_rejected(change):
     assert client.post('/api/fatigue-report', json=base_request(**change)).status_code == 422
 
 
-def test_unknown_airport_is_disclosed():
+def test_unknown_airport_is_rejected():
     body = base_request()
     body['duties'][0]['sectors'][0]['arrival'] = 'QQZ'
-    r = post(body)
-    assert any('QQZ' in n for n in r['data_quality']['notes'])
+    response = client.post('/api/fatigue-report', json=body)
+    assert response.status_code == 422
+    assert 'Unknown airport QQZ' in response.text

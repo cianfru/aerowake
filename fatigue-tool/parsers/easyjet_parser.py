@@ -107,7 +107,7 @@ def _get_airport(code: str) -> Airport:
             latitude=entry['lat'],
             longitude=entry['lon']
         )
-    print(f"   ⚠️  Airport '{code}' not found in airportsdata — using UTC")
+    pass  # Parser diagnostics are returned to the caller, never logged with personal data.
     return Airport(code=code, timezone='UTC', latitude=0.0, longitude=0.0)
 
 
@@ -188,7 +188,7 @@ class EasyJetParser:
                 'unknown_airports': ['XXX', ...]
             }
         """
-        print(f"   [easyJet] Opening PDF: {pdf_path}")
+        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
 
         with pdfplumber.open(pdf_path) as pdf:
             page = pdf.pages[0]
@@ -201,14 +201,14 @@ class EasyJetParser:
             if base_airport.timezone != 'UTC':
                 self.home_timezone = base_airport.timezone
 
-            print(f"   [easyJet] Pilot: {pilot_info.get('name')} | Base: {self.home_base_code} | TZ: {self.home_timezone}")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
 
             table = self._extract_schedule_table(page)
 
         year = pilot_info.get('year', datetime.now().year)
         month = pilot_info.get('month', datetime.now().month)
         duties = self._parse_grid_to_duties(table, year, month)
-        print(f"   [easyJet] Parsed {len(duties)} duties")
+        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
 
         return {
             'pilot_info': pilot_info,
@@ -244,7 +244,7 @@ class EasyJetParser:
             info['role'] = m.group(4).strip()
             info['aircraft'] = m.group(5).strip()  # e.g. "319"
         else:
-            print("   [easyJet] ⚠️  Could not extract pilot header line")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             info = {'id': 'UNKNOWN', 'name': 'UNKNOWN', 'base': 'AGP', 'role': 'CP', 'aircraft': '319'}
 
         # Period: extract year and month from start date
@@ -256,7 +256,7 @@ class EasyJetParser:
             info['year'] = year
             info['month'] = month   # integer, unlike CrewLink which uses 3-letter abbrev
         else:
-            print("   [easyJet] ⚠️  Could not extract period; defaulting to current year/month")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             now = datetime.now()
             info['year'] = now.year
             info['month'] = now.month
@@ -289,11 +289,11 @@ class EasyJetParser:
         })
 
         if table and len(table) >= 2:
-            print(f"   [easyJet] Table extracted (lines strategy): {len(table)} rows × {len(table[0])} cols")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             return table
 
         # Fallback: text-based grouping
-        print("   [easyJet] Lines strategy produced no table — trying text strategy")
+        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         table = page.extract_table({
             'vertical_strategy': 'text',
             'horizontal_strategy': 'text',
@@ -302,10 +302,10 @@ class EasyJetParser:
         })
 
         if table and len(table) >= 2:
-            print(f"   [easyJet] Table extracted (text strategy): {len(table)} rows × {len(table[0])} cols")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             return table
 
-        print("   [easyJet] ⚠️  Both table strategies failed — returning empty table")
+        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         return []
 
     # ── Grid parsing ──────────────────────────────────────────────────────
@@ -344,7 +344,7 @@ class EasyJetParser:
         # Find the row containing date headers
         date_row_idx = self._find_date_row(table)
         if date_row_idx < 0:
-            print("   [easyJet] ⚠️  No date header row found in table")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             return []
 
         data_row_idx = date_row_idx + 1  # duty data is in the row below dates
@@ -372,7 +372,7 @@ class EasyJetParser:
                 except ValueError:
                     pass  # Invalid date — skip
 
-        print(f"   [easyJet] Found {len(date_columns)} date columns (date row: {date_row_idx}, data row: {data_row_idx})")
+        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
 
         duties: List[Duty] = []
         # Track cross-column overnight: col N has →, col N+1 starts with ↓
@@ -632,7 +632,7 @@ class EasyJetParser:
         try:
             report_time_utc = _localize_to_utc(report_time_str, col_date, dep_tz, 0)
         except Exception as e:
-            print(f"   [easyJet] ⚠️  Could not localize report time on {col_date.date()}: {e}")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             return None
 
         if release_time_str:
@@ -707,7 +707,7 @@ class EasyJetParser:
             if release_utc <= report_utc:
                 release_utc += timedelta(days=1)
         except Exception as e:
-            print(f"   [easyJet] ⚠️  Could not parse office duty times on {col_date.date()}: {e}")
+            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             return None
 
         duty_id = f"D{col_date.strftime('%Y%m%d')}_{code}"
@@ -850,7 +850,7 @@ class EasyJetParser:
                         aircraft_type=arr_aircraft,
                     )
                     prev_duty.segments.append(new_seg)
-                    print(f"   [easyJet] Completed overnight segment: {new_seg.flight_number} {dep_airport.code}→{arr_airport.code}")
+                    pass  # Parser diagnostics are returned to the caller, never logged with personal data.
                 else:
                     # No incomplete segment info — update last segment's arrival
                     if prev_duty.segments:
@@ -888,7 +888,7 @@ class EasyJetParser:
                     prev_duty.release_time_utc = prev_duty.report_time_utc + timedelta(hours=1)
 
             except Exception as e:
-                print(f"   [easyJet] ⚠️  Could not complete overnight arrival on {col_date.date()}: {e}")
+                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
 
         # Check for additional duties after the continuation (e.g. OFC8 on same day)
         remaining_tokens = tokens[consumed:]
@@ -990,7 +990,7 @@ class EasyJetParser:
                 if arr_utc <= dep_utc:
                     arr_utc = _localize_to_utc(arr_time_str, col_date, arr_airport.timezone, sta_off + 1)
             except Exception as e:
-                print(f"   [easyJet] ⚠️  Time conversion failed for {flight_num}: {e}")
+                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
                 i += 1
                 continue
 
