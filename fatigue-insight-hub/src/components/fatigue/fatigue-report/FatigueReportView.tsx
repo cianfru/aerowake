@@ -76,6 +76,8 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
   const tz = report.home_timezone;
   const a = report.assessment;
   const sw = report.prior_sleep_wake;
+  const sleepAnchor = report.duties.find(d => d.id === report.event.affected_duty_id);
+  const sleepAnchorLabel = sleepAnchor ? 'duty' : 'event';
 
   // Chart in home-base local hours since period start.
   const chart = useMemo(() => {
@@ -198,9 +200,10 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
 
       {report.watch_reference && <p className="text-sm text-muted-foreground">Personal watch reference: KSS {report.watch_reference.kss.toFixed(1)}. {report.watch_reference.duty_ids.length} assessed duties reach this reference. {report.watch_reference.explanation}</p>}
 
+      <p className="text-sm text-muted-foreground">Sleep screening below uses {sleepAnchor ? `duty report at ${sleepAnchor.report_local}` : `the event at ${report.event.time_local}`} ({tz}). It includes the supplied reported and estimated sleep. The diary’s 24/48-hour totals use reported sleep before the event at {report.event.time_local}.</p>
       <section className="grid grid-cols-2 gap-x-6 gap-y-6 border-y border-border py-5 sm:grid-cols-4 sm:gap-x-0 sm:divide-x sm:divide-border">
-        <Stat label="Sleep, prior 24 h" value={fmtH(sw?.sleep_24h)} hint="5h or more recommended" tone={sw && sw.sleep_24h < 5 ? 'bad' : undefined} />
-        <Stat label="Sleep, prior 48 h" value={fmtH(sw?.sleep_48h)} hint="12h or more recommended" tone={sw && sw.sleep_48h < 12 ? 'bad' : undefined} />
+        <Stat label={`Sleep before ${sleepAnchorLabel}, 24 h`} value={fmtH(sw?.sleep_24h)} hint="5h or more recommended" tone={sw && sw.sleep_24h < 5 ? 'bad' : undefined} />
+        <Stat label={`Sleep before ${sleepAnchorLabel}, 48 h`} value={fmtH(sw?.sleep_48h)} hint="12h or more recommended" tone={sw && sw.sleep_48h < 12 ? 'bad' : undefined} />
         <Stat label="Awake by end" value={fmtH(a?.hours_awake_at_end ?? sw?.hours_awake_at_end)} tone={(a?.hours_awake_at_end ?? 0) >= 17 ? 'bad' : undefined} />
         <Stat label="Predicted peak KSS" value={a ? a.kss_max.toFixed(1) : '—'}
           hint={a ? `${a.kss_label} · 90th pct ${a.kss_max_90.toFixed(1)}` : 'Not modelled'} tone={a && a.kss_max >= 7 ? 'bad' : undefined} />

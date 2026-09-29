@@ -759,7 +759,7 @@ def _narrative(r: Dict, inp: ReportInput) -> List[Dict]:
             'fatigue_after_duty': 'reported fatigue after'}.get(inp.event_type, 'reported fatigue in relation to')
     if ev['affected_duty_label']:
         paras.append(dict(title='Event', text=f"The pilot {kind} the duty {ev['affected_duty_label']} "
-                                              f"(home-base time, {tz}). The assessed point is {ev['time_local']} "
+                                              f"(home-base time, {tz}). The recorded event or concern time is {ev['time_local']} "
                                               f"({ev['time_z']})."))
     elif inp.event_type == 'roster_concern':
         paras.append(dict(title='Event', text=f"The pilot raises a prospective roster concern for {ev['time_local']} ({ev['time_z']}). No fatigue event or cancellation is inferred."))
@@ -776,7 +776,9 @@ def _narrative(r: Dict, inp: ReportInput) -> List[Dict]:
                 f"pre-period initialization history ({rep} reported by the pilot, "
                 f"{len(s_rows) - rep} estimated from the roster).")
         if sw:
-            text += (f" The supplied pattern contains {_hours(sw['sleep_24h'])} of sleep in the 24 h before the assessed point, and "
+            affected = next((d for d in inp.duties if d.id == inp.affected_duty_id), None)
+            reference = f"duty report at {_fmt(affected.report_utc, tz)}" if affected else f"the fatigue event at {ev['time_local']}"
+            text += (f" The supplied pattern contains {_hours(sw['sleep_24h'])} of sleep in the 24 h before {reference}, and "
                      f"{_hours(sw['sleep_48h'])} in the 48 h before")
             if sw['hours_awake_at_start'] is not None:
                 text += f"; estimated time awake at that point is {_hours(sw['hours_awake_at_start'])}"
