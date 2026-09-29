@@ -1,73 +1,22 @@
-# Welcome to your Lovable project
+# AeroWake frontend
 
-## Project info
-
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
-
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+Node 22.12+ on the Node 22 line; React 18, TypeScript, Vite, Tailwind and Recharts.
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+npm ci
+VITE_API_URL=http://127.0.0.1:8000 npm run dev
+npm run typecheck
+npm run lint
+npm test
+npm run build
 ```
 
-**Edit a file directly in GitHub**
+`VITE_API_URL` is a public build-time API origin, not a secret. Production builds inject `VERCEL_GIT_COMMIT_SHA` when available; the app footer exposes the build for support. Configure the API's CORS origins to match deployment. All routes rewrite to `index.html` (see `vercel.json`).
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+The public landing route loads independently of the heavy analysis view. Application hubs are `/roster`, `/report`, `/history` and `/learn`; account controls are `/account`, recovery/verification `/account-action`, and data policy `/privacy`.
 
-**Use GitHub Codespaces**
+Globe and flat-route views use bundled land geometry. Coordinate resolution is batched, shared between consumers and retryable; the route list remains available during errors. No third-party tile token is used.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Authentication changes remount private analysis state and clear query/draft caches. Guest access uses a random per-tab capability. Draft persistence is explicitly optional, per-tab, and removed on sign-out. Reports contain personal information: exports are controlled by the pilot.
 
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+See [deployment and release gates](../docs/LAUNCH_HARDENING.md) before publishing.
