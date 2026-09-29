@@ -5,6 +5,7 @@ import {
 import {
   Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
+import { reportToSmsSummary } from '@/lib/report-sms';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { reportToText, tzOffsetMinutes, type FatigueReport, type Severity } from '@/lib/fatigue-report-api';
@@ -70,6 +71,8 @@ function Stat({ label, value, hint, tone }: { label: string; value: string; hint
 
 export function FatigueReportView({ report, onEdit }: { report: FatigueReport; onEdit: () => void }) {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
+  const [showSubmission, setShowSubmission] = useState(false);
   const tz = report.home_timezone;
   const a = report.assessment;
   const sw = report.prior_sleep_wake;
@@ -98,22 +101,26 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
     return `${local.getUTCDate()}/${local.getUTCMonth() + 1} ${hh}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
   };
 
-  const download = () => {
-    const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
+  const download = (format: 'json' | 'txt') => {
+    const content = format === 'json' ? JSON.stringify(report, null, 2) : `${reportToSmsSummary(report)}\n\nFULL ASSESSMENT\n${reportToText(report)}`;
+    const url = URL.createObjectURL(new Blob([content], { type: format === 'json' ? 'application/json' : 'text/plain;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `fatigue-report-${report.event.time_utc.slice(0, 10)}.json`;
+    link.download = `fatigue-report-${report.event.time_utc.slice(0, 10)}.${format}`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(reportToText(report));
+      await navigator.clipboard.writeText(reportToSmsSummary(report));
+      setCopyError(false);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       setCopied(false);
+      setCopyError(true);
+      setShowSubmission(true);
     }
   };
 
@@ -125,12 +132,21 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
       <div className="no-print flex flex-wrap items-center justify-between gap-2">
         <Button variant="ghost" onClick={onEdit}><ArrowLeft className="mr-1 h-4 w-4" />Edit inputs</Button>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={copy}>{copied ? <Check className="mr-1 h-4 w-4" /> : <Copy className="mr-1 h-4 w-4" />}{copied ? 'Copied' : 'Copy text'}</Button>
-          <Button variant="outline" onClick={download}><Download className="mr-1 h-4 w-4" />JSON</Button>
+          <Button variant="outline" onClick={copy}>{copied ? <Check className="mr-1 h-4 w-4" /> : <Copy className="mr-1 h-4 w-4" />}{copied ? 'Copied' : 'Copy for SMS'}</Button>
+          <Button variant="outline" onClick={() => download('txt')}><Download className="mr-1 h-4 w-4" />Download text</Button>
           <Button onClick={() => window.print()}><Printer className="mr-1 h-4 w-4" />Print / PDF</Button>
         </div>
       </div>
 
+      <section aria-label="Export to your SMS" className="no-print space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-5">
+        <h2 className="font-semibold">Ready for your safety reporting system</h2>
+        <p className="text-sm leading-6 text-muted-foreground">Review your statement and supporting evidence below. Copy the submission text into your SMS form, or choose Print / PDF to save an attachment. Follow your operator’s required fields and submission process.</p>
+        <div className="flex flex-wrap gap-3"><Button variant="outline" size="sm" onClick={() => setShowSubmission(!showSubmission)} aria-expanded={showSubmission}>{showSubmission ? 'Hide submission text' : 'Preview submission text'}</Button><Button variant="ghost" size="sm" onClick={() => download('json')}>Download structured JSON</Button></div>
+        <p className="text-xs text-muted-foreground">Nothing is sent automatically. PDF, text and JSON are portable exports; acceptance depends on your SMS.</p>
+        {copyError && <p role="alert" className="text-sm text-destructive">Your browser blocked copying. Select the text below to copy it manually, or download the text file.</p>}
+        {showSubmission && <label className="block space-y-2 text-sm"><span>Submission text</span><textarea aria-label="Submission text" readOnly rows={12} className="w-full rounded-lg border bg-background p-3 text-sm leading-6" value={reportToSmsSummary(report)} onFocus={event => event.target.select()} /></label>}
+        {copied && <p role="status" className="text-sm">Submission text copied. Paste it into your SMS and review before submitting.</p>}
+      </section>
       <section className="space-y-3 border-b border-border pb-6">
         <p className="eyebrow">{report.event.type === 'roster_concern' ? 'Prospective roster concern' : 'Fatigue report'}</p>
         <h1 className="text-2xl md:text-3xl font-semibold leading-tight tracking-[-0.02em]">

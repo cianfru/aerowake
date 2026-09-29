@@ -1,7 +1,6 @@
-import { useRef } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowDown, FileText, Moon, Plane } from 'lucide-react';
 import { LandingGlobe } from './LandingGlobe';
-import { useScrollProgress } from './useScrollProgress';
 
 interface HeroSectionProps {
   onScrollToContent: () => void;
@@ -9,106 +8,35 @@ interface HeroSectionProps {
 }
 
 export function HeroSection({ onScrollToContent, onEnter }: HeroSectionProps) {
-  const heroRef = useRef<HTMLElement>(null);
-  const progress = useScrollProgress(heroRef);
-
-  const scrollFade = Math.max(0, Math.min(1, (progress - 0.5) * 4));
-  const contentOpacity = 1 - scrollFade;
-  const contentTranslate = scrollFade * 60;
-
-  return (
-    <section ref={heroRef} className="relative min-h-[720px] h-[100svh] overflow-hidden bg-[#000408]">
-      {/* Keyless route globe */}
-      <LandingGlobe />
-
-      {/* Gradient overlays */}
-      <div
-        className="absolute inset-0 z-[1] pointer-events-none"
-        style={{
-          background: `
-            linear-gradient(135deg, rgba(0,4,8,0.92) 0%, rgba(0,4,8,0.65) 40%, rgba(0,4,8,0.15) 65%, rgba(0,4,8,0.25) 100%)
-          `,
-        }}
-      />
-      <div
-        className="absolute inset-0 z-[1] pointer-events-none"
-        style={{
-          background: 'linear-gradient(to bottom, rgba(0,4,8,0.2) 0%, transparent 20%, transparent 70%, #000408 100%)',
-        }}
-      />
-
-      {/* Subtle grain texture overlay */}
-      <div
-        className="absolute inset-0 z-[2] pointer-events-none opacity-[0.03]"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`,
-          backgroundSize: '128px 128px',
-        }}
-      />
-
-      {/* Hero Content — left-aligned editorial layout */}
-      <div
-        className="relative z-10 flex h-full items-end pb-32 md:items-center md:pb-0"
-        style={{
-          opacity: contentOpacity,
-          transform: `translateY(${contentTranslate}px)`,
-        }}
-      >
-        <div className="mx-auto w-full max-w-7xl px-6 md:px-10 lg:px-16">
-          <div className="max-w-2xl">
-            {/* Overline */}
-            <div className="mb-6 flex items-center gap-3">
-              <div className="h-px w-8 bg-[hsl(199,89%,48%)]/40" />
-              <span className="text-[11px] font-medium tracking-[0.2em] uppercase text-[hsl(199,89%,48%)]/70">
-                Fatigue Risk Management
-              </span>
-            </div>
-
-            {/* Headline — large, confident, clean */}
-            <h1 className="font-serif text-[clamp(2.5rem,6vw,4.5rem)] font-light leading-[1.05] tracking-[-0.02em] text-white">
-              Understand your roster.
-              <br />
-              <span className="text-white/65">Report fatigue clearly.</span>
-            </h1>
-
-            {/* Body copy — warm, supportive, not confrontational */}
-            <p className="mt-6 max-w-md text-[15px] leading-[1.7] text-white/75 font-light">
-              Review predicted sleepiness across your duties, understand the
-              assumptions, and prepare a report using your own sleep and experience.
-            </p>
-
-            {/* CTAs */}
-            <div className="mt-10 flex flex-wrap items-center gap-4">
-              <button
-                onClick={onEnter}
-                className="border-beam-wrapper cursor-pointer"
-              >
-                <div className="beam-border"><div className="beam-gradient" /></div>
-                <span className="beam-inner block bg-[#5bb8e8]/20 px-7 py-3 text-[13px] font-semibold text-white tracking-wide backdrop-blur-md">
-                  Analyse a roster
-                </span>
-              </button>
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/60" />
-                <span className="text-[12px] text-white/70 tracking-wide">
-                  Try it without an account
-                </span>
-              </div>
-            </div>
-
+  return <section className="relative overflow-hidden border-b border-[#c6dbe6] bg-[#edf5fa] pt-28 md:pt-36">
+    <div className="relative mx-auto grid max-w-7xl items-center gap-8 px-6 pb-14 md:px-10 lg:grid-cols-[1.1fr_1fr] lg:gap-0 lg:px-16 lg:pb-20">
+      <div className="relative z-10 max-w-xl">
+        <p className="mb-6 flex items-center gap-2 text-sm font-medium text-[#087478]"><Plane className="h-4 w-4" /> A clearer picture of pilot fatigue</p>
+        <h1 className="font-serif text-[clamp(3.2rem,5.8vw,5.1rem)] leading-[1.04] tracking-[-0.025em] text-[#142e45]">Understand your roster.<br />Report fatigue clearly.</h1>
+        <p className="mt-7 max-w-md text-lg leading-8 text-[#425d73]">See where your duties may become demanding. Add the sleep you actually had, capture how you felt, and build a report that tells the whole story.</p>
+        <div className="mt-8 flex flex-wrap items-center gap-3">
+          <button onClick={onEnter} className="rounded-full bg-[#175779] px-7 py-3.5 text-sm font-semibold text-slate-50 transition-colors hover:bg-[#123e58]">Analyse a roster</button>
+          <Link to="/report" className="rounded-full border border-[#8ca9ba] bg-[#f8fbfd] px-6 py-3.5 text-sm font-semibold text-[#173d57] transition-colors hover:bg-[#dcebf3]">Create a fatigue report</Link>
+        </div>
+        <p className="mt-4 text-sm text-[#425d73]">Start without an account. No roster? Enter your recent days.</p>
+      </div>
+      <div className="relative mx-auto w-full max-w-lg py-4 lg:py-12">
+        <LandingGlobe />
+        <div className="relative -mt-14 ml-auto max-w-xs rounded-2xl border border-[#b9d4df] bg-[#f8fbfd]/95 p-5 shadow-[0_14px_40px_-24px_#285c76]">
+          <p className="mb-4 text-sm font-semibold text-[#142e45]">Every duty has a before and after.</p>
+          <div className="space-y-3 text-sm text-[#425d73]">
+            <p className="flex items-center gap-3"><Moon className="h-4 w-4 text-[#087478]" /> Sleep and recovery</p>
+            <p className="flex items-center gap-3"><Plane className="h-4 w-4 text-[#175779]" /> Duty timing and workload</p>
+            <p className="flex items-center gap-3"><FileText className="h-4 w-4 text-[#9c570a]" /> Your own experience</p>
           </div>
         </div>
       </div>
-
-      {/* Scroll indicator */}
-      <button
-        onClick={onScrollToContent}
-        className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center gap-1 text-white/30 transition-colors hover:text-white/70"
-        style={{ opacity: contentOpacity }}
-      >
-        <span className="text-[10px] tracking-[0.15em] uppercase">Scroll</span>
-        <ChevronDown className="h-3.5 w-3.5 animate-bounce" />
-      </button>
-    </section>
-  );
+    </div>
+    <div className="border-t border-[#c6dbe6] bg-[#e2eef5]">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5 text-sm text-[#425d73] md:px-10 lg:px-16">
+        <p>Published science. Visible assumptions. Your judgment.</p>
+        <button onClick={onScrollToContent} className="flex items-center gap-2 font-medium text-[#175779]">Explore the workflow <ArrowDown className="h-4 w-4" /></button>
+      </div>
+    </div>
+  </section>;
 }
