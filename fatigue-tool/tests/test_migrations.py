@@ -14,6 +14,26 @@ from db.models import Base
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize('source', ['railway', 'docker'])
+@pytest.mark.parametrize('port', ['9237', None])
+def test_container_start_command_expands_port(tmp_path, source, port):
+    """Exercise exec-form startup, where Railway does not expand variables."""
+    if source == 'railway':
+        command = shlex.split(json.loads((ROOT / 'railway.json').read_text())['deploy']['startCommand'])
+    else:
+        cmd = next(line[4:] for line in (ROOT / 'Dockerfile').read_text().splitlines() if line.startswith('CMD '))
+        command = json.loads(cmd)
+    server = tmp_path / 'uvicorn'
+    server.write_text(f'#!{sys.executable}\nimport json, sys\nprint(json.dumps(sys.argv[1:]))\n')
+    server.chmod(0o755)
+    env = {**os.environ, 'PATH': str(tmp_path) + os.pathsep + os.environ['PATH']}
+    env.pop('PORT', None)
+    if port is not None:
+        env['PORT'] = port
+    result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True, check=True)
+    assert json.loads(result.stdout) == ['api.api_server:app', '--host', '0.0.0.0', '--port', port or '8000']
+
+
 def migration_command():
     """Use Railway's console entry point, not python -m (which masks path bugs)."""
     command = shlex.split(json.loads((ROOT / 'railway.json').read_text())['deploy']['preDeployCommand'][0])
