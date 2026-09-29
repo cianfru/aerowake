@@ -45,9 +45,9 @@ describe('transform: aerowake-4.0-kss roster fields', () => {
     expect(selectDutiesToWatch(t).map((d) => d.dutyId)).toEqual(['D3', 'D4']);
   });
 
-  it('uses the backend watch list (order and emptiness) when present', () => {
-    expect(selectDutiesToWatch({ ...r, dutiesToWatch: ['D4', 'D3'] }).map((d) => d.dutyId)).toEqual(['D4', 'D3']);
-    expect(selectDutiesToWatch({ ...r, dutiesToWatch: [] })).toEqual([]);
+  it('recomputes peak-risk ordering even if saved landing-risk lists are empty', () => {
+    expect(selectDutiesToWatch({ ...r, dutiesToWatch: ['D4', 'D3'] }).map((d) => d.dutyId)).toEqual(['D3', 'D4']);
+    expect(selectDutiesToWatch({ ...r, dutiesToWatch: [] }).map(d => d.dutyId)).toEqual(['D3', 'D4']);
   });
 
   it('builds compact rows with standby in chronological order', () => {

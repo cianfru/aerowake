@@ -33,6 +33,7 @@ export function TimelineSection({ results, pilotId, homeBase, theme, selectedDut
   const [open, setOpen] = useState(isWide);
 
   return (
+    <>
     <Collapsible open={open} onOpenChange={setOpen} asChild>
       <section aria-label="Timeline and charts" className="space-y-5">
         <CollapsibleTrigger asChild>
@@ -49,7 +50,8 @@ export function TimelineSection({ results, pilotId, homeBase, theme, selectedDut
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-4 min-w-0">
           {/* The chronogram scrolls horizontally inside its own container on small screens. */}
-          <div className="min-w-0">
+          <details className="min-w-0">
+            <summary className="cursor-pointer py-3 text-sm font-medium">Detailed monthly chronogram</summary>
             <Chronogram
               duties={results.duties}
               statistics={results.statistics}
@@ -64,10 +66,10 @@ export function TimelineSection({ results, pilotId, homeBase, theme, selectedDut
               analysisId={results.analysisId}
               standbyPeriods={results.standbyPeriods}
             />
-          </div>
+          </details>
 
-          <Tabs defaultValue="month" className="w-full min-w-0">
-            <TabsList className="h-auto w-full justify-start gap-5 rounded-none border-b border-border bg-transparent p-0">
+          <Tabs defaultValue={isWide() ? "month" : "alertness"} className="w-full min-w-0">
+            <TabsList className="h-auto w-full justify-start flex-wrap gap-x-5 gap-y-3 rounded-none border-b border-border bg-transparent p-0">
               {[['month', 'Through the month'], ['alertness', 'By duty'], ['sleepdebt', 'Sleep debt'], ['bodyclock', 'Body clock']].map(([v, l]) => (
                 <TabsTrigger
                   key={v}
@@ -102,9 +104,11 @@ export function TimelineSection({ results, pilotId, homeBase, theme, selectedDut
             </TabsContent>
           </Tabs>
 
-          <RouteNetwork duties={results.duties} homeBase={results.pilotBase || homeBase} />
+
         </CollapsibleContent>
       </section>
     </Collapsible>
+    <RouteNetwork duties={results.duties} homeBase={results.pilotBase || homeBase} />
+    </>
   );
 }

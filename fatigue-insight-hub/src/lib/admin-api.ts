@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/auth-session';
 // src/lib/admin-api.ts
 // Admin dashboard API client — fetches platform-wide data for admin users.
 
@@ -66,7 +67,7 @@ export interface ActivityEvent {
 // ─── API Functions ───────────────────────────────────────────────────────────
 
 async function adminFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const res = await apiFetch(`${API_BASE_URL}${path}`, {
     headers: { ...getAuthHeaders() },
   });
   if (!res.ok) {

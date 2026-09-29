@@ -179,6 +179,7 @@ export function createRestDayPseudoDuty(restDay: RestDaySleep): DutyAnalysis {
     riskAdvisory: 'routine',
     flightSegments: [],
     crewComposition: 'standard',
+    ulrCrewSet: null,
     restFacilityClass: null,
     isUlr: false,
     acclimatizationState: 'acclimatized',

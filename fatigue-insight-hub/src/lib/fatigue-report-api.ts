@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/auth-session';
 /**
  * Automatic fatigue report — client, types and helpers.
  *
@@ -26,12 +27,14 @@ export interface ReportSector {
 }
 
 export interface ReportDuty {
+  crew_composition?: 'standard' | 'augmented_3' | 'augmented_4' | 'unknown';
+  acclimatization?: 'acclimatized' | 'unknown';
   id: string;
   report_utc: string;
   release_utc: string;
   sectors: ReportSector[];
   status: DutyStatus;
-  duty_type: 'flight' | 'standby' | 'simulator' | 'ground' | 'positioning' | 'other';
+  duty_type: 'flight' | 'standby' | 'home_standby' | 'airport_standby' | 'simulator' | 'ground' | 'positioning' | 'other';
   description?: string;
   source: 'roster' | 'manual';
 }
@@ -46,6 +49,7 @@ export interface ReportSleep {
 }
 
 export interface FatigueReportRequest {
+  diary_complete?: boolean;
   home_base?: string | null;
   home_timezone?: string | null;
   event_type: EventType;
@@ -135,7 +139,7 @@ export interface FatigueReport {
     model_available: boolean;
   };
   summary: {
-    overall_level: 'low' | 'moderate' | 'high' | 'critical';
+    overall_level: 'low' | 'moderate' | 'high' | 'critical' | 'unknown';
     objective_support: boolean;
     headline: string;
     counts: Record<Severity, number>;
@@ -173,7 +177,7 @@ export interface FatigueReport {
 }
 
 export async function generateFatigueReport(body: FatigueReportRequest): Promise<FatigueReport> {
-  const response = await fetch(`${API_BASE_URL}/api/fatigue-report`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/fatigue-report`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(body),
@@ -248,10 +252,11 @@ export function localInputToUtcIso(value: string, tz: string): string | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value);
   if (!m) return null;
   const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
-  // Two passes resolve the offset across DST transitions.
-  let guess = wall - tzOffsetMinutes(new Date(wall), tz) * 60000;
-  guess = wall - tzOffsetMinutes(new Date(guess), tz) * 60000;
-  return new Date(guess).toISOString();
+  // Reject skipped and repeated wall times: the pilot must use UTC to disambiguate.
+  const offsets = new Set([-2, -1, 0, 1, 2].map(day => tzOffsetMinutes(new Date(wall + day * 86400000), tz)));
+  const candidates = [...offsets].map(offset => new Date(wall - offset * 60000).toISOString())
+    .filter(iso => utcIsoToLocalInput(iso, tz) === value.slice(0, 16));
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
 /** ISO UTC → "YYYY-MM-DDTHH:mm" wall-clock in `tz`. */
@@ -302,7 +307,7 @@ export function dutyFromAnalysis(duty: DutyAnalysis, index: number): ReportDuty 
     cursor = arr;
   }
   const dutyType = duty.dutyType === 'simulator' ? 'simulator'
-    : duty.dutyType === 'ground_training' ? 'ground' : 'flight';
+    : duty.dutyType === 'ground_training' ? 'ground' : duty.dutyType === 'airport_standby' ? 'airport_standby' : 'flight';
   return {
     id: duty.dutyId ?? `duty-${index + 1}`,
     report_utc: report,

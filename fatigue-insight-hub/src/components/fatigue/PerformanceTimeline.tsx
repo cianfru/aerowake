@@ -1,3 +1,4 @@
+import type { TooltipProps } from 'recharts';
 import { forwardRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DutyAnalysis } from '@/types/fatigue';
@@ -112,7 +113,7 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
     }
   };
 
-  const CustomTooltip = forwardRef<HTMLDivElement, any>(({ active, payload }: any, ref) => {
+  const CustomTooltip = forwardRef<HTMLDivElement, TooltipProps<number, string>>(({ active, payload }: TooltipProps<number, string>, ref) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
@@ -257,7 +258,7 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
                 fill="url(#colorMin)"
                 strokeWidth={2}
                 name="Peak sleepiness"
-                dot={(props: any) => {
+                dot={(props) => {
                   const { cx, cy, payload } = props;
                   if (payload.isDuty) {
                     return (
@@ -282,7 +283,7 @@ export function PerformanceTimeline({ duties, month }: PerformanceTimelineProps)
                 fill="url(#colorAvg)"
                 strokeWidth={2}
                 name="Average"
-                dot={(props: any) => {
+                dot={(props) => {
                   const { cx, cy, payload } = props;
                   if (payload.isDuty) {
                     return (

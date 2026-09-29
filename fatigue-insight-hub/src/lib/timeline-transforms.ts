@@ -1306,7 +1306,7 @@ export function elapsedTransform(
             sleepStartUtcIso: block.sleepStartUtc,
             sleepEndUtcIso: block.sleepEndUtc,
           });
-          let se = dayHourToElapsed(block.sleepStartDayHomeTz!, block.sleepStartHourHomeTz!);
+          const se = dayHourToElapsed(block.sleepStartDayHomeTz!, block.sleepStartHourHomeTz!);
           let ee = dayHourToElapsed(block.sleepEndDayHomeTz!, block.sleepEndHourHomeTz!);
           if (ee <= se) ee += 24;
           maxElapsedHour = Math.max(maxElapsedHour, ee);

@@ -15,7 +15,7 @@ import type { DutyAnalysis } from '@/types/fatigue';
  * so we never double-count the active roster.
  */
 export function useAllDuties() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { rosters } = useRosterHistory();
   const { state } = useAnalysis();
 
@@ -28,14 +28,14 @@ export function useAllDuties() {
   // Parallel-fetch all roster analyses
   const queries = useQueries({
     queries: analyzedRosters.map((roster) => ({
-      queryKey: ['roster-duties', roster.id] as const,
+      queryKey: ['roster-duties', user?.id, roster.id] as const,
       queryFn: async (): Promise<DutyAnalysis[]> => {
         const detail = await getRoster(roster.id);
         if (!detail.analysis) return [];
         const [year, month] = roster.month.split('-');
         const fallbackMonth = new Date(Number(year), Number(month) - 1, 1);
         const transformed = transformAnalysisResult(detail.analysis, fallbackMonth);
-        return transformed.duties;
+        return transformed.legacyModel ? [] : transformed.duties;
       },
       enabled: isAuthenticated,
       staleTime: 5 * 60_000, // 5 minutes
@@ -65,7 +65,7 @@ export function useAllDuties() {
     }
 
     // Add current in-memory duties if not already included via a persisted roster
-    if (state.analysisResults?.duties) {
+    if (state.analysisResults?.duties && !state.analysisResults.legacyModel) {
       for (const duty of state.analysisResults.duties) {
         const key = duty.dutyId ?? `${duty.dateString}-${duty.reportTimeUtc}`;
         if (!seenIds.has(key)) {

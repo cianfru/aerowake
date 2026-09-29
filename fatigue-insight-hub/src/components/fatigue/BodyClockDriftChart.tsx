@@ -1,3 +1,4 @@
+import type { TooltipProps } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DutyAnalysis, BodyClockTimelineEntry } from '@/types/fatigue';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Line, ComposedChart, Area } from 'recharts';
@@ -122,7 +123,7 @@ export function BodyClockDriftChart({ duties, month, homeBase, bodyClockTimeline
 
   const maxShift = Math.max(...chartData.map(d => Math.abs(d.phaseShift)), 8);
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       const shift = data.phaseShift;
@@ -255,7 +256,7 @@ export function BodyClockDriftChart({ duties, month, homeBase, bodyClockTimeline
                 dataKey="phaseShift"
                 stroke="hsl(var(--foreground))"
                 strokeWidth={1.5}
-                dot={(props: any) => {
+                dot={(props) => {
                   const { cx, cy, payload } = props;
                   if (payload.isDuty) {
                     const color = payload.phaseShift > 0 ? 'hsl(30, 100%, 50%)' : 

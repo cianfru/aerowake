@@ -74,15 +74,15 @@ describe('RosterPage', () => {
   });
 
   it('shows a calm empty state when nothing needs attention', async () => {
-    render(<AnalysisProvider><Loaded results={{ ...results, dutiesToWatch: [], easaFindings: [] }} /></AnalysisProvider>);
+    render(<AnalysisProvider><Loaded results={{ ...results, duties: results.duties.filter(d => (d.maxKss ?? 9) < 6.5), dutiesToWatch: [], easaFindings: [] }} /></AnalysisProvider>);
     expect(await screen.findByText('No duties need special attention this month')).toBeInTheDocument();
     expect(screen.getByTestId('duties-to-watch-empty')).toBeInTheDocument();
-    expect(screen.getByText('All EASA cumulative duty and rest checks met')).toBeInTheDocument();
+    expect(screen.getByText('No exceedances found in the supplied activities')).toBeInTheDocument();
   });
 
   it('asks for the home base before analysing when no roster is loaded', () => {
     render(<AnalysisProvider><RosterPage /></AnalysisProvider>);
     expect(screen.getByLabelText(/Home base \(IATA\)/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Run analysis/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Review roster/ })).toBeDisabled();
   });
 });

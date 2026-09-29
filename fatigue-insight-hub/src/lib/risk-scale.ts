@@ -10,12 +10,12 @@
  *     index = 110 − 10·KSS    ⇔    KSS = (110 − index) / 10
  *     (KSS 1 → 100, KSS 5 → 60, KSS 9 → 20)
  *
- * Risk bands (lower bound inclusive) on the index / KSS:
- *     low       ≥ 55   (KSS < 5.5)
+ * Risk bands (lower KSS bound inclusive; upper index bound inclusive):
+ *     low       > 55   (KSS < 5.5)
  *     moderate  45–55  (KSS 5.5–6.5)
  *     high      35–45  (KSS 6.5–7.5)
  *     critical  25–35  (KSS 7.5–8.5)
- *     extreme   < 25   (KSS ≥ 8.5)
+ *     extreme   ≤ 25   (KSS ≥ 8.5)
  *
  * The index is NOT a percentage, NOT a measure of cognitive capacity and NOT
  * alcohol-equivalent. It is a group-average sleepiness prediction.
@@ -27,7 +27,7 @@
 export type RiskLevel = 'low' | 'moderate' | 'high' | 'critical' | 'extreme' | 'unknown';
 export type RiskLevelUpper = 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL' | 'EXTREME' | 'UNKNOWN';
 
-/** Backend-shaped thresholds: level → [lowerInclusive, upperExclusive] on the index. */
+/** Backend-shaped thresholds: level → [lowerExclusive, upperInclusive] on the index. */
 export type RiskThresholds = Record<string, [number, number]>;
 
 export const INDEX_MIN = 20;
@@ -98,9 +98,9 @@ export function kssToIndex(kss: number): number {
 }
 
 /** Prefer a backend-provided KSS, otherwise derive it from the index. */
-export function resolveKss(kss: number | null | undefined, index: number | null | undefined): number | null {
-  if (typeof kss === 'number' && Number.isFinite(kss)) return kss;
-  if (typeof index === 'number' && Number.isFinite(index)) return indexToKss(index);
+export function resolveKss(kss: number | null | undefined, index: number | null | undefined, modelVersion?: string): number | null {
+  if (typeof kss === 'number' && Number.isFinite(kss) && kss >= 1 && kss <= 9) return kss;
+  if (modelVersion === 'aerowake-4.0-kss' && typeof index === 'number' && Number.isFinite(index) && index >= INDEX_MIN && index <= INDEX_MAX) return indexToKss(index);
   return null;
 }
 
@@ -149,10 +149,10 @@ export function classifyPerformance(
 ): RiskLevel {
   if (index == null || !Number.isFinite(index)) return 'unknown';
   const t = resolveThresholds(thresholds);
-  if (index >= t.low[0]) return 'low';
-  if (index >= t.moderate[0]) return 'moderate';
-  if (index >= t.high[0]) return 'high';
-  if (index >= t.critical[0]) return 'critical';
+  if (index > t.low[0]) return 'low';
+  if (index > t.moderate[0]) return 'moderate';
+  if (index > t.high[0]) return 'high';
+  if (index > t.critical[0]) return 'critical';
   return 'extreme';
 }
 

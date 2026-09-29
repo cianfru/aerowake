@@ -1,3 +1,4 @@
+import type { TooltipProps } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -19,13 +20,13 @@ function formatMonth(month: string): string {
   }
 }
 
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label }: TooltipProps<number, string>) {
   if (active && payload?.length) {
-    const total = payload.reduce((sum: number, entry: any) => sum + (entry.value || 0), 0);
+    const total = payload.reduce((sum: number, entry) => sum + (entry.value || 0), 0);
     return (
       <div className="rounded-lg border border-border bg-card p-3 shadow-lg">
         <p className="text-xs font-medium mb-1.5">{label}</p>
-        {payload.map((entry: any, i: number) => (
+        {payload.map((entry, i: number) => (
           <p key={i} className="text-xs">
             <span
               className="inline-block w-2 h-2 rounded-full mr-1.5"

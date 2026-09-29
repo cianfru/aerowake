@@ -3,3 +3,6 @@
 declare const __APP_VERSION__: string;
 
 export const APP_VERSION: string = __APP_VERSION__;
+
+declare const __BUILD_SHA__: string;
+export const BUILD_SHA = __BUILD_SHA__;

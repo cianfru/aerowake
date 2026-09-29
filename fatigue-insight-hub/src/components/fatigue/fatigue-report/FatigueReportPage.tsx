@@ -54,6 +54,7 @@ function fmtH(h: number | null): string {
 function TimeInput({ value, onChange, tz, label, required }: {
   value: string; onChange: (iso: string) => void; tz: string; label: string; required?: boolean;
 }) {
+  const [timeError, setTimeError] = useState('');
   return (
     <label className={field}>
       <span className="text-muted-foreground">{label}</span>
@@ -64,9 +65,11 @@ function TimeInput({ value, onChange, tz, label, required }: {
         value={value ? utcIsoToLocalInput(value, tz) : ''}
         onChange={(e) => {
           const iso = localInputToUtcIso(e.target.value, tz);
+          setTimeError(iso ? '' : 'This local time is invalid or ambiguous. Switch to UTC to enter it.');
           if (iso) onChange(iso);
         }}
       />
+      {timeError && <span role="alert" className="text-xs text-destructive">{timeError}</span>}
     </label>
   );
 }
@@ -74,8 +77,11 @@ function TimeInput({ value, onChange, tz, label, required }: {
 export function FatigueReportPage() {
   const { state, clearFatigueReportPrefill } = useAnalysis();
   const { fatigueReportPrefill } = state;
-  const results = state.analysisResults;
+  const results = state.analysisResults?.legacyModel ? null : state.analysisResults;
+  const [diaryComplete, setDiaryComplete] = useState(false);
 
+  const [saveDraft, setSaveDraft] = useState(false);
+  const [draftLoaded, setDraftLoaded] = useState(false);
   const [step, setStep] = useState(0);
   const [report, setReport] = useState<FatigueReport | null>(null);
   const [busy, setBusy] = useState(false);
@@ -107,24 +113,60 @@ export function FatigueReportPage() {
   const [narrative, setNarrative] = useState('');
   const [pilot, setPilot] = useState({ name: state.analysisResults?.pilotName ?? '', staff_number: '', rank: '', fleet: '', operator: '' });
 
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('aerowake-report-draft-v1');
+      if (raw) {
+        const draft = JSON.parse(raw);
+        if (draft.version === 1 && Array.isArray(draft.duties) && Array.isArray(draft.sleeps)) {
+          setHomeBase(draft.homeBase); setTimeMode(draft.timeMode); setEventType(draft.eventType);
+          setEventTime(draft.eventTime); setPeriodStart(draft.periodStart); setPeriodEnd(draft.periodEnd);
+          setDuties(draft.duties); setSleeps(draft.sleeps); setAffectedId(draft.affectedId);
+          setKss(draft.kss); setSp(draft.sp); setFactors(draft.factors); setNarrative(draft.narrative);
+          setPilot(draft.pilot); setDiaryComplete(draft.diaryComplete); setPrefilledFor('restored');
+          setSaveDraft(true);
+        }
+      }
+    } catch { setError('The saved draft could not be restored.'); }
+    setDraftLoaded(true);
+  }, []);
+  useEffect(() => {
+    if (!draftLoaded) return;
+    try {
+      if (saveDraft) sessionStorage.setItem('aerowake-report-draft-v1', JSON.stringify({
+        version: 1, homeBase, timeMode, eventType, eventTime, periodStart, periodEnd, duties, sleeps,
+        affectedId, kss, sp, factors, narrative, pilot, diaryComplete,
+      }));
+      else sessionStorage.removeItem('aerowake-report-draft-v1');
+    } catch { setError('This browser could not save the draft. Keep this tab open.'); }
+  }, [draftLoaded, saveDraft, homeBase, timeMode, eventType, eventTime, periodStart, periodEnd,
+      duties, sleeps, affectedId, kss, sp, factors, narrative, pilot, diaryComplete]);
+  useEffect(() => {
+    if (saveDraft || (!duties.length && !sleeps.length && !narrative)) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [saveDraft, duties.length, sleeps.length, narrative]);
+
   // Resolve the home-base time zone for manual entry.
   useEffect(() => {
-    if (results?.homeBaseTimezone) return;
+    setHomeTz('');
     const code = homeBase.trim().toUpperCase();
-    if (code.length < 3) return;
+    if (code.length !== 3) return;
     let cancelled = false;
     getAirportCoordinatesAsync(code).then((a) => {
-      if (!cancelled && a?.timezone) setHomeTz(a.timezone);
-    }).catch(() => undefined);
+      if (!cancelled) { setHomeTz(a?.timezone ?? ''); if (!a) setError('Home airport not found. Check its IATA code.'); }
+    }).catch(() => { if (!cancelled) setError('Unable to look up the home airport. Check your connection and try again.'); });
     return () => { cancelled = true; };
   }, [homeBase, results?.homeBaseTimezone]);
 
   // Pre-fill duties and estimated sleep from the loaded roster when entering step 2.
   const periodKey = `${periodStart}|${periodEnd}`;
   const runPrefill = (opts: {
-    start: string; end: string; event: string; type: EventType; affected?: string | null;
+    start: string; end: string; event: string; type: EventType; affected?: string | null; replacementConfirmed?: boolean;
   }) => {
     if (!results) return;
+    if (!opts.replacementConfirmed && (duties.length || sleeps.length || narrative) && !window.confirm('Replace the current duties and sleep entries with estimates from the roster?')) return;
     const found = dutiesInPeriod(results, opts.start, opts.end);
     const eventMs = new Date(opts.event).getTime();
     const target = opts.affected
@@ -148,6 +190,9 @@ export function FatigueReportPage() {
     const idx = results.duties.findIndex((d) => d.dutyId === req.dutyId);
     const rd = idx >= 0 ? dutyFromAnalysis(results.duties[idx], idx) : null;
     if (!rd) return;
+    if ((duties.length || sleeps.length || narrative) && !window.confirm('Replace the current event, duties and sleep entries with this roster duty?')) return;
+    setHomeBase(results.pilotBase || homeBase);
+    setReport(null);
     const reportMs = new Date(rd.report_utc).getTime();
     const event = new Date(reportMs - 3600e3).toISOString();
     const start = new Date(reportMs - 3 * 86400e3).toISOString();
@@ -156,7 +201,7 @@ export function FatigueReportPage() {
     setEventTime(event);
     setPeriodStart(start);
     setPeriodEnd(end);
-    runPrefill({ start, end, event, type: 'fatigue_call_before_duty', affected: rd.id });
+    runPrefill({ start, end, event, type: 'fatigue_call_before_duty', affected: rd.id, replacementConfirmed: true });
     setStep(0);
     // Run once per prefill request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -164,12 +209,12 @@ export function FatigueReportPage() {
 
   const goTo = (n: number) => {
     setError('');
-    if (n === 1 && results && prefilledFor !== periodKey) prefill();
+    if (n === 1 && results && !prefilledFor && !duties.length && !sleeps.length) prefill();
     setStep(n);
     window.scrollTo?.({ top: 0, behavior: 'smooth' });
   };
 
-  const eventValid = !!homeTz && !!eventTime && !!periodStart && !!periodEnd && periodEnd > periodStart;
+  const eventValid = !!homeTz && !!eventTime && !!periodStart && !!periodEnd && periodEnd > periodStart && eventTime >= periodStart && eventTime <= periodEnd;
 
   // ── Duty editing ──
   const updateDuty = (id: string, patch: Partial<ReportDuty>) =>
@@ -199,7 +244,7 @@ export function FatigueReportPage() {
 
   // ── Sleep editing ──
   const updateSleep = (key: string, patch: Partial<ReportSleep>) =>
-    setSleeps((ss) => ss.map((s) => (s.key === key ? { ...s, ...patch, source: 'reported' } : s)));
+    setSleeps((ss) => ss.map((s) => (s.key === key ? { ...s, ...patch } : s)));
   const addSleep = (kind: 'main' | 'nap') => {
     const last = sleeps[sleeps.length - 1];
     const start = last ? new Date(new Date(last.end_utc).getTime() + 16 * 3600e3) : new Date(periodStart);
@@ -236,6 +281,7 @@ export function FatigueReportPage() {
         period_start_utc: periodStart,
         period_end_utc: periodEnd,
         affected_duty_id: affectedId,
+        diary_complete: diaryComplete,
         duties,
         sleeps: sleeps.map(({ key: _key, ...s }) => s),
         self_assessment: { kss, samn_perelli: sp, rated_at_utc: eventTime },
@@ -265,7 +311,7 @@ export function FatigueReportPage() {
         <p className="max-w-2xl text-[15px] text-muted-foreground">
           Describe what happened in four short steps. AeroWake checks your sleep and duties against published
           sleep science and EASA rest rules, then writes a structured report you can submit through your
-          operator&apos;s fatigue reporting system. Nothing is stored on our servers.
+          operator&apos;s fatigue reporting system. Generated reports are not saved on our servers. Saved roster history is separate.
         </p>
         <p className="max-w-2xl text-sm text-muted-foreground">
           {results
@@ -274,6 +320,7 @@ export function FatigueReportPage() {
         </p>
       </header>
 
+      <label className="flex items-start gap-3 rounded-md border border-border p-4 text-sm"><input type="checkbox" checked={saveDraft} onChange={e => setSaveDraft(e.target.checked)} className="mt-1" /><span>Save this draft in this browser tab, including personal details, until I sign out or close the tab. Uncheck to remove the saved copy.</span></label>
       {/* Stepper: underline tabs on wide screens; "Step n of 4" with segments on phones */}
       <nav aria-label="Report steps" className="space-y-3">
         <p className="text-[13px] text-muted-foreground sm:hidden">
@@ -419,6 +466,12 @@ export function FatigueReportPage() {
                           </select>
                         </label>
                       </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className={field}><span>Activity</span><select className={select} value={d.duty_type} onChange={e => updateDuty(d.id, { duty_type: e.target.value as ReportDuty['duty_type'] })}><option value="flight">Flight duty</option><option value="home_standby">Home standby</option><option value="airport_standby">Airport standby</option><option value="standby">Standby · type unconfirmed</option><option value="simulator">Simulator</option><option value="ground">Ground duty</option><option value="positioning">Positioning</option><option value="other">Other duty</option></select></label>
+                        <label className={field}><span>Crew composition</span><select className={select} value={d.crew_composition ?? 'unknown'} onChange={e => updateDuty(d.id, { crew_composition: e.target.value as ReportDuty['crew_composition'] })}><option value="unknown">Not confirmed</option><option value="standard">Standard · 2 pilots</option><option value="augmented_3">Augmented · 3 pilots</option><option value="augmented_4">Augmented · 4 pilots</option></select></label>
+                        <label className={field}><span>Acclimatization</span><select className={select} value={d.acclimatization ?? 'unknown'} onChange={e => updateDuty(d.id, { acclimatization: e.target.value as ReportDuty['acclimatization'] })}><option value="unknown">Not confirmed</option><option value="acclimatized">Acclimatized to home reference time</option></select></label>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Basic FDP is assessed for confirmed standard, acclimatized crew. Augmented and operator-specific limits need specialist review.</p>
                       <div className="space-y-2">
                         {d.sectors.map((s, i) => (
                           <div key={i} className="grid items-end gap-2 sm:grid-cols-[5rem_4.5rem_4.5rem_1fr_1fr_auto]">
@@ -449,6 +502,7 @@ export function FatigueReportPage() {
 
           {step === 2 && (
             <div className="space-y-5">
+              <label className="flex items-start gap-3 rounded-md border border-border p-4 text-sm"><input type="checkbox" checked={diaryComplete} onChange={e => setDiaryComplete(e.target.checked)} className="mt-1" /><span>I have entered every sleep period and nap in this diary. Missing days mean I did not sleep. Without this confirmation, sleep-dependent predictions will be withheld.</span></label>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h2 className="text-lg font-semibold">Your actual sleep</h2>
@@ -580,7 +634,7 @@ export function FatigueReportPage() {
 
       {error && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
 
-      <div className="flex items-center justify-between">
+      <div className="sticky bottom-0 z-20 flex items-center justify-between border-t border-border bg-background/95 py-3 backdrop-blur">
         <Button type="button" variant="ghost" disabled={step === 0} onClick={() => goTo(step - 1)}>
           <ArrowLeft className="mr-1 h-4 w-4" />Back
         </Button>

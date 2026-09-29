@@ -3,10 +3,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getYearlyDashboard, type YearlyDashboardData } from '@/lib/api-client';
 
 export function useYearlyDashboard() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   const query = useQuery<YearlyDashboardData>({
-    queryKey: ['dashboard', 'yearly'],
+    queryKey: ['dashboard', 'yearly', user?.id],
     queryFn: getYearlyDashboard,
     enabled: isAuthenticated,
     staleTime: 60_000,

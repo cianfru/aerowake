@@ -140,6 +140,7 @@ export function LoginPage() {
               </button>
             </p>
           </form>
+            <a href="/account-action" className="block py-3 text-center text-sm text-primary">Forgot your password?</a>
         </CardContent>
       </Card>
       </div>

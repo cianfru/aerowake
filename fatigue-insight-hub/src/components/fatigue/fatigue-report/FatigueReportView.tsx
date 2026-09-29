@@ -26,11 +26,20 @@ const LEVEL_RULE: Record<string, string> = {
 
 const PRINT_CSS = `
 @media print {
+  @page { size: A4; margin: 14mm; }
+  body { background: white !important; }
   body * { visibility: hidden !important; }
   #fatigue-report-print, #fatigue-report-print * { visibility: visible !important; }
-  #fatigue-report-print { position: absolute; inset: 0 auto auto 0; width: 100%; padding: 0 12mm; color: #000; }
+  #fatigue-report-print { position: absolute; inset: 0 auto auto 0; width: 100%; max-width: none; padding: 0; }
+  #fatigue-report-print, #fatigue-report-print * { color: #111 !important; background-color: transparent !important; border-color: #bbb !important; box-shadow: none !important; text-shadow: none !important; }
   #fatigue-report-print .no-print { display: none !important; }
-  #fatigue-report-print section { break-inside: avoid; }
+  #fatigue-report-print section { break-inside: auto; margin-top: 6mm; }
+  #fatigue-report-print h1, #fatigue-report-print h2, #fatigue-report-print h3 { break-after: avoid; }
+  #fatigue-report-print table { width: 100%; font-size: 9pt; }
+  #fatigue-report-print th, #fatigue-report-print td { white-space: normal !important; overflow-wrap: anywhere; }
+  #fatigue-report-print thead { display: table-header-group; }
+  #fatigue-report-print tr, #fatigue-report-print figure { break-inside: avoid; }
+  #fatigue-report-print .overflow-x-auto { overflow: visible !important; }
 }`;
 
 function fmtH(h: number | null | undefined): string {
@@ -141,6 +150,8 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
           </p>
         </div>
       </section>
+
+      <aside className="space-y-2 border-l-2 border-border pl-4 text-sm" aria-label="Evidence coverage"><p className="font-medium">Evidence coverage · {report.data_quality.confidence} confidence</p>{report.data_quality.notes.map((note, i) => <p key={i} className="text-muted-foreground">{note}</p>)}</aside>
 
       <section className="grid grid-cols-2 gap-x-6 gap-y-6 border-y border-border py-5 sm:grid-cols-4 sm:gap-x-0 sm:divide-x sm:divide-border">
         <Stat label="Sleep, prior 24 h" value={fmtH(sw?.sleep_24h)} hint="5h or more recommended" tone={sw && sw.sleep_24h < 5 ? 'bad' : undefined} />

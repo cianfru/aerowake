@@ -12,17 +12,17 @@ export function useComparativeMetrics(month?: string) {
   const hasCompany = !!user?.company_id;
 
   const metricsQuery = useQuery<ComparativeMetrics>({
-    queryKey: ['comparative-metrics', month],
+    queryKey: ['comparative-metrics', user?.id, month],
     queryFn: () => getComparativeMetrics(month),
-    enabled: isAuthenticated && hasCompany,
+    enabled: isAuthenticated && hasCompany && !!user?.metrics_consent,
     staleTime: 60_000, // 1 minute
     retry: 1,
   });
 
   const trendQuery = useQuery<TrendData>({
-    queryKey: ['comparative-trend'],
+    queryKey: ['comparative-trend', user?.id],
     queryFn: getComparativeTrend,
-    enabled: isAuthenticated && hasCompany,
+    enabled: isAuthenticated && hasCompany && !!user?.metrics_consent,
     staleTime: 60_000,
     retry: 1,
   });
