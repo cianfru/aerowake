@@ -239,14 +239,14 @@
     box-shadow: var(--shadow-card);
   }
   .calendar-grid {
-    @apply rounded-xl border border-border bg-card p-2 md:p-3;
+    @apply isolate rounded-xl border border-border bg-card p-2 md:p-3;
     box-shadow: inset 0 2px 4px hsl(210 40% 20% / 0.035);
   }
   .calendar-duty {
     box-shadow: 0 2px 4px hsl(212 35% 15% / 0.22), inset 0 1px 0 #ffffff45;
   }
   .calendar-duty:hover, .calendar-duty:focus-visible {
-    z-index: 35;
+    z-index: 20;
     box-shadow: 0 4px 10px hsl(212 35% 15% / 0.3);
   }
   .action-raised {
