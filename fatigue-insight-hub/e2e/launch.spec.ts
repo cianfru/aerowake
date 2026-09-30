@@ -10,6 +10,7 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   await page.goto('/');
   await page.getByRole('button',{name:'Analyse a roster',exact:true}).click();
   await expect(page).toHaveURL(/\/roster$/);
+  await expect(page.getByRole('heading',{name:'Check your roster',exact:true})).toBeVisible();
   await page.evaluate(()=>window.scrollTo(0,0));
   await page.screenshot({path:testInfo.outputPath('roster-upload.png'),fullPage:true});
   await page.getByLabel('Home base (IATA)').fill('DOH');
