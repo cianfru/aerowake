@@ -326,7 +326,7 @@ class PDFRosterParser:
             except Exception:
                 pass  # Parser diagnostics are returned to the caller, never logged with personal data.
 
-        elif roster_format == 'crewlink':
+        elif roster_format in ('crewlink', 'generic'):
             # Try specialized CrewLink-style grid parser first
             try:
                 grid_parser = CrewLinkRosterParser(
@@ -355,8 +355,6 @@ class PDFRosterParser:
 
         elif roster_format == 'tabular':
             duties = self._parse_tabular_format(full_text)
-
-        # 'generic': no CrewLink/easyJet structure found; nothing to parse.
 
         # MERGE LOGIC: Prioritize the Header Extraction for ID/Name
         final_pilot_id = header_info.get('id') or pilot_info.get('id') or pilot_id
