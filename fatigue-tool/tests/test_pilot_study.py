@@ -14,6 +14,11 @@ from db.session import get_db
 NOW = datetime(2026,9,3,16,tzinfo=timezone.utc)
 
 
+def enrolled_user():
+    from study.config import CONSENT_VERSION
+    return SimpleNamespace(id=uuid4(), study_consent_version=CONSENT_VERSION, study_enrolled_at=NOW, study_withdrawn_at=None)
+
+
 def body(**changes):
     value = dict(client_id=str(uuid4()), observed_at=NOW.isoformat(), observed_kss=4,
         home_utc_offset=0, sleeps=[dict(start='2026-09-01T22:00:00Z',end='2026-09-02T06:00:00Z'),
@@ -49,13 +54,13 @@ def test_auth_required_on_all_endpoints():
 
 
 def test_owner_filter_and_idempotent_snapshot():
-    user=SimpleNamespace(id=uuid4()); saved={'prediction': {'kss': 4}, 'original': True}
+    user=enrolled_user(); saved={'prediction': {'kss': 4}, 'original': True}
     row=SimpleNamespace(id=uuid4(),payload=saved)
     queries=[]
     async def execute(query):
         queries.append(query)
         return SimpleNamespace(scalar_one_or_none=lambda:row, scalars=lambda:SimpleNamespace(all=lambda:[row]))
-    db=SimpleNamespace(execute=execute,commit=AsyncMock())
+    db=SimpleNamespace(execute=execute,commit=AsyncMock(),scalar=AsyncMock(return_value=0))
     app=FastAPI();app.include_router(router)
     app.dependency_overrides[get_current_user]=lambda:user
     app.dependency_overrides[get_db]=lambda:db
@@ -93,9 +98,9 @@ def test_save_commits_before_revealing_prediction(monkeypatch):
         row.id=uuid4(); rows.append(row)
     async def commit():
         committed.append(True)
-    db=SimpleNamespace(execute=execute,add=add,commit=commit)
+    db=SimpleNamespace(execute=execute,add=add,commit=commit,scalar=AsyncMock(return_value=0))
     app=FastAPI();app.include_router(router)
-    app.dependency_overrides[get_current_user]=lambda:SimpleNamespace(id=uuid4())
+    app.dependency_overrides[get_current_user]=enrolled_user
     app.dependency_overrides[get_db]=lambda:db
     with TestClient(app) as client:
         response=client.post('/api/pilot-study/observations',json=body().model_dump(mode='json'))

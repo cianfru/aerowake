@@ -74,6 +74,8 @@ app = FastAPI(
 # Include auth + admin + company + metrics routes
 from study.routes import router as pilot_study_router
 app.include_router(pilot_study_router)
+from study.debriefs import router as debrief_router
+app.include_router(debrief_router)
 app.include_router(auth_router)
 from auth.account import router as account_router
 app.include_router(account_router)
