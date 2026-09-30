@@ -1,27 +1,28 @@
-import { useRef } from 'react';
 import { LandingHeader } from './LandingHeader';
 import { HeroSection } from './HeroSection';
-import { AppShowcaseSection } from './AppShowcaseSection';
-import { ScienceFooter } from './ScienceFooter';
+import { TrustStrip } from './TrustStrip';
+import { SampleDutiesSection } from './SampleDutiesSection';
+import { StepsSection } from './StepsSection';
+import { FinalCta } from './FinalCta';
+import { LandingFooter } from './LandingFooter';
 
 interface LandingPageProps {
   onEnter: () => void;
 }
 
+/** Public landing: always daylight, planning first, credibility below the fold. */
 export function LandingPage({ onEnter }: LandingPageProps) {
-  const contentRef = useRef<HTMLDivElement>(null);
-
-  const scrollToContent = () => {
-    contentRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   return (
     <div className="light landing-daylight min-h-screen bg-[#f8fbfd] text-[#142e45]">
       <LandingHeader onEnter={onEnter} />
-      <HeroSection onScrollToContent={scrollToContent} onEnter={onEnter} />
-      <div ref={contentRef} />
-      <AppShowcaseSection />
-      <ScienceFooter />
+      <main>
+        <HeroSection onEnter={onEnter} />
+        <TrustStrip />
+        <SampleDutiesSection />
+        <StepsSection />
+        <FinalCta onEnter={onEnter} />
+      </main>
+      <LandingFooter />
     </div>
   );
 }

@@ -255,21 +255,75 @@
   .action-raised:hover {
     box-shadow: 0 5px 10px -4px hsl(205 65% 20% / 0.4), inset 0 1px 0 #ffffff26;
   }
-  .landing-orbit {
-    @apply relative isolate rounded-[2rem] border p-5 sm:p-8;
-    background: #dce9ed;
-    border-color: #bed1d9;
-    box-shadow: inset 0 1px 0 #fafdfe, 0 28px 60px -34px #274e62;
+  /* Landing (always daylight): hero, surfaces and type rhythm. */
+  .landing-hero {
+    background:
+      radial-gradient(56% 60% at 76% 44%, #d5e7f0 0%, #d5e7f000 72%),
+      radial-gradient(42% 46% at 6% 0%, #f8fbfd 0%, #f8fbfd00 70%),
+      linear-gradient(180deg, #eef4f7 0%, #edf3f6 68%, #e6eff4 100%);
   }
-  .landing-orbit::before {
-    content: '';
-    position: absolute;
-    inset: 8%;
-    z-index: -1;
-    border: 1px solid #91b4c36b;
-    border-radius: 50%;
-    box-shadow: 0 0 0 1.5rem #bdd3dc40;
-    pointer-events: none;
+  .landing-eyebrow {
+    @apply text-[11px] font-semibold uppercase text-[#087478] sm:text-xs;
+    letter-spacing: 0.1em;
+  }
+  .landing-navy .landing-eyebrow {
+    color: #7fd0dc;
+  }
+  .landing-display {
+    @apply font-serif font-normal leading-[1.03] text-[#142e45];
+    letter-spacing: -0.02em;
+  }
+  .landing-h2 {
+    @apply font-serif text-[clamp(2.1rem,3.8vw,3.1rem)] font-normal leading-[1.08] text-[#142e45];
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+  .landing-navy .landing-h2 {
+    color: #f4f8fa;
+  }
+  .landing-section {
+    @apply relative py-16 md:py-28;
+    scroll-margin-top: 4rem;
+  }
+  .landing-cta-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-[#175779] px-7 py-3.5 text-sm font-semibold text-[#f8fbfd] transition-[background-color,box-shadow] hover:bg-[#123e58];
+    box-shadow: 0 3px 5px -2px hsl(205 65% 20% / 0.3), 0 14px 26px -16px #175779, inset 0 1px 0 #ffffff26;
+  }
+  .landing-cta-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-[#b8cbd5] bg-[#fcfdfe] px-6 py-3.5 text-sm font-semibold text-[#173d57] transition-colors hover:bg-[#e3eef4];
+    box-shadow: 0 1px 2px #17384f14;
+  }
+  /* Square by construction, so the globe (and any halo it draws) stays concentric. */
+  .landing-orbit {
+    position: relative;
+    isolation: isolate;
+    aspect-ratio: 1 / 1;
+  }
+  @media (min-width: 640px) {
+    .landing-orbit {
+      padding: 2rem;
+      border: 1px solid #bed1d9;
+      border-radius: 2rem;
+      background: radial-gradient(circle at 50% 46%, #f4f9fb 0%, #e2edf2 58%, #d4e4eb 100%);
+      box-shadow: inset 0 1px 0 #fafdfe, 0 1px 2px #274e6212, 0 32px 64px -36px #274e62;
+    }
+  }
+  .landing-glass {
+    @apply rounded-2xl border border-[#c3d8e2];
+    background: #fcfdfee0;
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 1px 2px #17384f10, 0 10px 18px -12px #285c7640, 0 30px 48px -28px #285c7666;
+  }
+  .landing-card {
+    @apply rounded-2xl border border-[#c9dbe4] bg-[#fcfdfe];
+    box-shadow: 0 1px 2px #17384f0d, 0 24px 48px -32px #285c7659;
+  }
+  .landing-navy {
+    color: #d5e5ec;
+    background:
+      radial-gradient(70% 90% at 88% 0%, #1f4d66 0%, #1f4d6600 62%),
+      linear-gradient(180deg, #12324a 0%, #0f2c3d 100%);
   }
 }
 
@@ -676,8 +730,11 @@
 }
 
 /* Landing remains daylight even when a pilot prefers dark mode in the workspace. */
-.landing-daylight :is(a, button):focus-visible {
+.landing-daylight :is(a, button, [role="tab"]):focus-visible {
   outline: 3px solid #087478;
   outline-offset: 5px;
+}
+.landing-daylight .landing-navy :is(a, button, [role="tab"]):focus-visible {
+  outline-color: #8fdce6;
 }
 input[type="datetime-local"], input[type="date"], input[type="time"] { min-width: 0; max-width: 100%; }

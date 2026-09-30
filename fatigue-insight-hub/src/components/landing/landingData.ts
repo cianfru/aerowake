@@ -1,7 +1,40 @@
 /**
- * Static landing content for the decorative globe network.
- * Nothing here is a model output.
+ * Static landing content: hero copy options and the decorative globe network.
+ * Nothing here is a model output; illustrative model data lives in tourData.ts.
  */
+
+export interface HeroCopy {
+  eyebrow: string;
+  headline: string;
+  subline: string;
+}
+
+/**
+ * Headline options reviewed for the launch. A is live; switch HERO_COPY to
+ * B or C to try another promise without touching the layout.
+ */
+export const HERO_COPY_OPTIONS = {
+  A: {
+    eyebrow: 'For line pilots · Built on published sleep science',
+    headline: 'Know your roster before you fly it.',
+    subline: 'See which duties press on sleep and your body clock, plan rest around them, and keep a clear, factual record of how each duty actually went. Built on published sleep science and referenced to EASA ORO.FTL.',
+  },
+  B: {
+    eyebrow: 'For line pilots · Built on published sleep science',
+    headline: 'Plan your rest around your roster.',
+    subline: 'Predicted sleepiness for every duty, the timing behind it and the assumptions it rests on, so you reach report time with a plan.',
+  },
+  C: {
+    eyebrow: 'For line pilots · Built on published sleep science',
+    headline: 'Every duty, seen through sleep science.',
+    subline: "From report to release, see how sleep, body clock and time awake add up, and share clear, factual observations through your operator's fatigue risk management process when it matters.",
+  },
+} as const satisfies Record<'A' | 'B' | 'C', HeroCopy>;
+
+export const HERO_COPY: HeroCopy = HERO_COPY_OPTIONS.A;
+
+/** The one statement every landing surface repeats about independence. */
+export const NON_AFFILIATION_NOTE = "Independent tool, not affiliated with or endorsed by any airline or aviation authority. Your operator's approved FTL scheme and FRM process take precedence.";
 
 // Static airport coordinates for the landing globe: no async API dependency.
 export interface LandingAirport {

@@ -1,41 +1,39 @@
 import { Link } from 'react-router-dom';
-import { ArrowDown, FileText, Moon, Plane } from 'lucide-react';
+import { ArrowRight, Moon, NotebookPen, Plane, type LucideIcon } from 'lucide-react';
 import { LandingGlobe } from './LandingGlobe';
+import { HERO_COPY } from './landingData';
 
-interface HeroSectionProps {
-  onScrollToContent: () => void;
-  onEnter: () => void;
-}
+const DUTY_FRAME: { icon: LucideIcon; label: string; short: string }[] = [
+  { icon: Moon, label: 'Sleep and recovery', short: 'Sleep & recovery' },
+  { icon: Plane, label: 'Duty timing and body clock', short: 'Duty timing' },
+  { icon: NotebookPen, label: 'How it actually went', short: 'Your experience' },
+];
 
-export function HeroSection({ onScrollToContent, onEnter }: HeroSectionProps) {
-  return <section className="relative overflow-hidden border-b border-[#c6dbe6] bg-[#edf3f6] pt-28 md:pt-36">
-    <div className="relative mx-auto grid max-w-7xl items-center gap-8 px-6 pb-14 md:px-10 lg:grid-cols-[1.1fr_1fr] lg:gap-0 lg:px-16 lg:pb-20">
+export function HeroSection({ onEnter }: { onEnter: () => void }) {
+  return <section id="top" aria-labelledby="hero-title" className="landing-hero relative isolate overflow-hidden pt-24 md:pt-32">
+    <div className="mx-auto grid max-w-7xl items-center gap-8 px-6 pb-12 md:px-10 md:pb-14 lg:grid-cols-[1.08fr_1fr] lg:gap-8 lg:px-16 lg:pb-24">
       <div className="relative z-10 max-w-xl">
-        <p className="mb-6 flex items-center gap-2 text-sm font-medium text-[#087478]"><Plane className="h-4 w-4" /> A clearer picture of pilot fatigue</p>
-        <h1 className="font-serif text-[clamp(3.2rem,5.8vw,5.1rem)] leading-[1.04] tracking-[-0.025em] text-[#142e45]">Understand your roster.<br />Report fatigue clearly.</h1>
-        <p className="mt-7 max-w-md text-lg leading-8 text-[#425d73]">See where your duties may become demanding. Add the sleep you actually had, capture how you felt, and build a report that tells the whole story.</p>
-        <div className="mt-8 flex flex-wrap items-center gap-3">
-          <button onClick={onEnter} className="action-raised rounded-full bg-[#175779] px-7 py-3.5 text-sm font-semibold text-slate-50 transition-[background-color,box-shadow] hover:bg-[#123e58]">Analyse a roster</button>
-          <Link to="/report" className="rounded-full border border-[#b8cbd5] bg-[#f8fbfd] px-6 py-3.5 text-sm font-semibold text-[#173d57] shadow-sm transition-colors hover:bg-[#dcebf3]">Create a fatigue report</Link>
+        <p className="landing-eyebrow mb-5">{HERO_COPY.eyebrow.split(' · ').map((part, i) => <span key={part} className={i ? 'block sm:inline' : undefined}>{i > 0 && <span aria-hidden="true" className="hidden sm:inline"> · </span>}{part}</span>)}</p>
+        <h1 id="hero-title" className="landing-display text-balance text-[clamp(2.6rem,5.8vw,4.6rem)]">{HERO_COPY.headline}</h1>
+        <p className="mt-6 max-w-[34rem] text-[1.0625rem] leading-7 text-[#425d73] md:text-lg md:leading-8">{HERO_COPY.subline}</p>
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <button type="button" onClick={onEnter} className="landing-cta-primary w-full sm:w-auto">Analyse my roster <ArrowRight aria-hidden="true" className="h-4 w-4" /></button>
+          <Link to="/report" className="landing-cta-secondary w-full sm:w-auto">Log how a duty went</Link>
         </div>
-        <p className="mt-4 text-sm text-[#425d73]">Start without an account. No roster? Enter your recent days.</p>
+        <p className="mt-4 text-sm leading-6 text-[#526579]">Start without an account. No roster file? Enter your recent duties instead.</p>
       </div>
-      <div className="relative mx-auto w-full max-w-lg py-4 lg:py-8 lg:pl-5">
-        <div className="landing-orbit pb-16"><LandingGlobe /></div>
-        <div className="relative -mt-16 ml-auto mr-3 max-w-xs rounded-2xl border border-[#b9d4df] bg-[#fcfdfe] p-6 shadow-[0_8px_12px_-8px_#285c7630,0_24px_40px_-20px_#285c7650] sm:mr-6">
-          <p className="mb-4 text-sm font-semibold text-[#142e45]">Every duty has a before and after.</p>
-          <div className="space-y-3 text-sm text-[#425d73]">
-            <p className="flex items-center gap-3"><Moon className="h-4 w-4 text-[#087478]" /> Sleep and recovery</p>
-            <p className="flex items-center gap-3"><Plane className="h-4 w-4 text-[#175779]" /> Duty timing and workload</p>
-            <p className="flex items-center gap-3"><FileText className="h-4 w-4 text-[#9c570a]" /> Your own experience</p>
-          </div>
+
+      <div className="relative mx-auto w-full max-w-[18.75rem] sm:mb-10 sm:max-w-md lg:mb-12 lg:max-w-[31rem] lg:justify-self-end">
+        <div className="landing-orbit"><LandingGlobe /></div>
+        <div className="landing-glass absolute -bottom-10 left-0 hidden w-[min(18rem,80%)] p-5 sm:block lg:-left-10 lg:-bottom-12">
+          <p className="mb-3.5 text-sm font-semibold text-[#142e45]">Every duty has a before and after.</p>
+          <ul className="space-y-2.5 text-sm text-[#425d73]">
+            {DUTY_FRAME.map(({ icon: Icon, label }) => <li key={label} className="flex items-center gap-3"><Icon aria-hidden="true" className="h-4 w-4 text-[#087478]" />{label}</li>)}
+          </ul>
         </div>
-      </div>
-    </div>
-    <div className="border-t border-[#325969] bg-[#1a3f52] shadow-[inset_0_1px_0_#ffffff15]">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5 text-sm text-[#d3e4eb] md:px-10 lg:px-16">
-        <p>Published science. Visible assumptions. Your judgment.</p>
-        <button onClick={onScrollToContent} className="flex items-center gap-2 font-medium text-[#eef8fa]">Explore the workflow <ArrowDown className="h-4 w-4" /></button>
+        <ul aria-label="Every duty has a before and after" className="mt-5 flex flex-wrap justify-center gap-2 sm:hidden">
+          {DUTY_FRAME.map(({ icon: Icon, short }) => <li key={short} className="flex items-center gap-1.5 rounded-full border border-[#c6dbe6] bg-[#fcfdfe]/80 px-3 py-1.5 text-xs font-medium text-[#425d73]"><Icon aria-hidden="true" className="h-3.5 w-3.5 text-[#087478]" />{short}</li>)}
+        </ul>
       </div>
     </div>
   </section>;
