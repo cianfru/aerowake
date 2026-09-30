@@ -8,7 +8,7 @@
 import { AnalysisResults, DutyAnalysis, PilotSettings, CompanyDetection, TimelinePoint, EasaFinding, EasaSummary, StandbyPeriod } from '@/types/fatigue';
 import { AnalysisResult, Duty, SleepEstimate, DutySegment } from '@/lib/api-client';
 import { format, parseISO } from 'date-fns';
-import { toUpperRisk } from '@/lib/risk-scale';
+import { isKssEngine, toUpperRisk } from '@/lib/risk-scale';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -529,7 +529,7 @@ export function transformAnalysisResult(
       : undefined,
     easaFindings: transformEasaFindings(result.easa_findings),
     easaSummary: transformEasaSummary(result.easa_summary),
-    legacyModel: result.duties.some(d => d.model_version !== "aerowake-4.0-kss"),
+    legacyModel: result.duties.some(d => !isKssEngine(d.model_version)),
     persistenceStatus: result.persistence_status,
     standbyPeriods: transformStandbyPeriods(result.standby_periods),
     alertnessTimeline: (result.alertness_timeline ?? [])

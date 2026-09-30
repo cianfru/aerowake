@@ -97,10 +97,17 @@ export function kssToIndex(kss: number): number {
   return clamp(110 - 10 * kss, INDEX_MIN, INDEX_MAX);
 }
 
+/** Engines whose index is a linear re-expression of KSS (backend core/alertness.py). */
+export const KSS_ENGINE_VERSIONS = ['aerowake-4.0-kss', 'aerowake-4.1-kss'] as const;
+
+export function isKssEngine(modelVersion: string | null | undefined): boolean {
+  return (KSS_ENGINE_VERSIONS as readonly string[]).includes(modelVersion ?? '');
+}
+
 /** Prefer a backend-provided KSS, otherwise derive it from the index. */
 export function resolveKss(kss: number | null | undefined, index: number | null | undefined, modelVersion?: string): number | null {
   if (typeof kss === 'number' && Number.isFinite(kss) && kss >= 1 && kss <= 9) return kss;
-  if (modelVersion === 'aerowake-4.0-kss' && typeof index === 'number' && Number.isFinite(index) && index >= INDEX_MIN && index <= INDEX_MAX) return indexToKss(index);
+  if (isKssEngine(modelVersion) && typeof index === 'number' && Number.isFinite(index) && index >= INDEX_MIN && index <= INDEX_MAX) return indexToKss(index);
   return null;
 }
 
