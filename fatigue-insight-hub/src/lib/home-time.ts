@@ -40,3 +40,13 @@ export function zoneOffsetLabel(tz: string | null | undefined, at?: string): str
   if (!name) return '';
   return name === 'GMT' ? 'UTC' : name.replace(/^GMT/, 'UTC');
 }
+
+/** "2026-10-16": the calendar day of an instant in the given zone. */
+export function homeDayKey(iso: string | null | undefined, tz: string | null | undefined): string {
+  if (!iso || !tz) return '';
+  const p = parts(iso, tz, { year: 'numeric', month: '2-digit', day: '2-digit' });
+  if (!p) return '';
+  const get = (type: string) => p.find((x) => x.type === type)?.value ?? '';
+  const y = get('year'), m = get('month'), d = get('day');
+  return y && m && d ? `${y}-${m}-${d}` : '';
+}

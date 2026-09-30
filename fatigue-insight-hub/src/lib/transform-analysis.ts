@@ -5,7 +5,7 @@
  * from the TanStack Query mutation hook.
  */
 
-import { AnalysisResults, DutyAnalysis, PilotSettings, CompanyDetection, TimelinePoint, EasaFinding, EasaSummary, StandbyPeriod } from '@/types/fatigue';
+import { AnalysisResults, DutyAnalysis, NapHabit, PilotSettings, CompanyDetection, TimelinePoint, EasaFinding, EasaSummary, StandbyPeriod } from '@/types/fatigue';
 import { AnalysisResult, Duty, SleepEstimate, DutySegment } from '@/lib/api-client';
 import { format, parseISO } from 'date-fns';
 import { classifyKss, kssToIndex, normalizeRiskLevel, roundKss, toUpperRisk, type RiskLevel } from '@/lib/risk-scale';
@@ -95,6 +95,20 @@ export function dutyPeakTime(duty: Pick<Duty, 'peak_time_utc' | 'max_kss' | 'wor
     return wp.timestamp;
   }
   return undefined;
+}
+
+function isNapHabit(v: unknown): v is NapHabit {
+  return v === 'usually' || v === 'sometimes' || v === 'rarely';
+}
+
+/** The backend's analysis assumptions, when present. */
+export function mapAssumptions(raw: AnalysisResult['assumptions']): AnalysisResults['assumptions'] {
+  if (!raw) return undefined;
+  const napHabit = typeof raw.nap_habit === 'string' ? raw.nap_habit.toLowerCase() : undefined;
+  const out: NonNullable<AnalysisResults['assumptions']> = {};
+  if (isNapHabit(napHabit)) out.napHabit = napHabit;
+  if (typeof raw.headline_risk_window === 'string' && raw.headline_risk_window) out.headlineRiskWindow = raw.headline_risk_window;
+  return Object.keys(out).length ? out : undefined;
 }
 
 function parseIsoToDayHour(iso: string | undefined | null): { day: number; hour: number } | null {
@@ -514,6 +528,7 @@ export function transformAnalysisResult(
       } as DutyAnalysis;
     }),
     homeBaseTimezone: result.home_base_timezone ?? undefined,
+    assumptions: mapAssumptions(result.assumptions),
     companyDetection: result.company_detection
       ? {
           suggestedName: result.company_detection.suggested_name,

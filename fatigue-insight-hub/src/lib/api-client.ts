@@ -434,6 +434,13 @@ export interface AnalysisResult {
   standby_periods?: StandbyPeriodResponse[] | null;
   /** Predicted KSS through the month (30-min steps); kss is null while asleep. */
   alertness_timeline?: Array<{ t: string; kss: number | null; asleep: boolean; on_duty: boolean }> | null;
+  /** Assumptions the analysis ran with. Absent on older analyses. */
+  assumptions?: {
+    /** Pre-duty nap habit: 'usually' | 'sometimes' | 'rarely'. */
+    nap_habit?: string | null;
+    /** Which window the headline risk uses, e.g. 'duty' or 'fdp'. */
+    headline_risk_window?: string | null;
+  } | null;
 
   // Fatigue continuity (multi-roster chaining)
   continuity_from_month?: string | null;

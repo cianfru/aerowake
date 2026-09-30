@@ -1,4 +1,4 @@
-import { PilotSettings } from '@/types/fatigue';
+import { PilotSettings, NapHabit } from '@/types/fatigue';
 
 const STORAGE_KEY = 'aerowake-pilot-settings';
 
@@ -10,6 +10,7 @@ interface PersistedFields {
   configPreset?: string;
   analysisType?: 'single' | 'range';
   selectedMonth?: string; // ISO string
+  napHabit?: NapHabit;
 }
 
 /**
@@ -27,6 +28,7 @@ export function loadPersistedSettings(): Partial<PilotSettings> {
     if (parsed.homeBase) result.homeBase = parsed.homeBase;
     // parsed.configPreset (legacy) is intentionally ignored — one model only.
     if (parsed.analysisType) result.analysisType = parsed.analysisType;
+    if (parsed.napHabit === 'usually' || parsed.napHabit === 'sometimes' || parsed.napHabit === 'rarely') result.napHabit = parsed.napHabit;
     if (parsed.selectedMonth) {
       const d = new Date(parsed.selectedMonth);
       if (!isNaN(d.getTime())) result.selectedMonth = d;
@@ -48,6 +50,7 @@ export function savePersistedSettings(settings: PilotSettings): void {
       homeBase: settings.homeBase,
       analysisType: settings.analysisType,
       selectedMonth: settings.selectedMonth.toISOString(),
+      napHabit: settings.napHabit,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
   } catch {

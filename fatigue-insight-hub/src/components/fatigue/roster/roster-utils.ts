@@ -110,3 +110,31 @@ export function standbyLabel(s: StandbyPeriod): string {
 export function formatLimit(value: number, limit: number): string {
   return `${Math.round(value)}/${Math.round(limit)}h`;
 }
+
+export interface WatchGroup {
+  level: RiskLevel;
+  duties: DutyAnalysis[];
+  /** Reasons every duty in the group shares (stated once in the header). */
+  shared: Set<string>;
+}
+
+/**
+ * Duties to watch grouped by band, most demanding band first, keeping the
+ * worst-first order inside each group. Reasons common to a whole group of two
+ * or more are lifted into the group so cards only say what sets them apart.
+ */
+export function groupDutiesToWatch(watch: DutyAnalysis[]): WatchGroup[] {
+  const groups: WatchGroup[] = [];
+  for (const duty of watch) {
+    const level = dutyRiskLevel(duty);
+    let group = groups.find((g) => g.level === level);
+    if (!group) { group = { level, duties: [], shared: new Set() }; groups.push(group); }
+    group.duties.push(duty);
+  }
+  for (const g of groups) {
+    if (g.duties.length < 2) continue;
+    const [head, ...rest] = g.duties.map((d) => new Set(d.riskReasons ?? []));
+    for (const r of head) if (rest.every((s) => s.has(r))) g.shared.add(r);
+  }
+  return groups;
+}

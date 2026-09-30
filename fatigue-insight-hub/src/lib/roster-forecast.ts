@@ -1,5 +1,6 @@
 import type { AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { dutyPeakKss } from '@/components/fatigue/roster/roster-utils';
+import { roundKss } from '@/lib/risk-scale';
 
 export const DEFAULT_WATCH_KSS = 6.5;
 
@@ -8,6 +9,8 @@ export interface ForecastDuty {
   peak: number | null;
   reachesWatch: boolean;
   gapHours: number | null;
+  /** True when a standby period sits between this duty and the previous one. */
+  standbyInGap: boolean;
   peakChange: number | null;
   deficitChange: number | null;
 }
@@ -41,7 +44,8 @@ export function buildRosterForecast(results: AnalysisResults, reference = DEFAUL
     const deficit = duty.sleepDeficit7d?.deficitHours;
     const previousDeficit = previous?.sleepDeficit7d?.deficitHours;
     return {
-      duty, peak, reachesWatch: peak != null && peak >= watchReference(reference), gapHours,
+      duty, peak, reachesWatch: peak != null && roundKss(peak) >= watchReference(reference), gapHours,
+      standbyInGap: !!standbyInGap,
       peakChange: peak != null && previousPeak != null && start != null && end != null && start >= end
         ? peak - previousPeak : null,
       deficitChange: Number.isFinite(deficit) && Number.isFinite(previousDeficit)

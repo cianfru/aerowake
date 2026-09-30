@@ -11,9 +11,15 @@ export interface SleepDeficit7d {
   band: SleepDeficitBand;
 }
 
+/** How often the pilot naps before late duties (an analysis assumption). */
+export type NapHabit = 'usually' | 'sometimes' | 'rarely';
+export const DEFAULT_NAP_HABIT: NapHabit = 'sometimes';
+
 export interface PilotSettings {
   pilotId: string;
   homeBase: string;
+  /** Pre-duty nap assumption sent with the next analysis. */
+  napHabit: NapHabit;
   analysisType: 'single' | 'range';
   selectedMonth: Date;
   startDate?: Date;
@@ -432,6 +438,12 @@ export interface AnalysisResults {
   pilotBase?: string;
   pilotAircraft?: string;
   homeBaseTimezone?: string; // IANA timezone e.g. "Asia/Qatar"
+  /** Assumptions the backend ran with (absent on older analyses). */
+  assumptions?: {
+    napHabit?: NapHabit;
+    /** Window of the headline risk, e.g. 'duty' or 'fdp'. */
+    headlineRiskWindow?: string;
+  };
   // Rest day sleep data
   restDaysSleep?: RestDaySleep[];
   // Circadian adaptation curve across the roster

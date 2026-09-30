@@ -255,28 +255,39 @@
     border-color: hsl(var(--hero-line));
     box-shadow: 0 16px 30px -20px hsl(var(--hero-from)), inset 0 1px 0 hsl(0 0% 100% / 0.11);
   }
-  /* The view rail: one compact full-bleed strip under the header, calm until it sticks. */
+  /* The view rail: one compact full-bleed strip under the header, calm until it sticks.
+     The strip paints edge to edge with a clipped spread shadow, so it never adds layout width. */
   .roster-rail-strip {
-    @apply sticky top-14 z-10 border-b border-transparent transition-[background-color,border-color,box-shadow] duration-200;
+    @apply sticky top-14 z-20;
   }
   .roster-rail-strip[data-stuck] {
-    @apply border-border bg-background/90 backdrop-blur-xl;
-    box-shadow: 0 10px 18px -16px hsl(215 50% 10% / 0.45);
+    background: hsl(var(--card) / 0.96);
+    box-shadow: 0 0 0 100vmax hsl(var(--card) / 0.96), 0 1px 0 100vmax hsl(var(--border));
+    clip-path: inset(0 -100vmax -1px);
   }
-  .roster-view-rail {
-    @apply inline-flex h-auto max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1;
+  /* Selectors carry a parent class so they outrank the shadcn Tabs utilities. */
+  .roster-rail-strip .roster-view-rail {
+    @apply inline-flex h-auto max-w-full items-center justify-start gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1 text-muted-foreground;
     box-shadow: var(--shadow-card);
     scrollbar-width: none;
+    transition: background-color 200ms, box-shadow 200ms, border-color 200ms;
+  }
+  .roster-rail-strip[data-stuck] .roster-view-rail {
+    @apply border-transparent bg-transparent;
+    box-shadow: none;
   }
   .roster-view-rail::-webkit-scrollbar { display: none; }
-  .roster-view-tab {
-    @apply inline-flex min-h-[40px] shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  .roster-view-rail .roster-view-tab {
+    @apply inline-flex min-h-[44px] shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-0 text-[13px] font-medium text-muted-foreground shadow-none transition-colors hover:bg-secondary hover:text-foreground;
+  }
+  .roster-rail-strip[data-stuck] .roster-view-rail .roster-view-tab {
+    @apply min-h-[40px];
   }
   /* Dark: tinted active state with a ring (no neon fill). Light: solid deep teal. */
-  .roster-view-tab[data-state='active'] {
-    @apply bg-primary/15 text-primary ring-1 ring-inset ring-primary/40;
+  .roster-view-rail .roster-view-tab[data-state='active'] {
+    @apply bg-primary/15 text-primary shadow-none ring-1 ring-inset ring-primary/40;
   }
-  .light .roster-view-tab[data-state='active'] {
+  .light .roster-view-rail .roster-view-tab[data-state='active'] {
     @apply bg-primary text-primary-foreground ring-0;
     box-shadow: 0 3px 8px -3px hsl(204 70% 20% / 0.45), inset 0 1px 0 hsl(200 40% 95% / 0.18);
   }
