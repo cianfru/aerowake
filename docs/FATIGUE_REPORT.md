@@ -1,57 +1,81 @@
 # Automatic fatigue report
 
-**Report fatigue** in the app (`POST /api/fatigue-report`) turns what a pilot knows into a structured fatigue report for their operator's FRMS.
+**Report fatigue** in the app (`POST /api/fatigue-report`) turns what a pilot knows into a structured fatigue report for their operator's fatigue risk management (FRM). A fatigue report is a normal safety report within the operator's FRM (EASA ORO.FTL.120; crew duty to plan and use rest, ORO.FTL.115), handled under a just culture (Regulation (EU) 376/2014). Planning comes first; reporting is the safety net.
 
 ## Flow
 
-1. **Event.** The pilot sets their home base, the purpose (a prospective roster concern, or fatigue before, during or after a duty), when it happened, and the days to include (up to 31).
-2. **Duties.** Duties come pre-filled as planned from the loaded roster, or the pilot enters them manually. Importing a roster never asserts that a duty was flown or cancelled. They mark the duty that was affected and set each duty's status: operated, planned, not operated because of fatigue, or not operated for another reason.
-3. **Sleep.** Estimated sleep from the roster analysis is pre-filled and marked *estimated*. For a roster concern the pilot reviews a complete expected sleep scenario; for an experienced event they enter actual sleep, including naps and bunk rest. Only an explicit “Mark as actual sleep” action changes an estimate into a reported observation. Future sleep cannot be reported as actual. The completeness confirmation is required before sleep-dependent predictions appear.
-4. **How you feel.** The pilot records KSS and Samn-Perelli ratings, ticks contributing factors, writes their own account, and can add their details (these are printed on the report only).
-5. **Report.** The pilot gets the report on screen and can print or save it as PDF, download it as JSON, or copy it as plain text.
+1. **Event.** "What happened?" comes first: a concern about a planned roster, or fatigue before, during or after a duty. The home base is next (pre-filled from the roster or settings; three-letter IATA). Every time field stays locked until the base resolves, so no time is captured in an implicit zone. Each field is labelled with its zone ("DOH local, UTC+3") and echoes the other reference (Z, or local when entering in UTC). Times use a date plus a 24-hour HH:MM entry. The days included (up to 31) sit in a collapsed "Days included" line.
+2. **Duties.** Duties are pre-filled as planned from the roster, or entered manually. Imported times are labelled "Scheduled" until the pilot confirms them. One action, "Operated as rostered", marks the planned duties that finished before the event as operated. Individual statuses stay editable.
+3. **Sleep.** Roster sleep estimates are pre-filled and marked *estimated*. The location comes from the block's environment when the API supplies it. Otherwise it is inferred from where the pilot was: home at base, hotel on a layover. It is never silently "other". One action, "These times are what happened", confirms past estimates. Future sleep stays an estimate, and the page says so. The completeness confirmation is still required for sleep-dependent findings.
+4. **Your account.** The pilot enters KSS and Samn-Perelli, with the rating time defaulting to the event time. They then add contributing factors and, for experienced events, the operational context (crew position, pilot flying or monitoring, phase of flight for fatigue during a duty, mitigations taken, effect on the operation). A free account and an optional suggested action follow. Name, staff number and fleet are pre-filled from the roster when available and stay editable. The review summary comes last.
+5. **Report.** The pilot can copy a summary, copy the full text, download a PDF (the print dialog), download a text file or JSON, and copy or download each chart as PNG or SVG.
 
 The backend is stateless and stores nothing. The pilot decides where the report goes.
 
-## What the report contains
+### Future duties
 
-- **Headline and record coverage.** High/medium/low describe the supplied records, not scientific accuracy. Model availability requires two sleep episodes, a complete-history/scenario confirmation and an awake prediction at the assessed point. Estimated sleep in the preceding 72 hours yields medium coverage; unavailable prediction yields low coverage. Missing days remain visible for pilot review.
-- **Predicted KSS across the period**, computed from the sleep the pilot supplied (Ingre et al. 2014). It covers the affected duty: KSS at start, at peak, at the last landing, and for the 90th-percentile pilot.
-- **Prior sleep/wake check** (Dawson & McCulloch 2005). Screening references compare 5 h sleep in 24 h, 12 h in 48 h, and end-of-duty wakefulness against prior 48 h sleep. These are screening references, not regulatory or individual fitness limits.
-- **Cumulative restriction** over the preceding 7 days.
-- **EASA cumulative checks** on the duties entered (same code as roster analysis, `core/easa_checks.py`): ORO.FTL.210 duty and flight-time limits, ORO.FTL.235(d) recovery rest, FDP above the table maximum.
-- **Roster findings**, each with a reference:
-  - rest shorter than the ORO.FTL.235 minimum;
-  - a late finish followed by an early start;
-  - disruptive elements under ORO.FTL.105(8), all on home-base time: early start (05:00–05:59), very early start (02:00–04:59), late finish (23:00–01:59), and night duty touching 02:00–04:59;
-  - three or more consecutive disruptive duties;
-  - duty through the WOCL, long duties, four or more sectors (Powell et al. 2007), and time-zone transitions.
-- **Pilot self-rating versus the model.** The pilot's assessment is never contradicted. When the pilot reports more sleepiness than predicted, the report explains what the model cannot see. When the model predicts more, it notes that people under sleep restriction tend to underestimate their own impairment.
-- **Narrative.** Deterministic paragraphs that state only what the data supports. Missing items are called "not provided", never invented.
-- **Limitations.**
+"Report fatigue" on a duty that has not started opens as a **roster concern** anchored to the duty's report time, with a one-line explanation. If the pilot has already called fatigue for it, they choose "I called fatigue before a duty". The event time then moves to now, never into the future. Both the wizard and the API enforce these rules:
 
-## Honesty rules (tested in `tests/test_fatigue_report.py`)
+- Retrospective event types (`fatigue_call_before_duty`, `fatigue_during_duty`, `fatigue_after_duty`) must be at or before now (5-minute tolerance).
+- A duty that has not started cannot be `operated`. It can be `cancelled_fatigue` only after a fatigue call.
+- `fatigue_during_duty` needs the affected duty, with the event between its report and release. `phase_of_flight` applies only to this type.
+
+### Validation
+
+Problems are shown inline next to the field and echoed in the sticky action bar. Pressing Next or Generate scrolls to the first problem and focuses it. The action bar is opaque and full width. While the wizard is mounted the page reserves `scroll-padding-bottom`, so focused fields are never hidden behind the bar. A generation error is scrolled into view and focused.
+
+## Report contents (1.3)
+
+- **Header:** event in local time with the year, UTC offset and Z; period; labelled reporter fields (name, staff number, rank, fleet, operator, base, crew position); generation time; report id and version.
+- **Key facts:** sleep in the 24/48/72 h before the event, time awake at the event with the last wake time, and the self-rating.
+- **Figure 1, actogram (always shown, model-independent):** 72 h before the event to the end of the affected duty, one row per home-base calendar day (00–24). Sleep sits on the upper lane: reported sleep is solid and estimated sleep is hatched. Duties sit on the lower lane: operated duties are solid, planned duties dashed and dotted, and duties not operated cross-hatched. Flight sectors show as block-time bars, labelled with flight numbers and route. The WOCL (02:00–05:59) is shaded, and the event (▲) and self-rating (◆) are marked. Daily sleep and duty totals are listed on the right.
+- **Figure 2, predicted KSS:** the average-pilot and 90th-percentile curves up to the assessed point, with the canonical band thresholds 5.5 / 6.5 / 7.5 / 8.5. Sleep and duty strips sit under the axis. The event line, the self-rating ◆ with the model value ○ at that time, and the labelled peak (the assessment's peak) are marked. Major ticks fall on local midnight, with 6-hour minor ticks. When the diary is not confirmed, a **provisional** curve (`provisional_timeline`) is drawn dashed and labelled. No finding or assessment is ever derived from it.
+- Both charts are fixed-viewBox SVG. The screen copy follows the container width. A separate print copy is laid out for the A4 content width, so a report printed from a phone keeps full-width charts. Patterns carry every distinction, so the charts survive black-and-white printing. Each figure has a caption that states its key values in words.
+- **Pilot statement, narrative, operational context, assessment and findings.** The headline level is the canonical band of the predicted peak KSS. `summary.highest_severity` carries the worst finding separately.
+- **Optional reporter confirmation block** (name, date, signature), which can be toggled on screen.
+- **Supporting detail (from page 2 in print):** duties (with flight numbers) and sleep, shown as tables from `sm` and in print and as stacked cards on phones. Then the FTL checks performed (coverage per rule from `easa_summary`), sleep screening with the 7-day shortfall, the scientific basis, and one de-duplicated list of data-quality notes and limitations.
+
+Print uses A4 with a running footer ("Aerowake fatigue report · base · id", "Page x of y" where the browser supports `@page` margin boxes). The document title becomes the default PDF file name ("Fatigue report DOH 2026-09-29"). Everything outside the report is removed from layout, so no blank pages are printed.
+
+## Severity and bands
+
+- The predicted-peak finding follows the canonical bands, applied to the value rounded to one decimal: moderate → note, high (≥ 6.5) → caution, critical (≥ 7.5) → warning, extreme (≥ 8.5) → critical. The Ingre P(KSS ≥ 7) sentence remains as explanation.
+- Estimated sleep alone never produces a critical finding. The multi-criteria prior sleep/wake check, extended wakefulness, cumulative restriction and the prediction finding are capped at warning when the sleep in the preceding 72 h is not all pilot-reported. Their text begins "Based on estimated sleep (not confirmed by the pilot)".
+- Wording is neutral and operations-aligned. For example: "The recorded sleep and duty history includes factors consistent with the reported fatigue."
+
+## Exports
+
+- **Copy summary:** at most 1,200 characters, in a fixed order. It gives the event (local with year, offset and Z), the duty with flight numbers, the reporter and self-rating, sleep in 24/48/72 h with its basis, the last wake time and time awake, then contributing factors, mitigations, effect and suggested action. The statement is shortened to fit. The model estimate is labelled "not a measurement", and the report id closes the summary.
+- **Copy full text / Text file:** every section appears once, keys are in title case, the generation time reads "30 Sep 2026 12:14Z", and "Record coverage" is used.
+- **JSON:** the full report, including `watch_reference`. The personal KSS watch reference is a private roster setting. It is not shown in the wizard and never appears in the printed, copied or text outputs.
+
+## API contract additions (report 1.3, additive)
+
+Request (all optional): `crew_position` (`captain|first_officer|second_officer|other`), `pilot_role` (`pilot_flying|pilot_monitoring`), `phase_of_flight` (`pre_flight|taxi|takeoff_climb|cruise|descent_approach|landing|post_flight`), `mitigations[]` (`strategic_nap|controlled_rest|caffeine|informed_crew|informed_operator|removed_from_duty|none`), `effect_on_operation` (`none_noticed|reduced_performance|error_or_lapse|microsleep|duty_not_operated`), `suggested_action` (≤ 1,000 characters).
+
+Response additions:
+
+- `event.time_local_long`, `event.utc_offset`; `period.start_local_long`, `period.end_local_long`.
+- `duties[].flights`, `duties[].flights_label` (e.g. `QR460/461`) and `duties[].sector_times[]`. Duty labels include flight numbers. A manual duty without sectors is named by its type.
+- `sleep_summary`: 24/48/72 h totals, reported and estimated 72 h, last wake time, hours awake at the event, basis and diary flag. It is anchored to the event.
+- `operational`: codes and labels, echoed in the narrative as "Operational context (pilot)".
+- `summary.overall_level` is now the peak-KSS band (`low … extreme`, or `unknown` without a prediction). `summary.highest_severity` is added.
+- `provisional_timeline`: present only when the diary is not confirmed.
+- `self_assessment.rated_at_z`.
+
+Existing fields are retained. Input provenance schema remains 2.
+
+## Honesty rules (tested in `tests/test_fatigue_report.py` and `tests/test_fatigue_report_guards.py`)
 
 - With fewer than two sleep periods there is no model output. Rule-based checks still run.
-- Estimated sleep lowers confidence, and the report says so.
+- Estimated sleep lowers record coverage, is labelled wherever it appears, and cannot on its own raise a finding to critical.
 - Unknown airport codes are rejected rather than assigned invented time zones.
 - When a pilot reports fatigue and the data shows no objective risk factor, the headline says the pilot's assessment stands.
+- A report about fatigue that has occurred cannot be dated in the future, and a future duty cannot be marked operated.
+- When the diary is confirmed, days without sleep read "No sleep recorded on … (the pilot confirmed the diary is complete)".
 
-## Pilot outlook and report contract (1.2)
+## Earlier contract notes (1.2)
 
-The roster page compares chronological duty peaks, estimated prior sleep, maximum wakefulness, gaps between listed duties and the seven-day sleep-shortfall ledger. It uses the existing `aerowake-4.0-kss` results without additional biological multipliers. The personal KSS watch reference defaults to 6.5 and changes review prompts only; canonical model bands and legal checks remain unchanged. Recovery comparisons describe numerical differences between duties, not proof of complete recovery. Standby within a gap prevents that interval being presented as free recovery time.
+`event_type=roster_concern` includes planned sector arrivals in the projected location and acclimatisation history. Retrospective reports use only operated sectors for the actual location history. Both modes can identify patterns in planned schedules. In a prospective scenario, sleep cannot overlap an active planned duty unless it is specified crew rest or home standby. Ratings describe actual past observations, and no future rating is inferred. The historical `objective_support` field means supporting non-self-rating findings, including estimates. It must not be read as an objective measurement or as proof of a report. Report predictions are recalculated from the selected sleep history, so they may differ from a full-roster forecast. Model calibration against real crew observations is a separate activity; see `MODEL_VALIDATION.md`.
 
-`event_type=roster_concern` includes planned sector arrivals in the projected location/acclimatization history. Retrospective reports only use operated sectors for actual location history. Both modes can identify patterns in planned schedules. Sleep cannot overlap active planned duties in a prospective scenario except for appropriately specified crew rest or home standby. Ratings describe actual past observations; no future rating is inferred.
-
-Report version `aerowake-fatigue-report-1.2` adds `watch_reference`, `scientific_basis` and `data_quality.prediction_basis`; request `watch_reference_kss` is optional and defaults to 6.5. Input provenance schema is 2. Existing fields are retained. The historical `objective_support` field means supporting non-self-rating findings, including estimates; it must not be interpreted as objective measurement or proof of a declaration.
-
-The on-screen, print and copied-text outputs retain scientific references and the personal reference. Original roster records, scientific estimates and the pilot account are displayed separately. Report predictions are recalculated from the selected sleep history and may differ from a full-roster forecast. Model calibration against real crew observations remains a separate activity; see `MODEL_VALIDATION.md`.
-
-## Recent-day reconstruction and SMS export
-
-The duty and sleep steps share a calendar daybook in the pilot's selected input zone (home-base local or UTC). Every date in the reporting window is available, including days with no entries. Overnight entries appear on both days; calendar-day totals clip intervals at local midnight and use elapsed time across DST. Operated/planned duties and reported/estimated sleep remain separate. Missing entries never mean confirmed zero sleep, and gaps between duties are not legal rest assessments.
-
-Select a day before adding a duty, last night's sleep, or a nap. New duties remain planned until the pilot confirms their status. Suggested sleep times remain estimated until explicitly marked actual, and future sleep cannot be confirmed as actual. The 24/48-hour summary includes only reported sleep before the event. Any diary edit clears its completeness acknowledgement. The model continues to withhold sleep-dependent results without the existing completeness confirmation. Invalid duty dates, overlapping active duties and out-of-period duties prompt correction before continuing.
-
-The export panel provides a preview and copy-ready SMS submission with the pilot's statement, time-stamped duty and sleep history, status/source labels, model findings, references, limitations and report/version identifiers. Clipboard failure reveals selectable text. Full text, printable PDF and structured JSON are available. No data is automatically submitted, and no vendor-specific SMS import compatibility is claimed. The operator's required fields, attachment rules and submission process still apply.
-
-The diary's 24/48-hour totals use reported sleep before the event. Report screening uses all supplied sleep before the affected duty's report time (or the event when no duty is selected); both anchors are named explicitly. A post-duty event must not be described as the reference time for pre-duty sleep checks.
+The duty and sleep steps share a calendar daybook in the pilot's selected input zone. Overnight entries appear on both days. Calendar-day totals clip intervals at local midnight and use elapsed time across DST. Missing entries never mean confirmed zero sleep, and gaps between duties are not legal rest assessments.
