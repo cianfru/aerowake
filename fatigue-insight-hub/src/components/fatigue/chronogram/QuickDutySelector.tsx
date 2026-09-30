@@ -30,7 +30,7 @@ export function QuickDutySelector({ duties, selectedDuty, onDutySelect }: QuickD
           >
             {duty.dayOfWeek}, {format(duty.date, 'MMM dd')}
             {duty.isUlr && (
-              <span className="rounded-[2px] border border-primary/30 px-1 text-[9px] font-medium uppercase leading-tight tracking-[0.06em] text-primary">ULR</span>
+              <span className="rounded-[2px] border border-primary/30 px-1 text-[11px] font-medium uppercase leading-tight tracking-[0.06em] text-primary">ULR</span>
             )}
           </button>
         ))}

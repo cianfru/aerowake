@@ -40,7 +40,7 @@ function KssTape({ kss }: { kss: number }) {
         </div>
         <span className="absolute -top-1 bottom-[-4px] w-[3px] -translate-x-1/2 rounded-full bg-foreground" style={{ left: pos(kss), boxShadow: '0 0 0 2px hsl(var(--card))' }} />
       </div>
-      <div className="flex justify-between font-mono text-[10px] text-muted-foreground">
+      <div className="flex justify-between font-mono text-[11px] text-muted-foreground">
         <span>1 alert</span><span>5</span><span>9 fighting sleep</span>
       </div>
     </div>
