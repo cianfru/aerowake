@@ -1,6 +1,6 @@
 """Print private parse facts and optionally compare independently reviewed expectations.
 
-Run from fatigue-tool: python scripts/validate_roster.py roster.pdf --base DOH --expected reviewed.json
+Run from fatigue-tool: python scripts/validate_roster.py roster.pdf [--base DOH] --expected reviewed.json
 The input, expectations and output may contain personal data. Keep them outside git.
 """
 import argparse
@@ -14,7 +14,7 @@ from api.hardening import validate_upload
 if __name__ == '__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('file', type=Path)
-    parser.add_argument('--base', required=True)
+    parser.add_argument('--base', help='home base when the roster header states none (CSV or header-less PDF)')
     parser.add_argument('--expected', type=Path)
     args=parser.parse_args()
     content=args.file.read_bytes()

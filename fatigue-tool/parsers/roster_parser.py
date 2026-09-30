@@ -82,7 +82,7 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
     # the home base is never a layover station for IR purposes.  Including it
     # would incorrectly tag every homebound flight as AUGMENTED_4.
     # ------------------------------------------------------------------
-    home_base = roster.pilot_base or 'DOH'
+    home_base = roster.pilot_base  # never assumed; None excludes no station
     ir_layover_stations: set = set()   # non-home airports linked to IR duties
     for duty in roster.duties:
         if duty.segments and duty.has_inflight_rest_segments:
@@ -228,27 +228,53 @@ class PDFRosterParser:
     - Text-based duty listings
     """
     
-    def __init__(self, home_base: str = 'DOH', home_timezone: str = 'Asia/Qatar',
+    def __init__(self, home_base: Optional[str] = None, home_timezone: Optional[str] = None,
                  timezone_format: str = 'auto'):
         """
         Args:
-            home_base: Home base airport code (e.g., 'DOH')
-            home_timezone: Home base IANA timezone (e.g., 'Asia/Qatar')
+            home_base: Base the pilot entered (e.g., 'LGW'). Used only when the
+                roster header does not state one; never assumed.
+            home_timezone: IANA zone of ``home_base`` (resolved when omitted)
             timezone_format: How times in the roster should be interpreted.
                 'auto' - detect from PDF header (default)
                 'local' - times are in each airport's local timezone
                 'homebase' - times are in home base timezone
                 'zulu' - times are in UTC
         """
+        self.entered_base = home_base
+        if home_base and not home_timezone:
+            from parsers.validation import resolve_home_timezone
+            home_timezone = resolve_home_timezone(home_base)
         self.home_base = home_base
-        self.home_timezone = home_timezone
+        # Provisional UTC while no base is known; intake refuses to analyse without one.
+        self.home_timezone = home_timezone if home_base else 'UTC'
         self.timezone_format = timezone_format
         self.airport_db = AirportDatabase()
         self.roster_year = datetime.now().year  # Default, will be updated from PDF
-    
-    def parse_pdf(self, pdf_path: str, pilot_id: str, month: str) -> Roster:
+        self.header_base: Optional[str] = None      # verified base printed in the roster
+        self.detected_format: Optional[str] = None
+        self.inferred_release_ids: set = set()
+        self.pilot_info: Dict = {}
+
+    def _use_base(self, base: Optional[str]) -> None:
+        """Read home-base times in ``base``'s zone (header base, else the entered base)."""
+        if not base:
+            return
+        from parsers.validation import resolve_home_timezone
+        self.home_base = base
+        self.home_timezone = resolve_home_timezone(base)
+
+    @staticmethod
+    def _verified_base(code: Optional[str]) -> Optional[str]:
+        from parsers.base_detection import airport_known, normalise_code
+        code = normalise_code(code)
+        return code if airport_known(code) else None
+
+    def parse_pdf(self, pdf_path: str, pilot_id: str, month: Optional[str] = None) -> Roster:
         """
-        Main entry point - extract roster from PDF
+        Main entry point - extract roster from PDF.
+
+        ``month`` is a last resort: the PDF period, then the first duty, win.
         """
         pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         
@@ -258,136 +284,121 @@ class PDFRosterParser:
                 raise ValueError('PDF exceeds 12 pages. Upload a single roster month.')
             full_text = ""
             for page in pdf.pages:
-                full_text += page.extract_text() + "\n"
+                full_text += (page.extract_text() or '') + "\n"
 
         self.raw_pdf_text = full_text  # Expose for company detection
-        
+
         # Extract the Roster Period Year
         self._extract_roster_year(full_text)
 
         # Pre-extract Header Info (Robust Regex for ID/Name)
         header_info = self._extract_header_info(full_text)
-        
+
         # Detect roster format
         roster_format = self._detect_format(full_text)
         self.detected_format = roster_format  # Expose for company detection
-        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
+
+        # A verified header base sets how the roster's own times are read; the
+        # entered base is used only when the header does not state one.
+        self._use_base(self._verified_base(header_info.get('base')))
 
         pilot_info = {}
         duties = []
 
         if roster_format == 'easyjet':
             # ── easyJet "Personal Crew Schedule" parser ──────────────────────
-            # Auto-detects home_base and home_timezone from the PDF header,
-            # overriding whatever the frontend sent as defaults (DOH/Asia:Qatar).
+            # Reads home_base and home_timezone from the PDF header.
+            from parsers.base_detection import RosterIntakeError
             from parsers.easyjet_parser import EasyJetParser
-            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             try:
-                ezy_parser = EasyJetParser()
+                ezy_parser = EasyJetParser(home_base=self.home_base,
+                                           home_timezone=self.home_timezone if self.home_base else None)
                 result = ezy_parser.parse_roster(pdf_path)
                 duties = result['duties']
                 pilot_info = result.get('pilot_info', {})
+                self.inferred_release_ids = set(ezy_parser.inferred_release_ids)
                 # Always local station time for easyJet PDFs
                 self.effective_timezone_format = 'local'
-                # Override instance home_base / timezone from PDF-extracted values
-                if pilot_info.get('base'):
-                    self.home_base = pilot_info['base']
-                    self.home_timezone = ezy_parser.home_timezone
-                if result.get('unknown_airports'):
-                    pass  # Parser diagnostics are returned to the caller, never logged with personal data.
-                    for code in sorted(result['unknown_airports']):
-                        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
-                if duties:
-                    pass  # Parser diagnostics are returned to the caller, never logged with personal data.
-                else:
-                    pass  # Parser diagnostics are returned to the caller, never logged with personal data.
-            except Exception as e:
+                self._use_base(self._verified_base(pilot_info.get('base')))
+            except RosterIntakeError:
+                raise
+            except Exception:
                 pass  # Parser diagnostics are returned to the caller, never logged with personal data.
-                import traceback
-                traceback.print_exc()
 
-        elif roster_format == 'crewlink' or roster_format == 'generic':
+        elif roster_format == 'crewlink':
             # Try specialized CrewLink-style grid parser first
             try:
-                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
-                grid_parser = CrewLinkRosterParser(timezone_format=self.timezone_format)
+                grid_parser = CrewLinkRosterParser(
+                    timezone_format=self.timezone_format,
+                    home_base=self.home_base,
+                    home_timezone=self.home_timezone if self.home_base else None,
+                )
                 result = grid_parser.parse_roster(pdf_path)
                 duties = result['duties']
                 pilot_info = result.get('pilot_info', {})
+                self.inferred_release_ids = set(grid_parser.inferred_release_ids)
                 # Capture the effective timezone format (may differ from input
                 # if 'auto' was specified — the grid parser auto-detects it)
                 self.effective_timezone_format = grid_parser.timezone_format
-
-                # Report unknown airports if any
-                if result.get('unknown_airports'):
-                    pass  # Parser diagnostics are returned to the caller, never logged with personal data.
-                    for code in sorted(result['unknown_airports']):
-                        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
-
-                if duties:
-                    pass  # Parser diagnostics are returned to the caller, never logged with personal data.
-                else:
-                    pass  # Parser diagnostics are returned to the caller, never logged with personal data.
+                self._use_base(self._verified_base(pilot_info.get('base')))
+                if not duties:
                     raise ValueError("Grid parser returned empty duties")
 
-            except Exception as e:
-                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
-
-                # Fall back to line-based parser (Handles the messy "text soup")
-                # Line parser always treats times as home base timezone
-                pass  # Parser diagnostics are returned to the caller, never logged with personal data.
+            except Exception:
+                # Fall back to line-based parser (Handles the messy "text soup").
+                # Line parser always treats times as home base timezone and
+                # never states a release, so every release is inferred.
                 duties = self._parse_crewlink_format(full_text)
+                self.inferred_release_ids = {d.duty_id for d in duties}
                 self.effective_timezone_format = 'homebase'
-        
+
         elif roster_format == 'tabular':
             duties = self._parse_tabular_format(full_text)
-        
-        else:
-            duties = self._parse_generic_format(full_text)
-       
+
+        # 'generic': no CrewLink/easyJet structure found; nothing to parse.
+
         # MERGE LOGIC: Prioritize the Header Extraction for ID/Name
         final_pilot_id = header_info.get('id') or pilot_info.get('id') or pilot_id
         final_pilot_name = header_info.get('name') or pilot_info.get('name')
-        final_base = header_info.get('base') or pilot_info.get('base') or self.home_base
+        self.header_base = (self._verified_base(pilot_info.get('base'))
+                            or self._verified_base(header_info.get('base')))
+        final_base = self.header_base or self.entered_base
         final_aircraft = header_info.get('aircraft') or pilot_info.get('aircraft')
 
-        # Auto-derive roster month from PDF period — PDF is authoritative over API default.
+        # Roster month: PDF period first, then the first parsed duty, then the
+        # caller's value. No fixed placeholder month.
         # easyJet: pilot_info['month'] is an int (1-12)
         # CrewLink: pilot_info['month'] is a 3-letter abbreviation (e.g. "Mar")
+        period_month = None
         pdf_month_val = pilot_info.get('month')
         pdf_year = pilot_info.get('year')
         if pdf_month_val and pdf_year:
             if isinstance(pdf_month_val, int):
-                # easyJet path — month already numeric
-                month = f"{pdf_year}-{pdf_month_val:02d}"
+                period_month = f"{pdf_year}-{pdf_month_val:02d}"
             else:
-                # CrewLink path — parse 3-letter abbreviation
                 try:
                     pdf_month_num = datetime.strptime(pdf_month_val, '%b').month
-                    month = f"{pdf_year}-{pdf_month_num:02d}"
+                    period_month = f"{pdf_year}-{pdf_month_num:02d}"
                 except ValueError:
-                    pass  # Keep API-supplied month if parsing fails
-        # Final fallback: derive from first parsed duty date (covers line-parser
-        # fallback path and any PDF missing a Period: header).
-        if month == "2026-02" and duties:
+                    pass
+        first_duty_month = None
+        if duties:
             try:
-                first_date = duties[0].date
-                month = f"{first_date.year}-{first_date.month:02d}"
-            except (AttributeError, IndexError):
+                first_date = min(duties, key=lambda d: d.report_time_utc).date
+                first_duty_month = f"{first_date.year}-{first_date.month:02d}"
+            except (AttributeError, ValueError):
                 pass
+        month = period_month or first_duty_month or month
 
         # Expose pilot_info for company detection (merge header + parser info)
         self.pilot_info = {**pilot_info, **header_info}
 
-        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
-        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
-
         if final_base:
-            from parsers.validation import resolve_home_timezone
-            self.home_base = final_base
-            self.home_timezone = resolve_home_timezone(final_base)
+            self._use_base(final_base)
             for duty in duties:
                 duty.home_base_timezone = self.home_timezone
+        else:
+            self.home_base = None
 
         standbys = [d for d in duties if d.duty_type == DutyType.HOME_STANDBY]
         duties = [d for d in duties if d.duty_type != DutyType.HOME_STANDBY]
@@ -406,7 +417,6 @@ class PDFRosterParser:
         # Auto-detect augmented crew / ULR duties
         auto_detect_crew_augmentation(roster)
 
-        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         return roster
     
     def _extract_roster_year(self, text: str):
@@ -455,7 +465,7 @@ class PDFRosterParser:
 
         # 3. Extract Base, Role, and Aircraft from parens
         # Looks for patterns like (DOH CP-A320) or (DOH FO-A320)
-        details_match = re.search(r'\(([A-Z]{3})\s+([A-Z]{2})-([A-Z0-9\-]+)\)', text)
+        details_match = re.search(r'\(\s*([A-Z]{3})\s+([A-Z]{2,3})-([A-Z0-9\-]+)\)', text)
         if details_match:
             info['base'] = details_match.group(1)      # e.g. DOH
             info['role'] = details_match.group(2)       # e.g. CP, FO
@@ -737,26 +747,48 @@ class PDFRosterParser:
 class CSVRosterParser:
     """Parse CSV exports from crew management systems"""
     
-    def __init__(self, home_base: str = 'DOH', home_timezone: str = None):
+    REQUIRED_COLUMNS = ('Date', 'Flight', 'Departure', 'Arrival', 'STD', 'STA', 'Report', 'Release')
+
+    def __init__(self, home_base: Optional[str] = None, home_timezone: str = None):
+        # CSV report/release times are home-base local: the base is required.
+        from parsers.base_detection import home_base_required
+        if not home_base:
+            raise home_base_required()
         self.home_base = home_base
         from parsers.validation import resolve_home_timezone
         self.home_timezone = resolve_home_timezone(home_base, home_timezone)
         self.airport_db = AirportDatabase()
-    
-    def parse_csv(self, csv_path: str, pilot_id: str, month: str) -> Roster:
-        """Parse CSV roster file"""
-        pass  # Parser diagnostics are returned to the caller, never logged with personal data.
-        df = pd.read_csv(csv_path, nrows=1441)
-        required = {'Date', 'Flight', 'Departure', 'Arrival', 'STD', 'STA', 'Report', 'Release'}
-        if not required.issubset(df.columns) or df[list(required)].isna().any().any():
+
+    @classmethod
+    def load_frame(cls, csv_path: str) -> pd.DataFrame:
+        """Read and check the template columns. Needs no base, so detection can use it."""
+        try:
+            df = pd.read_csv(csv_path, nrows=1441, dtype=str, skipinitialspace=True)
+        except (pd.errors.ParserError, pd.errors.EmptyDataError, UnicodeDecodeError):
+            df = None
+        if df is None or df.empty:
+            from parsers.base_detection import no_duties_found
+            raise no_duties_found()
+        df.columns = [str(c).strip() for c in df.columns]
+        missing = [c for c in cls.REQUIRED_COLUMNS if c not in df.columns]
+        if missing:
+            raise ValueError('This CSV is missing the column(s) ' + ', '.join(missing)
+                             + '. Use the Aerowake template: ' + ','.join(cls.REQUIRED_COLUMNS) + '.')
+        if df[list(cls.REQUIRED_COLUMNS)].isna().any().any():
             raise ValueError('CSV requires complete Date, Flight, Departure, Arrival, STD, STA, Report and Release columns.')
         if len(df) > 1440:
             raise ValueError('CSV has more than 1440 sector rows. Upload one month at a time.')
-        
-        if 'Flight' in df.columns:
-            duties = self._parse_simple_csv(df)
-        else:
-            raise NotImplementedError("Multi-sector CSV parser not yet implemented")
+        for column in ('Departure', 'Arrival'):
+            df[column] = df[column].str.strip().str.upper()
+        return df
+
+    def parse_csv(self, csv_path: str, pilot_id: str, month: Optional[str] = None) -> Roster:
+        """Parse CSV roster file"""
+        return self.parse_frame(self.load_frame(csv_path), pilot_id, month)
+
+    def parse_frame(self, df: pd.DataFrame, pilot_id: str, month: Optional[str] = None) -> Roster:
+        """Build the roster from a frame returned by ``load_frame``."""
+        duties = self._parse_simple_csv(df)
 
         # Derive month from first duty date — CSV has no header metadata.
         if duties:
