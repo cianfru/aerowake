@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from db.legacy_baseline import adopt_baseline, inspect_baseline
+from db.session import EXPECTED_SCHEMA_REVISION
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = Path(__file__).parent / 'fixtures' / 'legacy_schema_bae4943.sql'
@@ -63,7 +64,7 @@ def test_legacy_check_and_upgrade_preserve_records(legacy_database):
         engine = create_async_engine(legacy_database)
         try:
             async with engine.connect() as connection:
-                assert await connection.scalar(text('SELECT version_num FROM alembic_version')) == '003'
+                assert await connection.scalar(text('SELECT version_num FROM alembic_version')) == EXPECTED_SCHEMA_REVISION
                 for table, rows in before.items():
                     after = (await connection.execute(text(f'SELECT * FROM {table}'))).mappings().all()
                     assert len(after) == len(rows)

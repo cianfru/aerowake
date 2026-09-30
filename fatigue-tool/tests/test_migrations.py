@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import create_async_engine
 from db.models import Base
+from db.session import EXPECTED_SCHEMA_REVISION
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -47,7 +48,7 @@ def test_release_command_loads_migrations_without_pythonpath():
     result = subprocess.run([*migration_command(), '--sql'], cwd=ROOT, env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert 'CREATE TABLE users' in result.stdout
-    assert "SET version_num='003'" in result.stdout
+    assert f"SET version_num='{EXPECTED_SCHEMA_REVISION}'" in result.stdout
 
 def test_schema_migration_preserves_legacy_data_and_matches_models():
     url=os.environ.get('TEST_DATABASE_URL')
@@ -69,7 +70,7 @@ def test_schema_migration_preserves_legacy_data_and_matches_models():
             if seed:
                 await c.execute(text("INSERT INTO users(id,email) VALUES ('00000000-0000-0000-0000-000000000001','migration@example.test')"))
             else:
-                assert await c.scalar(text('SELECT version_num FROM alembic_version'))=='003'
+                assert await c.scalar(text('SELECT version_num FROM alembic_version'))==EXPECTED_SCHEMA_REVISION
                 def columns(conn):
                     inspector=inspect(conn)
                     for table in Base.metadata.sorted_tables:

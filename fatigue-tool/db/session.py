@@ -14,6 +14,9 @@ from db.models import Base
 
 logger = logging.getLogger(__name__)
 
+# Alembic head this release requires; migrations run before the API starts.
+EXPECTED_SCHEMA_REVISION = '004'
+
 # ─── Connection Setup ────────────────────────────────────────────────────────
 
 _raw_url = os.environ.get("DATABASE_URL", "")
@@ -60,7 +63,7 @@ async def init_db():
     from sqlalchemy import text
     async with engine.connect() as conn:
         version = await conn.scalar(text('SELECT version_num FROM alembic_version'))
-        if version != '003':
+        if version != EXPECTED_SCHEMA_REVISION:
             raise RuntimeError('Database migration required: run alembic upgrade head before starting the API')
 
 async def database_ready():

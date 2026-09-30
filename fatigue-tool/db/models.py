@@ -9,6 +9,7 @@ Tables:
   - fatigue_states: end-of-roster fatigue state for chaining across months
   - aggregate_metrics: pre-computed comparative stats per company/fleet/role
   - refresh_tokens: JWT refresh token rotation
+  - pilot_observations / duty_debriefs: voluntary, owner-scoped study data
 """
 
 import uuid
@@ -26,6 +27,8 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     UniqueConstraint,
+    CheckConstraint,
+    SmallInteger,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -74,6 +77,10 @@ class User(Base):
     is_admin = Column(Boolean, default=False, nullable=False)
     email_verified = Column(Boolean, default=False, nullable=False)
     metrics_consent = Column(Boolean, default=False, nullable=False)
+    # Voluntary duty-debrief study enrolment (migration 004). Withdrawal is recorded, not erased.
+    study_enrolled_at = Column(DateTime(timezone=True), nullable=True)
+    study_consent_version = Column(String(40), nullable=True)
+    study_withdrawn_at = Column(DateTime(timezone=True), nullable=True)
     auth_version = Column(Integer, default=0, nullable=False)
 
     # Company membership (auto-detected from roster, confirmed by pilot)
@@ -271,6 +278,48 @@ class PilotObservation(Base):
     payload = Column(JSONB, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     __table_args__ = (UniqueConstraint('user_id', 'client_id'),)
+
+
+class DutyDebrief(Base):
+    """One blinded rating of a flown duty (migration 004). Owner-scoped study data.
+
+    The forecast snapshot in ``payload`` is taken by the server from the saved
+    analysis at submission. Roster/analysis links become NULL when the pilot
+    deletes the roster, so the snapshot survives; account deletion cascades.
+    """
+    __tablename__ = 'duty_debriefs'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    client_id = Column(UUID(as_uuid=True), nullable=False)
+    roster_id = Column(UUID(as_uuid=True), ForeignKey('rosters.id', ondelete='SET NULL'), nullable=True)
+    analysis_id = Column(String(100), ForeignKey('analyses.id', ondelete='SET NULL'), nullable=True)
+    duty_id = Column(String(64), nullable=False)
+    duty_report_utc = Column(DateTime(timezone=True), nullable=False)
+    duty_release_utc = Column(DateTime(timezone=True), nullable=False)
+    moment = Column(String(20), nullable=False)
+    operation = Column(String(20), nullable=False)
+    kss = Column(SmallInteger, nullable=True)
+    samn_perelli = Column(SmallInteger, nullable=True)
+    felt_vs_prediction = Column(String(12), nullable=True)
+    rated_at_utc = Column(DateTime(timezone=True), nullable=False)
+    prediction_seen = Column(Boolean, nullable=False)
+    payload = Column(JSONB, nullable=False)
+    schema_version = Column(SmallInteger, nullable=False, default=1)
+    consent_version = Column(String(40), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    __table_args__ = (
+        UniqueConstraint('user_id', 'client_id', name='uq_duty_debriefs_client'),
+        UniqueConstraint('user_id', 'duty_id', 'duty_report_utc', 'moment', name='uq_duty_debriefs_moment'),
+        CheckConstraint("moment IN ('worst_moment', 'top_of_descent', 'end_of_duty')", name='ck_duty_debriefs_moment'),
+        CheckConstraint("operation IN ('as_rostered', 'times_changed', 'not_operated')", name='ck_duty_debriefs_operation'),
+        CheckConstraint('kss IS NULL OR kss BETWEEN 1 AND 9', name='ck_duty_debriefs_kss'),
+        CheckConstraint('samn_perelli IS NULL OR samn_perelli BETWEEN 1 AND 7', name='ck_duty_debriefs_sp'),
+        CheckConstraint("felt_vs_prediction IS NULL OR felt_vs_prediction IN ('worse', 'about_right', 'better')",
+                        name='ck_duty_debriefs_felt'),
+        CheckConstraint("operation = 'not_operated' OR kss IS NOT NULL OR samn_perelli IS NOT NULL",
+                        name='ck_duty_debriefs_rating'),
+        Index('ix_duty_debriefs_user_report', 'user_id', 'duty_report_utc'),
+    )
 
 
 class AccountActionToken(Base):
