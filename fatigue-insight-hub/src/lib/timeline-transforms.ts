@@ -1,12 +1,15 @@
 /**
- * Pure transform functions for the three grid-based chronogram views.
+ * Pure transform functions for the grid-based roster calendar.
  *
  * Each function converts DutyAnalysis[] into a TimelineData object
  * consumed by the unified TimelineGrid renderer. No React, no hooks, no JSX.
  *
  * - homeBaseTransform()  -- positions bars using home-base local times
  * - utcTransform()       -- positions bars using UTC/Zulu times
- * - elapsedTransform()   -- positions bars on a continuous elapsed-hours axis
+ *
+ * Colour comes only from model output: a sector's own band when the backend
+ * reports it (segments[].kss_peak / risk_level), otherwise the duty peak band.
+ * Nothing here interpolates or invents a sector or phase KSS.
  */
 
 import { format, getDaysInMonth, startOfMonth, addDays } from 'date-fns';
@@ -17,6 +20,7 @@ import type {
   TimelineSleepBar,
   TimelineIRBar,
   TimelineFdpMarker,
+  TimelinePeakMarker,
   TimelineSegment,
   WoclBand,
   WmzBand,
@@ -28,25 +32,23 @@ import {
   isoToZulu,
   getRecoveryScore,
   isTrainingDuty,
-  buildFlightPhases,
-  getDayWarnings,
   createRestDayPseudoDuty,
   deduplicateTimelineBars,
   splitOvernightBar,
   parseUtcTimeStr,
-  parseIsoDirectly,
   DEFAULT_CHECK_IN_MINUTES,
   WOCL_START,
   WOCL_END,
   WMZ_START,
   WMZ_END,
-  ADAPTATION_RATE_EAST,
-  ADAPTATION_RATE_WEST,
 } from '@/lib/fatigue-utils';
 
+import { classifyKss, resolveKss, toUpperRisk, type RiskLevel } from '@/lib/risk-scale';
 import { utcDayHour } from '@/lib/timezone-utils';
 
-import type { DutyAnalysis, RestDaySleep } from '@/types/fatigue';
+import type { DutyAnalysis, FlightSegment, RestDaySleep } from '@/types/fatigue';
+
+type SleepFields = Omit<TimelineSleepBar, 'rowIndex' | 'startHour' | 'endHour' | 'isOvernightStart' | 'isOvernightContinuation'>;
 
 // ---------------------------------------------------------------------------
 // Shared helpers (internal)
@@ -58,59 +60,58 @@ function dutyDayOfMonth(duty: DutyAnalysis): number {
   return duty.date.getDate();
 }
 
-/** Build TimelineSegments for flight-based duties using local HH:mm times.
- *  Includes ground/turnaround segments between flights and a post-flight
- *  segment from last arrival to duty release. */
-function buildLocalSegments(
+/** Duty peak KSS (backend max_kss, else the current model's index). */
+function dutyPeak(duty: DutyAnalysis): number | null {
+  return resolveKss(duty.maxKss, duty.minPerformance, duty.modelVersion);
+}
+
+/** Band of the duty peak: the fallback colour for every part of the duty. */
+export function dutyBand(duty: DutyAnalysis): RiskLevel {
+  return classifyKss(dutyPeak(duty));
+}
+
+/** A sector's own model band when supplied, else the duty peak band. */
+export function sectorBand(seg: Pick<FlightSegment, 'riskLevel' | 'kssPeak'>, duty: DutyAnalysis): RiskLevel {
+  if (seg.kssPeak != null) return classifyKss(seg.kssPeak);
+  return seg.riskLevel ?? dutyBand(duty);
+}
+
+/**
+ * Build TimelineSegments for a flight duty: check-in, sectors, ground
+ * turnarounds and post-flight time, in continuous hours (> 24 after midnight)
+ * so overnight duties can later be clipped per row slice.
+ */
+function buildSegments(
   duty: DutyAnalysis,
   checkInHour: number,
   dutyEndHour: number,
+  times: (seg: FlightSegment) => [number | undefined, number | undefined],
 ): TimelineSegment[] {
   const segments: TimelineSegment[] = [];
-  let lastEndHour: number | undefined;
+  const level = dutyBand(duty);
+  let lastEndHour = checkInHour;
 
-  // Check-in segment (use continuous hours for overnight: firstDep may need +24)
   if (duty.flightSegments.length > 0) {
-    const firstDepRaw = parseTimeToHours(duty.flightSegments[0].departureTime);
+    const [firstDepRaw] = times(duty.flightSegments[0]);
     if (firstDepRaw !== undefined) {
       const firstDep = firstDepRaw < checkInHour ? firstDepRaw + 24 : firstDepRaw;
       if (firstDep > checkInHour + 0.01) {
-        segments.push({
-          type: 'checkin',
-          startHour: checkInHour,
-          endHour: firstDep,
-          performance: duty.avgPerformance,
-        });
+        segments.push({ type: 'checkin', startHour: checkInHour, endHour: firstDep, level, kss: null });
         lastEndHour = firstDep;
-      } else {
-        lastEndHour = checkInHour;
       }
-    } else {
-      lastEndHour = checkInHour;
     }
   }
 
-  // Flight segments (with ground gaps between them)
   for (const seg of duty.flightSegments) {
-    const depH = parseTimeToHours(seg.departureTime);
-    const arrH = parseTimeToHours(seg.arrivalTime);
+    const [depH, arrH] = times(seg);
     if (depH === undefined || arrH === undefined) continue;
 
-    // Use continuous hours (>24 for post-midnight) so overnight segments
-    // can later be clipped correctly per bar slice.
-    const adjustedDep = depH < (lastEndHour ?? checkInHour) ? depH + 24 : depH;
+    const adjustedDep = depH < lastEndHour ? depH + 24 : depH;
     let adjustedArr = arrH < depH ? arrH + 24 : arrH;
     if (adjustedArr < adjustedDep) adjustedArr += 24;
-    const perf = seg.performance ?? duty.avgPerformance;
 
-    // Insert ground segment for turnaround gap between previous arrival and this departure
-    if (lastEndHour !== undefined && adjustedDep > lastEndHour + 0.01) {
-      segments.push({
-        type: 'ground',
-        startHour: lastEndHour,
-        endHour: adjustedDep,
-        performance: duty.avgPerformance,
-      });
+    if (adjustedDep > lastEndHour + 0.01) {
+      segments.push({ type: 'ground', startHour: lastEndHour, endHour: adjustedDep, level, kss: null });
     }
 
     segments.push({
@@ -120,40 +121,35 @@ function buildLocalSegments(
       arrival: seg.arrival,
       startHour: adjustedDep,
       endHour: adjustedArr,
-      performance: perf,
+      level: seg.isDeadhead ? level : sectorBand(seg, duty),
+      kss: seg.isDeadhead ? null : seg.kssPeak ?? null,
       activityCode: seg.activityCode,
       isDeadhead: seg.isDeadhead,
-      phases: seg.isDeadhead ? undefined : buildFlightPhases(perf, duty.landingPerformance),
     });
 
     lastEndHour = adjustedArr;
   }
 
-  // Post-flight ground segment (last arrival → duty release)
-  if (lastEndHour !== undefined) {
-    const adjustedEnd = dutyEndHour < lastEndHour ? dutyEndHour + 24 : dutyEndHour;
-    if (adjustedEnd > lastEndHour + 0.01) {
-      segments.push({
-        type: 'postflight',
-        startHour: lastEndHour,
-        endHour: adjustedEnd,
-        performance: duty.avgPerformance,
-      });
-    }
+  const adjustedEnd = dutyEndHour < lastEndHour ? dutyEndHour + 24 : dutyEndHour;
+  if (segments.length > 0 && adjustedEnd > lastEndHour + 0.01) {
+    segments.push({ type: 'postflight', startHour: lastEndHour, endHour: adjustedEnd, level, kss: null });
   }
 
   return segments;
 }
 
+const localTimes = (seg: FlightSegment): [number | undefined, number | undefined] =>
+  [parseTimeToHours(seg.departureTime), parseTimeToHours(seg.arrivalTime)];
+
+const utcTimes = (seg: FlightSegment): [number | undefined, number | undefined] =>
+  [parseUtcTimeStr(seg.departureTimeUtc) ?? undefined, parseUtcTimeStr(seg.arrivalTimeUtc) ?? undefined];
+
 /**
  * Clip a full-duty segment array to a single overnight bar slice.
  *
- * For overnight duties the segments use continuous hours (e.g. check-in at
- * 23.5, flight at 24.75 = 00:45 next day, arrival at 27.0 = 03:00 next day).
- * Each bar slice covers either [sliceStart, 24] or [0, sliceEnd].
- *
- * This function filters and trims segments to the slice window, mapping
- * hours > 24 back into the 0-24 range for the continuation slice.
+ * Segments use continuous hours (e.g. 24.75 = 00:45 next day). The start
+ * slice keeps [sliceStart, 24]; the continuation slice maps hours > 24 back
+ * into 0..sliceEnd.
  */
 function clipSegmentsToSlice(
   segments: TimelineSegment[],
@@ -161,88 +157,72 @@ function clipSegmentsToSlice(
   sliceEnd: number,
   isContinuation: boolean,
 ): TimelineSegment[] {
-  // For the start slice (e.g. 23.5→24): keep segments whose hours fall in [sliceStart, 24]
-  // For the continuation slice (e.g. 0→7.42): map hours > 24 to hours - 24
   const clipped: TimelineSegment[] = [];
-
-  if (!isContinuation) {
-    // Start slice: sliceStart → 24
-    for (const seg of segments) {
+  for (const seg of segments) {
+    if (!isContinuation) {
       if (seg.endHour <= sliceStart || seg.startHour >= 24) continue;
       const s = Math.max(seg.startHour, sliceStart);
       const e = Math.min(seg.endHour, 24);
-      if (e - s < 0.01) continue;
-      clipped.push({ ...seg, startHour: s, endHour: e });
-    }
-  } else {
-    // Continuation slice: 0 → sliceEnd
-    // Include any segment whose continuous-hour range extends past 24.
-    for (const seg of segments) {
-      if (seg.endHour <= 24) continue; // entirely before midnight
-      // Map continuous hours back to 0-24 for this day
-      const rawS = seg.startHour >= 24 ? seg.startHour - 24 : 0; // clamp start at midnight
-      const rawE = seg.endHour - 24;
-      const s = Math.max(rawS, 0);
-      const e = Math.min(rawE, sliceEnd);
-      if (e - s < 0.01) continue;
-      clipped.push({ ...seg, startHour: s, endHour: e });
+      if (e - s >= 0.01) clipped.push({ ...seg, startHour: s, endHour: e });
+    } else {
+      if (seg.endHour <= 24) continue;
+      const s = Math.max(seg.startHour >= 24 ? seg.startHour - 24 : 0, 0);
+      const e = Math.min(seg.endHour - 24, sliceEnd);
+      if (e - s >= 0.01) clipped.push({ ...seg, startHour: s, endHour: e });
     }
   }
-
   return clipped;
 }
 
-/** Build a single training segment spanning the full duty window. */
-function buildTrainingSegment(
-  duty: DutyAnalysis,
-  startHour: number,
-  endHour: number,
-): TimelineSegment {
-  return {
-    type: 'training',
-    startHour,
-    endHour,
-    performance: duty.avgPerformance,
-    activityCode: duty.trainingCode ?? null,
-  };
+/** A single training segment spanning the duty window, in the duty peak band. */
+function buildTrainingSegment(duty: DutyAnalysis, startHour: number, endHour: number): TimelineSegment {
+  return { type: 'training', startHour, endHour, level: dutyBand(duty), kss: null, activityCode: duty.trainingCode ?? null };
 }
 
-/** Build common sleep bar fields shared across all three views.
- *  When `blockOverrides` is provided, per-block ISO timestamps and a unique
- *  `blockKey` are generated. Without overrides, the first sleep block's ISOs
- *  are used (single-block / fallback path). */
+/**
+ * Where the duty peak sits in the grid: `checkInHour` on `startRow` plus the
+ * time from report to the model's peak (peak_time_utc). No marker without one.
+ */
+function peakMarker(duty: DutyAnalysis, startRow: number, checkInHour: number, maxRow: number): TimelinePeakMarker[] {
+  const kss = dutyPeak(duty);
+  const peak = Date.parse(duty.peakTimeUtc ?? '');
+  const report = Date.parse(duty.reportTimeUtc ?? '');
+  const release = Date.parse(duty.releaseTimeUtc ?? '');
+  if (kss == null || !Number.isFinite(peak) || !Number.isFinite(report)) return [];
+  const offset = (peak - report) / 3_600_000;
+  const span = Number.isFinite(release) ? (release - report) / 3_600_000 : duty.dutyHours;
+  if (offset < -0.01 || offset > span + 0.01) return [];
+  const continuous = checkInHour + Math.max(0, offset);
+  const rowIndex = startRow + Math.floor(continuous / 24);
+  if (rowIndex < 1 || rowIndex > maxRow) return [];
+  return [{ rowIndex, hour: continuous % 24, kss, level: classifyKss(kss), duty }];
+}
+
+/** Common sleep bar fields; per-block ISO timestamps and a unique blockKey when given. */
 function baseSleepFields(
   est: NonNullable<DutyAnalysis['sleepEstimate']>,
   duty: DutyAnalysis,
   blockOverrides?: {
     blockIndex: number;
-    sleepStartUtcIso?: string;
-    sleepEndUtcIso?: string;
+    block: NonNullable<NonNullable<DutyAnalysis['sleepEstimate']>['sleepBlocks']>[number];
   },
-): Omit<TimelineSleepBar, 'rowIndex' | 'startHour' | 'endHour' | 'isOvernightStart' | 'isOvernightContinuation'> {
-  // Per-block ISOs if provided, otherwise fall back to first block (single-block case)
-  const sleepStartUtcIso = blockOverrides?.sleepStartUtcIso
-    ?? est.sleepBlocks?.[0]?.sleepStartUtc
-    ?? undefined;
-  const sleepEndUtcIso = blockOverrides?.sleepEndUtcIso
-    ?? est.sleepBlocks?.[0]?.sleepEndUtc
-    ?? undefined;
-
-  // Unique per-block key: "${dutyId}::${blockIndex}"
+): SleepFields {
+  const first = est.sleepBlocks?.[0];
+  const block = blockOverrides?.block;
   const blockIdx = blockOverrides?.blockIndex ?? 0;
-  const blockKey = duty.dutyId ? `${duty.dutyId}::${blockIdx}` : undefined;
-
   return {
     recoveryScore: getRecoveryScore(est),
-    effectiveSleep: est.effectiveSleepHours,
+    // A block of a multi-block night (a nap, say) reports its own hours and window.
+    effectiveSleep: block?.effectiveHours ?? est.effectiveSleepHours,
     sleepEfficiency: est.sleepEfficiency,
     sleepStrategy: est.sleepStrategy,
+    sleepType: block?.sleepType ?? first?.sleepType,
     isPreDuty: false,
     relatedDuty: duty,
-    originalStartHour: est.sleepStartHourHomeTz ?? est.sleepStartHour,
-    originalEndHour: est.sleepEndHourHomeTz ?? est.sleepEndHour,
-    sleepStartZulu: isoToZulu(est.sleepStartIso) ?? undefined,
-    sleepEndZulu: isoToZulu(est.sleepEndIso) ?? undefined,
+    originalStartHour: block?.sleepStartHourHomeTz ?? est.sleepStartHourHomeTz ?? est.sleepStartHour,
+    originalEndHour: block?.sleepEndHourHomeTz ?? est.sleepEndHourHomeTz ?? est.sleepEndHour,
+    sleepStartZulu: isoToZulu(block?.sleepStartUtc ?? est.sleepStartIso) ?? undefined,
+    sleepEndZulu: isoToZulu(block?.sleepEndUtc ?? est.sleepEndIso) ?? undefined,
     qualityFactors: est.qualityFactors,
     explanation: est.explanation,
     confidenceBasis: est.confidenceBasis,
@@ -250,49 +230,139 @@ function baseSleepFields(
     references: est.references,
     woclOverlapHours: est.woclOverlapHours,
     sleepId: duty.dutyId,
-    sleepStartIso: sleepStartUtcIso,
-    sleepEndIso: sleepEndUtcIso,
-    blockKey,
+    sleepStartIso: (block ?? first)?.sleepStartUtc ?? undefined,
+    sleepEndIso: (block ?? first)?.sleepEndUtc ?? undefined,
+    blockKey: duty.dutyId ? `${duty.dutyId}::${blockIdx}` : undefined,
   };
 }
 
-/** Build row labels for a calendar month (shared by homebase and utc). */
-function buildMonthRowLabels(
-  duties: DutyAnalysis[],
-  month: Date,
-): RowLabel[] {
+/** Sleep bar fields for a rest-day block (no duty). */
+function restDaySleepFields(restDay: RestDaySleep, blockIdx: number, startHour: number, endHour: number): SleepFields {
+  const block = restDay.sleepBlocks[blockIdx];
+  return {
+    recoveryScore: (block.effectiveHours / 8) * 100,
+    effectiveSleep: block.effectiveHours,
+    sleepEfficiency: restDay.sleepEfficiency,
+    sleepStrategy: restDay.strategyType,
+    sleepType: block.sleepType,
+    isPreDuty: false,
+    relatedDuty: createRestDayPseudoDuty(restDay),
+    originalStartHour: startHour,
+    originalEndHour: endHour,
+    sleepStartZulu: isoToZulu(block.sleepStartIso) ?? undefined,
+    sleepEndZulu: isoToZulu(block.sleepEndIso) ?? undefined,
+    qualityFactors: restDay.qualityFactors,
+    explanation: restDay.explanation,
+    confidenceBasis: restDay.confidenceBasis,
+    confidence: restDay.confidence,
+    references: restDay.references,
+    blockKey: `rest::${format(restDay.date, 'yyyy-MM-dd')}::${blockIdx}`,
+    sleepStartIso: block.sleepStartIso,
+    sleepEndIso: block.sleepEndIso,
+  };
+}
+
+/** Push a home-base sleep block, splitting at midnight when needed. */
+function addDaySleepBar(
+  bars: TimelineSleepBar[],
+  fields: SleepFields,
+  startDay: number,
+  startHour: number,
+  endDay: number,
+  endHour: number,
+  maxRow: number,
+): void {
+  if (startDay > maxRow || endDay < 1) return;
+  if (startDay === endDay) {
+    if (endHour <= startHour) {
+      for (const s of splitOvernightBar(startDay, startHour, endHour, maxRow)) bars.push({ ...fields, ...s });
+    } else {
+      bars.push({ ...fields, rowIndex: startDay, startHour, endHour });
+    }
+    return;
+  }
+  if (startDay >= 1 && startDay <= maxRow) {
+    bars.push({ ...fields, rowIndex: startDay, startHour, endHour: 24, isOvernightStart: true });
+  }
+  if (endDay >= 1 && endDay <= maxRow) {
+    bars.push({ ...fields, rowIndex: endDay, startHour: 0, endHour, isOvernightContinuation: true });
+  }
+}
+
+/**
+ * Row labels for a calendar month (home base and UTC): the highest duty peak
+ * starting that day, with its band. Notes such as WOCL or sleep live in the
+ * duty tooltip, not the label column.
+ */
+function buildMonthRowLabels(duties: DutyAnalysis[], month: Date): RowLabel[] {
   const dim = getDaysInMonth(month);
   const monthStart = startOfMonth(month);
   const labels: RowLabel[] = [];
 
   for (let d = 1; d <= dim; d++) {
     const dateObj = addDays(monthStart, d - 1);
-    const dayResult = getDayWarnings(duties, d);
+    const dayDuties = duties.filter((duty) => dutyDayOfMonth(duty) === d);
+    const peaks = dayDuties.map(dutyPeak).filter((k): k is number => k != null);
+    const peakKss = peaks.length ? Math.max(...peaks) : null;
+    const level = dayDuties.length ? classifyKss(peakKss) : undefined;
     labels.push({
       rowIndex: d,
       label: format(dateObj, 'EEE d'),
       date: dateObj,
-      hasDuty: dayResult !== null,
-      risk: dayResult?.risk,
-      warnings: dayResult?.warnings ?? [],
+      hasDuty: dayDuties.length > 0,
+      risk: level ? toUpperRisk(level) : undefined,
+      peakKss,
+      level,
+      warnings: [],
     });
   }
 
   return labels;
 }
 
+/** Duty bars (one per row slice) for a duty starting at `startHour` on `startRow`. */
+function dutySlices(
+  duty: DutyAnalysis,
+  startRow: number,
+  startHour: number,
+  endHour: number,
+  segments: TimelineSegment[],
+  maxRow: number,
+  training: boolean,
+): TimelineDutyBar[] {
+  const overnight = endHour < startHour || (!training && startHour >= 16 && endHour < 10);
+  if (!overnight) return [{ rowIndex: startRow, startHour, endHour, duty, segments }];
+  return splitOvernightBar(startRow, startHour, endHour, maxRow).map((s) => ({
+    ...s,
+    duty,
+    segments: training
+      ? [buildTrainingSegment(duty, s.startHour, s.endHour)]
+      : clipSegmentsToSlice(segments, s.startHour, s.endHour, !!s.isOvernightContinuation),
+  }));
+}
+
+/** FDP limit marker, on the start row or the following one. */
+function fdpMarker(duty: DutyAnalysis, row: number, checkInHour: number, maxRow: number): TimelineFdpMarker[] {
+  if (!duty.maxFdpHours) return [];
+  const end = checkInHour + duty.maxFdpHours;
+  if (end <= 24) return [{ rowIndex: row, hour: end, maxFdp: duty.maxFdpHours, duty }];
+  return row + 1 <= maxRow ? [{ rowIndex: row + 1, hour: end - 24, maxFdp: duty.maxFdpHours, duty }] : [];
+}
+
+const STATIC_BANDS = () => ({
+  woclBands: [{ rowIndex: -1, startHour: WOCL_START, endHour: WOCL_END }] as WoclBand[],
+  wmzBands: [{ rowIndex: -1, startHour: WMZ_START, endHour: WMZ_END }] as WmzBand[],
+});
+
 // ===========================================================================
 // 1. HOME BASE TRANSFORM
 // ===========================================================================
 
 /**
- * Transform DutyAnalysis[] into TimelineData for the Home Base local-time view.
+ * Transform DutyAnalysis[] into TimelineData for the home-base local-time view.
  *
- * Duty and sleep bars are positioned using precomputed home-base timezone
- * fields from the backend. Sleep bars ONLY use Path 1 (sleepStartDayHomeTz,
- * sleepStartHourHomeTz, sleepEndDayHomeTz, sleepEndHourHomeTz). Missing
- * precomputed fields cause a console.warn and the bar is skipped -- no
- * fallback to ISO parsing or estimation.
+ * Duty and sleep bars use precomputed home-base fields from the backend.
+ * Sleep bars without them are skipped (no guessing).
  */
 export function homeBaseTransform(
   duties: DutyAnalysis[],
@@ -305,6 +375,7 @@ export function homeBaseTransform(
   const sleepBars: TimelineSleepBar[] = [];
   const irBars: TimelineIRBar[] = [];
   const fdpMarkers: TimelineFdpMarker[] = [];
+  const peakMarkers: TimelinePeakMarker[] = [];
 
   for (const duty of duties) {
     const dayOfMonth = dutyDayOfMonth(duty);
@@ -314,307 +385,91 @@ export function homeBaseTransform(
       const startH = parseTimeToHours(duty.reportTimeLocal);
       const endH = parseTimeToHours(duty.releaseTimeLocal);
       if (startH !== undefined && endH !== undefined) {
-        const isOvernight = endH < startH || (startH >= 16 && endH < 10);
-        if (isOvernight) {
-          const slices = splitOvernightBar(dayOfMonth, startH, endH, daysInMonth);
-          for (const s of slices) {
-            dutyBars.push({
-              ...s,
-              duty,
-              segments: [buildTrainingSegment(duty, s.startHour, s.endHour)],
-            });
-          }
-        } else {
-          dutyBars.push({
-            rowIndex: dayOfMonth,
-            startHour: startH,
-            endHour: endH,
-            duty,
-            segments: [buildTrainingSegment(duty, startH, endH)],
-          });
-        }
+        dutyBars.push(...dutySlices(duty, dayOfMonth, startH, endH, [buildTrainingSegment(duty, startH, endH)], daysInMonth, true));
+        peakMarkers.push(...peakMarker(duty, dayOfMonth, startH, daysInMonth));
       }
     } else if (duty.flightSegments.length > 0) {
-      // Flight duty: derive check-in / release from local times
-      const firstDep = parseTimeToHours(duty.flightSegments[0].departureTime);
-      const lastArr = parseTimeToHours(duty.flightSegments[duty.flightSegments.length - 1].arrivalTime);
+      const [firstDep] = localTimes(duty.flightSegments[0]);
+      const [, lastArr] = localTimes(duty.flightSegments[duty.flightSegments.length - 1]);
       const reportH = parseTimeToHours(duty.reportTimeLocal);
       const releaseH = parseTimeToHours(duty.releaseTimeLocal);
-
       const checkInHour = reportH ?? (firstDep !== undefined ? firstDep - DEFAULT_CHECK_IN_MINUTES / 60 : undefined);
       const endHour = releaseH ?? lastArr;
 
       if (checkInHour !== undefined && endHour !== undefined) {
-        // Detect overnight: end < start, or late start with early end
-        const isOvernight = endHour < checkInHour || (checkInHour >= 16 && endHour < 10);
-
-        // buildLocalSegments uses continuous hours (e.g. 24.75 for 00:45
-        // next day) so overnight segments can be properly clipped per slice.
-        const segments = buildLocalSegments(duty, checkInHour, endHour);
-
-        if (isOvernight) {
-          const slices = splitOvernightBar(dayOfMonth, checkInHour, endHour, daysInMonth);
-          for (const s of slices) {
-            const clipped = clipSegmentsToSlice(segments, s.startHour, s.endHour, !!s.isOvernightContinuation);
-            dutyBars.push({ ...s, duty, segments: clipped });
-          }
-        } else {
-          dutyBars.push({
-            rowIndex: dayOfMonth,
-            startHour: checkInHour,
-            endHour,
-            duty,
-            segments,
-          });
-        }
-
-        // FDP marker (only on start bar, not continuation)
-        if (duty.maxFdpHours && checkInHour !== undefined) {
-          const fdpEndHour = checkInHour + duty.maxFdpHours;
-          if (fdpEndHour <= 24) {
-            fdpMarkers.push({ rowIndex: dayOfMonth, hour: fdpEndHour, maxFdp: duty.maxFdpHours, duty });
-          } else {
-            const nextRow = dayOfMonth + 1;
-            if (nextRow <= daysInMonth) {
-              fdpMarkers.push({ rowIndex: nextRow, hour: fdpEndHour - 24, maxFdp: duty.maxFdpHours, duty });
-            }
-          }
-        }
+        const segments = buildSegments(duty, checkInHour, endHour, localTimes);
+        dutyBars.push(...dutySlices(duty, dayOfMonth, checkInHour, endHour, segments, daysInMonth, false));
+        fdpMarkers.push(...fdpMarker(duty, dayOfMonth, checkInHour, daysInMonth));
+        peakMarkers.push(...peakMarker(duty, dayOfMonth, checkInHour, daysInMonth));
       }
     }
 
-    // ---- Sleep bars (Path 1 ONLY) ----
+    // ---- Sleep bars (precomputed home-base positions only) ----
     const est = duty.sleepEstimate;
-    if (est) {
-      if (est.sleepStrategy === 'ulr_pre_duty') {
-        // Skip ULR pre-duty sleep
-      } else {
-        const base = baseSleepFields(est, duty);
+    if (est && est.sleepStrategy !== 'ulr_pre_duty') {
+      // Every modelled block (main sleep and pre-duty naps) is drawn on its own.
+      const blocksWithPos = (est.sleepBlocks ?? []).filter(
+        (b) =>
+          b.sleepStartDayHomeTz != null &&
+          b.sleepStartHourHomeTz != null &&
+          b.sleepEndDayHomeTz != null &&
+          b.sleepEndHourHomeTz != null,
+      );
 
-        // Multi-block rendering: if >1 sleep block has per-block home-TZ
-        // positioning, render each block individually (e.g. nap + night sleep)
-        // instead of one giant aggregated bar.
-        const blocksWithPos = (est.sleepBlocks ?? []).filter(
-          (b) =>
-            b.sleepStartDayHomeTz != null &&
-            b.sleepStartHourHomeTz != null &&
-            b.sleepEndDayHomeTz != null &&
-            b.sleepEndHourHomeTz != null,
-        );
-
-        if (blocksWithPos.length >= 2) {
-          // Render each block as a separate bar with per-block ISOs and unique blockKey
-          for (let blockIdx = 0; blockIdx < blocksWithPos.length; blockIdx++) {
-            const block = blocksWithPos[blockIdx];
-            const blockBase = baseSleepFields(est, duty, {
-              blockIndex: blockIdx,
-              sleepStartUtcIso: block.sleepStartUtc,
-              sleepEndUtcIso: block.sleepEndUtc,
-            });
-            const bStartDay = block.sleepStartDayHomeTz!;
-            const bStartHour = block.sleepStartHourHomeTz!;
-            const bEndDay = block.sleepEndDayHomeTz!;
-            const bEndHour = block.sleepEndHourHomeTz!;
-
-            if (bStartDay > daysInMonth || bEndDay < 1) continue;
-
-            if (bStartDay === bEndDay) {
-              if (bEndHour <= bStartHour) {
-                const slices = splitOvernightBar(bStartDay, bStartHour, bEndHour, daysInMonth);
-                for (const s of slices) {
-                  sleepBars.push({ ...blockBase, ...s });
-                }
-              } else {
-                sleepBars.push({
-                  ...blockBase,
-                  rowIndex: bStartDay,
-                  startHour: bStartHour,
-                  endHour: bEndHour,
-                });
-              }
-            } else {
-              if (bStartDay >= 1 && bStartDay <= daysInMonth) {
-                sleepBars.push({
-                  ...blockBase,
-                  rowIndex: bStartDay,
-                  startHour: bStartHour,
-                  endHour: 24,
-                  isOvernightStart: true,
-                });
-              }
-              if (bEndDay >= 1 && bEndDay <= daysInMonth) {
-                sleepBars.push({
-                  ...blockBase,
-                  rowIndex: bEndDay,
-                  startHour: 0,
-                  endHour: bEndHour,
-                  isOvernightContinuation: true,
-                });
-              }
-            }
-          }
-        } else if (
-          est.sleepStartDayHomeTz != null &&
-          est.sleepStartHourHomeTz != null &&
-          est.sleepEndDayHomeTz != null &&
-          est.sleepEndHourHomeTz != null
-        ) {
-          // Single-block fallback: use top-level aggregated fields
-          const startDay = est.sleepStartDayHomeTz;
-          const startHour = est.sleepStartHourHomeTz;
-          const endDay = est.sleepEndDayHomeTz;
-          const endHour = est.sleepEndHourHomeTz;
-
-          if (startDay <= daysInMonth && endDay >= 1) {
-            if (startDay === endDay) {
-              if (endHour <= startHour) {
-                const slices = splitOvernightBar(startDay, startHour, endHour, daysInMonth);
-                for (const s of slices) {
-                  sleepBars.push({ ...base, ...s });
-                }
-              } else {
-                sleepBars.push({
-                  ...base,
-                  rowIndex: startDay,
-                  startHour,
-                  endHour,
-                });
-              }
-            } else {
-              if (startDay >= 1 && startDay <= daysInMonth) {
-                sleepBars.push({
-                  ...base,
-                  rowIndex: startDay,
-                  startHour,
-                  endHour: 24,
-                  isOvernightStart: true,
-                });
-              }
-              if (endDay >= 1 && endDay <= daysInMonth) {
-                sleepBars.push({
-                  ...base,
-                  rowIndex: endDay,
-                  startHour: 0,
-                  endHour,
-                  isOvernightContinuation: true,
-                });
-              }
-            }
-          }
-        } else {
-          console.warn(
-            `[homeBaseTransform] Skipping sleep bar for duty ${duty.dateString ?? duty.date.toISOString()}: ` +
-            'missing sleepStartDayHomeTz/sleepStartHourHomeTz/sleepEndDayHomeTz/sleepEndHourHomeTz',
-          );
-        }
+      if (blocksWithPos.length >= 2) {
+        blocksWithPos.forEach((block, blockIdx) => {
+          const fields = baseSleepFields(est, duty, { blockIndex: blockIdx, block });
+          addDaySleepBar(sleepBars, fields, block.sleepStartDayHomeTz!, block.sleepStartHourHomeTz!,
+            block.sleepEndDayHomeTz!, block.sleepEndHourHomeTz!, daysInMonth);
+        });
+      } else if (
+        est.sleepStartDayHomeTz != null &&
+        est.sleepStartHourHomeTz != null &&
+        est.sleepEndDayHomeTz != null &&
+        est.sleepEndHourHomeTz != null
+      ) {
+        addDaySleepBar(sleepBars, baseSleepFields(est, duty), est.sleepStartDayHomeTz, est.sleepStartHourHomeTz,
+          est.sleepEndDayHomeTz, est.sleepEndHourHomeTz, daysInMonth);
       }
     }
 
-    // ---- In-flight rest bars (Path 1: home-TZ precomputed) ----
+    // ---- In-flight rest bars (home-TZ precomputed) ----
     for (const block of duty.inflightRestBlocks) {
       if (
-        block.startDayHomeTz != null &&
-        block.startHourHomeTz != null &&
-        block.endDayHomeTz != null &&
-        block.endHourHomeTz != null
-      ) {
-        const slices = splitOvernightBar(
-          block.startDayHomeTz,
-          block.startHourHomeTz,
-          block.endHourHomeTz,
-          daysInMonth,
-        );
-        for (const s of slices) {
-          irBars.push({
-            rowIndex: s.rowIndex,
-            startHour: s.startHour,
-            endHour: s.endHour,
-            durationHours: block.durationHours,
-            effectiveSleepHours: block.effectiveSleepHours,
-            isDuringWocl: block.isDuringWocl,
-            crewSet: block.crewSet,
-            relatedDuty: duty,
-          });
-        }
-      } else {
-        console.warn(
-          `[homeBaseTransform] Skipping IR bar for duty ${duty.dateString ?? duty.date.toISOString()}: ` +
-          'missing home-TZ precomputed fields on inflightRestBlock',
-        );
+        block.startDayHomeTz == null ||
+        block.startHourHomeTz == null ||
+        block.endDayHomeTz == null ||
+        block.endHourHomeTz == null
+      ) continue;
+      for (const s of splitOvernightBar(block.startDayHomeTz, block.startHourHomeTz, block.endHourHomeTz, daysInMonth)) {
+        irBars.push({
+          rowIndex: s.rowIndex,
+          startHour: s.startHour,
+          endHour: s.endHour,
+          durationHours: block.durationHours,
+          effectiveSleepHours: block.effectiveSleepHours,
+          isDuringWocl: block.isDuringWocl,
+          crewSet: block.crewSet,
+          relatedDuty: duty,
+        });
       }
     }
   }
 
-  // ---- Rest day sleep ----
-  if (restDaysSleep) {
-    for (const restDay of restDaysSleep) {
-      const pseudoDuty = createRestDayPseudoDuty(restDay);
-      for (let blockIdx = 0; blockIdx < restDay.sleepBlocks.length; blockIdx++) {
-        const block = restDay.sleepBlocks[blockIdx];
-        if (
-          block.sleepStartDayHomeTz != null &&
-          block.sleepStartHourHomeTz != null &&
-          block.sleepEndDayHomeTz != null &&
-          block.sleepEndHourHomeTz != null
-        ) {
-          const startDay = block.sleepStartDayHomeTz;
-          const startHour = block.sleepStartHourHomeTz;
-          const endDay = block.sleepEndDayHomeTz;
-          const endHour = block.sleepEndHourHomeTz;
-
-          if (startDay > daysInMonth || endDay < 1) continue;
-
-          const baseFields: Omit<TimelineSleepBar, 'rowIndex' | 'startHour' | 'endHour' | 'isOvernightStart' | 'isOvernightContinuation'> = {
-            recoveryScore: (block.effectiveHours / 8) * 100,
-            effectiveSleep: block.effectiveHours,
-            sleepEfficiency: restDay.sleepEfficiency,
-            sleepStrategy: restDay.strategyType,
-            isPreDuty: false,
-            relatedDuty: pseudoDuty,
-            originalStartHour: startHour,
-            originalEndHour: endHour,
-            sleepStartZulu: isoToZulu(block.sleepStartIso) ?? undefined,
-            sleepEndZulu: isoToZulu(block.sleepEndIso) ?? undefined,
-            qualityFactors: restDay.qualityFactors,
-            explanation: restDay.explanation,
-            confidenceBasis: restDay.confidenceBasis,
-            confidence: restDay.confidence,
-            references: restDay.references,
-            blockKey: `rest::${format(restDay.date, 'yyyy-MM-dd')}::${blockIdx}`,
-            sleepStartIso: block.sleepStartIso,
-            sleepEndIso: block.sleepEndIso,
-          };
-
-          if (startDay === endDay) {
-            if (endHour <= startHour) {
-              const slices = splitOvernightBar(startDay, startHour, endHour, daysInMonth);
-              for (const s of slices) sleepBars.push({ ...baseFields, ...s });
-            } else {
-              sleepBars.push({ ...baseFields, rowIndex: startDay, startHour, endHour });
-            }
-          } else {
-            if (startDay >= 1 && startDay <= daysInMonth) {
-              sleepBars.push({ ...baseFields, rowIndex: startDay, startHour, endHour: 24, isOvernightStart: true });
-            }
-            if (endDay >= 1 && endDay <= daysInMonth) {
-              sleepBars.push({ ...baseFields, rowIndex: endDay, startHour: 0, endHour, isOvernightContinuation: true });
-            }
-          }
-        } else {
-          console.warn(
-            `[homeBaseTransform] Skipping rest-day sleep bar for ${restDay.date.toISOString()}: ` +
-            'missing home-TZ precomputed fields on sleepBlock',
-          );
-        }
-      }
-    }
+  // ---- Rest-day sleep ----
+  for (const restDay of restDaysSleep ?? []) {
+    restDay.sleepBlocks.forEach((block, blockIdx) => {
+      if (
+        block.sleepStartDayHomeTz == null ||
+        block.sleepStartHourHomeTz == null ||
+        block.sleepEndDayHomeTz == null ||
+        block.sleepEndHourHomeTz == null
+      ) return;
+      const fields = restDaySleepFields(restDay, blockIdx, block.sleepStartHourHomeTz, block.sleepEndHourHomeTz);
+      addDaySleepBar(sleepBars, fields, block.sleepStartDayHomeTz, block.sleepStartHourHomeTz,
+        block.sleepEndDayHomeTz, block.sleepEndHourHomeTz, daysInMonth);
+    });
   }
-
-  // ---- WOCL band (static) ----
-  const woclBands: WoclBand[] = [{ rowIndex: -1, startHour: WOCL_START, endHour: WOCL_END }];
-
-  // ---- WMZ band (static — 18:00-21:00 home base time, Dijk & Czeisler 1994) ----
-  const wmzBands: WmzBand[] = [{ rowIndex: -1, startHour: WMZ_START, endHour: WMZ_END }];
 
   return {
     variant: 'homebase',
@@ -622,11 +477,11 @@ export function homeBaseTransform(
     sleepBars: deduplicateTimelineBars(sleepBars),
     inflightRestBars: irBars,
     fdpMarkers,
-    woclBands,
-    wmzBands,
+    peakMarkers,
+    ...STATIC_BANDS(),
     rowLabels: buildMonthRowLabels(duties, month),
     totalRows: daysInMonth,
-    xAxisLabel: 'Time of Day (Home Base)',
+    xAxisLabel: 'Time of day (home base)',
   };
 }
 
@@ -634,137 +489,42 @@ export function homeBaseTransform(
 // 2. UTC TRANSFORM
 // ===========================================================================
 
-/** Build TimelineSegments using UTC times from flight segments.
- *  Includes ground/turnaround segments between flights and a post-flight
- *  segment from last arrival to duty end. */
-function buildUtcSegments(
-  duty: DutyAnalysis,
-  checkInHour: number,
-  dutyEndHour: number,
-): TimelineSegment[] {
-  const segments: TimelineSegment[] = [];
-  let lastEndHour: number | undefined;
-
-  if (duty.flightSegments.length > 0) {
-    const firstDepRaw = parseUtcTimeStr(duty.flightSegments[0].departureTimeUtc);
-    if (firstDepRaw !== null) {
-      const firstDepUtc = firstDepRaw < checkInHour ? firstDepRaw + 24 : firstDepRaw;
-      if (firstDepUtc > checkInHour + 0.01) {
-        segments.push({
-          type: 'checkin',
-          startHour: checkInHour,
-          endHour: firstDepUtc,
-          performance: duty.avgPerformance,
-        });
-        lastEndHour = firstDepUtc;
-      } else {
-        lastEndHour = checkInHour;
-      }
-    } else {
-      lastEndHour = checkInHour;
-    }
-  }
-
-  for (const seg of duty.flightSegments) {
-    const depH = parseUtcTimeStr(seg.departureTimeUtc);
-    const arrH = parseUtcTimeStr(seg.arrivalTimeUtc);
-    if (depH === null || arrH === null) continue;
-
-    const adjustedDep = depH < (lastEndHour ?? checkInHour) ? depH + 24 : depH;
-    let adjustedArr = arrH < depH ? arrH + 24 : arrH;
-    if (adjustedArr < adjustedDep) adjustedArr += 24;
-    const perf = seg.performance ?? duty.avgPerformance;
-
-    // Insert ground segment for turnaround gap
-    if (lastEndHour !== undefined && adjustedDep > lastEndHour + 0.01) {
-      segments.push({
-        type: 'ground',
-        startHour: lastEndHour,
-        endHour: adjustedDep,
-        performance: duty.avgPerformance,
-      });
-    }
-
-    segments.push({
-      type: seg.isDeadhead ? 'ground' : 'flight',
-      flightNumber: seg.flightNumber,
-      departure: seg.departure,
-      arrival: seg.arrival,
-      startHour: adjustedDep,
-      endHour: adjustedArr,
-      performance: perf,
-      activityCode: seg.activityCode,
-      isDeadhead: seg.isDeadhead,
-      phases: seg.isDeadhead ? undefined : buildFlightPhases(perf, duty.landingPerformance),
-    });
-
-    lastEndHour = adjustedArr;
-  }
-
-  // Post-flight ground segment (last arrival → duty end)
-  if (lastEndHour !== undefined) {
-    const adjustedEnd = dutyEndHour < lastEndHour ? dutyEndHour + 24 : dutyEndHour;
-    if (adjustedEnd > lastEndHour + 0.01) {
-      segments.push({
-        type: 'postflight',
-        startHour: lastEndHour,
-        endHour: adjustedEnd,
-        performance: duty.avgPerformance,
-      });
-    }
-  }
-
-  return segments;
-}
-
-/**
- * Helper to add a sleep bar in the UTC view, handling same-day, overnight,
- * and multi-day splitting.
- */
+/** Add a UTC sleep bar, handling same-day, overnight and multi-day blocks. */
 function addUtcSleepBar(
   bars: TimelineSleepBar[],
   startDay: number,
   startHour: number,
   endDay: number,
   endHour: number,
-  fields: Omit<TimelineSleepBar, 'rowIndex' | 'startHour' | 'endHour' | 'isOvernightStart' | 'isOvernightContinuation'>,
+  fields: SleepFields,
   maxRow: number,
 ): void {
   if (startDay > maxRow || endDay < 1) return;
 
   if (startDay === endDay) {
     if (endHour <= startHour && endHour > 0) {
-      // Wraps midnight on same UTC day number
-      const slices = splitOvernightBar(startDay, startHour, endHour, maxRow);
-      for (const s of slices) bars.push({ ...fields, ...s });
-    } else {
-      if (startDay >= 1 && startDay <= maxRow) {
-        bars.push({ ...fields, rowIndex: startDay, startHour, endHour: endHour > startHour ? endHour : 24 });
-      }
+      for (const s of splitOvernightBar(startDay, startHour, endHour, maxRow)) bars.push({ ...fields, ...s });
+    } else if (startDay >= 1 && startDay <= maxRow) {
+      bars.push({ ...fields, rowIndex: startDay, startHour, endHour: endHour > startHour ? endHour : 24 });
     }
-  } else {
-    // Multi-day: first day startHour..24, intermediate full rows, last day 0..endHour
-    if (startDay >= 1 && startDay <= maxRow) {
-      bars.push({ ...fields, rowIndex: startDay, startHour, endHour: 24, isOvernightStart: true });
-    }
-    // Intermediate full days (rare for sleep, but handle it)
-    for (let d = startDay + 1; d < endDay; d++) {
-      if (d >= 1 && d <= maxRow) {
-        bars.push({ ...fields, rowIndex: d, startHour: 0, endHour: 24 });
-      }
-    }
-    if (endDay >= 1 && endDay <= maxRow && endHour > 0) {
-      bars.push({ ...fields, rowIndex: endDay, startHour: 0, endHour, isOvernightContinuation: true });
-    }
+    return;
+  }
+  if (startDay >= 1 && startDay <= maxRow) {
+    bars.push({ ...fields, rowIndex: startDay, startHour, endHour: 24, isOvernightStart: true });
+  }
+  for (let d = startDay + 1; d < endDay; d++) {
+    if (d >= 1 && d <= maxRow) bars.push({ ...fields, rowIndex: d, startHour: 0, endHour: 24 });
+  }
+  if (endDay >= 1 && endDay <= maxRow && endHour > 0) {
+    bars.push({ ...fields, rowIndex: endDay, startHour: 0, endHour, isOvernightContinuation: true });
   }
 }
 
 /**
  * Transform DutyAnalysis[] into TimelineData for the UTC (Zulu) view.
  *
- * Duty bars use UTC flight segment times. Sleep bars prefer ISO timestamps
- * converted to UTC day/hour via utcDayHour(), falling back to location-TZ
- * precomputed fields.
+ * Duty bars use UTC sector times. Sleep bars prefer ISO timestamps converted
+ * to UTC day/hour, falling back to location-TZ precomputed fields.
  */
 export function utcTransform(
   duties: DutyAnalysis[],
@@ -777,239 +537,124 @@ export function utcTransform(
   const sleepBars: TimelineSleepBar[] = [];
   const irBars: TimelineIRBar[] = [];
   const fdpMarkers: TimelineFdpMarker[] = [];
+  const peakMarkers: TimelinePeakMarker[] = [];
 
   for (const duty of duties) {
     const dayOfMonth = dutyDayOfMonth(duty);
 
     // ---- Duty bars ----
     if (isTrainingDuty(duty)) {
-      // Training duties: use reportTimeUtc/releaseTimeUtc ISO timestamps
-      let startDay = dayOfMonth;
-      let startHour: number | undefined;
-      let endHour: number | undefined;
-
-      if (duty.reportTimeUtc) {
-        const parsed = utcDayHour(duty.reportTimeUtc);
-        startDay = parsed.day;
-        startHour = parsed.hour;
-      }
-      if (duty.releaseTimeUtc) {
-        const parsed = utcDayHour(duty.releaseTimeUtc);
-        endHour = parsed.hour;
-      }
-
-      if (startHour !== undefined && endHour !== undefined) {
-        const isOvernight = endHour < startHour;
-        if (isOvernight) {
-          const slices = splitOvernightBar(startDay, startHour, endHour, daysInMonth);
-          for (const s of slices) {
-            dutyBars.push({ ...s, duty, segments: [buildTrainingSegment(duty, s.startHour, s.endHour)] });
-          }
-        } else {
-          dutyBars.push({
-            rowIndex: startDay,
-            startHour,
-            endHour,
-            duty,
-            segments: [buildTrainingSegment(duty, startHour, endHour)],
-          });
-        }
+      if (duty.reportTimeUtc && duty.releaseTimeUtc) {
+        const start = utcDayHour(duty.reportTimeUtc);
+        const end = utcDayHour(duty.releaseTimeUtc);
+        dutyBars.push(...dutySlices(duty, start.day, start.hour, end.hour, [buildTrainingSegment(duty, start.hour, end.hour)], daysInMonth, true));
+        peakMarkers.push(...peakMarker(duty, start.day, start.hour, daysInMonth));
       }
     } else if (duty.flightSegments.length > 0) {
-      // Flight duty: UTC times from segments
-      const firstDepUtc = parseUtcTimeStr(duty.flightSegments[0].departureTimeUtc);
-      const lastArrUtc = parseUtcTimeStr(duty.flightSegments[duty.flightSegments.length - 1].arrivalTimeUtc);
+      const [firstDepUtc] = utcTimes(duty.flightSegments[0]);
+      const [, lastArrUtc] = utcTimes(duty.flightSegments[duty.flightSegments.length - 1]);
 
-      // Check-in: prefer reportTimeUtc ISO, else estimate -1h from departure
       let checkInDay = dayOfMonth;
       let checkInHour: number | undefined;
-
-      if (duty.reportTimeUtc) {
-        try {
-          const parsed = utcDayHour(duty.reportTimeUtc);
-          checkInDay = parsed.day;
-          checkInHour = parsed.hour;
-        } catch {
-          // fallback below
-        }
+      if (duty.reportTimeUtc && /^\d{4}-\d{2}-\d{2}T/.test(duty.reportTimeUtc)) {
+        const parsed = utcDayHour(duty.reportTimeUtc);
+        checkInDay = parsed.day;
+        checkInHour = parsed.hour;
       }
-      if (checkInHour === undefined && firstDepUtc !== null) {
+      if (checkInHour === undefined && firstDepUtc !== undefined) {
         checkInHour = firstDepUtc - DEFAULT_CHECK_IN_MINUTES / 60;
         if (checkInHour < 0) checkInHour += 24;
       }
 
-      if (checkInHour !== undefined && lastArrUtc !== null) {
+      if (checkInHour !== undefined && lastArrUtc !== undefined) {
         const endHour = lastArrUtc;
-        const isOvernight = endHour < checkInHour;
-        const segments = buildUtcSegments(duty, checkInHour, endHour);
-
-        if (isOvernight) {
-          const slices = splitOvernightBar(checkInDay, checkInHour, endHour, daysInMonth);
-          for (const s of slices) {
-            const clipped = clipSegmentsToSlice(segments, s.startHour, s.endHour, !!s.isOvernightContinuation);
-            dutyBars.push({ ...s, duty, segments: clipped });
+        const segments = buildSegments(duty, checkInHour, endHour, utcTimes);
+        const overnight = endHour < checkInHour;
+        if (overnight) {
+          for (const s of splitOvernightBar(checkInDay, checkInHour, endHour, daysInMonth)) {
+            dutyBars.push({ ...s, duty, segments: clipSegmentsToSlice(segments, s.startHour, s.endHour, !!s.isOvernightContinuation) });
           }
         } else {
-          dutyBars.push({
-            rowIndex: checkInDay,
-            startHour: checkInHour,
-            endHour,
-            duty,
-            segments,
-          });
+          dutyBars.push({ rowIndex: checkInDay, startHour: checkInHour, endHour, duty, segments });
         }
-
-        // FDP marker
-        if (duty.maxFdpHours) {
-          const fdpEndHour = checkInHour + duty.maxFdpHours;
-          if (fdpEndHour <= 24) {
-            fdpMarkers.push({ rowIndex: checkInDay, hour: fdpEndHour, maxFdp: duty.maxFdpHours, duty });
-          } else {
-            const nextRow = checkInDay + 1;
-            if (nextRow <= daysInMonth) {
-              fdpMarkers.push({ rowIndex: nextRow, hour: fdpEndHour - 24, maxFdp: duty.maxFdpHours, duty });
-            }
-          }
-        }
+        fdpMarkers.push(...fdpMarker(duty, checkInDay, checkInHour, daysInMonth));
+        peakMarkers.push(...peakMarker(duty, checkInDay, checkInHour, daysInMonth));
       }
     }
 
-    // ---- Sleep bars (ISO -> UTC preferred, fallback to location-TZ precomputed) ----
+    // ---- Sleep bars (ISO → UTC preferred, fallback to location-TZ precomputed) ----
     const est = duty.sleepEstimate;
     if (est && est.sleepStrategy !== 'ulr_pre_duty') {
-      const base = baseSleepFields(est, duty);
-
-      // Multi-block rendering: if >1 sleep block has UTC timestamps,
-      // render each individually (e.g. nap + night sleep)
-      const blocksWithUtc = (est.sleepBlocks ?? []).filter(
-        (b) => b.sleepStartUtc && b.sleepEndUtc,
-      );
+      const blocksWithUtc = (est.sleepBlocks ?? []).filter((b) => b.sleepStartUtc && b.sleepEndUtc);
 
       if (blocksWithUtc.length >= 2) {
-        for (let blockIdx = 0; blockIdx < blocksWithUtc.length; blockIdx++) {
-          const block = blocksWithUtc[blockIdx];
-          const blockBase = baseSleepFields(est, duty, {
-            blockIndex: blockIdx,
-            sleepStartUtcIso: block.sleepStartUtc,
-            sleepEndUtcIso: block.sleepEndUtc,
-          });
-          const sUtc = utcDayHour(block.sleepStartUtc!);
-          const eUtc = utcDayHour(block.sleepEndUtc!);
-          addUtcSleepBar(sleepBars, sUtc.day, sUtc.hour, eUtc.day, eUtc.hour, blockBase, daysInMonth);
-        }
+        blocksWithUtc.forEach((block, blockIdx) => {
+          const fields = baseSleepFields(est, duty, { blockIndex: blockIdx, block });
+          const s = utcDayHour(block.sleepStartUtc!);
+          const e = utcDayHour(block.sleepEndUtc!);
+          addUtcSleepBar(sleepBars, s.day, s.hour, e.day, e.hour, fields, daysInMonth);
+        });
       } else {
-        // Single-block fallback
         let startDay: number | undefined;
         let startHour: number | undefined;
         let endDay: number | undefined;
         let endHour: number | undefined;
 
         if (est.sleepStartIso && est.sleepEndIso) {
-          const startUtc = utcDayHour(est.sleepStartIso);
-          const endUtc = utcDayHour(est.sleepEndIso);
-          startDay = startUtc.day;
-          startHour = startUtc.hour;
-          endDay = endUtc.day;
-          endHour = endUtc.hour;
-        }
-
-        if (startDay == null && est.sleepStartDay != null && est.sleepEndDay != null) {
-          startDay = est.sleepStartDay;
-          startHour = est.sleepStartHour ?? 0;
-          endDay = est.sleepEndDay;
-          endHour = est.sleepEndHour ?? 0;
+          const s = utcDayHour(est.sleepStartIso);
+          const e = utcDayHour(est.sleepEndIso);
+          [startDay, startHour, endDay, endHour] = [s.day, s.hour, e.day, e.hour];
+        } else if (est.sleepStartDay != null && est.sleepEndDay != null) {
+          [startDay, startHour, endDay, endHour] = [est.sleepStartDay, est.sleepStartHour ?? 0, est.sleepEndDay, est.sleepEndHour ?? 0];
         }
 
         if (startDay != null && startHour != null && endDay != null && endHour != null) {
-          addUtcSleepBar(sleepBars, startDay, startHour, endDay, endHour, base, daysInMonth);
+          addUtcSleepBar(sleepBars, startDay, startHour, endDay, endHour, baseSleepFields(est, duty), daysInMonth);
         }
       }
     }
 
     // ---- In-flight rest bars (UTC ISO) ----
     for (const block of duty.inflightRestBlocks) {
-      if (block.startUtc && block.endUtc) {
-        const start = utcDayHour(block.startUtc);
-        const end = utcDayHour(block.endUtc);
-
-        const slices = splitOvernightBar(start.day, start.hour, end.hour, daysInMonth);
-        for (const s of slices) {
-          irBars.push({
-            rowIndex: s.rowIndex,
-            startHour: s.startHour,
-            endHour: s.endHour,
-            durationHours: block.durationHours,
-            effectiveSleepHours: block.effectiveSleepHours,
-            isDuringWocl: block.isDuringWocl,
-            crewSet: block.crewSet,
-            relatedDuty: duty,
-          });
-        }
+      if (!block.startUtc || !block.endUtc) continue;
+      const start = utcDayHour(block.startUtc);
+      const end = utcDayHour(block.endUtc);
+      for (const s of splitOvernightBar(start.day, start.hour, end.hour, daysInMonth)) {
+        irBars.push({
+          rowIndex: s.rowIndex,
+          startHour: s.startHour,
+          endHour: s.endHour,
+          durationHours: block.durationHours,
+          effectiveSleepHours: block.effectiveSleepHours,
+          isDuringWocl: block.isDuringWocl,
+          crewSet: block.crewSet,
+          relatedDuty: duty,
+        });
       }
     }
   }
 
-  // ---- Rest day sleep ----
-  if (restDaysSleep) {
-    for (const restDay of restDaysSleep) {
-      const pseudoDuty = createRestDayPseudoDuty(restDay);
-      for (let blockIdx = 0; blockIdx < restDay.sleepBlocks.length; blockIdx++) {
-        const block = restDay.sleepBlocks[blockIdx];
-        let startDay: number | undefined;
-        let startHour: number | undefined;
-        let endDay: number | undefined;
-        let endHour: number | undefined;
+  // ---- Rest-day sleep ----
+  for (const restDay of restDaysSleep ?? []) {
+    restDay.sleepBlocks.forEach((block, blockIdx) => {
+      let startDay: number | undefined;
+      let startHour: number | undefined;
+      let endDay: number | undefined;
+      let endHour: number | undefined;
 
-        // Primary: ISO -> UTC
-        if (block.sleepStartIso && block.sleepEndIso) {
-          const s = utcDayHour(block.sleepStartIso);
-          const e = utcDayHour(block.sleepEndIso);
-          startDay = s.day;
-          startHour = s.hour;
-          endDay = e.day;
-          endHour = e.hour;
-        }
-
-        // Fallback: location-TZ precomputed
-        if (startDay == null && block.sleepStartDay != null && block.sleepEndDay != null) {
-          startDay = block.sleepStartDay;
-          startHour = block.sleepStartHour ?? 0;
-          endDay = block.sleepEndDay;
-          endHour = block.sleepEndHour ?? 0;
-        }
-
-        if (startDay != null && startHour != null && endDay != null && endHour != null) {
-          const baseFields: Omit<TimelineSleepBar, 'rowIndex' | 'startHour' | 'endHour' | 'isOvernightStart' | 'isOvernightContinuation'> = {
-            recoveryScore: (block.effectiveHours / 8) * 100,
-            effectiveSleep: block.effectiveHours,
-            sleepEfficiency: restDay.sleepEfficiency,
-            sleepStrategy: restDay.strategyType,
-            isPreDuty: false,
-            relatedDuty: pseudoDuty,
-            originalStartHour: startHour,
-            originalEndHour: endHour,
-            sleepStartZulu: isoToZulu(block.sleepStartIso) ?? undefined,
-            sleepEndZulu: isoToZulu(block.sleepEndIso) ?? undefined,
-            qualityFactors: restDay.qualityFactors,
-            explanation: restDay.explanation,
-            confidenceBasis: restDay.confidenceBasis,
-            confidence: restDay.confidence,
-            references: restDay.references,
-            blockKey: `rest::${format(restDay.date, 'yyyy-MM-dd')}::${blockIdx}`,
-            sleepStartIso: block.sleepStartIso,
-            sleepEndIso: block.sleepEndIso,
-          };
-          addUtcSleepBar(sleepBars, startDay, startHour, endDay, endHour, baseFields, daysInMonth);
-        }
+      if (block.sleepStartIso && block.sleepEndIso) {
+        const s = utcDayHour(block.sleepStartIso);
+        const e = utcDayHour(block.sleepEndIso);
+        [startDay, startHour, endDay, endHour] = [s.day, s.hour, e.day, e.hour];
+      } else if (block.sleepStartDay != null && block.sleepEndDay != null) {
+        [startDay, startHour, endDay, endHour] = [block.sleepStartDay, block.sleepStartHour ?? 0, block.sleepEndDay, block.sleepEndHour ?? 0];
       }
-    }
+
+      if (startDay != null && startHour != null && endDay != null && endHour != null) {
+        addUtcSleepBar(sleepBars, startDay, startHour, endDay, endHour, restDaySleepFields(restDay, blockIdx, startHour, endHour), daysInMonth);
+      }
+    });
   }
-
-  // ---- WOCL band (static) ----
-  const woclBands: WoclBand[] = [{ rowIndex: -1, startHour: WOCL_START, endHour: WOCL_END }];
-
-  // ---- WMZ band (static — 18:00-21:00 home base time, Dijk & Czeisler 1994) ----
-  const wmzBands: WmzBand[] = [{ rowIndex: -1, startHour: WMZ_START, endHour: WMZ_END }];
 
   return {
     variant: 'utc',
@@ -1017,535 +662,10 @@ export function utcTransform(
     sleepBars: deduplicateTimelineBars(sleepBars),
     inflightRestBars: irBars,
     fdpMarkers,
-    woclBands,
-    wmzBands,
+    peakMarkers,
+    ...STATIC_BANDS(),
     rowLabels: buildMonthRowLabels(duties, month),
     totalRows: daysInMonth,
-    xAxisLabel: 'Time of Day (UTC / Zulu)',
-  };
-}
-
-// ===========================================================================
-// 3. ELAPSED TRANSFORM
-// ===========================================================================
-
-/**
- * Convert a day-of-month and hour to elapsed hours from T=0
- * (midnight on the 1st of the roster month).
- */
-function dayHourToElapsed(dayOfMonth: number, hourOfDay: number): number {
-  return (dayOfMonth - 1) * 24 + hourOfDay;
-}
-
-/**
- * Split an elapsed-hours range across 24h row boundaries.
- *
- * Each row spans [row*24, (row+1)*24). Returns bar slices with
- * startHour/endHour relative to the row (0-24).
- */
-function splitElapsedAcrossRows(
-  startElapsed: number,
-  endElapsed: number,
-): { rowIndex: number; startHour: number; endHour: number; isOvernightStart?: boolean; isOvernightContinuation?: boolean }[] {
-  const results: { rowIndex: number; startHour: number; endHour: number; isOvernightStart?: boolean; isOvernightContinuation?: boolean }[] = [];
-  if (endElapsed <= startElapsed) return results;
-
-  const firstRow = Math.floor(startElapsed / 24);
-  const lastRow = Math.floor((endElapsed - 0.001) / 24); // -epsilon so exactly on boundary stays in previous row
-
-  for (let row = firstRow; row <= lastRow; row++) {
-    const rowStart = row * 24;
-    const rowEnd = rowStart + 24;
-    const barStart = Math.max(startElapsed, rowStart) - rowStart;
-    const barEnd = Math.min(endElapsed, rowEnd) - rowStart;
-
-    if (barEnd > barStart) {
-      results.push({
-        rowIndex: row,
-        startHour: barStart,
-        endHour: barEnd,
-        isOvernightStart: row === firstRow && lastRow > firstRow ? true : undefined,
-        isOvernightContinuation: row > firstRow ? true : undefined,
-      });
-    }
-  }
-
-  return results;
-}
-
-/**
- * Transform DutyAnalysis[] into TimelineData for the Elapsed (HPT) view.
- *
- * The X axis represents elapsed hours from T=0 (midnight on the 1st of the
- * roster month). Each row is a 24-hour chunk. WOCL bands shift per row
- * based on accumulated circadian phase shift.
- */
-export function elapsedTransform(
-  duties: DutyAnalysis[],
-  month: Date,
-  restDaysSleep?: RestDaySleep[],
-): TimelineData {
-  const daysInMonth = getDaysInMonth(month);
-  const monthStart = startOfMonth(month);
-  const dutyBars: TimelineDutyBar[] = [];
-  const sleepBars: TimelineSleepBar[] = [];
-  const irBars: TimelineIRBar[] = [];
-  const fdpMarkers: TimelineFdpMarker[] = [];
-  let maxElapsedHour = 24; // at least one row
-
-  // --- Circadian shift tracking ---
-  // Build a map of day-of-month -> cumulative circadian shift
-  const circadianShiftByDay = new Map<number, number>();
-  let accumulatedShift = 0;
-  let lastDutyDay = 0;
-
-  // Sort duties by date for sequential shift tracking
-  const sortedDuties = [...duties].sort((a, b) => {
-    const da = dutyDayOfMonth(a);
-    const db = dutyDayOfMonth(b);
-    return da - db;
-  });
-
-  for (const duty of sortedDuties) {
-    const dom = dutyDayOfMonth(duty);
-
-    // Adapt shift toward 0 for rest days between duties
-    if (lastDutyDay > 0 && dom > lastDutyDay + 1) {
-      const restDays = dom - lastDutyDay - 1;
-      if (accumulatedShift > 0) {
-        accumulatedShift = Math.max(0, accumulatedShift - restDays * ADAPTATION_RATE_WEST);
-      } else if (accumulatedShift < 0) {
-        accumulatedShift = Math.min(0, accumulatedShift + restDays * ADAPTATION_RATE_EAST);
-      }
-    }
-
-    // Apply this duty's phase shift
-    const dutyShift = duty.circadianPhaseShiftValue ?? duty.circadianPhaseShift ?? 0;
-    accumulatedShift += dutyShift;
-
-    // Clamp to +/-12h
-    accumulatedShift = Math.max(-12, Math.min(12, accumulatedShift));
-
-    circadianShiftByDay.set(dom, accumulatedShift);
-    lastDutyDay = dom;
-  }
-
-  // Fill in shift values for non-duty days (decay toward 0)
-  let currentShift = 0;
-  for (let d = 1; d <= daysInMonth; d++) {
-    if (circadianShiftByDay.has(d)) {
-      currentShift = circadianShiftByDay.get(d)!;
-    } else {
-      // Adapt toward 0
-      if (currentShift > 0) {
-        currentShift = Math.max(0, currentShift - ADAPTATION_RATE_WEST);
-      } else if (currentShift < 0) {
-        currentShift = Math.min(0, currentShift + ADAPTATION_RATE_EAST);
-      }
-      circadianShiftByDay.set(d, currentShift);
-    }
-  }
-
-  // --- Duty bars ---
-  for (const duty of duties) {
-    const dayOfMonth = dutyDayOfMonth(duty);
-
-    if (isTrainingDuty(duty)) {
-      const startH = parseTimeToHours(duty.reportTimeLocal);
-      const endH = parseTimeToHours(duty.releaseTimeLocal);
-      if (startH !== undefined && endH !== undefined) {
-        const startElapsed = dayHourToElapsed(dayOfMonth, startH);
-        let endElapsed = dayHourToElapsed(dayOfMonth, endH);
-        if (endElapsed <= startElapsed) endElapsed += 24; // overnight
-        maxElapsedHour = Math.max(maxElapsedHour, endElapsed);
-
-        const totalDuration = endElapsed - startElapsed;
-        const slices = splitElapsedAcrossRows(startElapsed, endElapsed);
-        for (const s of slices) {
-          dutyBars.push({
-            ...s,
-            duty,
-            segments: [{
-              type: 'training',
-              startHour: s.startHour,
-              endHour: s.endHour,
-              widthPercent: totalDuration > 0 ? ((s.endHour - s.startHour) / totalDuration) * 100 : 100,
-              performance: duty.avgPerformance,
-              activityCode: duty.trainingCode ?? null,
-            }],
-          });
-        }
-      }
-    } else if (duty.flightSegments.length > 0) {
-      const firstDep = parseTimeToHours(duty.flightSegments[0].departureTime);
-      const lastArr = parseTimeToHours(duty.flightSegments[duty.flightSegments.length - 1].arrivalTime);
-      const reportH = parseTimeToHours(duty.reportTimeLocal);
-      const releaseH = parseTimeToHours(duty.releaseTimeLocal);
-
-      const checkInHour = reportH ?? (firstDep !== undefined ? firstDep - DEFAULT_CHECK_IN_MINUTES / 60 : undefined);
-      const dutyEnd = releaseH ?? lastArr;
-
-      if (checkInHour !== undefined && dutyEnd !== undefined) {
-        const startElapsed = dayHourToElapsed(dayOfMonth, checkInHour);
-        let adjustedDutyEnd = dutyEnd;
-        if (adjustedDutyEnd < checkInHour) adjustedDutyEnd += 24;
-        const endElapsed = dayHourToElapsed(dayOfMonth, adjustedDutyEnd);
-        maxElapsedHour = Math.max(maxElapsedHour, endElapsed);
-
-        const totalDuration = endElapsed - startElapsed;
-
-        // Build segments with widthPercent (including ground gaps)
-        const segments: TimelineSegment[] = [];
-        let lastSegEnd: number | undefined;
-
-        // Check-in
-        if (firstDep !== undefined) {
-          const ciDur = firstDep - checkInHour;
-          if (ciDur > 0) {
-            segments.push({
-              type: 'checkin',
-              startHour: checkInHour,
-              endHour: firstDep,
-              widthPercent: totalDuration > 0 ? (ciDur / totalDuration) * 100 : 0,
-              performance: duty.avgPerformance,
-            });
-            lastSegEnd = firstDep;
-          } else {
-            lastSegEnd = checkInHour;
-          }
-        }
-
-        for (const seg of duty.flightSegments) {
-          const depH = parseTimeToHours(seg.departureTime);
-          const arrH = parseTimeToHours(seg.arrivalTime);
-          if (depH === undefined || arrH === undefined) continue;
-
-          const adjustedDep = depH < (lastSegEnd ?? checkInHour) ? depH + 24 : depH;
-          let adjustedArr = arrH < depH ? arrH + 24 : arrH;
-          if (adjustedArr < adjustedDep) adjustedArr += 24;
-          const perf = seg.performance ?? duty.avgPerformance;
-
-          // Insert ground segment for turnaround gap
-          if (lastSegEnd !== undefined && adjustedDep > lastSegEnd + 0.01) {
-            const gapDur = adjustedDep - lastSegEnd;
-            segments.push({
-              type: 'ground',
-              startHour: lastSegEnd,
-              endHour: adjustedDep,
-              widthPercent: totalDuration > 0 ? (gapDur / totalDuration) * 100 : 0,
-              performance: duty.avgPerformance,
-            });
-          }
-
-          const segDur = adjustedArr - adjustedDep;
-          segments.push({
-            type: seg.isDeadhead ? 'ground' : 'flight',
-            flightNumber: seg.flightNumber,
-            departure: seg.departure,
-            arrival: seg.arrival,
-            startHour: adjustedDep,
-            endHour: adjustedArr,
-            widthPercent: totalDuration > 0 ? (segDur / totalDuration) * 100 : 0,
-            performance: perf,
-            activityCode: seg.activityCode,
-            isDeadhead: seg.isDeadhead,
-            phases: seg.isDeadhead ? undefined : buildFlightPhases(perf, duty.landingPerformance),
-          });
-
-          lastSegEnd = adjustedArr;
-        }
-
-        // Post-flight ground segment (last arrival → duty release)
-        if (lastSegEnd !== undefined && adjustedDutyEnd > lastSegEnd + 0.01) {
-          const gapDur = adjustedDutyEnd - lastSegEnd;
-          segments.push({
-            type: 'postflight',
-            startHour: lastSegEnd,
-            endHour: adjustedDutyEnd,
-            widthPercent: totalDuration > 0 ? (gapDur / totalDuration) * 100 : 0,
-            performance: duty.avgPerformance,
-          });
-        }
-
-        const slices = splitElapsedAcrossRows(startElapsed, endElapsed);
-        for (const s of slices) {
-          dutyBars.push({ ...s, duty, segments });
-        }
-
-        // FDP marker
-        if (duty.maxFdpHours) {
-          const fdpElapsed = startElapsed + duty.maxFdpHours;
-          const fdpRow = Math.floor(fdpElapsed / 24);
-          const fdpHourInRow = fdpElapsed - fdpRow * 24;
-          fdpMarkers.push({ rowIndex: fdpRow, hour: fdpHourInRow, maxFdp: duty.maxFdpHours, duty });
-          maxElapsedHour = Math.max(maxElapsedHour, fdpElapsed);
-        }
-      }
-    }
-
-    // ---- Sleep bars ----
-    const est = duty.sleepEstimate;
-    if (est && est.sleepStrategy !== 'ulr_pre_duty') {
-      const base = baseSleepFields(est, duty);
-
-      // Multi-block rendering: if >1 sleep block has home-TZ positioning,
-      // render each individually (e.g. nap + night sleep)
-      const blocksWithPos = (est.sleepBlocks ?? []).filter(
-        (b) =>
-          b.sleepStartDayHomeTz != null &&
-          b.sleepStartHourHomeTz != null &&
-          b.sleepEndDayHomeTz != null &&
-          b.sleepEndHourHomeTz != null,
-      );
-
-      if (blocksWithPos.length >= 2) {
-        for (let blockIdx = 0; blockIdx < blocksWithPos.length; blockIdx++) {
-          const block = blocksWithPos[blockIdx];
-          const blockBase = baseSleepFields(est, duty, {
-            blockIndex: blockIdx,
-            sleepStartUtcIso: block.sleepStartUtc,
-            sleepEndUtcIso: block.sleepEndUtc,
-          });
-          const se = dayHourToElapsed(block.sleepStartDayHomeTz!, block.sleepStartHourHomeTz!);
-          let ee = dayHourToElapsed(block.sleepEndDayHomeTz!, block.sleepEndHourHomeTz!);
-          if (ee <= se) ee += 24;
-          maxElapsedHour = Math.max(maxElapsedHour, ee);
-          const slices = splitElapsedAcrossRows(se, ee);
-          for (const s of slices) sleepBars.push({ ...blockBase, ...s });
-        }
-      } else {
-        // Single-block fallback
-        let startElapsed: number | undefined;
-        let endElapsed: number | undefined;
-
-        if (
-          est.sleepStartDayHomeTz != null &&
-          est.sleepStartHourHomeTz != null &&
-          est.sleepEndDayHomeTz != null &&
-          est.sleepEndHourHomeTz != null
-        ) {
-          startElapsed = dayHourToElapsed(est.sleepStartDayHomeTz, est.sleepStartHourHomeTz);
-          endElapsed = dayHourToElapsed(est.sleepEndDayHomeTz, est.sleepEndHourHomeTz);
-        }
-
-        if (startElapsed == null && est.sleepStartIso && est.sleepEndIso) {
-          const sp = parseIsoDirectly(est.sleepStartIso);
-          const ep = parseIsoDirectly(est.sleepEndIso);
-          if (sp && ep) {
-            startElapsed = dayHourToElapsed(sp.dayOfMonth, sp.hour);
-            endElapsed = dayHourToElapsed(ep.dayOfMonth, ep.hour);
-          }
-        }
-
-        if (startElapsed == null && est.sleepStartTime && est.sleepEndTime) {
-          const sH = parseTimeToHours(est.sleepStartTime);
-          const eH = parseTimeToHours(est.sleepEndTime);
-          const dom = dutyDayOfMonth(duty);
-          if (sH !== undefined && eH !== undefined) {
-            startElapsed = dayHourToElapsed(dom, sH);
-            endElapsed = dayHourToElapsed(dom, eH);
-          }
-        }
-
-        if (startElapsed != null && endElapsed != null) {
-          if (endElapsed <= startElapsed) endElapsed += 24;
-          maxElapsedHour = Math.max(maxElapsedHour, endElapsed);
-          const slices = splitElapsedAcrossRows(startElapsed, endElapsed);
-          for (const s of slices) sleepBars.push({ ...base, ...s });
-        }
-      }
-    }
-
-    // ---- In-flight rest bars ----
-    for (const block of duty.inflightRestBlocks) {
-      let startElapsed: number | undefined;
-      let endElapsed: number | undefined;
-
-      // Prefer home-TZ precomputed
-      if (
-        block.startDayHomeTz != null &&
-        block.startHourHomeTz != null &&
-        block.endDayHomeTz != null &&
-        block.endHourHomeTz != null
-      ) {
-        startElapsed = dayHourToElapsed(block.startDayHomeTz, block.startHourHomeTz);
-        endElapsed = dayHourToElapsed(block.endDayHomeTz, block.endHourHomeTz);
-      }
-
-      // Fallback: UTC ISO
-      if (startElapsed == null && block.startUtc && block.endUtc) {
-        const s = utcDayHour(block.startUtc);
-        const e = utcDayHour(block.endUtc);
-        startElapsed = dayHourToElapsed(s.day, s.hour);
-        endElapsed = dayHourToElapsed(e.day, e.hour);
-      }
-
-      if (startElapsed != null && endElapsed != null) {
-        if (endElapsed <= startElapsed) endElapsed += 24;
-        maxElapsedHour = Math.max(maxElapsedHour, endElapsed);
-
-        const slices = splitElapsedAcrossRows(startElapsed, endElapsed);
-        for (const s of slices) {
-          irBars.push({
-            rowIndex: s.rowIndex,
-            startHour: s.startHour,
-            endHour: s.endHour,
-            durationHours: block.durationHours,
-            effectiveSleepHours: block.effectiveSleepHours,
-            isDuringWocl: block.isDuringWocl,
-            crewSet: block.crewSet,
-            relatedDuty: duty,
-          });
-        }
-      }
-    }
-  }
-
-  // ---- Rest day sleep ----
-  if (restDaysSleep) {
-    for (const restDay of restDaysSleep) {
-      const pseudoDuty = createRestDayPseudoDuty(restDay);
-      for (let blockIdx = 0; blockIdx < restDay.sleepBlocks.length; blockIdx++) {
-        const block = restDay.sleepBlocks[blockIdx];
-        let startElapsed: number | undefined;
-        let endElapsed: number | undefined;
-
-        // Path 1: home-TZ precomputed
-        if (
-          block.sleepStartDayHomeTz != null &&
-          block.sleepStartHourHomeTz != null &&
-          block.sleepEndDayHomeTz != null &&
-          block.sleepEndHourHomeTz != null
-        ) {
-          startElapsed = dayHourToElapsed(block.sleepStartDayHomeTz, block.sleepStartHourHomeTz);
-          endElapsed = dayHourToElapsed(block.sleepEndDayHomeTz, block.sleepEndHourHomeTz);
-        }
-
-        // Fallback: ISO direct parse
-        if (startElapsed == null && block.sleepStartIso && block.sleepEndIso) {
-          const sp = parseIsoDirectly(block.sleepStartIso);
-          const ep = parseIsoDirectly(block.sleepEndIso);
-          if (sp && ep) {
-            startElapsed = dayHourToElapsed(sp.dayOfMonth, sp.hour);
-            endElapsed = dayHourToElapsed(ep.dayOfMonth, ep.hour);
-          }
-        }
-
-        if (startElapsed != null && endElapsed != null) {
-          if (endElapsed <= startElapsed) endElapsed += 24;
-          maxElapsedHour = Math.max(maxElapsedHour, endElapsed);
-
-          const baseFields: Omit<TimelineSleepBar, 'rowIndex' | 'startHour' | 'endHour' | 'isOvernightStart' | 'isOvernightContinuation'> = {
-            recoveryScore: (block.effectiveHours / 8) * 100,
-            effectiveSleep: block.effectiveHours,
-            sleepEfficiency: restDay.sleepEfficiency,
-            sleepStrategy: restDay.strategyType,
-            isPreDuty: false,
-            relatedDuty: pseudoDuty,
-            originalStartHour: block.sleepStartHourHomeTz ?? block.sleepStartHour,
-            originalEndHour: block.sleepEndHourHomeTz ?? block.sleepEndHour,
-            sleepStartZulu: isoToZulu(block.sleepStartIso) ?? undefined,
-            sleepEndZulu: isoToZulu(block.sleepEndIso) ?? undefined,
-            qualityFactors: restDay.qualityFactors,
-            explanation: restDay.explanation,
-            confidenceBasis: restDay.confidenceBasis,
-            confidence: restDay.confidence,
-            references: restDay.references,
-            blockKey: `rest::${format(restDay.date, 'yyyy-MM-dd')}::${blockIdx}`,
-            sleepStartIso: block.sleepStartIso,
-            sleepEndIso: block.sleepEndIso,
-          };
-
-          const slices = splitElapsedAcrossRows(startElapsed, endElapsed);
-          for (const s of slices) {
-            sleepBars.push({ ...baseFields, ...s });
-          }
-        }
-      }
-    }
-  }
-
-  // ---- WOCL + WMZ bands (DYNAMIC per row, shifted by circadian phase) ----
-  const totalRows = Math.max(1, Math.ceil(maxElapsedHour / 24));
-  const woclBands: WoclBand[] = [];
-  const wmzBands: WmzBand[] = [];
-
-  for (let row = 0; row < totalRows; row++) {
-    // Map row back to approximate day-of-month for shift lookup
-    const approxDay = row + 1; // row 0 = day 1
-    const shift = circadianShiftByDay.get(Math.min(approxDay, daysInMonth)) ?? 0;
-
-    // WOCL bands
-    let shiftedStart = WOCL_START + shift;
-    let shiftedEnd = WOCL_END + shift;
-
-    // Wrap around [0, 24)
-    shiftedStart = ((shiftedStart % 24) + 24) % 24;
-    shiftedEnd = ((shiftedEnd % 24) + 24) % 24;
-
-    if (shiftedStart < shiftedEnd) {
-      woclBands.push({ rowIndex: row, startHour: shiftedStart, endHour: shiftedEnd });
-    } else {
-      // Wraps midnight: two bands
-      woclBands.push({ rowIndex: row, startHour: shiftedStart, endHour: 24 });
-      woclBands.push({ rowIndex: row, startHour: 0, endHour: shiftedEnd });
-    }
-
-    // WMZ bands (18:00-21:00, shifted by circadian phase — Dijk & Czeisler 1994)
-    let wmzStart = WMZ_START + shift;
-    let wmzEnd = WMZ_END + shift;
-    wmzStart = ((wmzStart % 24) + 24) % 24;
-    wmzEnd = ((wmzEnd % 24) + 24) % 24;
-
-    if (wmzStart < wmzEnd) {
-      wmzBands.push({ rowIndex: row, startHour: wmzStart, endHour: wmzEnd });
-    } else {
-      wmzBands.push({ rowIndex: row, startHour: wmzStart, endHour: 24 });
-      wmzBands.push({ rowIndex: row, startHour: 0, endHour: wmzEnd });
-    }
-  }
-
-  // ---- Row labels ----
-  const rowLabels: RowLabel[] = [];
-  const dutyBarRowSet = new Set(dutyBars.map(b => b.rowIndex));
-
-  for (let row = 0; row < totalRows; row++) {
-    const approxDay = row + 1;
-    const dayResult = approxDay <= daysInMonth ? getDayWarnings(duties, approxDay) : null;
-
-    // Date range for this row
-    const rowStartDate = addDays(monthStart, row);
-
-    // Circadian annotation
-    const shift = circadianShiftByDay.get(Math.min(approxDay, daysInMonth)) ?? 0;
-    let circadianAnnotation: string | undefined;
-    if (Math.abs(shift) > 0.5) {
-      const direction = shift > 0 ? 'E' : 'W';
-      const sign = shift > 0 ? '+' : '';
-      circadianAnnotation = `\u2192${direction} ${sign}${shift.toFixed(1)}h`;
-    }
-
-    rowLabels.push({
-      rowIndex: row,
-      label: `Day ${row + 1} (${format(rowStartDate, 'MMM d')})`,
-      date: rowStartDate,
-      hasDuty: dutyBarRowSet.has(row),
-      risk: dayResult?.risk,
-      warnings: dayResult?.warnings ?? [],
-      circadianAnnotation,
-    });
-  }
-
-  return {
-    variant: 'elapsed',
-    dutyBars,
-    sleepBars: deduplicateTimelineBars(sleepBars),
-    inflightRestBars: irBars,
-    fdpMarkers,
-    woclBands,
-    wmzBands,
-    rowLabels,
-    totalRows,
-    xAxisLabel: 'Hours (Elapsed)',
+    xAxisLabel: 'Time of day (UTC)',
   };
 }

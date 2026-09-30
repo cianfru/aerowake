@@ -2,11 +2,10 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { getRecoveryClasses, getStrategyIcon, decimalToHHmm, QUALITY_FACTOR_LABELS } from '@/lib/fatigue-utils';
-import { SleepQualityBadge } from '../SleepQualityBadge';
+import { decimalToHHmm, QUALITY_FACTOR_LABELS } from '@/lib/fatigue-utils';
 import { EditableSleepBar } from './EditableSleepBar';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
-import { ChevronDown, BedDouble, BatteryCharging, Lightbulb, Clock, Sparkles, Moon, Microscope, BookOpen } from 'lucide-react';
+import { ChevronDown, BedDouble, Moon, Microscope, BookOpen } from 'lucide-react';
 import type { TimelineSleepBar } from '@/lib/timeline-types';
 import type { SleepEdit } from '@/hooks/useSleepEdits';
 import { format } from 'date-fns';
@@ -36,57 +35,59 @@ interface SleepBarPopoverProps {
   getRowEl?: () => HTMLDivElement | null;
 }
 
+const STRATEGY_LABELS: Record<string, string> = {
+  normal: 'Normal night',
+  anchor: 'Anchored to home time',
+  split: 'Split sleep',
+  early_bedtime: 'Early bedtime',
+  restricted: 'Restricted by the roster',
+  extended: 'Extended recovery',
+  recovery: 'Recovery',
+  post_duty_recovery: 'Recovery after duty',
+  nap: 'Night departure with nap',
+  afternoon_nap: 'Afternoon nap',
+};
+
+const strategyLabel = (s: string) => STRATEGY_LABELS[s] ?? s.split('_').join(' ');
+
 export function SleepBarPopover({
   bar,
   widthPercent,
   leftPercent,
-  variant,
   isEditable,
   pendingEdit,
   onSleepEdit,
-  onRemoveEdit,
   isEditing,
   onActivateEdit,
   onDeactivateEdit,
   getRowEl,
 }: SleepBarPopoverProps) {
-  const classes = getRecoveryClasses(bar.recoveryScore);
   const hasEdit = pendingEdit != null;
+  const isNap = bar.sleepType === 'nap';
 
-  // Controlled popover state — single-click opens, double-click enters edit mode
+  // Controlled popover — single click opens it, double click enters edit mode.
   const [popoverOpen, setPopoverOpen] = useState(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => { if (clickTimer.current) clearTimeout(clickTimer.current); }, []);
 
-  // Determine border radius based on overnight status
-  const borderRadius = bar.isOvernightStart
-    ? '2px 0 0 2px'
-    : bar.isOvernightContinuation
-      ? '0 2px 2px 0'
-      : '2px';
+  const borderRadius = bar.isOvernightStart ? '3px 0 0 3px' : bar.isOvernightContinuation ? '0 3px 3px 0' : '3px';
 
-  // Current display times (use edited values if available)
   const originalStart = bar.originalStartHour ?? bar.startHour;
   const originalEnd = bar.originalEndHour ?? bar.endHour;
   const displayStartHour = hasEdit ? pendingEdit!.newStartHour : originalStart;
   const displayEndHour = hasEdit ? pendingEdit!.newEndHour : originalEnd;
+  const windowHours = ((displayEndHour - displayStartHour) % 24 + 24) % 24;
 
-  // Can edit: must be homebase, have a blockKey + sleepId, have UTC ISOs, and NOT be an overnight continuation
-  // (only the primary half of an overnight sleep is editable — the continuation just follows)
+  // Only the primary half of an overnight sleep is editable; the continuation follows.
   const canEdit = isEditable && bar.blockKey && bar.sleepId && bar.sleepStartIso && bar.sleepEndIso && !bar.isOvernightContinuation;
 
-  // ── Click / double-click discrimination ──
-  // Single-click (after 250ms timeout) → open popover
-  // Double-click (clears timer) → enter drag-edit mode
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (clickTimer.current) clearTimeout(clickTimer.current);
     if (e.detail === 0) { setPopoverOpen(true); return; }
-    clickTimer.current = setTimeout(() => {
-      setPopoverOpen(true);
-    }, 250);
+    clickTimer.current = setTimeout(() => setPopoverOpen(true), 250);
   }, []);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
@@ -96,12 +97,9 @@ export function SleepBarPopover({
       clearTimeout(clickTimer.current);
       clickTimer.current = null;
     }
-    if (canEdit && onActivateEdit && bar.blockKey) {
-      onActivateEdit(bar.blockKey);
-    }
+    if (canEdit && onActivateEdit && bar.blockKey) onActivateEdit(bar.blockKey);
   }, [canEdit, onActivateEdit, bar.blockKey]);
 
-  // ── If in edit mode, render the draggable bar instead of popover ──
   if (isEditing && canEdit && onSleepEdit && onDeactivateEdit && getRowEl) {
     return (
       <EditableSleepBar
@@ -116,37 +114,30 @@ export function SleepBarPopover({
     );
   }
 
-  // ── Normal mode: controlled popover + click/double-click on the bar div ──
+  const title = isNap ? 'Nap (estimated)' : 'Sleep (estimated)';
+
   return (
     <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
       {/* Hidden anchor so Radix knows where to position the popover */}
       <PopoverTrigger asChild>
         <span
-          className="absolute pointer-events-none"
-          style={{
-            top: 0,
-            height: '100%',
-            left: `${leftPercent}%`,
-            width: `${Math.max(widthPercent, 1)}%`,
-          }}
+          className="pointer-events-none absolute"
+          style={{ top: 0, height: '100%', left: `${leftPercent}%`, width: `${Math.max(widthPercent, 1)}%` }}
           aria-hidden
         />
       </PopoverTrigger>
-      {/* Visible bar — handles click/double-click without Radix interference */}
       <button
         type="button"
-        aria-label={`Inspect estimated sleep ${decimalToHHmm(displayStartHour)} to ${decimalToHHmm(displayEndHour)}`}
+        aria-label={`Inspect estimated ${isNap ? 'nap' : 'sleep'} ${decimalToHHmm(displayStartHour)} to ${decimalToHHmm(displayEndHour)}`}
         aria-haspopup="dialog"
         aria-expanded={popoverOpen}
         className={cn(
-          "absolute z-[5] flex items-center justify-end px-1 border cursor-pointer hover:brightness-110 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          hasEdit
-            ? "border-warning/60 bg-warning/10 border-solid"
-            : "border-dashed border-primary/20 bg-primary/5"
+          'calendar-seg absolute z-[5] flex cursor-pointer items-center justify-center border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          hasEdit ? 'border-solid border-primary/70 bg-primary/15' : 'border-dashed border-primary/45 bg-primary/[0.07] hover:bg-primary/[0.12]',
         )}
         style={{
-          top: 0,
-          height: '100%',
+          top: 4,
+          bottom: 4,
           left: `${leftPercent}%`,
           width: `${Math.max(widthPercent, 1)}%`,
           borderRadius,
@@ -156,273 +147,111 @@ export function SleepBarPopover({
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
       >
-        {/* Show recovery info if bar is wide enough */}
-        {widthPercent > 6 && (
-          <div className={cn("flex items-center gap-0.5 text-[8px] font-medium", hasEdit ? "text-warning" : classes.text)}>
-            <span>{getStrategyIcon(bar.sleepStrategy)}</span>
-            <span>{Math.round(bar.recoveryScore)}%</span>
-          </div>
-        )}
-        {/* Sleep quality badge */}
-        {widthPercent > 4 && !hasEdit && (
-          <SleepQualityBadge qualityFactors={bar.qualityFactors} />
-        )}
-        {/* Modified indicator */}
-        {hasEdit && widthPercent > 3 && (
-          <span className="text-[7px] text-warning font-medium ml-0.5">{'\u270E'}</span>
+        {!bar.isOvernightContinuation && windowHours >= 3 && (
+          <span className="calendar-seg-label font-mono text-[11px] leading-none text-muted-foreground tabular">
+            {hasEdit ? 'edited' : `${windowHours.toFixed(1)}h`}
+          </span>
         )}
       </button>
-      <PopoverContent align="start" side="top" className="max-w-xs p-3">
-        <div className="space-y-2 text-xs">
-          <p className="text-muted-foreground">Estimated sleep from the roster, not a record of sleep taken.</p>
-          {/* ── HEADER: Type + Score + Confidence ── */}
-          <div className="flex items-center justify-between">
-            <div className="font-semibold flex items-center gap-1.5">
-              {bar.isPreDuty ? <BedDouble className="h-4 w-4" /> : <BatteryCharging className="h-4 w-4" />}
-              <span>{bar.isPreDuty ? 'Pre-Duty Sleep' : 'Recovery Sleep'}</span>
-              {hasEdit && (
-                <span className="text-[9px] font-medium uppercase tracking-[0.06em] text-warning border border-warning/30 px-1.5 py-0.5 rounded-[4px]">
-                  Modified
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5">
-              {/* Confidence badge (inline) */}
-              {bar.confidence != null && (
-                <span className={cn(
-                  "text-[9px] font-mono font-medium px-1 py-0.5 rounded-[4px] border",
-                  bar.confidence >= 0.7 ? "border-success/30 text-success" :
-                  bar.confidence >= 0.5 ? "border-warning/30 text-warning" : "border-high/30 text-high"
-                )}>
-                  {Math.round(bar.confidence * 100)}%
-                </span>
-              )}
-              {/* Score */}
-              <div className={cn("text-lg font-bold", hasEdit ? "text-warning" : classes.text)}>
-                {Math.round(bar.recoveryScore)}%
-              </div>
-            </div>
+      <PopoverContent align="start" side="top" className="w-80 max-w-[calc(100vw-2rem)] p-4">
+        <div className="space-y-3 text-xs">
+          <div className="flex items-start justify-between gap-3">
+            <p className="flex items-center gap-1.5 text-sm font-semibold">
+              {isNap ? <Moon className="h-4 w-4" aria-hidden="true" /> : <BedDouble className="h-4 w-4" aria-hidden="true" />}
+              {title}
+            </p>
+            {hasEdit && <span className="rounded-[4px] border border-primary/40 px-1.5 py-0.5 text-[11px] font-medium text-primary">Edited</span>}
           </div>
+          <p className="text-muted-foreground">Estimated sleep from the roster, not a record of sleep taken.</p>
 
-          {/* ── EXPLANATION + CONFIDENCE BASIS ── */}
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+            <dt className="text-muted-foreground">Window (home base)</dt>
+            <dd className="font-mono tabular">
+              {decimalToHHmm(displayStartHour)}–{decimalToHHmm(displayEndHour)}
+              {bar.sleepStartZulu && bar.sleepEndZulu && (
+                <span className="ml-2 text-muted-foreground">{bar.sleepStartZulu}–{bar.sleepEndZulu}</span>
+              )}
+            </dd>
+            <dt className="text-muted-foreground">Effective sleep</dt>
+            <dd className="font-mono tabular">{bar.effectiveSleep.toFixed(1)}h</dd>
+            <dt className="text-muted-foreground">Efficiency</dt>
+            <dd className="font-mono tabular">{Math.round(bar.sleepEfficiency * 100)}%</dd>
+            {(bar.woclOverlapHours ?? 0) > 0 && (
+              <><dt className="text-muted-foreground">In body-clock low</dt><dd className="font-mono tabular">{bar.woclOverlapHours!.toFixed(1)}h</dd></>
+            )}
+            <dt className="text-muted-foreground">Pattern</dt>
+            <dd>{strategyLabel(bar.sleepStrategy)}</dd>
+            {bar.confidence != null && (
+              <><dt className="text-muted-foreground">Confidence</dt><dd className="font-mono tabular">{Math.round(bar.confidence * 100)}%</dd></>
+            )}
+          </dl>
+
           {(bar.explanation || bar.confidenceBasis) && (
-            <div className="bg-primary/5 border border-primary/20 rounded-md p-2 text-[11px] text-muted-foreground leading-relaxed space-y-1">
-              {bar.explanation && (
-                <p>
-                  <Lightbulb className="h-3 w-3 text-primary inline-block mr-0.5" />
-                  {bar.explanation}
-                </p>
-              )}
-              {bar.confidenceBasis && (
-                <p className="text-[10px] text-muted-foreground">
-                  {bar.confidenceBasis}
-                </p>
-              )}
+            <div className="space-y-1 rounded-lg border border-border bg-muted/40 p-2.5 leading-relaxed text-muted-foreground">
+              {bar.explanation && <p>{bar.explanation}</p>}
+              {bar.confidenceBasis && <p>{bar.confidenceBasis}</p>}
             </div>
           )}
 
-          {/* ── SLEEP WINDOW + ZULU (combined row) ── */}
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span>Sleep Window</span>
-            <div className="flex items-center gap-2">
-              <span className={cn("font-mono font-medium", hasEdit ? "text-warning" : "text-foreground")}>
-                {decimalToHHmm(displayStartHour)} {'\u2192'} {decimalToHHmm(displayEndHour)}
-                {(bar.isOvernightStart || bar.isOvernightContinuation) &&
-                 displayStartHour > displayEndHour && ' (+1d)'}
-              </span>
-              {bar.sleepStartZulu && bar.sleepEndZulu && (
-                <span className="text-[10px] text-muted-foreground font-mono">
-                  {bar.sleepStartZulu}{'\u2192'}{bar.sleepEndZulu}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* ── COMPACT RECOVERY SUMMARY ── */}
-          <div className="flex items-center gap-3 text-[11px]">
-            <div className="flex items-center gap-1">
-              <Clock className="h-3 w-3 text-muted-foreground" />
-              <span className={cn(
-                "font-mono font-medium",
-                bar.effectiveSleep >= 7 ? "text-success" :
-                bar.effectiveSleep >= 5 ? "text-warning" : "text-critical"
-              )}>
-                {bar.effectiveSleep.toFixed(1)}h
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Sparkles className="h-3 w-3 text-muted-foreground" />
-              <span className={cn(
-                "font-mono font-medium",
-                bar.sleepEfficiency >= 0.9 ? "text-success" :
-                bar.sleepEfficiency >= 0.7 ? "text-warning" : "text-high"
-              )}>
-                {Math.round(bar.sleepEfficiency * 100)}%
-              </span>
-            </div>
-            {(bar.woclOverlapHours ?? 0) > 0 && (
-              <div className="flex items-center gap-1">
-                <Moon className="h-3 w-3 text-muted-foreground" />
-                <span className="font-mono font-medium text-critical">
-                  {bar.woclOverlapHours!.toFixed(1)}h
-                </span>
-              </div>
-            )}
-            <div className="flex items-center gap-1 ml-auto">
-              <span className="text-[10px] font-mono font-medium bg-primary/10 text-primary px-1 rounded">
-                {getStrategyIcon(bar.sleepStrategy)}
-              </span>
-              <span className="capitalize text-muted-foreground">{bar.sleepStrategy.split('_').join(' ')}</span>
-            </div>
-          </div>
-
-          {/* ── Edit hint (homebase only) ── */}
           {canEdit && (
             <button type="button" className="rounded-md border border-border px-3 py-2 text-xs font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setPopoverOpen(false); onActivateEdit?.(bar.blockKey!); }}>
               Adjust sleep times
             </button>
           )}
 
-          {/* ── COLLAPSIBLE: Score Breakdown ── */}
-          <Collapsible>
-            <CollapsibleTrigger className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors w-full group">
-              <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
-              <span>Score Breakdown</span>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="bg-secondary/30 rounded-lg p-2 space-y-1.5 mt-1.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="h-3 w-3 text-muted-foreground" />
-                    <span>Effective Sleep</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">{bar.effectiveSleep.toFixed(1)}h / 8h</span>
-                    <span className={cn(
-                      "font-mono font-medium min-w-[40px] text-right",
-                      bar.effectiveSleep >= 7 ? "text-success" :
-                      bar.effectiveSleep >= 5 ? "text-warning" : "text-critical"
-                    )}>
-                      +{Math.round((bar.effectiveSleep / 8) * 100)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles className="h-3 w-3 text-muted-foreground" />
-                    <span>Sleep Quality</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">{Math.round(bar.sleepEfficiency * 100)}% efficiency</span>
-                    <span className={cn(
-                      "font-mono font-medium min-w-[40px] text-right",
-                      bar.sleepEfficiency >= 0.9 ? "text-success" :
-                      bar.sleepEfficiency >= 0.7 ? "text-warning" : "text-high"
-                    )}>
-                      +{Math.round(bar.sleepEfficiency * 20)}
-                    </span>
-                  </div>
-                </div>
-
-                {(bar.woclOverlapHours ?? 0) > 0 && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <Moon className="h-3 w-3 text-muted-foreground" />
-                      <span>WOCL Overlap</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">{bar.woclOverlapHours!.toFixed(1)}h</span>
-                      <span className="font-mono font-medium text-critical min-w-[40px] text-right">
-                        -{Math.round(bar.woclOverlapHours! * 5)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                <div className="border-t border-border/50 pt-1.5 flex items-center justify-between font-medium">
-                  <span>Total Score</span>
-                  <span className={cn("font-mono", classes.text)}>
-                    = {Math.round(bar.recoveryScore)}%
-                  </span>
-                </div>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-
-          {/* ── COLLAPSIBLE: Model Calculation Factors ── */}
           {bar.qualityFactors && (
             <Collapsible>
-              <CollapsibleTrigger className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors w-full group">
-                <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
-                <Microscope className="h-3 w-3 inline-block" /> <span>Model Factors</span>
+              <CollapsibleTrigger className="group flex w-full items-center gap-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground">
+                <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
+                <Microscope className="h-3 w-3" aria-hidden="true" /> Sleep quality factors
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <div className="bg-secondary/20 rounded-lg p-2 space-y-1.5 mt-1.5">
+                <dl className="mt-1.5 space-y-1 rounded-lg bg-muted/40 p-2">
                   {Object.entries(bar.qualityFactors).map(([key, value]) => {
-                    const label = QUALITY_FACTOR_LABELS[key] || key;
-                    const numValue = value as number;
+                    const n = value as number;
                     const isHours = key === 'pre_duty_awake_hours';
-                    const isBoost = numValue >= 1;
                     return (
                       <div key={key} className="flex items-center justify-between text-[11px]">
-                        <span className="text-muted-foreground">{label}</span>
-                        <span className={cn(
-                          "font-mono font-medium",
-                          isHours
-                            ? (numValue <= 2 ? "text-success" : numValue <= 4 ? "text-muted-foreground" : numValue <= 8 ? "text-warning" : "text-critical")
-                            : (numValue >= 1.05 ? "text-success" : numValue >= 0.98 ? "text-muted-foreground" : numValue >= 0.90 ? "text-warning" : "text-critical")
-                        )}>
-                          {isHours ? `${numValue.toFixed(1)}h` : `${isBoost ? '+' : ''}${((numValue - 1) * 100).toFixed(0)}%`}
-                        </span>
+                        <dt className="text-muted-foreground">{QUALITY_FACTOR_LABELS[key] || key}</dt>
+                        <dd className="font-mono tabular">{isHours ? `${n.toFixed(1)}h` : `×${n.toFixed(2)}`}</dd>
                       </div>
                     );
                   })}
-                </div>
+                </dl>
               </CollapsibleContent>
             </Collapsible>
           )}
 
-          {/* ── COLLAPSIBLE: References ── */}
           {bar.references?.length ? (
             <Collapsible>
-              <CollapsibleTrigger className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors w-full group">
-                <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
-                <BookOpen className="h-3 w-3 inline-block" /> <span>References</span>
-                <span className="text-[9px] text-muted-foreground/80 ml-auto">{bar.references.length}</span>
+              <CollapsibleTrigger className="group flex w-full items-center gap-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground">
+                <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
+                <BookOpen className="h-3 w-3" aria-hidden="true" /> References ({bar.references.length})
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <div className="bg-secondary/20 rounded-lg p-2 space-y-2 mt-1.5">
-                  {bar.references.length > 0 && (
-                    <TooltipProvider delayDuration={200}>
-                      <div className="flex flex-wrap gap-1">
-                        {bar.references.map((ref, i) => (
-                          <Tooltip key={i}>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex items-center rounded-[4px] border border-primary/30 px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.06em] text-primary cursor-help">
-                                {ref.short}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" className="max-w-[280px] text-[11px] leading-snug">
-                              {ref.full}
-                            </TooltipContent>
-                          </Tooltip>
-                        ))}
-                      </div>
-                    </TooltipProvider>
-                  )}
-                </div>
+                <TooltipProvider delayDuration={200}>
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {bar.references.map((ref, i) => (
+                      <Tooltip key={i}>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex cursor-help items-center rounded-[4px] border border-border px-1.5 py-0.5 text-[11px] font-medium">
+                            {ref.short}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-[280px] text-[11px] leading-snug">{ref.full}</TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </div>
+                </TooltipProvider>
               </CollapsibleContent>
             </Collapsible>
           ) : null}
 
-          {/* ── FOOTER: Duty context ── */}
-          <div className="text-[10px] text-muted-foreground pt-1 border-t border-border/50">
-            {bar.isPreDuty
-              ? `Rest before ${format(bar.relatedDuty.date, 'EEEE, MMM d')} duty`
-              : `Rest day recovery \u2022 ${format(bar.relatedDuty.date, 'EEEE, MMM d')}`
-            }
-          </div>
+          <p className="border-t border-border pt-2 text-[11px] text-muted-foreground">
+            {bar.relatedDuty.dutyId
+              ? `Before the duty on ${format(bar.relatedDuty.date, 'EEE d MMM')}`
+              : `Rest day · ${format(bar.relatedDuty.date, 'EEE d MMM')}`}
+          </p>
         </div>
       </PopoverContent>
     </Popover>

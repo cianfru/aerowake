@@ -4,41 +4,61 @@
 
 @layer base {
   :root {
+    /* Dark theme is the base token set; `.light` overrides it. */
     --background: 214 38% 10%;
     --foreground: 214 32% 96%;
 
-    --card: 214 32% 15%;
+    --card: 214 30% 17%;
     --card-foreground: 214 32% 96%;
 
-    --popover: 214 30% 17%;
+    --popover: 214 30% 19%;
     --popover-foreground: 214 32% 96%;
 
-    --primary: 198 93% 60%;
-    --primary-foreground: 222 47% 7%;
+    /* Desaturated teal: the same identity as light mode's deep teal, not neon. */
+    --primary: 196 60% 62%;
+    --primary-foreground: 214 45% 10%;
 
-    --secondary: 222 32% 13%;
+    --secondary: 214 28% 20%;
     --secondary-foreground: 240 5% 96%;
 
-    --muted: 222 26% 17%;
-    --muted-foreground: 215 18% 66%;
+    --muted: 214 26% 21%;
+    --muted-foreground: 214 18% 70%;
 
-    --accent: 198 93% 60%;
-    --accent-foreground: 222 47% 7%;
+    --accent: 196 60% 62%;
+    --accent-foreground: 214 45% 10%;
 
-    --destructive: 344 74% 56%;
+    --destructive: 346 72% 60%;
     --destructive-foreground: 210 40% 98%;
 
     --success: 147 55% 50%;
     --success-foreground: 210 40% 98%;
 
-    --high: 24 85% 57%;
+    --high: 24 88% 62%;
     --high-foreground: 222 47% 6%;
 
-    --warning: 42 90% 65%;
+    --warning: 42 90% 62%;
     --warning-foreground: 222 47% 6%;
 
-    --critical: 344 74% 56%;
-    --critical-foreground: 210 40% 98%;
+    --critical: 346 78% 66%;
+    --critical-foreground: 222 47% 6%;
+
+    /* Risk bands (predicted KSS). Fill: bars and marks (>= 3:1 on card).
+       Ink: text (>= 4.5:1 on card). On: text drawn on top of the fill. */
+    --risk-low: 214 11% 52%;
+    --risk-low-ink: 214 16% 72%;
+    --risk-low-on: 214 45% 8%;
+    --risk-moderate: 42 88% 58%;
+    --risk-moderate-ink: 42 92% 66%;
+    --risk-moderate-on: 214 45% 8%;
+    --risk-high: 24 85% 57%;
+    --risk-high-ink: 24 90% 66%;
+    --risk-high-on: 214 45% 8%;
+    --risk-critical: 346 72% 60%;
+    --risk-critical-ink: 346 80% 72%;
+    --risk-critical-on: 214 45% 8%;
+    --risk-extreme: 322 62% 70%;
+    --risk-extreme-ink: 322 70% 80%;
+    --risk-extreme-on: 214 45% 8%;
 
     --wocl: 280 60% 70%;
     --wocl-foreground: 222 47% 6%;
@@ -48,37 +68,46 @@
     --ground-training: 215 30% 55%;
     --ground-training-foreground: 210 40% 98%;
 
-    --border: 220 26% 19%;
-    --input: 222 30% 13%;
-    --ring: 198 93% 60%;
+    --border: 214 22% 27%;
+    --input: 214 22% 30%;
+    --ring: 196 60% 62%;
 
     --radius: 0.625rem;
 
-    --chart-1: 198 93% 60%;
+    --chart-1: 196 60% 62%;
     --chart-2: 147 55% 50%;
     --chart-3: 42 90% 65%;
     --chart-4: 344 74% 56%;
     --chart-5: 280 65% 60%;
 
-    --sidebar-background: 222 42% 5%;
+    --sidebar-background: 214 36% 8%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 198 93% 60%;
+    --sidebar-primary: 196 60% 62%;
     --sidebar-primary-foreground: 222 47% 6%;
-    --sidebar-accent: 222 32% 13%;
+    --sidebar-accent: 214 28% 16%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 220 26% 17%;
-    --sidebar-ring: 198 93% 60%;
+    --sidebar-border: 214 22% 22%;
+    --sidebar-ring: 196 60% 62%;
+
+    /* Brand and roster hero: the hero keeps its deep-teal gradient in both themes. */
+    --brand-ink: 208 53% 18%;
+    --brand-deep: 200 68% 28%;
+    --hero-from: 205 55% 20%;
+    --hero-to: 195 50% 27%;
+    --hero-line: 200 34% 34%;
+    --on-hero: 200 30% 97%;
+    --on-hero-muted: 195 42% 84%;
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(198 93% 60%), hsl(200 90% 48%));
-    --gradient-card: linear-gradient(180deg, hsl(222 38% 10%), hsl(222 42% 7%));
-    --gradient-glow: radial-gradient(ellipse at center, hsl(198 93% 60% / 0.12), transparent 70%);
+    --gradient-primary: linear-gradient(135deg, hsl(196 60% 62%), hsl(198 55% 50%));
+    --gradient-card: linear-gradient(180deg, hsl(214 32% 12%), hsl(214 36% 9%));
+    --gradient-glow: radial-gradient(ellipse at center, hsl(196 60% 62% / 0.12), transparent 70%);
 
-    /* Shadows */
-    --shadow-glow: 0 0 0 1px hsl(198 93% 60% / 0.25);
-    --shadow-card: 0 2px 4px hsl(215 50% 3% / 0.25), 0 14px 32px -20px hsl(215 50% 3% / 0.65), inset 0 1px 0 hsl(210 30% 90% / 0.05);
-    --shadow-elevated: 0 6px 12px -6px hsl(215 50% 3% / 0.3), 0 24px 56px -24px hsl(215 50% 3% / 0.8);
-    --surface-recessed: 214 35% 12%;
+    /* Shadows: a top highlight and a faint outer ring give dark cards visible depth. */
+    --shadow-glow: 0 0 0 1px hsl(196 60% 62% / 0.25);
+    --shadow-card: 0 0 0 1px hsl(214 30% 30% / 0.35), 0 2px 4px hsl(215 50% 3% / 0.35), 0 16px 32px -18px hsl(215 50% 3% / 0.8), inset 0 1px 0 hsl(210 40% 90% / 0.06);
+    --shadow-elevated: 0 0 0 1px hsl(214 30% 32% / 0.4), 0 8px 14px -6px hsl(215 50% 3% / 0.5), 0 24px 56px -24px hsl(215 50% 3% / 0.9), inset 0 1px 0 hsl(210 40% 90% / 0.07);
+    --surface-recessed: 214 32% 13%;
   }
 
   .light {
@@ -103,20 +132,37 @@
     --accent: 183 83% 26%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 335 76% 36%;
+    --destructive: 342 70% 38%;
     --destructive-foreground: 210 40% 98%;
 
-    --success: 148 67% 34%;
+    --success: 148 67% 30%;
     --success-foreground: 210 40% 98%;
 
-    --high: 19 77% 44%;
+    /* Semantic tokens tuned so small text still reaches 4.5:1 on cards. */
+    --high: 19 80% 40%;
     --high-foreground: 0 0% 100%;
 
-    --warning: 44 100% 41%;
-    --warning-foreground: 222 47% 6%;
+    --warning: 36 92% 33%;
+    --warning-foreground: 0 0% 100%;
 
-    --critical: 335 76% 36%;
+    --critical: 342 70% 38%;
     --critical-foreground: 210 40% 98%;
+
+    --risk-low: 213 13% 56%;
+    --risk-low-ink: 215 20% 38%;
+    --risk-low-on: 214 45% 10%;
+    --risk-moderate: 38 92% 38%;
+    --risk-moderate-ink: 36 95% 29%;
+    --risk-moderate-on: 214 45% 8%;
+    --risk-high: 19 84% 48%;
+    --risk-high-ink: 19 80% 37%;
+    --risk-high-on: 214 45% 8%;
+    --risk-critical: 342 66% 40%;
+    --risk-critical-ink: 342 70% 36%;
+    --risk-critical-on: 0 0% 100%;
+    --risk-extreme: 322 58% 30%;
+    --risk-extreme-ink: 322 58% 30%;
+    --risk-extreme-on: 0 0% 100%;
 
     --wocl: 280 60% 70%;
     --wocl-foreground: 222 47% 11%;
@@ -126,29 +172,31 @@
     --ground-training: 215 30% 40%;
     --ground-training-foreground: 0 0% 100%;
 
-    --border: 214 28% 86%;
-    --input: 214 28% 89%;
-    --ring: 200 98% 39%;
+    --border: 214 26% 81%;
+    --input: 214 24% 76%;
+    --ring: 199 64% 36%;
+
+    --chart-1: 199 64% 29%;
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 200 98% 39%;
+    --sidebar-primary: 199 64% 29%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 214 32% 94%;
     --sidebar-accent-foreground: 222 47% 11%;
     --sidebar-border: 214 28% 88%;
-    --sidebar-ring: 200 98% 39%;
+    --sidebar-ring: 199 64% 36%;
 
     /* Light-mode shadows */
-    --shadow-glow: 0 0 0 1px hsl(200 98% 39% / 0.25);
-    --shadow-card: 0 2px 3px hsl(208 40% 24% / 0.04), 0 12px 28px -16px hsl(208 40% 24% / 0.22), inset 0 1px 0 hsl(200 33% 99% / 0.8);
-    --shadow-elevated: 0 4px 8px -4px hsl(208 40% 24% / 0.12), 0 24px 52px -24px hsl(208 40% 24% / 0.28);
+    --shadow-glow: 0 0 0 1px hsl(199 64% 29% / 0.25);
+    --shadow-card: 0 1px 2px hsl(208 40% 24% / 0.06), 0 12px 28px -16px hsl(208 40% 24% / 0.24), inset 0 1px 0 hsl(200 33% 99% / 0.8);
+    --shadow-elevated: 0 4px 8px -4px hsl(208 40% 24% / 0.14), 0 24px 52px -24px hsl(208 40% 24% / 0.3);
     --surface-recessed: 207 28% 95%;
 
     /* Light-mode gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(199 89% 42%), hsl(199 89% 35%));
+    --gradient-primary: linear-gradient(135deg, hsl(199 64% 34%), hsl(199 64% 27%));
     --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(240 10% 99%));
-    --gradient-glow: radial-gradient(ellipse at center, hsl(199 89% 48% / 0.08), transparent 70%);
+    --gradient-glow: radial-gradient(ellipse at center, hsl(199 64% 29% / 0.08), transparent 70%);
   }
 }
 
@@ -190,70 +238,83 @@
   .workspace-shell {
     background: hsl(var(--background));
   }
+  /* Surfaces: canvas (background) → surface (card + shadow) → inset (recessed). No card in card. */
   .instrument-surface {
-    @apply rounded-2xl border border-border/80 bg-card p-5 md:p-8;
+    @apply rounded-2xl border border-border bg-card p-5 md:p-8;
     box-shadow: var(--shadow-card);
   }
   .instrument-inset {
-    @apply rounded-xl border border-border/70;
+    @apply rounded-xl border border-border/80;
     background: hsl(var(--surface-recessed));
-    box-shadow: inset 0 1px 3px hsl(210 40% 20% / 0.04);
+    box-shadow: inset 0 1px 3px hsl(210 40% 20% / 0.05);
   }
   .roster-identity {
     @apply relative isolate overflow-hidden rounded-2xl border p-6 md:px-8 md:py-7;
-    color: #f4f8fa;
-    background: linear-gradient(110deg, #17384f 25%, #235669);
-    border-color: #376075;
-    box-shadow: 0 16px 30px -20px #16394f, inset 0 1px 0 #ffffff1c;
+    color: hsl(var(--on-hero));
+    background: linear-gradient(110deg, hsl(var(--hero-from)) 25%, hsl(var(--hero-to)));
+    border-color: hsl(var(--hero-line));
+    box-shadow: 0 16px 30px -20px hsl(var(--hero-from)), inset 0 1px 0 hsl(0 0% 100% / 0.11);
   }
-  .roster-identity::after {
-    content: '';
-    position: absolute;
-    z-index: -1;
-    width: 26rem;
-    height: 26rem;
-    right: -8rem;
-    top: -15rem;
-    border: 1px solid #b5dbe128;
-    border-radius: 50%;
-    box-shadow: 0 0 0 3rem #b5dbe10b, 0 0 0 6rem #b5dbe107;
-    pointer-events: none;
+  /* The view rail: one compact full-bleed strip under the header, calm until it sticks. */
+  .roster-rail-strip {
+    @apply sticky top-14 z-10 border-b border-transparent transition-[background-color,border-color,box-shadow] duration-200;
+  }
+  .roster-rail-strip[data-stuck] {
+    @apply border-border bg-background/90 backdrop-blur-xl;
+    box-shadow: 0 10px 18px -16px hsl(215 50% 10% / 0.45);
   }
   .roster-view-rail {
-    @apply rounded-2xl border border-border/80 bg-card p-1.5;
-    box-shadow: var(--shadow-elevated);
+    @apply inline-flex h-auto max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1;
+    box-shadow: var(--shadow-card);
+    scrollbar-width: none;
   }
+  .roster-view-rail::-webkit-scrollbar { display: none; }
   .roster-view-tab {
-    @apply rounded-xl text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground;
+    @apply inline-flex min-h-[40px] shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
   }
+  /* Dark: tinted active state with a ring (no neon fill). Light: solid deep teal. */
   .roster-view-tab[data-state='active'] {
-    @apply bg-primary text-primary-foreground;
+    @apply bg-primary/15 text-primary ring-1 ring-inset ring-primary/40;
+  }
+  .light .roster-view-tab[data-state='active'] {
+    @apply bg-primary text-primary-foreground ring-0;
     box-shadow: 0 3px 8px -3px hsl(204 70% 20% / 0.45), inset 0 1px 0 hsl(200 40% 95% / 0.18);
   }
   .forecast-facts {
-    @apply grid gap-6 rounded-xl border border-border/70 p-5 sm:grid-cols-[1.15fr_1fr] md:p-6;
+    @apply grid gap-6 rounded-xl border border-border/80 p-5 sm:grid-cols-[1.15fr_1fr] md:p-6;
     background: hsl(var(--surface-recessed));
   }
   .duty-watch-surface {
-    @apply rounded-xl border border-border/80 bg-card p-5 md:p-6;
+    @apply rounded-xl border border-border bg-card p-5 md:p-6;
     box-shadow: var(--shadow-card);
   }
   .calendar-grid {
-    @apply isolate rounded-xl border border-border bg-card p-2 md:p-3;
+    @apply isolate rounded-xl border border-border bg-card p-1.5 sm:p-2 md:p-3;
     box-shadow: inset 0 2px 4px hsl(210 40% 20% / 0.035);
   }
   .calendar-duty {
-    box-shadow: 0 2px 4px hsl(212 35% 15% / 0.22), inset 0 1px 0 #ffffff45;
+    box-shadow: 0 1px 3px hsl(212 35% 15% / 0.25), inset 0 1px 0 hsl(0 0% 100% / 0.22);
   }
   .calendar-duty:hover, .calendar-duty:focus-visible {
     z-index: 20;
     box-shadow: 0 4px 10px hsl(212 35% 15% / 0.3);
   }
+  /* Sector labels only where they fit: never a clipped "4" for flight 461. */
+  .calendar-seg {
+    container-type: inline-size;
+  }
+  @container (max-width: 30px) {
+    .calendar-seg-label { display: none; }
+  }
+  /* Extreme keeps its own hue plus a hatch, so it never reads as critical. */
+  .risk-extreme-hatch {
+    background-image: repeating-linear-gradient(135deg, transparent 0 4px, hsl(var(--risk-extreme-on) / 0.22) 4px 6px);
+  }
   .action-raised {
-    box-shadow: 0 3px 5px -2px hsl(205 65% 20% / 0.3), inset 0 1px 0 #ffffff26;
+    box-shadow: 0 3px 5px -2px hsl(205 65% 20% / 0.3), inset 0 1px 0 hsl(0 0% 100% / 0.15);
   }
   .action-raised:hover {
-    box-shadow: 0 5px 10px -4px hsl(205 65% 20% / 0.4), inset 0 1px 0 #ffffff26;
+    box-shadow: 0 5px 10px -4px hsl(205 65% 20% / 0.4), inset 0 1px 0 hsl(0 0% 100% / 0.15);
   }
   .landing-orbit {
     @apply relative isolate rounded-[2rem] border p-5 sm:p-8;
@@ -422,18 +483,21 @@
     background: radial-gradient(ellipse at center, transparent 50%, hsl(var(--background) / 0.4) 100%);
   }
 
-  /* Warning left-border accent */
+  /* Risk left-border accent (same tokens as every other risk mark) */
   .risk-border-low {
-    border-left: 3px solid hsl(var(--muted-foreground) / 0.35);
+    border-left: 3px solid hsl(var(--risk-low) / 0.6);
   }
   .risk-border-moderate {
-    border-left: 3px solid hsl(var(--warning));
+    border-left: 3px solid hsl(var(--risk-moderate));
   }
   .risk-border-high {
-    border-left: 3px solid hsl(var(--high));
+    border-left: 3px solid hsl(var(--risk-high));
   }
   .risk-border-critical {
-    border-left: 3px solid hsl(var(--critical));
+    border-left: 3px solid hsl(var(--risk-critical));
+  }
+  .risk-border-extreme {
+    border-left: 3px solid hsl(var(--risk-extreme));
   }
 }
 

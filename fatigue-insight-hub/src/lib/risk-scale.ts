@@ -156,15 +156,30 @@ export function classifyPerformance(
   return 'extreme';
 }
 
-/** Classify predicted KSS using the default KSS bands. */
+/**
+ * KSS as displayed: rounded to one decimal exactly like `toFixed(1)` (and the
+ * backend's `round(kss, 1)`), so a shown value and its band always agree.
+ */
+export function roundKss(kss: number): number {
+  return Number(kss.toFixed(1));
+}
+
+/**
+ * Classify predicted KSS using the default KSS bands (lower bound inclusive),
+ * on the value rounded to one decimal: 6.46 displays as 6.5 and is high.
+ */
 export function classifyKss(kss: number | null | undefined): RiskLevel {
   if (kss == null || !Number.isFinite(kss)) return 'unknown';
-  if (kss < 5.5) return 'low';
-  if (kss < 6.5) return 'moderate';
-  if (kss < 7.5) return 'high';
-  if (kss < 8.5) return 'critical';
+  const k = roundKss(kss);
+  if (k < 5.5) return 'low';
+  if (k < 6.5) return 'moderate';
+  if (k < 7.5) return 'high';
+  if (k < 8.5) return 'critical';
   return 'extreme';
 }
+
+/** Bands in ascending order of predicted sleepiness. */
+export const RISK_LEVELS = ['low', 'moderate', 'high', 'critical', 'extreme'] as const;
 
 /** Normalise any risk string ('HIGH', 'high', undefined) to a RiskLevel. */
 export function normalizeRiskLevel(level: string | null | undefined): RiskLevel {
@@ -189,22 +204,27 @@ export function isSevereRisk(level: RiskLevel): boolean {
 }
 
 export interface RiskClasses {
+  /** Text in the band colour (ink token, >= 4.5:1 on cards). */
   text: string;
   bg: string;
   border: string;
-  /** Solid fill (e.g. progress bars, dots). */
+  /** Solid fill (bars, squares, dots; >= 3:1 on cards). */
   fill: string;
+  /** Text drawn on top of the solid fill. */
+  onFill: string;
 }
 
+/*
+ * One token-driven palette (index.css --risk-*), identical in every view.
+ * Low risk is a neutral grey: attention stays on the bands that matter.
+ */
 const RISK_CLASSES: Record<RiskLevel, RiskClasses> = {
-  // Low risk carries no signal colour: neutral ink keeps attention on real risk.
-  low: { text: 'text-muted-foreground', bg: 'bg-muted/40', border: 'border-border', fill: 'bg-muted-foreground/45' },
-  moderate: { text: 'text-warning', bg: 'bg-warning/10', border: 'border-warning/30', fill: 'bg-warning' },
-  high: { text: 'text-high', bg: 'bg-high/10', border: 'border-high/30', fill: 'bg-high' },
-  critical: { text: 'text-critical', bg: 'bg-critical/10', border: 'border-critical/30', fill: 'bg-critical' },
-  // Extreme shares the critical hue (validated separation limit); its label distinguishes it.
-  extreme: { text: 'text-critical', bg: 'bg-critical/15', border: 'border-critical/60', fill: 'bg-critical' },
-  unknown: { text: 'text-muted-foreground', bg: 'bg-muted/30', border: 'border-border', fill: 'bg-muted-foreground' },
+  low: { text: 'text-risk-low-ink', bg: 'bg-muted/50', border: 'border-border', fill: 'bg-risk-low', onFill: 'text-risk-low-on' },
+  moderate: { text: 'text-risk-moderate-ink', bg: 'bg-risk-moderate/10', border: 'border-risk-moderate/40', fill: 'bg-risk-moderate', onFill: 'text-risk-moderate-on' },
+  high: { text: 'text-risk-high-ink', bg: 'bg-risk-high/10', border: 'border-risk-high/40', fill: 'bg-risk-high', onFill: 'text-risk-high-on' },
+  critical: { text: 'text-risk-critical-ink', bg: 'bg-risk-critical/10', border: 'border-risk-critical/40', fill: 'bg-risk-critical', onFill: 'text-risk-critical-on' },
+  extreme: { text: 'text-risk-extreme-ink', bg: 'bg-risk-extreme/10', border: 'border-risk-extreme/50', fill: 'bg-risk-extreme', onFill: 'text-risk-extreme-on' },
+  unknown: { text: 'text-muted-foreground', bg: 'bg-muted/30', border: 'border-border', fill: 'bg-muted-foreground/40', onFill: 'text-foreground' },
 };
 
 /** Tailwind classes (design tokens) for a risk level. */
@@ -236,21 +256,33 @@ export function riskBadgeVariant(level: RiskLevel): RiskBadgeVariant {
   }
 }
 
-/** CSS colour using theme variables (for SVG/Recharts inside the themed app). */
-const RISK_CSS: Record<RiskLevel, string> = {
-  low: 'hsl(var(--muted-foreground) / 0.55)',
-  moderate: 'hsl(var(--warning))',
-  high: 'hsl(var(--high))',
-  critical: 'hsl(var(--critical))',
-  extreme: 'hsl(var(--critical))',
-  unknown: 'hsl(var(--muted-foreground))',
-};
+const tokenName = (level: RiskLevel): string | null =>
+  level === 'unknown' ? null : `--risk-${level}`;
 
-export function riskCssColor(level: RiskLevel): string {
-  return RISK_CSS[level] ?? RISK_CSS.unknown;
+/** Theme-aware fill colour (SVG/Recharts/inline styles inside the themed app). */
+export function riskCssColor(level: RiskLevel, alpha?: number): string {
+  const name = tokenName(level);
+  if (!name) return `hsl(var(--muted-foreground) / ${alpha ?? 0.5})`;
+  return alpha == null ? `hsl(var(${name}))` : `hsl(var(${name}) / ${alpha})`;
 }
 
-/** Static hex colours matching the design tokens (for canvas/PDF/Mapbox). */
+/** Theme-aware text colour for a band (>= 4.5:1 on cards). */
+export function riskInkColor(level: RiskLevel): string {
+  const name = tokenName(level);
+  return name ? `hsl(var(${name}-ink))` : 'hsl(var(--muted-foreground))';
+}
+
+/** Theme-aware colour for text drawn on a band fill. */
+export function riskOnColor(level: RiskLevel): string {
+  const name = tokenName(level);
+  return name ? `hsl(var(${name}-on))` : 'hsl(var(--foreground))';
+}
+
+/**
+ * Static hex colours for contexts without theme variables (PDF, calendar
+ * export, landing illustrations). Never use these for workspace UI: use
+ * riskClasses / riskCssColor so light and dark themes stay correct.
+ */
 const RISK_HEX: Record<RiskLevel, string> = {
   // Validated with the dataviz palette checker on the dark surface.
   low: '#8e8e98',
@@ -309,12 +341,25 @@ export const SLEEP_DEFICIT_LABELS: Record<SleepDeficitBand, string> = {
   severe: 'Severe',
 };
 
+/** Lower bounds (hours) of the backend 7-day ledger bands: mild, moderate, severe. */
+export const SLEEP_DEFICIT_BOUNDS = { mild: 5, moderate: 10, severe: 15 } as const;
+
+/** Text class for a backend ledger band; "none" stays neutral (no reassuring green). */
 export function sleepDeficitClass(band: SleepDeficitBand | string | undefined): string {
   switch (band) {
-    case 'mild': return 'text-warning';
-    case 'moderate': return 'text-high';
-    case 'severe': return 'text-critical';
-    case 'none': return 'text-success';
+    case 'mild': return 'text-risk-moderate-ink';
+    case 'moderate': return 'text-risk-high-ink';
+    case 'severe': return 'text-risk-critical-ink';
     default: return 'text-muted-foreground';
+  }
+}
+
+/** Fill colour (CSS) for a backend ledger band; "none" is neutral. */
+export function sleepDeficitColor(band: SleepDeficitBand | string | undefined): string {
+  switch (band) {
+    case 'mild': return riskCssColor('moderate');
+    case 'moderate': return riskCssColor('high');
+    case 'severe': return riskCssColor('critical');
+    default: return riskCssColor('low');
   }
 }

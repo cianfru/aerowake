@@ -1,183 +1,143 @@
 import { useState } from 'react';
-import { AlertTriangle, Clock, Moon, Zap, Mountain, Users, Globe, ChevronDown, BedDouble, Home, Building2, Sun, Tag } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { BedDouble, Building2, ChevronDown, Home, Moon, Users } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { InfoTooltip, FATIGUE_INFO } from '@/components/ui/InfoTooltip';
 import { DutyAnalysis } from '@/types/fatigue';
-import { isTrainingDuty, getTrainingDutyLabel, formatAircraftType } from '@/lib/fatigue-utils';
+import { isTrainingDuty } from '@/lib/fatigue-utils';
 import { FDPUtilizationBar } from './FDPUtilizationBar';
-import { SleepQualityInfo } from './SleepQualityInfo';
 import { CrewRestTimeline } from './CrewRestTimeline';
 import { cn } from '@/lib/utils';
-import {
-  SLEEP_DEFICIT_LABELS,
-  classifyPerformance,
-  indexToKss,
-  kssLabel,
-  normalizeRiskLevel,
-  performanceColorClass,
-  resolveKss,
-  riskBadgeVariant,
-  sleepDeficitClass,
-} from '@/lib/risk-scale';
+import { SLEEP_DEFICIT_LABELS, sleepDeficitClass } from '@/lib/risk-scale';
+import { formatHomeTime } from '@/lib/home-time';
 import { toast } from 'sonner';
 
 const STRATEGY_LABELS: Record<string, string> = {
-  normal: 'Normal',
-  anchor: 'Anchor Sleep',
-  split: 'Split Sleep',
-  early_bedtime: 'Early Bedtime',
-  restricted: 'Restricted',
-  extended: 'Extended',
+  normal: 'Normal night',
+  anchor: 'Anchored to home time',
+  split: 'Split sleep',
+  early_bedtime: 'Early bedtime',
+  restricted: 'Restricted by the roster',
+  extended: 'Extended recovery',
   recovery: 'Recovery',
-  nap: 'Night Departure',
-  afternoon_nap: 'Afternoon Nap',
-  augmented_4_sleep: 'ULR (4-Crew)',
-  augmented_3: 'Augmented (3-Crew)',
-  wocl_duty: 'WOCL Duty',
-  inter_duty_recovery: 'Inter-Duty Recovery',
-  post_duty_recovery: 'Post-Duty Recovery',
+  nap: 'Night departure with a nap',
+  afternoon_nap: 'Afternoon nap',
+  augmented_4_sleep: 'Ultra-long range (4 pilots)',
+  augmented_3: 'Augmented crew (3 pilots)',
+  wocl_duty: 'Duty through the body-clock low',
+  inter_duty_recovery: 'Recovery between duties',
+  post_duty_recovery: 'Recovery after duty',
 };
 
-/** Scientific rationale explaining why each sleep strategy is applied. */
+/** Why the model chose each sleep pattern (with the published basis). */
 const STRATEGY_RATIONALE: Record<string, string> = {
-  normal:
-    'Standard habitual sleep pattern. Signal et al. (2009) and Gander et al. (2013) found pilots on daytime schedules maintain a consistent ~23:00 bedtime. For early reports (before 09:00), bedtime advances by up to 1.5h — Arsintescu et al. (2022) showed pilots advance bedtime by 1–2h, constrained by the Wake Maintenance Zone (Dijk & Czeisler, 1994).',
-  anchor:
-    'Applied when timezone shift ≥3h from home base. Minors & Waterhouse (1981, 1983) demonstrated that maintaining a sleep window anchored to home-base time preserves circadian alignment during transmeridian operations, reducing jet-lag effects on alertness.',
-  split:
-    'Applied when rest period is 9–10h — too short for a single consolidated sleep block. Jackson et al. (2014) and Kosmadopoulos et al. (2017) found that split sleep schedules preserve cognitive performance comparably to consolidated sleep when total duration is matched.',
-  early_bedtime:
-    'Applied for reports before 06:00 local. Roach et al. (2012) found that early-start duties restrict prior sleep duration; the model uses their regression to estimate achievable sleep, with a 21:30 bedtime floor reflecting WMZ constraints (Arsintescu et al., 2022).',
-  restricted:
-    'Applied when rest period is under 9h — sleep is physically constrained by schedule. Van Dongen et al. (2003) and Belenky et al. (2003) showed cumulative performance degradation under chronic sleep restriction, even with partial recovery opportunities.',
-  extended:
-    'Applied when rest period exceeds 14h, allowing recovery sleep. Banks et al. (2010) demonstrated that extended sleep opportunities (8.5–9.5h) after restriction support partial neurobehavioral recovery, with diminishing returns beyond ~9h (Kitamura et al., 2016).',
-  recovery:
-    'Home-base recovery with no duty constraints. Banks et al. (2010) showed recovery from sleep debt follows an exponential pattern over multiple nights, with the greatest restoration in the first recovery sleep period.',
-  nap:
-    'Applied for night departures (report ≥20:00). The model predicts a standard previous-night sleep plus a pre-duty nap. Dinges et al. (1987) showed strategic nap placement improves subsequent alertness; Signal et al. (2014) confirmed this pattern in airline pilot operations.',
-  afternoon_nap:
-    'Applied for late reports (14:00–20:00). Signal et al. (2014) found that approximately 54% of crew nap before evening departures. The model estimates a 1.5h afternoon nap following the post-lunch circadian dip (Dinges et al., 1987).',
-  augmented_4_sleep:
-    'Applied for ultra-long-range 4-pilot operations. Signal et al. (2014) established that a 48h pre-duty protocol with two normal nights maximises pre-departure sleep reserves for flights exceeding 12h FDP.',
-  augmented_3:
-    'Applied for 3-pilot augmented crew operations. Enhanced pre-duty night sleep (22:00 bedtime, 1h earlier) plus optional pre-duty nap for night departures, based on Signal et al. (2014) and Gander et al. (2013).',
-  wocl_duty:
-    'Applied for duties crossing the Window of Circadian Low (02:00–06:00) with >6h duration. Consolidated sleep is placed before the duty to maximise alertness during the WOCL crossing, when circadian drive for sleep peaks (Dijk & Czeisler, 1995).',
-  inter_duty_recovery:
-    'Single recovery block between consecutive duties. Sleep onset is determined by biological release time and homeostatic pressure (Signal et al., 2013; Banks et al., 2010). Duration scales with prior wakefulness, capped by circadian wake gate.',
-  post_duty_recovery:
-    'Post-duty recovery sleep estimated using circadian-gated wake timing. WOCL alignment is evaluated against the pilot\'s biological clock (home-base time), not local time (Signal et al., 2013; Roach et al., 2025).',
+  normal: 'Pilots on daytime schedules keep a consistent bedtime around 23:00 (Signal et al. 2009; Gander et al. 2013). Before reports earlier than 09:00, bedtime advances by up to 1.5h, limited by the evening wake-maintenance zone (Arsintescu et al. 2022; Dijk & Czeisler 1994).',
+  anchor: 'Used when the local time is 3h or more from home base. Keeping sleep anchored to home-base time preserves circadian alignment on transmeridian trips (Minors & Waterhouse 1981, 1983).',
+  split: 'Used when rest is 9–10h, too short for one consolidated sleep. Split sleep preserves performance when total sleep is matched (Jackson et al. 2014; Kosmadopoulos et al. 2017).',
+  early_bedtime: 'Used for reports before 06:00. Early starts restrict prior sleep (Roach et al. 2012); bedtime is not earlier than 21:30 because of the wake-maintenance zone (Arsintescu et al. 2022).',
+  restricted: 'Used when rest is under 9h: sleep is physically limited by the schedule. Repeated restriction degrades performance even with partial recovery (Van Dongen et al. 2003; Belenky et al. 2003).',
+  extended: 'Used when rest exceeds 14h. Longer sleep after restriction supports partial recovery, with diminishing returns beyond about 9h (Banks et al. 2010; Kitamura et al. 2016).',
+  recovery: 'Recovery at home with no duty constraint. Recovery from sleep loss builds over several nights, most in the first (Banks et al. 2010).',
+  nap: 'Used for night departures (report 20:00 or later): a normal previous night plus a pre-duty nap (Dinges et al. 1987; Signal et al. 2014).',
+  afternoon_nap: 'Used for late reports (14:00–20:00). About half of crew nap before evening departures (Signal et al. 2014); the nap follows the post-lunch dip (Dinges et al. 1987).',
+  augmented_4_sleep: 'Ultra-long-range four-pilot operations: two normal nights before departure (Signal et al. 2014).',
+  augmented_3: 'Three-pilot augmented operations: a 22:00 bedtime plus an optional pre-duty nap for night departures (Signal et al. 2014; Gander et al. 2013).',
+  wocl_duty: 'Duties over 6h through the body-clock low: consolidated sleep is placed before the duty (Dijk & Czeisler 1995).',
+  inter_duty_recovery: 'One recovery block between duties; onset follows release time and sleep pressure (Signal et al. 2013; Banks et al. 2010).',
+  post_duty_recovery: 'Recovery after duty, with wake timing gated by the home-base body clock (Signal et al. 2013; Roach et al. 2025).',
 };
 
 interface DutyInfoColumnProps {
   duty: DutyAnalysis;
+  /** Home-base IANA zone for sleep times. */
+  homeTz?: string;
   dutyCrewOverride?: 'crew_a' | 'crew_b';
   onCrewChange?: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
   onCrewReset?: (dutyId: string) => void;
   hasCrewContent: boolean;
 }
 
-/**
- * Left column of the DutyDetailsDialog — duty context, FDP, sleep, risk, crew.
- */
-export function DutyInfoColumn({ duty, dutyCrewOverride, onCrewChange, onCrewReset, hasCrewContent }: DutyInfoColumnProps) {
+function SleepBlocks({ duty, homeTz }: { duty: DutyAnalysis; homeTz?: string }) {
+  const blocks = (duty.sleepEstimate?.sleepBlocks ?? []).filter((b) => b.sleepStartUtc && b.sleepEndUtc);
+  if (!blocks.length || !homeTz) return null;
+  return (
+    <ul className="space-y-1" aria-label="Estimated sleep before this duty">
+      {blocks.map((b, i) => (
+        <li key={i} className="flex items-center justify-between gap-3 text-sm">
+          <span className="flex items-center gap-2">
+            {b.sleepType === 'nap' ? <Moon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" /> : <BedDouble className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />}
+            {b.sleepType === 'nap' ? 'Nap' : 'Sleep'}
+          </span>
+          <span className="font-mono tabular">
+            {formatHomeTime(b.sleepStartUtc, homeTz)}–{formatHomeTime(b.sleepEndUtc, homeTz)}
+            {b.durationHours != null && <span className="ml-2 text-muted-foreground">{b.durationHours.toFixed(1)}h</span>}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Sleep before the duty, the 7-day shortfall, FDP and crew context. */
+export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, onCrewReset, hasCrewContent }: DutyInfoColumnProps) {
   const isTraining = isTrainingDuty(duty);
   const [crewOpen, setCrewOpen] = useState(false);
-
-  const getRiskBadge = (risk: string) => (
-    <Badge variant={riskBadgeVariant(normalizeRiskLevel(risk))} className="text-[10px]">
-      {(risk || 'UNKNOWN').toUpperCase()}
-    </Badge>
-  );
-  const peakKss = resolveKss(duty.maxKss, duty.minPerformance);
-  const landingKss = duty.landingPerformance != null ? resolveKss(duty.landingKss, duty.landingPerformance) : null;
-
-  const formatOffset = (offset: number | null | undefined): string => {
-    if (offset === null || offset === undefined) return '';
-    const sign = offset >= 0 ? '+' : '';
-    return `UTC${sign}${offset}`;
-  };
+  const est = duty.sleepEstimate;
+  const deficit = duty.sleepDeficit7d;
+  const away = duty.sleepEnvironment === 'hotel' || duty.sleepEnvironment === 'layover';
 
   return (
-    <div className="space-y-3">
-      {/* 1. Flight Segments */}
-      <div className="rounded-2xl glass p-4 space-y-2">
-        {isTraining ? (
-          <div className="flex items-center gap-3 flex-wrap">
-            <Badge variant="info" className="text-[10px]">{getTrainingDutyLabel(duty.dutyType!)}</Badge>
-            <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded-md bg-muted/60">
-              {duty.trainingCode}
-            </span>
-            <span className="text-xs text-muted-foreground font-mono">
-              {duty.reportTimeLocal} — {duty.releaseTimeLocal}
-            </span>
+    <div className="space-y-4">
+      <section className="space-y-4 rounded-2xl border border-border bg-card p-5" style={{ boxShadow: 'var(--shadow-card)' }} aria-labelledby="sleep-before-heading">
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 id="sleep-before-heading" className="text-[15px] font-semibold">Sleep before this duty</h3>
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {away ? <Building2 className="h-3.5 w-3.5" aria-hidden="true" /> : <Home className="h-3.5 w-3.5" aria-hidden="true" />}
+            {away ? 'Layover' : 'Home'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">In the 24h before (est.)</p>
+            <p className="font-mono text-xl font-medium tabular">{duty.priorSleep.toFixed(1)}h</p>
           </div>
-        ) : (
-          <div className="space-y-1.5">
-            {(duty.flightSegments ?? []).map((seg, i) => {
-              const isDH = seg.activityCode === 'DH';
-              const isIR = seg.activityCode === 'IR';
-              const depTime = seg.departureTimeAirportLocal || seg.departureTime;
-              const arrTime = seg.arrivalTimeAirportLocal || seg.arrivalTime;
+          {(duty.preDutyAwakeHours ?? 0) > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Awake at report</p>
+              <p className="font-mono text-xl font-medium tabular">{duty.preDutyAwakeHours.toFixed(1)}h</p>
+            </div>
+          )}
+          {deficit && (
+            <div className="space-y-1">
+              <p className="flex items-center gap-1 text-xs text-muted-foreground">7-day shortfall <InfoTooltip entry={FATIGUE_INFO.sleepDeficit7d} size="sm" /></p>
+              <p className="font-mono text-xl font-medium tabular">{deficit.deficitHours.toFixed(1)}h</p>
+              {deficit.band !== 'none' && <p className={cn('text-xs font-medium', sleepDeficitClass(deficit.band))}>{SLEEP_DEFICIT_LABELS[deficit.band]}</p>}
+            </div>
+          )}
+        </div>
 
-              return (
-                <div
-                  key={i}
-                  className={cn(
-                    'flex items-center gap-2 flex-wrap rounded-xl px-3 py-2 text-xs border transition-colors',
-                    isDH ? 'bg-muted/30 border-border/30 opacity-70' :
-                    isIR ? 'bg-blue-500/5 border-blue-500/15' :
-                    'bg-secondary/30 border-border/30 hover:bg-secondary/40'
-                  )}
-                >
-                  <span className="font-mono font-bold text-primary tracking-wide">{seg.flightNumber}</span>
+        <SleepBlocks duty={duty} homeTz={homeTz} />
 
-                  {(isDH || isIR) && (
-                    <span className={cn(
-                      'text-[9px] font-semibold uppercase tracking-[0.06em] px-1.5 py-0.5 rounded-[4px] border',
-                      isDH ? 'border-border text-muted-foreground' : 'border-blue-500/30 text-blue-400'
-                    )}>
-                      {isDH ? 'DH' : 'IR'}
-                    </span>
-                  )}
-
-                  <span className="font-medium">{seg.departure} → {seg.arrival}</span>
-
-                  {seg.aircraftType && (
-                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 font-medium">
-                      {formatAircraftType(seg.aircraftType)}
-                    </Badge>
-                  )}
-
-                  <span className="text-muted-foreground font-mono">
-                    {depTime}
-                    {seg.departureUtcOffset != null && (
-                      <span className="text-[8px] text-muted-foreground/60 ml-0.5">({formatOffset(seg.departureUtcOffset)})</span>
-                    )}
-                    {' → '}
-                    {arrTime}
-                    {seg.arrivalUtcOffset != null && (
-                      <span className="text-[8px] text-muted-foreground/60 ml-0.5">({formatOffset(seg.arrivalUtcOffset)})</span>
-                    )}
-                  </span>
-                </div>
-              );
-            })}
-
-            {/* Cabin altitude */}
-            {!isTraining && duty.cabinAltitudeFt && duty.cabinAltitudeFt > 0 && (
-              <div className="flex items-center gap-1.5 px-3 py-1 text-xs text-muted-foreground">
-                <Mountain className="h-3 w-3" />
-                <span>Cabin Altitude: <span className="font-medium font-mono text-foreground">{duty.cabinAltitudeFt.toLocaleString()} ft</span></span>
-              </div>
+        {est && (
+          <div className="space-y-2 border-t border-border pt-3 text-sm">
+            <p>
+              <span className="font-medium">{STRATEGY_LABELS[est.sleepStrategy] ?? est.sleepStrategy.split('_').join(' ')}</span>
+              {est.explanation && <span className="text-muted-foreground"> — {est.explanation}</span>}
+            </p>
+            {STRATEGY_RATIONALE[est.sleepStrategy] && (
+              <details className="text-xs text-muted-foreground">
+                <summary className="cursor-pointer font-medium text-foreground/80">Why this sleep pattern</summary>
+                <p className="mt-2 leading-relaxed">{STRATEGY_RATIONALE[est.sleepStrategy]}</p>
+              </details>
             )}
           </div>
         )}
-      </div>
+        <p className="text-xs text-muted-foreground">
+          Estimated from the roster, not sleep you recorded. The shortfall compares the last 7 days with 8h a day.
+          {duty.woclExposure > 0 ? ` This duty spends ${duty.woclExposure.toFixed(1)}h in the body-clock low.` : ''}
+        </p>
+      </section>
 
-      {/* 2. FDP Utilization Bar */}
       {!isTraining && duty.maxFdpHours != null && duty.maxFdpHours > 0 && (
         <FDPUtilizationBar
           actualFdpHours={duty.actualFdpHours ?? duty.dutyHours ?? 0}
@@ -187,332 +147,77 @@ export function DutyInfoColumn({ duty, dutyCrewOverride, onCrewChange, onCrewRes
         />
       )}
 
-      {/* 3. Sleep & Risk Panel */}
-      <div className="rounded-2xl glass p-4 space-y-4">
-        {/* Pre-Duty Rest */}
-        <div className="space-y-2.5">
-          <div className="flex items-center gap-2">
-            <div className="h-px flex-1 bg-transparent" />
-            <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">Pre-Duty Rest</span>
-            <div className="h-px flex-1 bg-border/30" />
-          </div>
-          <div className="flex items-center gap-2.5 text-xs flex-wrap">
-            <div className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1 rounded-lg',
-              duty.priorSleep >= 7 ? 'bg-success/10 text-success' :
-              duty.priorSleep >= 5 ? 'bg-warning/10 text-warning' :
-              'bg-critical/10 text-critical',
-            )}>
-              <BedDouble className="h-3 w-3" />
-              <span className="font-medium font-mono">{duty.priorSleep.toFixed(0)}h sleep</span>
-            </div>
-            <span className="flex items-center gap-1 text-muted-foreground">
-              {duty.sleepEnvironment === 'hotel' || duty.sleepEnvironment === 'layover' ? (
-                <><Building2 className="h-3 w-3" /> Layover</>
-              ) : (
-                <><Home className="h-3 w-3" /> Home</>
-              )}
-            </span>
-            {(duty.preDutyAwakeHours ?? 0) > 0 && (
-              <span className={cn(
-                'flex items-center gap-1',
-                (duty.preDutyAwakeHours ?? 0) > 17 ? 'text-critical' :
-                (duty.preDutyAwakeHours ?? 0) > 14 ? 'text-warning' :
-                'text-muted-foreground',
-              )}>
-                <Sun className="h-3 w-3" />
-                <span className="font-mono">{(duty.preDutyAwakeHours ?? 0).toFixed(1)}h</span> awake
-              </span>
-            )}
-          </div>
-          {/* Sleep bar */}
-          <div className="space-y-1">
-            <div className="h-1.5 rounded-[2px] bg-secondary/50 overflow-hidden">
-              <div
-                className={cn(
-                  'h-full rounded-[2px] transition-all duration-500 ease-out',
-                  duty.priorSleep >= 7 ? 'bg-success' :
-                  duty.priorSleep >= 5 ? 'bg-warning' :
-                  'bg-critical',
-                )}
-                style={{ width: `${Math.min(100, (duty.priorSleep / 8) * 100)}%` }}
-              />
-            </div>
-            <p className="text-[9px] text-muted-foreground/70 font-mono">
-              {duty.priorSleep.toFixed(0)}h / 8h recommended
-            </p>
-          </div>
-          {/* Strategy explanation */}
-          {duty.sleepEstimate && (
-            <div className="space-y-1.5">
-              <div className="flex items-start gap-1.5">
-                <Tag className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
-                <div className="space-y-1">
-                  <p className="text-[11px] leading-relaxed">
-                    <span className="font-medium text-foreground">
-                      {STRATEGY_LABELS[duty.sleepEstimate.sleepStrategy] ?? duty.sleepEstimate.sleepStrategy}
-                    </span>
-                    {duty.sleepEstimate.explanation && (
-                      <span className="text-muted-foreground"> — {duty.sleepEstimate.explanation}</span>
-                    )}
-                  </p>
-                  {STRATEGY_RATIONALE[duty.sleepEstimate.sleepStrategy] && (
-                    <p className="text-[10px] text-muted-foreground/80 leading-relaxed">
-                      {STRATEGY_RATIONALE[duty.sleepEstimate.sleepStrategy]}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <SleepQualityInfo
-                variant="badge"
-                explanation={duty.sleepEstimate.explanation}
-                confidence={duty.sleepEstimate.confidence}
-                confidenceBasis={duty.sleepEstimate.confidenceBasis}
-                qualityFactors={duty.sleepEstimate.qualityFactors}
-                references={duty.sleepEstimate.references}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Fatigue Factors */}
-        <div className="border-t border-border/30 pt-3 space-y-2.5">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">Fatigue Factors</span>
-            <div className="h-px flex-1 bg-border/30" />
-          </div>
-          <div className="space-y-2">
-            <FactorBar
-              icon={<Clock className="h-3 w-3" />}
-              label="Sleep Debt"
-              value={duty.sleepDebt ?? 0}
-              unit="h"
-              max={8}
-              warnAt={3}
-              critAt={5}
-            />
-            <FactorBar
-              icon={<Moon className="h-3 w-3" />}
-              label="WOCL Exposure"
-              value={duty.woclExposure ?? 0}
-              unit="h"
-              max={4}
-              warnAt={1}
-              critAt={2}
-            />
-            {duty.sleepDeficit7d && (
-              <div className="flex items-center gap-2 text-xs" title="Rolling 7-day sleep ledger vs an 8 h/day need (reported separately from KSS)">
-                <BedDouble className="h-3 w-3 text-muted-foreground" />
-                <span className="text-muted-foreground w-20 truncate">7-day deficit</span>
-                <div className="flex-1" />
-                <span className={cn('font-bold font-mono', sleepDeficitClass(duty.sleepDeficit7d.band))}>
-                  {duty.sleepDeficit7d.deficitHours.toFixed(1)}h · {SLEEP_DEFICIT_LABELS[duty.sleepDeficit7d.band] ?? duty.sleepDeficit7d.band}
-                </span>
-              </div>
-            )}
-            {duty.returnToDeckPerformance != null && (
-              <div className="flex items-center gap-2 text-xs">
-                <Zap className="h-3 w-3 text-muted-foreground" />
-                <span className="text-muted-foreground w-20 truncate">RTD KSS</span>
-                <div className="flex-1" />
-                <span className={cn('font-bold font-mono', performanceColorClass(duty.returnToDeckPerformance, duty.riskThresholds))}>
-                  {indexToKss(duty.returnToDeckPerformance).toFixed(1)}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-      </div>
-
-      {/* 4. Crew & Compliance (collapsible) */}
       {hasCrewContent && (
         <Collapsible open={crewOpen} onOpenChange={setCrewOpen}>
-          <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl bg-secondary/30 border border-border/25 p-3 text-xs font-medium hover:bg-secondary/40 transition-colors">
+          <CollapsibleTrigger className="flex w-full items-center justify-between rounded-2xl border border-border bg-card px-5 py-4 text-sm font-medium transition-colors hover:bg-secondary/60">
             <span className="flex items-center gap-2">
-              <Users className="h-3.5 w-3.5 text-primary" />
-              Crew & Compliance
-              {duty.crewComposition && (
-                <Badge variant="outline" className="text-[9px] capitalize">
-                  {duty.crewComposition.replace('_', ' ')}
-                </Badge>
+              <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              Crew and in-flight rest
+              {duty.crewComposition && duty.crewComposition !== 'standard' && (
+                <span className="text-xs font-normal text-muted-foreground">{duty.crewComposition === 'augmented_4' ? '4 pilots' : '3 pilots'}</span>
               )}
             </span>
-            <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', crewOpen && 'rotate-180')} />
+            <ChevronDown className={cn('h-4 w-4 transition-transform', crewOpen && 'rotate-180')} aria-hidden="true" />
           </CollapsibleTrigger>
-          <CollapsibleContent className="pt-2 space-y-2">
-            {/* Crew toggle */}
+          <CollapsibleContent className="space-y-3 pt-3">
             {onCrewChange && duty.crewComposition === 'augmented_4' && (() => {
               const autoDetected = duty.ulrCrewSet || 'crew_b';
               const effective = dutyCrewOverride || autoDetected;
-              const hasOvr = !!dutyCrewOverride;
               return (
-                <div className="rounded-xl glass p-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-muted-foreground">Crew</span>
-                    <div className="inline-flex rounded-lg bg-secondary/50 p-0.5">
-                      {(['crew_a', 'crew_b'] as const).map(cs => (
-                        <button
-                          key={cs}
-                          onClick={() => {
-                            onCrewChange(duty.dutyId || '', cs);
-                            toast.info(`Crew ${cs === 'crew_a' ? 'A' : 'B'} — re-run to update`);
-                          }}
-                          className={cn(
-                            'px-2.5 py-0.5 text-[10px] font-medium rounded-md transition-all',
-                            effective === cs
-                              ? 'bg-primary text-primary-foreground shadow-sm'
-                              : 'text-muted-foreground hover:text-foreground'
-                          )}
-                        >
-                          {cs === 'crew_a' ? 'A' : 'B'}
-                        </button>
-                      ))}
-                    </div>
-                    {hasOvr ? (
-                      <div className="flex items-center gap-1">
-                        <Badge variant="outline" className="text-[8px] px-1 py-0">OVERRIDE</Badge>
-                        {onCrewReset && (
-                          <button
-                            onClick={() => {
-                              onCrewReset(duty.dutyId || '');
-                              toast.info(`Reset to auto: Crew ${autoDetected === 'crew_a' ? 'A' : 'B'}`);
-                            }}
-                            className="text-[9px] text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            Reset
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-[9px] text-muted-foreground">Auto</span>
-                    )}
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3 text-sm">
+                  <span className="text-muted-foreground">Crew set</span>
+                  <div className="inline-flex rounded-lg bg-muted p-0.5" role="group" aria-label="Crew set">
+                    {(['crew_a', 'crew_b'] as const).map((cs) => (
+                      <button
+                        key={cs}
+                        type="button"
+                        aria-pressed={effective === cs}
+                        onClick={() => { onCrewChange(duty.dutyId || '', cs); toast.info(`Crew ${cs === 'crew_a' ? 'A' : 'B'} — run the analysis again to update`); }}
+                        className={cn('min-h-[32px] rounded-md px-3 text-xs font-medium transition-colors', effective === cs ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                      >
+                        {cs === 'crew_a' ? 'A' : 'B'}
+                      </button>
+                    ))}
                   </div>
+                  {dutyCrewOverride ? (
+                    onCrewReset && <button type="button" className="text-xs text-primary underline-offset-2 hover:underline" onClick={() => { onCrewReset(duty.dutyId || ''); toast.info(`Back to automatic: crew ${autoDetected === 'crew_a' ? 'A' : 'B'}`); }}>Use automatic</button>
+                  ) : <span className="text-xs text-muted-foreground">Automatic</span>}
                 </div>
               );
             })()}
 
-            {/* ULR compliance */}
             {duty.isUlr && duty.ulrCompliance && (
-              <Card variant="glass" className="rounded-xl">
-                <CardHeader className="pb-2 px-3 pt-2.5">
-                  <CardTitle className="flex items-center gap-2 text-xs">
-                    <Globe className="h-3.5 w-3.5 text-primary" />
-                    ULR Compliance
-                    {duty.ulrCompliance.violations.length > 0 ? (
-                      <Badge variant="critical" className="text-[9px]">NON-COMPLIANT</Badge>
-                    ) : (
-                      <Badge variant="success" className="text-[9px]">COMPLIANT</Badge>
-                    )}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 pb-2.5 space-y-2">
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    <div>
-                      <span className="text-muted-foreground">Max FDP</span>
-                      <p className="font-medium font-mono">{(duty.ulrCompliance.maxPlannedFdp ?? 0).toFixed(1)}h</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Monthly ULR</span>
-                      <p className="font-medium font-mono">{duty.ulrCompliance.monthlyUlrCount}/{duty.ulrCompliance.monthlyLimit}</p>
-                    </div>
-                  </div>
-                  {duty.ulrCompliance.violations.length > 0 && (
-                    <div className="flex items-start gap-2 rounded-lg border border-critical/30 bg-critical/5 p-2 text-[11px]">
-                      <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-critical mt-0.5" />
-                      <ul className="space-y-0.5 text-muted-foreground">
-                        {duty.ulrCompliance.violations.map((v, i) => <li key={i}>- {v}</li>)}
-                      </ul>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <div className="space-y-2 rounded-xl border border-border bg-card p-3 text-sm">
+                <p className="font-medium">Ultra-long range: {duty.ulrCompliance.violations.length > 0 ? 'issues found' : 'no issues found'}</p>
+                <p className="font-mono text-xs text-muted-foreground tabular">Max FDP {(duty.ulrCompliance.maxPlannedFdp ?? 0).toFixed(1)}h · {duty.ulrCompliance.monthlyUlrCount}/{duty.ulrCompliance.monthlyLimit} this month</p>
+                {duty.ulrCompliance.violations.length > 0 && (
+                  <ul className="list-disc space-y-0.5 pl-5 text-xs text-risk-critical-ink">
+                    {duty.ulrCompliance.violations.map((v, i) => <li key={i}>{v}</li>)}
+                  </ul>
+                )}
+              </div>
             )}
 
-            {/* Crew rest timeline + in-flight rest */}
             {duty.inflightRestBlocks && duty.inflightRestBlocks.length > 0 && (
               <>
                 <CrewRestTimeline duty={duty} />
-                <div className="rounded-xl glass p-3">
-                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest mb-2">In-Flight Rest</p>
-                  <div className="space-y-1">
-                    {duty.inflightRestBlocks.map((block, i) => (
-                      <div key={i} className="flex items-center justify-between rounded-lg bg-secondary/30 px-2.5 py-1.5 text-[11px]">
-                        <span className="font-mono text-muted-foreground">
-                          {block.startUtc.slice(11, 16)}Z — {block.endUtc.slice(11, 16)}Z
-                        </span>
-                        <div className="flex items-center gap-2">
-                          {block.isDuringWocl && <Badge variant="warning" className="text-[9px]">WOCL</Badge>}
-                          <span className="text-muted-foreground font-mono">{(block.durationHours ?? 0).toFixed(1)}h</span>
-                          <span className="font-medium font-mono">{(block.effectiveSleepHours ?? 0).toFixed(1)}h eff.</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <ul className="space-y-1 rounded-xl border border-border bg-card p-3 text-xs" aria-label="In-flight rest">
+                  {duty.inflightRestBlocks.map((block, i) => (
+                    <li key={i} className="flex items-center justify-between gap-3">
+                      <span className="font-mono text-muted-foreground tabular">
+                        {homeTz ? `${formatHomeTime(block.startUtc, homeTz)}–${formatHomeTime(block.endUtc, homeTz)}` : `${block.startUtc.slice(11, 16)}Z–${block.endUtc.slice(11, 16)}Z`}
+                      </span>
+                      <span className="font-mono tabular">
+                        {(block.effectiveSleepHours ?? 0).toFixed(1)}h sleep of {(block.durationHours ?? 0).toFixed(1)}h{block.isDuringWocl ? ' · in WOCL' : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </>
             )}
           </CollapsibleContent>
         </Collapsible>
       )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
-function RiskCell({ label, badge }: { label: string; badge: React.ReactNode }) {
-  return (
-    <div className="flex flex-col items-center gap-1 rounded-xl bg-secondary/20 py-2 px-1">
-      <p className="text-[9px] text-muted-foreground">{label}</p>
-      {badge}
-    </div>
-  );
-}
-
-function FactorBar({
-  icon,
-  label,
-  value,
-  unit,
-  max,
-  warnAt,
-  critAt,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  unit: string;
-  max: number;
-  warnAt: number;
-  critAt: number;
-}) {
-  const color = value >= critAt ? 'critical' : value >= warnAt ? 'warning' : 'success';
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      <span className="text-muted-foreground">{icon}</span>
-      <span className="text-muted-foreground w-20 truncate">{label}</span>
-      <div className="flex-1 h-1.5 rounded-[2px] bg-secondary/50 overflow-hidden">
-        <div
-          className={cn(
-            'h-full rounded-[2px] transition-all duration-500 ease-out',
-            color === 'success' && 'bg-success',
-            color === 'warning' && 'bg-warning',
-            color === 'critical' && 'bg-critical',
-          )}
-          style={{ width: `${Math.min(100, (value / max) * 100)}%` }}
-        />
-      </div>
-      <span className={cn(
-        'font-mono font-bold w-10 text-right tabular-nums',
-        color === 'critical' && 'text-critical',
-        color === 'warning' && 'text-warning',
-        color === 'success' && 'text-foreground',
-      )}>
-        {value.toFixed(1)}{unit}
-      </span>
     </div>
   );
 }

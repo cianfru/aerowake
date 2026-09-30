@@ -1,33 +1,24 @@
 /**
- * TimelineGrid -- Pure presentational grid container that renders WOCL bands,
- * 24 hourly grid lines, day rows with duty/sleep/IR bars, and the color legend.
- *
- * Data is already transformed into TimelineData by the time it reaches this
- * component. Used by all three grid-based chronogram views (homebase, utc, elapsed).
+ * TimelineGrid — presentational month grid: WOCL band, hourly grid lines and
+ * one row per day with duty, sleep, standby, in-flight rest, FDP limit and
+ * duty-peak marks. Data arrives already transformed into TimelineData.
  */
 
-import { RISK_LEVEL_KSS_RANGE, riskCssColor } from '@/lib/risk-scale';
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { SleepBarPopover } from './SleepBarPopover';
 import { DutyBarTooltip } from './DutyBarTooltip';
 import { DayLabel } from './DayLabel';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
-import type { TimelineData } from '@/lib/timeline-types';
+import type { TimelineData, TimelinePeakMarker } from '@/lib/timeline-types';
 import type { DutyAnalysis } from '@/types/fatigue';
 import type { SleepEdit } from '@/hooks/useSleepEdits';
-
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
 
 interface TimelineGridProps {
   data: TimelineData;
   rowHeight: number;
-  showFlightPhases: boolean;
   selectedDuty: DutyAnalysis | null;
   onDutySelect: (duty: DutyAnalysis) => void;
   /** Pending sleep edits (Map<blockKey, SleepEdit>) — homebase only */
@@ -44,21 +35,24 @@ interface TimelineGridProps {
   onDeactivateEdit?: () => void;
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 /** X-axis labels at 3-hour intervals */
 const hours = Array.from({ length: 8 }, (_, i) => i * 3);
+const pct = (h: number) => `${(h / 24) * 100}%`;
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+/** Thin vertical tick with a diamond head at the duty's model peak. */
+function PeakMark({ marker }: { marker: TimelinePeakMarker }) {
+  const ring = { boxShadow: '0 0 0 1px hsl(var(--card))' };
+  return (
+    <span aria-hidden="true" className="pointer-events-none absolute bottom-[3px] top-[3px] z-20 w-0" style={{ left: pct(marker.hour) }}>
+      <span className="absolute inset-y-0 left-[-1px] w-[2px] rounded-full bg-foreground" style={ring} />
+      <span className="absolute left-[-3.5px] top-[-1px] h-[7px] w-[7px] rotate-45 bg-foreground" style={ring} />
+    </span>
+  );
+}
 
 export function TimelineGrid({
   data,
   rowHeight,
-  showFlightPhases,
   selectedDuty,
   onDutySelect,
   pendingEdits,
@@ -68,20 +62,15 @@ export function TimelineGrid({
   onActivateEdit,
   onDeactivateEdit,
 }: TimelineGridProps) {
-  // Store refs to each day row for coordinate math in EditableSleepBar
+  // Refs to each day row for coordinate math in EditableSleepBar
   const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   const setRowRef = useCallback((rowIndex: number) => (el: HTMLDivElement | null) => {
-    if (el) {
-      rowRefs.current.set(rowIndex, el);
-    } else {
-      rowRefs.current.delete(rowIndex);
-    }
+    if (el) rowRefs.current.set(rowIndex, el);
+    else rowRefs.current.delete(rowIndex);
   }, []);
 
-  // Stable closure cache: each rowIndex gets a SINGLE closure that persists
-  // across renders. Without caching, getRowEl(n) would create a new function
-  // identity every render, causing downstream re-renders and stale deps.
+  // One stable getter per row so downstream memoisation holds.
   const rowElGetters = useRef(new Map<number, () => HTMLDivElement | null>());
   const getRowEl = useCallback((rowIndex: number) => {
     let getter = rowElGetters.current.get(rowIndex);
@@ -92,135 +81,61 @@ export function TimelineGrid({
     return getter;
   }, []);
 
+  const peakByDuty = useMemo(() => {
+    const map = new Map<DutyAnalysis, TimelinePeakMarker>();
+    for (const m of data.peakMarkers ?? []) map.set(m.duty, m);
+    return map;
+  }, [data.peakMarkers]);
+
   return (
     <div className="calendar-grid flex">
-      {/* ----------------------------------------------------------------- */}
-      {/* Y-axis labels                                                     */}
-      {/* ----------------------------------------------------------------- */}
-      <div className="w-28 flex-shrink-0">
-        {/* Header spacer — matches the X-axis header row */}
+      {/* Y-axis: day labels with the day's duty peak */}
+      <div className="w-[52px] flex-shrink-0 sm:w-[104px]">
         <div style={{ height: `${rowHeight}px` }} />
         {data.rowLabels.map((label) => (
           <DayLabel key={label.rowIndex} label={label} rowHeight={rowHeight} />
         ))}
       </div>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* Main chart area                                                   */}
-      {/* ----------------------------------------------------------------- */}
-      <div className="relative flex-1">
+      <div className="relative min-w-0 flex-1">
         {/* X-axis header */}
-        <div
-          className="flex border-b border-border"
-          style={{ height: `${rowHeight}px` }}
-        >
+        <div className="flex border-b border-border" style={{ height: `${rowHeight}px` }} aria-hidden="true">
           {hours.map((hour) => (
-            <div
-              key={hour}
-              className="flex items-end justify-start pb-1 pl-1 text-[10px] text-muted-foreground"
-              style={{ width: `${100 / 8}%` }}
-            >
+            <div key={hour} className="flex items-end justify-start pb-1 pl-0.5 font-mono text-[10px] text-muted-foreground" style={{ width: `${100 / 8}%` }}>
               {String(hour).padStart(2, '0')}
             </div>
           ))}
         </div>
 
-        {/* Grid body: WOCL shading, grid lines, day rows */}
         <div className="relative">
-          {/* -------------------------------------------------------------- */}
-          {/* Static WOCL bands (rowIndex === -1 spans all rows)             */}
-          {/* -------------------------------------------------------------- */}
-          {data.woclBands
-            .filter((band) => band.rowIndex === -1)
-            .map((band, i) => (
-              <div
-                key={`wocl-static-${i}`}
-                className="absolute top-0 bottom-0 wocl-hatch pointer-events-none"
-                style={{
-                  left: `${(band.startHour / 24) * 100}%`,
-                  width: `${((band.endHour - band.startHour) / 24) * 100}%`,
-                }}
-              />
-            ))}
+          {/* WOCL band (static bands span all rows; per-row bands follow their row) */}
+          {data.woclBands.map((band, i) => (
+            <div
+              key={`wocl-${i}`}
+              className={cn('wocl-hatch pointer-events-none absolute', band.rowIndex === -1 && 'bottom-0 top-0')}
+              style={{
+                left: pct(band.startHour),
+                width: pct(band.endHour - band.startHour),
+                ...(band.rowIndex >= 0 ? { top: `${band.rowIndex * rowHeight}px`, height: `${rowHeight}px` } : {}),
+              }}
+            />
+          ))}
 
-          {/* -------------------------------------------------------------- */}
-          {/* Per-row WOCL bands (elapsed view, rowIndex >= 0)               */}
-          {/* -------------------------------------------------------------- */}
-          {data.woclBands
-            .filter((band) => band.rowIndex >= 0)
-            .map((band, i) => (
-              <div
-                key={`wocl-row-${i}`}
-                className="absolute wocl-hatch pointer-events-none"
-                style={{
-                  top: `${band.rowIndex * rowHeight}px`,
-                  height: `${rowHeight}px`,
-                  left: `${(band.startHour / 24) * 100}%`,
-                  width: `${((band.endHour - band.startHour) / 24) * 100}%`,
-                }}
-              />
-            ))}
-
-          {/* -------------------------------------------------------------- */}
-          {/* Static WMZ bands (rowIndex === -1 spans all rows)              */}
-          {/* -------------------------------------------------------------- */}
-          {data.wmzBands
-            .filter((band) => band.rowIndex === -1)
-            .map((band, i) => (
-              <div
-                key={`wmz-static-${i}`}
-                className="absolute top-0 bottom-0 wmz-band pointer-events-none"
-                style={{
-                  left: `${(band.startHour / 24) * 100}%`,
-                  width: `${((band.endHour - band.startHour) / 24) * 100}%`,
-                }}
-              />
-            ))}
-
-          {/* -------------------------------------------------------------- */}
-          {/* Per-row WMZ bands (elapsed view, rowIndex >= 0)                */}
-          {/* -------------------------------------------------------------- */}
-          {data.wmzBands
-            .filter((band) => band.rowIndex >= 0)
-            .map((band, i) => (
-              <div
-                key={`wmz-row-${i}`}
-                className="absolute wmz-band pointer-events-none"
-                style={{
-                  top: `${band.rowIndex * rowHeight}px`,
-                  height: `${rowHeight}px`,
-                  left: `${(band.startHour / 24) * 100}%`,
-                  width: `${((band.endHour - band.startHour) / 24) * 100}%`,
-                }}
-              />
-            ))}
-
-          {/* -------------------------------------------------------------- */}
-          {/* Vertical grid lines (24 columns, every 3rd more prominent)     */}
-          {/* -------------------------------------------------------------- */}
-          <div className="absolute inset-0 flex pointer-events-none">
+          {/* Vertical grid lines (24 columns, every 3rd stronger) */}
+          <div className="pointer-events-none absolute inset-0 flex">
             {Array.from({ length: 24 }, (_, hour) => (
-              <div
-                key={hour}
-                className={cn(
-                  'flex-1 border-r',
-                  hour % 3 === 0 ? 'border-border/70' : 'border-border/25',
-                )}
-              />
+              <div key={hour} className={cn('flex-1 border-r', hour % 3 === 2 ? 'border-border/80' : 'border-border/30')} />
             ))}
           </div>
 
-          {/* -------------------------------------------------------------- */}
-          {/* Day rows                                                       */}
-          {/* -------------------------------------------------------------- */}
+          {/* Day rows */}
           {data.rowLabels.map((label) => (
             <div
               key={label.rowIndex}
               ref={setRowRef(label.rowIndex)}
-              className={cn('relative border-b border-border/50 transition-colors hover:bg-primary/5', label.hasDuty && 'bg-primary/[0.025]')}
+              className="relative border-b border-border/50 transition-colors hover:bg-primary/[0.04]"
               style={{ height: `${rowHeight}px` }}
             >
-              {/* Sleep bars */}
               {data.sleepBars
                 .filter((bar) => bar.rowIndex === label.rowIndex)
                 .map((bar, i) => (
@@ -241,31 +156,38 @@ export function TimelineGrid({
                   />
                 ))}
 
-              {/* Standby bars (muted, hatched — not scored) */}
+              {/* Standby (hatched; no predicted KSS) */}
               {(data.standbyBars ?? [])
                 .filter((bar) => bar.rowIndex === label.rowIndex)
-                .map((bar, i) => (
-                  <Popover key={`standby-${i}`}><PopoverTrigger asChild><button
-                    type="button"
-                    className="absolute rounded-sm border border-muted-foreground/40 pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    style={{
-                      top: 6,
-                      bottom: 6,
-                      left: `${(bar.startHour / 24) * 100}%`,
-                      width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 0.5)}%`,
-                      background:
-                        'repeating-linear-gradient(45deg, transparent, transparent 3px, hsl(var(--muted-foreground) / 0.35) 3px, hsl(var(--muted-foreground) / 0.35) 5px)',
-                      zIndex: 5,
-                    }}
-                    title={`${bar.period.type === 'airport_standby' ? 'Airport standby' : 'Home standby'} ${bar.period.startHome}–${bar.period.endHome}`}
-                    aria-label={`${bar.period.type === 'airport_standby' ? 'Airport standby' : 'Home standby'} ${bar.period.startHome} to ${bar.period.endHome}`}
-                  /></PopoverTrigger><PopoverContent className="space-y-2 text-sm">
-                    <h3 className="font-semibold">{bar.period.type === 'airport_standby' ? 'Airport standby' : 'Home standby'}</h3>
-                    <p>{bar.period.date} · {bar.period.startHome}–{bar.period.endHome} home-base time</p>
-                    <p className="text-muted-foreground">Included as a standby period from the roster. It has no predicted duty KSS score.</p>
-                    <p className="text-xs text-muted-foreground">Counted duty time: {bar.period.countedDutyHours.toFixed(1)}h. Review the FTL checks for coverage and assumptions.</p>
-                  </PopoverContent></Popover>
-                ))}
+                .map((bar, i) => {
+                  const kind = bar.period.type === 'airport_standby' ? 'Airport standby' : 'Home standby';
+                  return (
+                    <Popover key={`standby-${i}`}>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="pointer-events-auto absolute rounded-[3px] border border-muted-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          style={{
+                            top: 7,
+                            bottom: 7,
+                            left: pct(bar.startHour),
+                            width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 0.5)}%`,
+                            background: 'repeating-linear-gradient(45deg, transparent, transparent 3px, hsl(var(--muted-foreground) / 0.35) 3px, hsl(var(--muted-foreground) / 0.35) 5px)',
+                            zIndex: 5,
+                          }}
+                          title={`${kind} ${bar.period.startHome}–${bar.period.endHome}`}
+                          aria-label={`${kind} ${bar.period.startHome} to ${bar.period.endHome}`}
+                        />
+                      </PopoverTrigger>
+                      <PopoverContent className="space-y-2 text-sm">
+                        <h3 className="font-semibold">{kind}</h3>
+                        <p>{bar.period.date} · {bar.period.startHome}–{bar.period.endHome} home-base time</p>
+                        <p className="text-muted-foreground">Included as a standby period from the roster. It has no predicted duty KSS score.</p>
+                        <p className="text-xs text-muted-foreground">Counted duty time: {bar.period.countedDutyHours.toFixed(1)}h. Review the FTL checks for coverage and assumptions.</p>
+                      </PopoverContent>
+                    </Popover>
+                  );
+                })}
 
               {/* Duty bars */}
               {data.dutyBars
@@ -276,114 +198,73 @@ export function TimelineGrid({
                     bar={bar}
                     widthPercent={((bar.endHour - bar.startHour) / 24) * 100}
                     leftPercent={(bar.startHour / 24) * 100}
-                    showFlightPhases={showFlightPhases}
                     selectedDuty={selectedDuty}
                     onDutySelect={onDutySelect}
                     variant={data.variant}
+                    peak={peakByDuty.get(bar.duty)}
                   />
                 ))}
 
-              {/* In-flight rest bars */}
+              {/* Duty peak (model peak time) */}
+              {(data.peakMarkers ?? [])
+                .filter((m) => m.rowIndex === label.rowIndex)
+                .map((m, i) => <PeakMark key={`peak-${i}`} marker={m} />)}
+
+              {/* In-flight rest */}
               {data.inflightRestBars
                 .filter((bar) => bar.rowIndex === label.rowIndex)
-                .map((bar, i) => {
-                  const barWidth = ((bar.endHour - bar.startHour) / 24) * 100;
-                  return (
-                    <TooltipProvider key={`ifr-${i}`} delayDuration={100}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div
-                            className="absolute pointer-events-auto cursor-help"
-                            style={{
-                              top: 13,
-                              height: 13,
-                              left: `${(bar.startHour / 24) * 100}%`,
-                              width: `${Math.max(barWidth, 0.5)}%`,
-                              background:
-                                'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(147, 130, 220, 0.5) 2px, rgba(147, 130, 220, 0.5) 4px)',
-                              borderRadius: '2px',
-                              zIndex: 25,
-                            }}
-                          />
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-xs p-3">
-                          <div className="space-y-1 text-xs">
-                            <div className="font-semibold border-b pb-1">
-                              In-Flight Rest
-                              {bar.crewSet && (
-                                <Badge
-                                  variant="outline"
-                                  className="ml-2 text-[10px] capitalize"
-                                >
-                                  {bar.crewSet.replace('_', ' ')}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                              <span className="text-muted-foreground">Duration:</span>
-                              <span>
-                                {bar.durationHours?.toFixed(1) ?? 'N/A'}h
-                              </span>
-                              <span className="text-muted-foreground">
-                                Effective Sleep:
-                              </span>
-                              <span>
-                                {bar.effectiveSleepHours?.toFixed(1) ?? 'N/A'}h
-                              </span>
-                              {bar.isDuringWocl && (
-                                <>
-                                  <span className="text-muted-foreground">WOCL:</span>
-                                  <span className="text-warning">Yes</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  );
-                })}
+                .map((bar, i) => (
+                  <TooltipProvider key={`ifr-${i}`} delayDuration={100}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div
+                          className="pointer-events-auto absolute cursor-help rounded-[2px]"
+                          style={{
+                            top: 14,
+                            height: 12,
+                            left: pct(bar.startHour),
+                            width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 0.5)}%`,
+                            background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, hsl(var(--wocl) / 0.6) 2px, hsl(var(--wocl) / 0.6) 4px)',
+                            zIndex: 25,
+                          }}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs p-3">
+                        <div className="space-y-1 text-xs">
+                          <p className="border-b border-border pb-1 font-semibold">
+                            In-flight rest{bar.crewSet ? ` · ${bar.crewSet.replace('_', ' ')}` : ''}
+                          </p>
+                          <dl className="grid grid-cols-2 gap-x-4 gap-y-1">
+                            <dt className="text-muted-foreground">Duration</dt>
+                            <dd className="font-mono tabular">{bar.durationHours?.toFixed(1) ?? '—'}h</dd>
+                            <dt className="text-muted-foreground">Effective sleep</dt>
+                            <dd className="font-mono tabular">{bar.effectiveSleepHours?.toFixed(1) ?? '—'}h</dd>
+                            {bar.isDuringWocl && <><dt className="text-muted-foreground">During WOCL</dt><dd>Yes</dd></>}
+                          </dl>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ))}
 
-              {/* FDP Limit markers (vertical dashed lines) */}
+              {/* FDP limit markers (dashed lines) */}
               {data.fdpMarkers
                 .filter((marker) => marker.rowIndex === label.rowIndex)
                 .map((marker, i) => (
                   <button
                     key={`fdp-${i}`}
                     type="button"
-                    className="absolute top-0 bottom-0 z-30 w-4 -translate-x-1/2 cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    style={{ left: `${(marker.hour / 24) * 100}%` }}
+                    className="absolute bottom-0 top-0 z-30 w-4 -translate-x-1/2 cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    style={{ left: pct(marker.hour) }}
                     title={`Calculated FDP limit: ${marker.maxFdp}h. Select to review this duty and its assumptions.`}
                     aria-label={`FDP limit for ${format(marker.duty.date, 'EEE d MMM')}: ${marker.maxFdp} hours — open duty details`}
                     onClick={() => onDutySelect(marker.duty)}
-                  ><span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-1/2 border-r-2 border-dashed border-muted-foreground/70" /></button>
+                  >
+                    <span aria-hidden="true" className="pointer-events-none absolute inset-y-1 left-1/2 border-r-2 border-dashed border-muted-foreground/70" />
+                  </button>
                 ))}
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* ----------------------------------------------------------------- */}
-      {/* Color legend column (right side)                                   */}
-      {/* ----------------------------------------------------------------- */}
-      <div className="ml-3 flex w-10 flex-shrink-0 flex-col">
-        {/* Spacer matching the X-axis header */}
-        <div style={{ height: `${rowHeight}px` }} />
-        <div
-          className="flex gap-1"
-          style={{ height: `${data.totalRows * rowHeight}px` }}
-        >
-          {/* Stepped key matching the risk bands (low → extreme), no gradient */}
-          <div className="flex w-[3px] flex-col gap-[2px]" aria-hidden="true">
-            {(['low', 'moderate', 'high', 'critical'] as const).map((level) => (
-              <div key={level} className="flex-1" style={{ backgroundColor: riskCssColor(level) }} />
-            ))}
-          </div>
-          <div className="flex flex-col text-[9px] leading-none text-muted-foreground">
-            {(['low', 'moderate', 'high', 'critical'] as const).map((level) => (
-              <span key={level} className="flex flex-1 items-start pt-0.5 font-mono">{RISK_LEVEL_KSS_RANGE[level].replace('KSS ', '')}</span>
-            ))}
-          </div>
         </div>
       </div>
     </div>

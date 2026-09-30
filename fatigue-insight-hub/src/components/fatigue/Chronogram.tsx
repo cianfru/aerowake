@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Pencil } from 'lucide-react';
+import { Pencil, RotateCcw } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { DutyAnalysis, DutyStatistics, RestDaySleep, StandbyPeriod } from '@/types/fatigue';
@@ -12,7 +12,7 @@ interface ChronogramProps {
   duties: DutyAnalysis[];
   statistics: DutyStatistics;
   month: Date;
-  pilotId: string;
+  pilotId?: string;
   pilotName?: string;
   pilotBase?: string;
   pilotAircraft?: string;
@@ -22,17 +22,16 @@ interface ChronogramProps {
   analysisId?: string;
   /** Standby periods (not scored) — drawn as muted hatched bars in the home-base view. */
   standbyPeriods?: StandbyPeriod[];
+  /** Heading id so the workspace can move focus here after navigation. */
+  headingId?: string;
 }
 
 type ChronogramTab = 'homebase' | 'utc';
 
-export function Chronogram({ duties, statistics, month, pilotName, pilotBase, pilotAircraft, onDutySelect, selectedDuty, restDaysSleep, analysisId, standbyPeriods }: ChronogramProps) {
+export function Chronogram({ duties, statistics, month, pilotBase, onDutySelect, selectedDuty, restDaysSleep, analysisId, standbyPeriods, headingId = 'chronogram-heading' }: ChronogramProps) {
   const [activeTab, setActiveTab] = useState<ChronogramTab>('homebase');
-
-  // Sleep editing state
   const sleepEdits = useSleepEdits(analysisId);
 
-  // Pre-compute timeline data for each grid-based view
   const homeBaseData = useMemo(
     () => ({
       ...homeBaseTransform(duties, statistics, month, restDaysSleep),
@@ -46,118 +45,76 @@ export function Chronogram({ duties, statistics, month, pilotName, pilotBase, pi
     [duties, statistics, month, restDaysSleep],
   );
 
-  const statsSubset = useMemo(() => ({
-    totalDuties: statistics.totalDuties,
-    highRiskDuties: statistics.highRiskDuties,
-    criticalRiskDuties: statistics.criticalRiskDuties,
-  }), [statistics]);
-
   return (
-    <section id="roster-calendar" aria-labelledby="chronogram-heading" className="instrument-surface min-w-0 scroll-mt-24 space-y-4">
-      <div className="space-y-4">
-        {/* Tab selector for timeline type */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ChronogramTab)}>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 id="chronogram-heading" className="text-xl font-semibold">Roster calendar</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Your monthly chronogram. Select a flight or duty bar to open its details.</p>
-              <p className="mt-1 text-xs text-muted-foreground">Duties, estimated sleep and the window of circadian low (WOCL). Swipe across the calendar on smaller screens.</p>
-            </div>
-            <TabsList className="h-auto gap-4 rounded-none bg-transparent p-0">
-              {([['homebase', 'Home base'], ['utc', 'UTC']] as const).map(([v, l]) => (
-                <TabsTrigger
-                  key={v}
-                  value={v}
-                  className="rounded-none border-b-2 border-transparent px-0 pb-1 pt-0 text-[13px] text-muted-foreground shadow-none data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-                >
-                  {l}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+    <section id="roster-calendar" aria-labelledby={headingId} className="instrument-surface min-w-0 scroll-mt-32 space-y-5 px-3 sm:px-5 md:px-8">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ChronogramTab)}>
+        <div className="flex flex-wrap items-end justify-between gap-3 px-1 sm:px-0">
+          <div className="space-y-1">
+            <h2 id={headingId} tabIndex={-1} className="text-title font-semibold focus:outline-none">Roster calendar</h2>
+            <p className="text-sm text-muted-foreground">Each duty in its predicted sleepiness band, with estimated sleep. Select a bar for details.</p>
           </div>
-
-          {/* Home-Base Timeline Tab — editable sleep */}
-          <TabsContent value="homebase" className="mt-4 space-y-4">
-            <TimelineRenderer
-              data={homeBaseData}
-              duties={duties}
-              statistics={statsSubset}
-              month={month}
-              pilotName={pilotName}
-              pilotBase={pilotBase}
-              pilotAircraft={pilotAircraft}
-              onDutySelect={onDutySelect}
-              selectedDuty={selectedDuty}
-              pendingEdits={sleepEdits.pendingEdits}
-              onSleepEdit={sleepEdits.addEdit}
-              onRemoveEdit={sleepEdits.removeEdit}
-              activeEditBarId={sleepEdits.activeBarId}
-              onActivateEdit={sleepEdits.activateEdit}
-              onDeactivateEdit={sleepEdits.deactivateEdit}
-            />
-          </TabsContent>
-
-          {/* UTC (Zulu) Timeline Tab */}
-          <TabsContent value="utc" className="mt-4">
-            <TimelineRenderer
-              data={utcData}
-              duties={duties}
-              statistics={statsSubset}
-              month={month}
-              pilotName={pilotName}
-              pilotBase={pilotBase}
-              pilotAircraft={pilotAircraft}
-              onDutySelect={onDutySelect}
-              selectedDuty={selectedDuty}
-            />
-          </TabsContent>
-
-        </Tabs>
-
-        {/* Floating Apply bar — shows when sleep edits are pending */}
-        {sleepEdits.hasEdits && (
-          <div className="sticky bottom-0 z-10 bg-background/95 backdrop-blur-sm border border-border/50 px-4 py-3 flex items-center justify-between rounded-xl shadow-lg">
-            <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-              <Pencil className="h-3.5 w-3.5" />
-              {sleepEdits.editCount} sleep edit{sleepEdits.editCount > 1 ? 's' : ''} pending
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={sleepEdits.clearEdits}
-                disabled={sleepEdits.isApplying}
+          <TabsList className="h-auto gap-4 rounded-none bg-transparent p-0" aria-label="Calendar time reference">
+            {([['homebase', 'Home base'], ['utc', 'UTC']] as const).map(([v, l]) => (
+              <TabsTrigger
+                key={v}
+                value={v}
+                title={v === 'homebase' && pilotBase ? `Times in ${pilotBase} local time` : undefined}
+                className="rounded-none border-b-2 border-transparent px-0 pb-1 pt-0 text-[13px] text-muted-foreground shadow-none data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
               >
-                Reset All
-              </Button>
-              <Button
-                variant="glow"
-                size="sm"
-                onClick={sleepEdits.applyEdits}
-                disabled={sleepEdits.isApplying}
-              >
-                {sleepEdits.isApplying ? 'Recalculating…' : 'Apply & Recalculate'}
-              </Button>
-            </div>
-          </div>
-        )}
+                {l}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
-        {/* Reset to Original bar — shows after recalculation when no new edits pending */}
-        {sleepEdits.hasOriginal && !sleepEdits.hasEdits && (
-          <div className="sticky bottom-0 z-10 bg-background/95 backdrop-blur-sm border border-primary/20 px-4 py-3 flex items-center justify-between rounded-xl shadow-lg">
-            <span className="text-sm text-muted-foreground">
-              Viewing recalculated results
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={sleepEdits.resetToOriginal}
-            >
-              ↩ Reset to Original
+        <TabsContent value="homebase" className="mt-4">
+          <TimelineRenderer
+            data={homeBaseData}
+            duties={duties}
+            onDutySelect={onDutySelect}
+            selectedDuty={selectedDuty}
+            pendingEdits={sleepEdits.pendingEdits}
+            onSleepEdit={sleepEdits.addEdit}
+            onRemoveEdit={sleepEdits.removeEdit}
+            activeEditBarId={sleepEdits.activeBarId}
+            onActivateEdit={sleepEdits.activateEdit}
+            onDeactivateEdit={sleepEdits.deactivateEdit}
+          />
+        </TabsContent>
+
+        <TabsContent value="utc" className="mt-4">
+          <TimelineRenderer data={utcData} duties={duties} onDutySelect={onDutySelect} selectedDuty={selectedDuty} />
+        </TabsContent>
+      </Tabs>
+
+      {/* Apply bar — shows while sleep edits are pending */}
+      {sleepEdits.hasEdits && (
+        <div className="sticky bottom-3 z-10 flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3" style={{ boxShadow: 'var(--shadow-elevated)' }}>
+          <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+            {sleepEdits.editCount} sleep {sleepEdits.editCount > 1 ? 'edits' : 'edit'} pending
+          </span>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={sleepEdits.clearEdits} disabled={sleepEdits.isApplying}>
+              Discard
+            </Button>
+            <Button size="sm" onClick={sleepEdits.applyEdits} disabled={sleepEdits.isApplying}>
+              {sleepEdits.isApplying ? 'Recalculating…' : 'Apply and recalculate'}
             </Button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* After recalculation, with no new edits pending */}
+      {sleepEdits.hasOriginal && !sleepEdits.hasEdits && (
+        <div className="sticky bottom-3 z-10 flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-card px-4 py-3" style={{ boxShadow: 'var(--shadow-elevated)' }}>
+          <span className="text-sm text-muted-foreground">Showing results with your sleep edits</span>
+          <Button variant="outline" size="sm" onClick={sleepEdits.resetToOriginal}>
+            <RotateCcw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            Back to the original
+          </Button>
+        </div>
+      )}
     </section>
   );
 }

@@ -1,33 +1,17 @@
-import { useState, useMemo } from 'react';
-import { Info, AlertTriangle, ZoomIn, RotateCcw } from 'lucide-react';
+import { useMemo } from 'react';
+import { AlertTriangle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { cn } from '@/lib/utils';
 import { useChronogramZoom } from '@/hooks/useChronogramZoom';
-import { TimelineLegend } from '../TimelineLegend';
+import { CalendarLegend } from './CalendarLegend';
 import { TimelineGrid } from './TimelineGrid';
-import { QuickDutySelector } from './QuickDutySelector';
 import { ROW_HEIGHT } from '@/lib/fatigue-utils';
 import type { TimelineData } from '@/lib/timeline-types';
 import type { DutyAnalysis } from '@/types/fatigue';
 import type { SleepEdit } from '@/hooks/useSleepEdits';
-import { format } from 'date-fns';
-import { RISK_LEVEL_KSS_RANGE, RISK_LEVEL_LABELS, riskHex } from '@/lib/risk-scale';
 
 interface TimelineRendererProps {
   data: TimelineData;
   duties: DutyAnalysis[];
-  statistics: {
-    totalDuties: number;
-    highRiskDuties: number;
-    criticalRiskDuties: number;
-  };
-  month: Date;
-  pilotName?: string;
-  pilotBase?: string;
-  pilotAircraft?: string;
   onDutySelect: (duty: DutyAnalysis) => void;
   selectedDuty: DutyAnalysis | null;
   /** Pending sleep edits (homebase view only) */
@@ -44,14 +28,13 @@ interface TimelineRendererProps {
   onDeactivateEdit?: () => void;
 }
 
+/**
+ * The month grid with its single key. The whole 24 hours fit the width on
+ * phones too, so evening duties are never hidden behind a horizontal scroll.
+ */
 export function TimelineRenderer({
   data,
   duties,
-  statistics,
-  month,
-  pilotName,
-  pilotBase,
-  pilotAircraft,
   onDutySelect,
   selectedDuty,
   pendingEdits,
@@ -61,9 +44,6 @@ export function TimelineRenderer({
   onActivateEdit,
   onDeactivateEdit,
 }: TimelineRendererProps) {
-  const [infoOpen, setInfoOpen] = useState(false);
-
-  // Zoom functionality
   const { zoom, containerRef, resetZoom, isZoomed } = useChronogramZoom({
     minScaleX: 1,
     maxScaleX: 4,
@@ -71,130 +51,47 @@ export function TimelineRenderer({
     maxScaleY: 3,
   });
 
-  // Show flight phases when zoomed in enough
-  const showFlightPhases = zoom.scaleX >= 2;
-
-  // Count duties with commander discretion
-  const discretionCount = useMemo(() =>
-    duties.filter(d => d.usedDiscretion).length
-  , [duties]);
-
-  // Empty state for elapsed view
-  if (data.dutyBars.length === 0 && data.variant === 'elapsed') {
-    return (
-      <Card variant="glass">
-        <CardContent className="py-8 text-center text-muted-foreground">
-          No duty data available for human performance visualization
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Determine info text based on variant
-  const infoText = data.variant === 'utc'
-    ? 'This chart shows duties positioned in UTC (Zulu) time. All bars use deterministic UTC coordinates from ISO timestamps — no timezone conversion applied.'
-    : data.variant === 'elapsed'
-    ? 'This chart shows duties on an elapsed-time axis. Each row represents 24 hours of continuous time. WOCL bands shift with circadian adaptation.'
-    : 'The chart shows duty periods across the month. Colors indicate the predicted sleepiness band (KSS):';
-
-  const woclNote = data.variant === 'utc'
-    ? 'Purple shaded area = WOCL (Window of Circadian Low: 02:00-06:00 UTC)'
-    : data.variant === 'elapsed'
-    ? 'Purple shaded area = WOCL (shifts with body clock adaptation)'
-    : 'Purple shaded area = WOCL (Window of Circadian Low: 02:00-06:00)';
-
-  // Title suffix
-  const titleSuffix = data.variant === 'utc'
-    ? '— UTC (Zulu) Timeline'
-    : data.variant === 'elapsed'
-    ? '— Human Performance (Elapsed)'
-    : '- High-Resolution Duty Timeline';
+  const discretionCount = useMemo(() => duties.filter((d) => d.usedDiscretion).length, [duties]);
 
   return (
     <div className="space-y-4">
-      {/* Zoom Controls */}
-      <div className="flex items-center justify-between">
+      <CalendarLegend showDiscretion={discretionCount > 0} showStandby={(data.standbyBars ?? []).length > 0} />
+
+      <div className="flex min-h-[28px] items-center justify-between gap-3 text-xs text-muted-foreground">
+        {discretionCount > 0 ? (
+          <p className="flex items-center gap-1.5 text-risk-critical-ink">
+            <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+            {discretionCount} {discretionCount === 1 ? 'duty uses' : 'duties use'} commander&apos;s discretion
+          </p>
+        ) : <span />}
         <div className="flex items-center gap-2">
-          {showFlightPhases && (
-            <p className="text-xs text-primary flex items-center gap-1">
-              <ZoomIn className="h-3 w-3" />
-              Flight phases visible
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">
-            {isZoomed ? `Zoom: ${zoom.scaleX.toFixed(1)}x` : 'Pinch/Ctrl+Scroll to zoom'}
-          </span>
+          {isZoomed ? <span className="font-mono tabular">Zoom {zoom.scaleX.toFixed(1)}×</span>
+            : <span className="hidden [@media(hover:hover)]:inline">Ctrl + scroll to zoom</span>}
           {isZoomed && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={resetZoom}
-              className="text-xs h-7 px-2"
-            >
-              <RotateCcw className="h-3 w-3 mr-1" />
-              Reset
+            <Button variant="outline" size="sm" onClick={resetZoom} className="h-7 px-2 text-xs">
+              <RotateCcw className="mr-1 h-3 w-3" aria-hidden="true" />
+              Reset zoom
             </Button>
           )}
         </div>
       </div>
 
-      {/* Info Collapsible */}
-      <Collapsible open={infoOpen} onOpenChange={setInfoOpen}>
-        <CollapsibleTrigger asChild>
-          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
-            <Info className="mr-1 h-3 w-3" />
-            How to Read This Chart
-          </Button>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2">
-          <div className="rounded-lg bg-secondary/30 p-3 text-xs text-muted-foreground">
-            <p className="mb-2">{infoText}</p>
-            <div className="flex flex-wrap gap-4">
-              {(['low', 'moderate', 'high', 'critical', 'extreme'] as const).map((level) => (
-                <span key={level} className="flex items-center gap-1">
-                  <span className="h-3 w-3 rounded" style={{ backgroundColor: riskHex(level) }} />
-                  {RISK_LEVEL_KSS_RANGE[level]} ({RISK_LEVEL_LABELS[level]})
-                </span>
-              ))}
-            </div>
-            <p className="mt-2">{woclNote}</p>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
-
-      {/* Timeline Legend */}
-      <div className="mb-3">
-        <TimelineLegend showDiscretion={discretionCount > 0} variant="homebase" />
-      </div>
-
-      {/* High-Resolution Timeline with zoom support */}
       <div
         ref={containerRef}
-        className="overflow-auto pb-4 touch-pan-x touch-pan-y"
+        className="overflow-auto pb-2"
         style={{ maxHeight: isZoomed ? '80vh' : undefined }}
       >
         <div
-          className="min-w-[600px] transition-transform duration-100"
+          className="transition-transform duration-100"
           style={{
             transform: `translate(${zoom.panX}px, ${zoom.panY}px) scale(${zoom.scaleX}, ${zoom.scaleY})`,
             transformOrigin: 'top left',
             width: `${100 / zoom.scaleX}%`,
           }}
         >
-          {discretionCount > 0 && (
-            <p className="mb-3 flex items-center gap-1.5 text-xs text-critical">
-              <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
-              {discretionCount} {discretionCount === 1 ? 'duty uses' : 'duties use'} commander&apos;s discretion
-            </p>
-          )}
-
-          {/* The actual grid */}
           <TimelineGrid
             data={data}
             rowHeight={ROW_HEIGHT}
-            showFlightPhases={showFlightPhases}
             selectedDuty={selectedDuty}
             onDutySelect={onDutySelect}
             pendingEdits={pendingEdits}
@@ -204,14 +101,9 @@ export function TimelineRenderer({
             onActivateEdit={onActivateEdit}
             onDeactivateEdit={onDeactivateEdit}
           />
-
-          {/* X-axis label */}
-          <div className="mt-2 text-center text-xs text-muted-foreground">
-            {data.xAxisLabel}
-          </div>
+          <p className="mt-2 text-center text-xs text-muted-foreground">{data.xAxisLabel}</p>
         </div>
       </div>
-
     </div>
   );
 }

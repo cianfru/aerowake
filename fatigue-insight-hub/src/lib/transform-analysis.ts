@@ -8,7 +8,7 @@
 import { AnalysisResults, DutyAnalysis, PilotSettings, CompanyDetection, TimelinePoint, EasaFinding, EasaSummary, StandbyPeriod } from '@/types/fatigue';
 import { AnalysisResult, Duty, SleepEstimate, DutySegment } from '@/lib/api-client';
 import { format, parseISO } from 'date-fns';
-import { toUpperRisk } from '@/lib/risk-scale';
+import { classifyKss, kssToIndex, normalizeRiskLevel, roundKss, toUpperRisk, type RiskLevel } from '@/lib/risk-scale';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -59,51 +59,42 @@ function computeSegmentBlockHours(seg: {
   return Math.max(0, diff / 60);
 }
 
+/** A KSS value from the API, or null when absent or out of range. */
+function kssOrNull(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 1 && v <= 9 ? v : null;
+}
+
 /**
- * Per-segment performance interpolation based on temporal position within duty.
- * Accounts for cumulative fatigue and time-on-task degradation.
+ * Per-sector sleepiness exactly as the model reports it (segments[].kss_peak,
+ * kss_at_arrival, risk_level). Older analyses have none: the sector then
+ * carries no value of its own and views fall back to the duty peak. Nothing is
+ * interpolated here.
  */
-function calculateSegmentPerformances(duty: {
-  segments: Array<{ departure_time: string; arrival_time: string; block_hours?: number }>;
-  report_time_utc: string;
-  min_performance: number;
-  avg_performance: number;
-  landing_performance: number | null;
-  duty_hours: number;
-}): number[] {
-  if (duty.segments.length === 0) return [];
-  if (duty.segments.length === 1) return [duty.avg_performance];
+export function sectorKss(seg: Pick<DutySegment, 'kss_peak' | 'kss_at_arrival' | 'risk_level'>): {
+  kssPeak: number | null;
+  kssAtArrival: number | null;
+  riskLevel: RiskLevel | null;
+} {
+  const kssPeak = kssOrNull(seg.kss_peak);
+  const kssAtArrival = kssOrNull(seg.kss_at_arrival);
+  const backendLevel = normalizeRiskLevel(seg.risk_level);
+  const riskLevel = kssPeak != null ? classifyKss(kssPeak) : backendLevel !== 'unknown' ? backendLevel : null;
+  return { kssPeak, kssAtArrival, riskLevel };
+}
 
-  const parseIsoToDate = (iso: string): Date | null => {
-    try { return parseISO(iso); } catch { return null; }
-  };
-
-  const reportTime = parseIsoToDate(duty.report_time_utc);
-  if (!reportTime) return duty.segments.map(() => duty.avg_performance);
-
-  const segmentEndHours: number[] = [];
-  let cumulativeHours = 0;
-
-  duty.segments.forEach((seg) => {
-    const arrivalTime = parseIsoToDate(seg.arrival_time);
-    if (arrivalTime) {
-      segmentEndHours.push((arrivalTime.getTime() - reportTime.getTime()) / (1000 * 60 * 60));
-    } else {
-      cumulativeHours += (seg.block_hours || 1) + 0.5;
-      segmentEndHours.push(cumulativeHours);
-    }
-  });
-
-  const finalLanding = duty.landing_performance ?? duty.min_performance;
-  const totalDutyHours = duty.duty_hours;
-  const performanceDrop = duty.avg_performance - finalLanding;
-  const estimatedStartPerf = Math.min(100, duty.avg_performance + performanceDrop * 0.5);
-
-  return segmentEndHours.map((hoursElapsed) => {
-    const fraction = totalDutyHours > 0 ? hoursElapsed / totalDutyHours : 0;
-    const performance = estimatedStartPerf - (estimatedStartPerf - finalLanding) * fraction;
-    return Math.max(0, Math.min(100, performance));
-  });
+/**
+ * When the duty peak occurs: the backend's peak_time_utc, else the worst point's
+ * timestamp when that point is the peak (same KSS to one decimal).
+ */
+export function dutyPeakTime(duty: Pick<Duty, 'peak_time_utc' | 'max_kss' | 'worst_point'>): string | undefined {
+  if (typeof duty.peak_time_utc === 'string' && Number.isFinite(Date.parse(duty.peak_time_utc))) return duty.peak_time_utc;
+  const wp = duty.worst_point;
+  const max = kssOrNull(duty.max_kss);
+  const wpKss = kssOrNull(wp?.kss);
+  if (wp?.timestamp && max != null && wpKss != null && roundKss(max) === roundKss(wpKss) && Number.isFinite(Date.parse(wp.timestamp))) {
+    return wp.timestamp;
+  }
+  return undefined;
 }
 
 function parseIsoToDayHour(iso: string | undefined | null): { day: number; hour: number } | null {
@@ -368,7 +359,6 @@ export function transformAnalysisResult(
       referenceTimezone: entry.reference_timezone,
     })),
     duties: result.duties.map((duty) => {
-      const segmentPerformances = calculateSegmentPerformances(duty);
       const sleep = duty.sleep_quality ?? duty.sleep_estimate;
       // Derive sleep environment from the first sleep block (backend sets 'home' or 'hotel')
       const blockEnv = sleep?.sleep_blocks?.[0]?.environment;
@@ -403,6 +393,8 @@ export function transformAnalysisResult(
         minPerformanceRisk: toUpperRisk(duty.risk_level),
         landingRisk: toUpperRisk(duty.risk_level),
         maxKss: duty.max_kss ?? undefined,
+        peakTimeUtc: dutyPeakTime(duty),
+        kssPeakFdp: kssOrNull(duty.kss_peak_fdp) ?? undefined,
         landingKss: duty.landing_kss ?? undefined,
         maxKss90: duty.max_kss_90 ?? undefined,
         maxPSevere: duty.max_p_severe_sleepiness ?? undefined,
@@ -494,7 +486,9 @@ export function transformAnalysisResult(
           p_severe_sleepiness: duty.worst_point.p_severe_sleepiness,
           hours_awake: duty.worst_point.hours_awake,
         }] : undefined,
-        flightSegments: (duty.segments ?? []).map((seg, idx) => ({
+        flightSegments: (duty.segments ?? []).map((seg) => {
+          const sector = sectorKss(seg);
+          return {
           flightNumber: seg.flight_number,
           departure: seg.departure,
           arrival: seg.arrival,
@@ -502,8 +496,11 @@ export function transformAnalysisResult(
           arrivalTime: seg.arrival_time_local,
           departureTimeUtc: isoToZulu(seg.departure_time),
           arrivalTimeUtc: isoToZulu(seg.arrival_time),
+          departureIso: seg.departure_time || undefined,
+          arrivalIso: seg.arrival_time || undefined,
           blockHours: seg.block_hours,
-          performance: segmentPerformances[idx] || duty.avg_performance,
+          ...sector,
+          performance: sector.kssAtArrival != null ? kssToIndex(sector.kssAtArrival) : undefined,
           departureTimeAirportLocal: seg.departure_time_airport_local,
           arrivalTimeAirportLocal: seg.arrival_time_airport_local,
           departureTimezone: seg.departure_timezone,
@@ -512,7 +509,8 @@ export function transformAnalysisResult(
           arrivalUtcOffset: seg.arrival_utc_offset,
           lineTrainingCodes: seg.line_training_codes || undefined,
           aircraftType: seg.aircraft_type ?? null,
-        })),
+          };
+        }),
       } as DutyAnalysis;
     }),
     homeBaseTimezone: result.home_base_timezone ?? undefined,
