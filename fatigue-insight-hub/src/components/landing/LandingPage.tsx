@@ -2,6 +2,9 @@ import { LandingHeader } from './LandingHeader';
 import { HeroSection } from './HeroSection';
 import { TrustStrip } from './TrustStrip';
 import { SampleDutiesSection } from './SampleDutiesSection';
+import { ScienceSection } from './ScienceSection';
+import { OperationsSection } from './OperationsSection';
+import { PrivacySection } from './PrivacySection';
 import { StepsSection } from './StepsSection';
 import { FinalCta } from './FinalCta';
 import { LandingFooter } from './LandingFooter';
@@ -19,6 +22,9 @@ export function LandingPage({ onEnter }: LandingPageProps) {
         <HeroSection onEnter={onEnter} />
         <TrustStrip />
         <SampleDutiesSection />
+        <ScienceSection />
+        <OperationsSection />
+        <PrivacySection />
         <StepsSection />
         <FinalCta onEnter={onEnter} />
       </main>
