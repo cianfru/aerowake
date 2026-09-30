@@ -1,357 +1,277 @@
-import { useMemo, useState } from 'react';
-import {
-  AlertOctagon, AlertTriangle, ArrowLeft, Check, Copy, Download, Info, Printer, ShieldAlert,
-} from 'lucide-react';
-import {
-  Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from 'recharts';
-import { reportToSmsSummary } from '@/lib/report-sms';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertOctagon, AlertTriangle, ArrowLeft, Check, Info, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { reportToText, tzOffsetMinutes, type FatigueReport, type Severity } from '@/lib/fatigue-report-api';
+import { FTL_RULE_LABELS, FTL_STATUS_LABELS, formatGeneratedAt, type FatigueReport, type Severity } from '@/lib/fatigue-report-api';
+import { formatDuration, formatInstant } from '@/lib/report-time';
+import { actogramCaption, buildKssSeries, kssBand, kssCaption } from './charts/chart-model';
+import { CHART_CSS } from './charts/chart-palette';
+import { ReportActogram } from './charts/ReportActogram';
+import { ReportFigure } from './charts/ReportFigure';
+import { ReportKssChart } from './charts/ReportKssChart';
+import { ReportExportBar } from './ReportExportBar';
+import { ReportRecordTables } from './ReportRecordTables';
+import { printTitle, reportPrintCss } from './report-print';
 
-/** Severity: text colour + a thin leading rule; no filled boxes or pills. */
-const SEVERITY_STYLE: Record<Severity, { label: string; text: string; rule: string; icon: typeof Info }> = {
-  critical: { label: 'Critical', text: 'text-critical', rule: 'bg-critical', icon: AlertOctagon },
-  warning: { label: 'Warning', text: 'text-high', rule: 'bg-high', icon: AlertTriangle },
-  caution: { label: 'Caution', text: 'text-warning', rule: 'bg-warning', icon: ShieldAlert },
-  info: { label: 'Info', text: 'text-muted-foreground', rule: 'bg-border', icon: Info },
+/** Severity: text colour + a leading rule (border, so it survives print). */
+const SEVERITY_STYLE: Record<Severity, { label: string; plural: string; text: string; rule: string; icon: typeof Info }> = {
+  critical: { label: 'Critical', plural: 'critical', text: 'text-critical', rule: 'border-l-critical', icon: AlertOctagon },
+  warning: { label: 'Warning', plural: 'warnings', text: 'text-high', rule: 'border-l-high', icon: AlertTriangle },
+  caution: { label: 'Caution', plural: 'cautions', text: 'text-foreground', rule: 'border-l-warning', icon: ShieldAlert },
+  info: { label: 'Note', plural: 'notes', text: 'text-muted-foreground', rule: 'border-l-border', icon: Info },
 };
 
-const LEVEL_RULE: Record<string, string> = {
-  low: 'bg-muted-foreground/50',
-  moderate: 'bg-warning',
-  high: 'bg-high',
-  critical: 'bg-critical',
+/** Canonical KSS band → rule colour. Low (and unknown) stay neutral. */
+const BAND_RULE: Record<string, string> = {
+  low: 'border-l-border', unknown: 'border-l-border', moderate: 'border-l-warning', high: 'border-l-high',
+  critical: 'border-l-critical', extreme: 'border-l-critical',
+};
+const BAND_WORD: Record<string, string> = {
+  low: 'Low', moderate: 'Moderate', high: 'High', critical: 'Critical', extreme: 'Extreme', unknown: 'Not modelled',
 };
 
-const PRINT_CSS = `
-@media print {
-  @page { size: A4; margin: 14mm; }
-  body { background: white !important; }
-  body * { visibility: hidden !important; }
-  #fatigue-report-print, #fatigue-report-print * { visibility: visible !important; }
-  #fatigue-report-print { position: absolute; inset: 0 auto auto 0; width: 100%; max-width: none; padding: 0; }
-  #fatigue-report-print, #fatigue-report-print * { color: #111 !important; background-color: transparent !important; border-color: #bbb !important; box-shadow: none !important; text-shadow: none !important; }
-  #fatigue-report-print .no-print { display: none !important; }
-  #fatigue-report-print section { break-inside: auto; margin-top: 6mm; }
-  #fatigue-report-print h1, #fatigue-report-print h2, #fatigue-report-print h3 { break-after: avoid; }
-  #fatigue-report-print .report-appendix { break-before: page; padding-top: 0; border: 0; }
-  #fatigue-report-print { font-size: 9.5pt; line-height: 1.4; --foreground: 220 10% 10%; --muted-foreground: 220 5% 35%; --border: 220 5% 70%; --popover: 0 0% 100%; }
-  #fatigue-report-print > * { margin-top: 4mm !important; margin-bottom: 0 !important; }
-  #fatigue-report-print .text-sm { font-size: 9.5pt; }
-  #fatigue-report-print section.grid { break-inside: avoid; }
-  #fatigue-report-print th { white-space: nowrap !important; font-size: 8pt; }
-  #fatigue-report-print table { width: 100%; font-size: 9pt; }
-  #fatigue-report-print td { white-space: normal !important; overflow-wrap: anywhere; }
-  #fatigue-report-print thead { display: table-header-group; }
-  #fatigue-report-print .recharts-tooltip-wrapper { display: none !important; }
-  #fatigue-report-print svg text { font-size: 16px !important; }
-  #fatigue-report-print li { padding-top: 1mm; padding-bottom: 1mm; }
-  #fatigue-report-print .report-limitations { break-inside: avoid; }
-  #fatigue-report-print li, #fatigue-report-print tr, #fatigue-report-print figure { break-inside: avoid; }
-  #fatigue-report-print .overflow-x-auto { overflow: visible !important; }
-}`;
+const EVENT_EYEBROW: Record<string, string> = {
+  roster_concern: 'Roster concern · planned duty',
+  fatigue_call_before_duty: 'Fatigue report · fatigue call before duty',
+  fatigue_during_duty: 'Fatigue report · fatigue during duty',
+  fatigue_after_duty: 'Fatigue report · fatigue after duty',
+};
 
-function fmtH(h: number | null | undefined): string {
-  if (h == null) return '—';
-  const whole = Math.floor(h);
-  return `${whole}h${String(Math.round((h - whole) * 60)).padStart(2, '0')}`;
-}
+const PILOT_FIELDS: [string, string][] = [['name', 'Name'], ['staff_number', 'Staff number'], ['rank', 'Rank'], ['fleet', 'Fleet'], ['operator', 'Operator']];
 
-function Stat({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'bad' | 'ok' }) {
+function Fact({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="min-w-0 space-y-1.5 py-1 sm:px-5 sm:first:pl-0">
-      <p className="eyebrow">{label}</p>
-      <p className={cn('font-mono text-2xl font-medium leading-none tabular', tone === 'bad' && 'text-critical')}>{value}</p>
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    <div className="min-w-0 space-y-1">
+      <dt className="eyebrow">{label}</dt>
+      <dd className="font-mono text-xl font-medium leading-none tabular-nums">{value}</dd>
+      {hint && <dd className="text-xs text-muted-foreground">{hint}</dd>}
     </div>
   );
 }
 
 export function FatigueReportView({ report, onEdit }: { report: FatigueReport; onEdit: () => void }) {
-  const [copied, setCopied] = useState(false);
-  const [copyError, setCopyError] = useState(false);
-  const [showSubmission, setShowSubmission] = useState(false);
+  const [signature, setSignature] = useState(true);
   const tz = report.home_timezone;
   const a = report.assessment;
-  const sw = report.prior_sleep_wake;
-  const sleepAnchor = report.duties.find(d => d.id === report.event.affected_duty_id);
-  const sleepAnchorLabel = sleepAnchor ? 'duty' : 'event';
+  const ss = report.sleep_summary;
+  const sa = report.self_assessment;
+  const op = report.operational;
+  const prospective = report.event.type === 'roster_concern';
+  const hasCurve = useMemo(() => !!buildKssSeries(report), [report]);
+  const printCss = useMemo(() => reportPrintCss(report), [report]);
+  const stem = `fatigue-report-${report.home_base ?? 'report'}-${report.event.time_utc.slice(0, 10)}`;
 
-  // Chart in home-base local hours since period start.
-  const chart = useMemo(() => {
-    const t0 = new Date(report.period.start_utc).getTime();
-    const toX = (iso: string) => (new Date(iso).getTime() - t0) / 3600e3;
-    const points = report.timeline.map((p) => ({
-      x: toX(p.time_utc),
-      kss: p.asleep ? null : p.kss,
-      kss90: p.asleep ? null : p.kss_90,
-    }));
-    const duties = report.duties.map((d) => ({
-      x1: toX(d.report_utc), x2: toX(d.release_utc), affected: d.is_affected, status: d.status,
-    }));
-    const sleeps = report.sleeps.map((s) => ({ x1: toX(s.start_utc), x2: toX(s.end_utc) }));
-    const eventX = toX(report.event.time_utc);
-    return { points, duties, sleeps, eventX, t0 };
+  // The document title becomes the default PDF file name.
+  useEffect(() => {
+    const original = document.title;
+    const before = () => { document.title = printTitle(report); };
+    const after = () => { document.title = original; };
+    window.addEventListener('beforeprint', before);
+    window.addEventListener('afterprint', after);
+    return () => { window.removeEventListener('beforeprint', before); window.removeEventListener('afterprint', after); document.title = original; };
   }, [report]);
 
-  const tickLabel = (x: number) => {
-    const d = new Date(chart.t0 + x * 3600e3);
-    const local = new Date(d.getTime() + tzOffsetMinutes(d, tz) * 60000);
-    const hh = String(local.getUTCHours()).padStart(2, '0');
-    return `${local.getUTCDate()}/${local.getUTCMonth() + 1} ${hh}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
-  };
-
-  const download = (format: 'json' | 'txt') => {
-    const content = format === 'json' ? JSON.stringify(report, null, 2) : `${reportToSmsSummary(report)}\n\nFULL ASSESSMENT\n${reportToText(report)}`;
-    const url = URL.createObjectURL(new Blob([content], { type: format === 'json' ? 'application/json' : 'text/plain;charset=utf-8' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `fatigue-report-${report.event.time_utc.slice(0, 10)}.${format}`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(reportToSmsSummary(report));
-      setCopyError(false);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-      setCopyError(true);
-      setShowSubmission(true);
-    }
-  };
-
-  const pilotLine = Object.entries(report.pilot).map(([, v]) => v).join(' · ');
+  const pilotRows = PILOT_FIELDS.filter(([k]) => report.pilot?.[k]).map(([k, l]) => [l, report.pilot[k]] as const);
+  if (report.home_base) pilotRows.push(['Base', report.home_base]);
+  if (op?.crew_position_label || op?.pilot_role_label) pilotRows.push(['Crew position', [op.crew_position_label, op.pilot_role_label].filter(Boolean).join(', ')]);
+  const counts = (['critical', 'warning', 'caution', 'info'] as Severity[]).filter((s) => report.summary.counts[s] > 0);
+  const notes = [...new Set([...(report.data_quality.notes ?? []), ...(report.limitations ?? [])])];
+  const coverage = Object.entries(report.easa_summary?.coverage ?? {});
+  const peakBand = a ? kssBand(a.kss_max) : 'unknown';
+  const operational = op && (op.phase_of_flight_label || op.mitigations.length || op.effect_on_operation_label || op.suggested_action);
 
   return (
-    <div id="fatigue-report-print" className="mx-auto max-w-4xl space-y-10 px-4 py-10 md:px-8">
-      <style>{PRINT_CSS}</style>
+    <div id="fatigue-report-print" className="fatigue-report-doc mx-auto max-w-4xl space-y-10 px-4 pb-16 pt-8 md:px-8">
+      <style>{printCss}</style>
+      <style>{CHART_CSS}</style>
+
       <div className="no-print flex flex-wrap items-center justify-between gap-2">
         <Button variant="ghost" onClick={onEdit}><ArrowLeft className="mr-1 h-4 w-4" />Edit inputs</Button>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={copy}>{copied ? <Check className="mr-1 h-4 w-4" /> : <Copy className="mr-1 h-4 w-4" />}{copied ? 'Copied' : 'Copy for SMS'}</Button>
-          <Button variant="outline" onClick={() => download('txt')}><Download className="mr-1 h-4 w-4" />Download text</Button>
-          <Button onClick={() => window.print()}><Printer className="mr-1 h-4 w-4" />Print / PDF</Button>
-        </div>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <input type="checkbox" checked={signature} onChange={(e) => setSignature(e.target.checked)} />
+          Include reporter confirmation block
+        </label>
       </div>
+      <ReportExportBar report={report} fileStem={stem} />
 
-      <section aria-label="Export to your SMS" className="no-print space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-5">
-        <h2 className="font-semibold">Ready for your safety reporting system</h2>
-        <p className="text-sm leading-6 text-muted-foreground">Review your statement and supporting evidence below. Copy the submission text into your SMS form, or choose Print / PDF to save an attachment. Follow your operator’s required fields and submission process.</p>
-        <div className="flex flex-wrap gap-3"><Button variant="outline" size="sm" onClick={() => setShowSubmission(!showSubmission)} aria-expanded={showSubmission}>{showSubmission ? 'Hide submission text' : 'Preview submission text'}</Button><Button variant="ghost" size="sm" onClick={() => download('json')}>Download structured JSON</Button></div>
-        <p className="text-xs text-muted-foreground">Nothing is sent automatically. PDF, text and JSON are portable exports; acceptance depends on your SMS.</p>
-        {copyError && <p role="alert" className="text-sm text-destructive">Your browser blocked copying. Select the text below to copy it manually, or download the text file.</p>}
-        {showSubmission && <label className="block space-y-2 text-sm"><span>Submission text</span><textarea aria-label="Submission text" readOnly rows={12} className="w-full rounded-lg border bg-background p-3 text-sm leading-6" value={reportToSmsSummary(report)} onFocus={event => event.target.select()} /></label>}
-        {copied && <p role="status" className="text-sm">Submission text copied. Paste it into your SMS and review before submitting.</p>}
-      </section>
-      <section className="space-y-3 border-b border-border pb-6">
-        <p className="eyebrow">{report.event.type === 'roster_concern' ? 'Prospective roster concern' : 'Fatigue report'}</p>
-        <h1 className="text-2xl md:text-3xl font-semibold leading-tight tracking-[-0.02em]">
-          {report.event.affected_duty_label ?? `Fatigue reported ${report.event.time_local}`}
+      {/* ── Header ───────────────────────────────────────────── */}
+      <header className="space-y-4 border-b border-border pb-6">
+        <p className="eyebrow">{EVENT_EYEBROW[report.event.type] ?? 'Fatigue report'}</p>
+        <h1 className="text-2xl font-semibold leading-tight tracking-[-0.02em] md:text-3xl">
+          {report.event.affected_duty_label ?? `${prospective ? 'Concern' : 'Fatigue reported'} ${report.event.time_local}`}
         </h1>
-        {pilotLine && <p className="text-sm">{pilotLine}</p>}
-        <p className="break-words font-mono text-[11px] leading-relaxed text-muted-foreground">
-          Event {report.event.time_local} ({report.event.time_z}) · Period {report.period.start_local} – {report.period.end_local} ·
-          Times in {tz} · Generated {new Date(report.generated_at).toUTCString()} · {report.report_version} / {report.engine_version}
+        <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 print:grid-cols-2">
+          <div className="flex gap-2"><dt className="w-28 shrink-0 text-muted-foreground">{prospective ? 'Concern for' : 'Event'}</dt><dd className="tabular-nums">{formatInstant(report.event.time_utc, tz, report.home_base)}</dd></div>
+          <div className="flex gap-2"><dt className="w-28 shrink-0 text-muted-foreground">Period</dt><dd className="tabular-nums">{report.period.start_local_long ?? report.period.start_local} – {report.period.end_local_long ?? report.period.end_local}</dd></div>
+          {pilotRows.map(([k, v]) => <div key={k} className="flex gap-2"><dt className="w-28 shrink-0 text-muted-foreground">{k}</dt><dd className="min-w-0 break-words">{v}</dd></div>)}
+          <div className="flex gap-2"><dt className="w-28 shrink-0 text-muted-foreground">Generated</dt><dd className="tabular-nums">{formatGeneratedAt(report.generated_at)}</dd></div>
+          <div className="flex gap-2"><dt className="w-28 shrink-0 text-muted-foreground">Report</dt><dd className="break-all font-mono text-xs leading-5">{report.report_id} · {report.report_version}</dd></div>
+        </dl>
+        <p className="text-xs leading-5 text-muted-foreground">
+          A fatigue report is a normal safety report within the operator’s fatigue risk management (EASA ORO.FTL.120), handled under a just culture (Regulation (EU) 376/2014). Times are {report.home_base ? `${report.home_base} ` : ''}local ({tz}) with Z in brackets.
         </p>
+      </header>
+
+      {/* ── Key facts ────────────────────────────────────────── */}
+      <section aria-label="Key facts" className="report-keep">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-5 border-y border-border py-5 sm:grid-cols-4 print:grid-cols-4">
+          <Fact label="Sleep 24 / 48 h" value={ss ? `${formatDuration(ss.sleep_24h)} / ${formatDuration(ss.sleep_48h)}` : '—'} hint="before the event" />
+          <Fact label="Sleep 72 h" value={formatDuration(ss?.sleep_72h)}
+            hint={ss ? (ss.basis === 'reported' ? 'all reported' : ss.basis === 'none' ? 'none entered' : `${formatDuration(ss.estimated_72h)} estimated`) : undefined} />
+          <Fact label="Awake at event" value={formatDuration(ss?.hours_awake_at_event)} hint={ss?.last_wake_local ? `woke ${ss.last_wake_local.slice(-5)}` : undefined} />
+          <Fact label="Self-rating" value={sa ? [sa.kss != null ? `KSS ${sa.kss}` : '', sa.samn_perelli != null ? `SP ${sa.samn_perelli}` : ''].filter(Boolean).join(' · ') : '—'}
+            hint={sa ? `at ${sa.rated_at_local.slice(-5)}` : 'none given'} />
+        </dl>
       </section>
 
-      <section className="space-y-3" aria-label="Submission summary">
-        <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Submission summary</h2>
-        {report.pilot_narrative && <div><h3 className="text-sm font-semibold">Pilot statement</h3><p className="whitespace-pre-wrap text-sm leading-relaxed">{report.pilot_narrative}</p></div>}
-        {report.narrative.filter(p => p.title !== 'Conclusion' && p.title !== 'Pilot assessment').map(p => <div key={p.title}><h3 className="text-sm font-semibold">{p.title}</h3><p className="text-sm leading-relaxed text-foreground/90">{p.text}</p></div>)}
-        {report.self_assessment && <p className="text-sm">Pilot self-rating at {report.self_assessment.rated_at_local}: {report.self_assessment.kss != null && `KSS ${report.self_assessment.kss}/9 (${report.self_assessment.kss_label})`} {report.self_assessment.samn_perelli != null && `· Samn-Perelli ${report.self_assessment.samn_perelli}/7`}. These are the pilot's observations.</p>}
+      {/* ── Figures ──────────────────────────────────────────── */}
+      <ReportFigure number={1} title="Sleep, duty and event, last 72 hours" caption={actogramCaption(report)}
+        chart={ReportActogram} report={report} fileStem={`${stem}-actogram`} />
+      {hasCurve ? (
+        <ReportFigure number={2} title={buildKssSeries(report)?.provisional ? 'Predicted sleepiness (provisional)' : 'Predicted sleepiness (KSS)'}
+          caption={kssCaption(report)} chart={ReportKssChart} report={report} fileStem={`${stem}-kss`} />
+      ) : (
+        <p className="border-l-2 border-border pl-4 text-sm text-muted-foreground">
+          No predicted sleepiness curve: at least two sleep periods covering the event are needed. The actogram above uses the records as entered.
+        </p>
+      )}
+
+      {/* ── Statement and summary ────────────────────────────── */}
+      <section className="space-y-4" aria-labelledby="report-summary">
+        <h2 id="report-summary" className="border-b border-border pb-2 text-[13px] font-semibold">Pilot account and summary</h2>
+        {report.pilot_narrative && (
+          <div className="report-keep"><h3 className="text-sm font-semibold">Pilot statement</h3><p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{report.pilot_narrative}</p></div>
+        )}
+        {report.narrative.filter((p) => p.title !== 'Conclusion' && p.title !== 'Operational context (pilot)').map((p) => (
+          <div key={p.title}><h3 className="text-sm font-semibold">{p.title}</h3><p className="mt-1 text-sm leading-relaxed text-foreground/90">{p.text}</p></div>
+        ))}
       </section>
 
-      <section className="flex gap-4">
-        <span aria-hidden="true" className={cn('w-[3px] rounded-[1px]', LEVEL_RULE[report.summary.overall_level] ?? 'bg-border')} />
-        <div className="min-w-0 space-y-2">
-          <p className="text-lg font-medium leading-snug">{report.summary.headline}</p>
-          <p className="flex flex-wrap gap-y-1 text-[13px] text-muted-foreground">
-            {(['critical', 'warning', 'caution', 'info'] as Severity[])
-              .filter((s) => report.summary.counts[s] > 0)
-              .map((s) => (
-                <span key={s} className="mr-3 whitespace-nowrap">
-                  <span className={cn('font-mono', SEVERITY_STYLE[s].text)}>{report.summary.counts[s]}</span>{' '}
-                  {SEVERITY_STYLE[s].label.toLowerCase()}
-                </span>
-              ))}
-            <span className="whitespace-nowrap">Record coverage: <span className="text-foreground">{report.data_quality.confidence}</span></span>
-          </p>
-        </div>
-      </section>
-
-      <aside className="space-y-2 border-l-2 border-border pl-4 text-sm" aria-label="Evidence coverage"><p className="font-medium">Evidence coverage · {report.data_quality.confidence}</p>{report.data_quality.notes.map((note, i) => <p key={i} className="text-muted-foreground">{note}</p>)}</aside>
-
-
-
-      <div className="report-appendix border-t border-border pt-6"><h2 className="text-lg font-semibold">Supporting detail</h2><p className="mt-2 text-sm text-muted-foreground">Duty and sleep records, supporting findings and optional model estimates. These estimates do not replace your declaration.</p></div>
-
-      <section aria-label="Three sources of evidence" className="grid gap-5 sm:grid-cols-3">
-        <div><h3 className="text-sm font-semibold">Roster records</h3><p className="mt-2 text-sm text-muted-foreground">{report.duties.length} duties supplied; {report.duties.filter(d => d.status === 'operated').length} marked operated and {report.duties.filter(d => d.status === 'planned').length} planned. Imported times need confirmation against actual operations.</p></div>
-        <div><h3 className="text-sm font-semibold">Scientific estimates</h3><p className="mt-2 text-sm text-muted-foreground">{report.data_quality.reported_sleeps} reported sleep periods and {report.data_quality.estimated_sleeps} estimated. {report.data_quality.model_available ? 'Predictions use this supplied pattern.' : 'Sleep-dependent predictions are unavailable.'}</p></div>
-        <div><h3 className="text-sm font-semibold">Pilot experience</h3><p className="mt-2 text-sm text-muted-foreground">{report.pilot_narrative ? 'Pilot statement included.' : 'No pilot statement supplied.'} {report.self_assessment ? 'Self-ratings are recorded separately from predictions.' : 'No self-rating supplied; none has been inferred.'}</p></div>
-      </section>
-
-      {report.watch_reference && <p className="text-sm text-muted-foreground">Personal watch reference: KSS {report.watch_reference.kss.toFixed(1)}. {report.watch_reference.duty_ids.length} assessed duties reach this reference. {report.watch_reference.explanation}</p>}
-
-      <p className="text-sm text-muted-foreground">Sleep screening below uses {sleepAnchor ? `duty report at ${sleepAnchor.report_local}` : `the event at ${report.event.time_local}`} ({tz}). It includes the supplied reported and estimated sleep. The diary’s 24/48-hour totals use reported sleep before the event at {report.event.time_local}.</p>
-      <section className="grid grid-cols-2 gap-x-6 gap-y-6 border-y border-border py-5 sm:grid-cols-4 sm:gap-x-0 sm:divide-x sm:divide-border">
-        <Stat label={`Sleep before ${sleepAnchorLabel}, 24 h`} value={fmtH(sw?.sleep_24h)} hint="5h or more recommended" tone={sw && sw.sleep_24h < 5 ? 'bad' : undefined} />
-        <Stat label={`Sleep before ${sleepAnchorLabel}, 48 h`} value={fmtH(sw?.sleep_48h)} hint="12h or more recommended" tone={sw && sw.sleep_48h < 12 ? 'bad' : undefined} />
-        <Stat label="Awake by end" value={fmtH(a?.hours_awake_at_end ?? sw?.hours_awake_at_end)} tone={(a?.hours_awake_at_end ?? 0) >= 17 ? 'bad' : undefined} />
-        <Stat label="Predicted peak KSS" value={a ? a.kss_max.toFixed(1) : '—'}
-          hint={a ? `${a.kss_label} · 90th pct ${a.kss_max_90.toFixed(1)}` : 'Not modelled'} tone={a && a.kss_max >= 7 ? 'bad' : undefined} />
-      </section>
-
-      {report.timeline.length > 0 && (
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border pb-2">
-            <h2 className="text-[13px] font-semibold">Predicted sleepiness across the period</h2>
-            <p className="text-xs text-muted-foreground">KSS 1 (extremely alert) – 9 (fighting sleep)</p>
-          </div>
-          <div className="h-64 min-w-0">
-            <ResponsiveContainer width="100%" height="100%" minWidth={240}>
-              <ComposedChart data={chart.points} margin={{ top: 12, right: 8, bottom: 0, left: -24 }}>
-                <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.6} />
-                <XAxis dataKey="x" type="number" domain={['dataMin', 'dataMax']} tickFormatter={tickLabel}
-                  tickLine={false} axisLine={{ stroke: 'hsl(var(--border))' }}
-                  tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))', fontFamily: 'JetBrains Mono, monospace' }}
-                  interval="preserveStartEnd" />
-                <YAxis domain={[1, 9]} ticks={[1, 3, 5, 7, 9]} tickLine={false} axisLine={false}
-                  tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))', fontFamily: 'JetBrains Mono, monospace' }} />
-                {chart.sleeps.map((s, i) => <ReferenceArea key={`s${i}`} x1={s.x1} x2={s.x2} fill="hsl(var(--primary))" fillOpacity={0.1} ifOverflow="hidden" />)}
-                {chart.duties.map((d, i) => (
-                  <ReferenceArea key={`d${i}`} x1={d.x1} x2={d.x2} fill="hsl(var(--muted-foreground))" fillOpacity={d.status === 'cancelled_fatigue' ? 0.06 : 0.14}
-                    stroke={d.affected ? 'hsl(var(--high))' : undefined} strokeWidth={d.affected ? 1 : 0} ifOverflow="hidden" />
-                ))}
-                <ReferenceLine y={7} stroke="hsl(var(--high))" strokeDasharray="3 3" strokeOpacity={0.8}
-                  label={{ value: 'Sleepy (7)', position: 'insideTopLeft', fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-                {report.watch_reference && report.watch_reference.kss !== 7 && <ReferenceLine y={report.watch_reference.kss} stroke="hsl(var(--primary))" strokeDasharray="6 4" label={{ value: 'Personal watch', position: 'insideBottomRight', fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />}
-                <ReferenceLine x={chart.eventX} stroke="hsl(var(--critical))" strokeOpacity={0.8}
-                  label={{ value: report.event.type === 'roster_concern' ? 'Assessment' : 'Event', fontSize: 10, position: 'insideTopLeft', fill: 'hsl(var(--muted-foreground))' }} />
-                <Area dataKey="kss" stroke="none" fill="hsl(var(--foreground))" fillOpacity={0.05} connectNulls={false} isAnimationActive={false} />
-                <Line dataKey="kss" stroke="hsl(var(--foreground))" dot={false} strokeWidth={2} connectNulls={false} isAnimationActive={false} />
-                <Line dataKey="kss90" stroke="hsl(var(--muted-foreground))" dot={false} strokeWidth={1} strokeDasharray="4 3" connectNulls={false} isAnimationActive={false} />
-                <Tooltip
-                  contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 6, fontSize: 12 }}
-                  labelFormatter={(x: number) => tickLabel(Math.round(x))}
-                  formatter={(v: number, name: string) => [v?.toFixed?.(1) ?? '—', name === 'kss90' ? 'KSS (90th pct)' : 'KSS']}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Solid line: average pilot with the sleep entered. Dashed: more fatigue-susceptible pilot (90th percentile).
-            Tinted bands: sleep. Grey bands: duties; outlined = the affected duty.
-          </p>
+      {operational && (
+        <section className="report-keep space-y-2" aria-labelledby="report-ops">
+          <h2 id="report-ops" className="border-b border-border pb-2 text-[13px] font-semibold">Operational context <span className="font-normal text-muted-foreground">· as reported by the pilot</span></h2>
+          <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[12rem_1fr] print:grid-cols-[12rem_1fr]">
+            {op.phase_of_flight_label && <><dt className="text-muted-foreground">Phase of flight</dt><dd>{op.phase_of_flight_label}</dd></>}
+            {op.mitigations.length > 0 && <><dt className="text-muted-foreground">Mitigations taken</dt><dd>{op.mitigations.map((m) => m.label).join('; ')}</dd></>}
+            {op.effect_on_operation_label && <><dt className="text-muted-foreground">Effect on the operation</dt><dd>{op.effect_on_operation_label}</dd></>}
+            {op.suggested_action && <><dt className="text-muted-foreground">Suggested action</dt><dd className="whitespace-pre-wrap">{op.suggested_action}</dd></>}
+          </dl>
         </section>
       )}
 
-      <section className="space-y-1">
-        <div className="border-b border-border pb-2">
-          <h2 className="text-[13px] font-semibold">Findings</h2>
-        </div>
+      {/* ── Assessment ───────────────────────────────────────── */}
+      <section className={cn('report-keep space-y-2 border-l-[3px] pl-4', BAND_RULE[report.summary.overall_level] ?? 'border-l-border')} data-print-keep>
+        <p className="text-lg font-medium leading-snug">{report.summary.headline}</p>
+        <p className="text-sm text-muted-foreground">
+          {a ? <>Predicted peak KSS <span className="font-mono text-foreground">{a.kss_max.toFixed(1)}</span> ({BAND_WORD[peakBand].toLowerCase()} band) at {a.kss_max_time_local}; 90th-percentile pilot {a.kss_max_90.toFixed(1)}. Model estimate, not a measurement.</>
+            : 'No modelled assessment: the sleep history was not confirmed complete or does not cover the event.'}
+        </p>
+        <p className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
+          {counts.map((s) => (
+            <span key={s} className="whitespace-nowrap">
+              <span className={cn('font-mono font-medium', SEVERITY_STYLE[s].text)} data-print-keep>{report.summary.counts[s]}</span>{' '}
+              {report.summary.counts[s] === 1 ? SEVERITY_STYLE[s].label.toLowerCase() : SEVERITY_STYLE[s].plural}
+            </span>
+          ))}
+          <span className="whitespace-nowrap">Record coverage: <span className="text-foreground">{report.data_quality.confidence}</span></span>
+        </p>
+      </section>
+
+      <section className="space-y-1" aria-labelledby="report-findings">
+        <h2 id="report-findings" className="border-b border-border pb-2 text-[13px] font-semibold">Findings</h2>
         {report.findings.length === 0 && <p className="py-3 text-sm text-muted-foreground">No findings.</p>}
-        <ul className="divide-y divide-border/70">
+        <ul className="space-y-3 pt-2">
           {report.findings.map((f, i) => {
             const s = SEVERITY_STYLE[f.severity];
             return (
-              <li key={i} className="flex gap-4 py-4">
-                <span aria-hidden="true" className={cn('w-[3px] rounded-[1px]', s.rule)} />
-                <div className="min-w-0 space-y-1 text-sm">
-                  <p className="flex flex-wrap items-baseline gap-x-3">
-                    <span className="font-medium text-foreground">{f.title}</span>
-                    <span className={cn('text-[11px] font-medium uppercase tracking-[0.08em]', s.text)}>{s.label}</span>
-                  </p>
-                  <p className="text-foreground/85">{f.detail}</p>
-                  {f.reference && <p className="font-mono text-[11px] text-muted-foreground">{f.reference}</p>}
-                </div>
+              <li key={i} className={cn('border-l-[3px] py-1 pl-4 text-sm', s.rule)} data-print-keep>
+                <p className="flex flex-wrap items-baseline gap-x-3">
+                  <span className="font-medium text-foreground">{f.title}</span>
+                  <span className={cn('text-[11px] font-semibold uppercase tracking-[0.08em]', s.text)} data-print-keep>{s.label}</span>
+                </p>
+                <p className="mt-0.5 text-foreground/85">{f.detail}</p>
+                {f.reference && <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{f.reference}</p>}
               </li>
             );
           })}
         </ul>
       </section>
 
-
-      <section className="space-y-2">
-        <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Duties</h2>
-        <div className="overflow-x-auto border-y border-border">
-          <table className="w-full text-sm">
-            <thead className="text-left text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-              <tr><th className="p-2">Duty</th><th className="p-2">Report</th><th className="p-2">Release</th><th className="p-2">Hours</th><th className="p-2">Rest before</th><th className="p-2">Status</th><th className="p-2">Peak KSS</th></tr>
-            </thead>
-            <tbody>
-              {report.duties.map((d) => (
-                <tr key={d.id} className={cn('border-t border-border/70', d.is_affected && 'bg-muted/40 font-medium')}>
-                  <td className="p-2">{d.route}{d.is_affected && ' ★'}</td>
-                  <td className="p-2 whitespace-nowrap">{d.report_local}<br /><span className="text-xs text-muted-foreground">{d.report_z}</span></td>
-                  <td className="p-2 whitespace-nowrap">{d.release_local}<br /><span className="text-xs text-muted-foreground">{d.release_z}</span></td>
-                  <td className="p-2 tabular-nums">{fmtH(d.duty_hours)}</td>
-                  <td className={cn('p-2 tabular-nums', d.rest_before_hours != null && d.rest_before_hours < 12 && 'text-critical')}>{fmtH(d.rest_before_hours)}</td>
-                  <td className="p-2">{d.status.replace(/_/g, ' ')}</td>
-                  <td className="p-2 tabular-nums">{d.predicted_kss_max?.toFixed(1) ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Sleep</h2>
-        <div className="overflow-x-auto border-y border-border">
-          <table className="w-full text-sm">
-            <thead className="text-left text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-              <tr><th className="p-2">Asleep</th><th className="p-2">Awake</th><th className="p-2">Duration</th><th className="p-2">Type</th><th className="p-2">Where</th><th className="p-2">Quality</th><th className="p-2">Source</th></tr>
-            </thead>
-            <tbody>
-              {report.sleeps.map((s, i) => (
-                <tr key={i} className="border-t border-border/70">
-                  <td className="p-2 whitespace-nowrap">{s.start_local}</td>
-                  <td className="p-2 whitespace-nowrap">{s.end_local}</td>
-                  <td className={cn('p-2 tabular-nums', s.kind === 'main' && s.hours < 5 && 'text-critical')}>{fmtH(s.hours)}</td>
-                  <td className="p-2">{s.kind.replace('_', ' ')}</td>
-                  <td className="p-2">{s.location.replace('_', ' ')}</td>
-                  <td className="p-2">{s.quality ? `${s.quality}/5` : '—'}</td>
-                  <td className="p-2">{s.source === 'estimated' ? <span className="text-warning">estimated</span> : 'reported'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {sw && (
-        <section className="space-y-2">
-          <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Prior sleep / wake check</h2>
-          <ul className="space-y-1 text-sm">
-            {sw.checks.map((c) => (
-              <li key={c.rule} className="flex items-center gap-2">
-                {c.passed ? <Check className="h-4 w-4 text-success" /> : <AlertTriangle className="h-4 w-4 text-critical" />}
-                {c.label}: <span className="tabular-nums">{fmtH(c.value)}</span>
-              </li>
+      {signature && (
+        <section className="report-keep space-y-4 rounded-lg border border-dashed border-border p-4 text-sm" aria-label="Reporter confirmation">
+          <h2 className="font-semibold">Reporter confirmation</h2>
+          <p className="text-muted-foreground">I confirm that this report reflects my own account to the best of my recollection. Model estimates are shown for context only.</p>
+          <div className="grid gap-6 pt-2 sm:grid-cols-3 print:grid-cols-3">
+            {['Name', 'Date', 'Signature'].map((l) => (
+              <div key={l}><div className="h-8 border-b border-foreground/50" /><p className="mt-1 text-xs text-muted-foreground">{l}</p></div>
             ))}
-          </ul>
-          <p className="text-xs text-muted-foreground">{sw.source}</p>
+          </div>
         </section>
       )}
 
-      {report.scientific_basis && <section className="space-y-3" aria-label="Scientific basis">
-        <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Scientific basis</h2>
-        {report.scientific_basis.map(source => <div key={source.url} className="text-sm"><a href={source.url} target="_blank" rel="noreferrer" className="font-medium underline">{source.citation}</a><p className="mt-1 text-muted-foreground">{source.application}</p></div>)}
-      </section>}
+      {/* ── Supporting detail (from page 2 in print) ─────────── */}
+      <div className="report-appendix space-y-2 border-t border-border pt-6">
+        <h2 className="text-lg font-semibold">Supporting detail</h2>
+        <p className="text-sm text-muted-foreground">Roster records, pilot-entered sleep and model estimates, each labelled by source. Estimates never replace the pilot’s account.</p>
+      </div>
 
-      <section className="report-limitations space-y-2">
-        <h2 className="border-b border-border pb-2 text-[13px] font-semibold">Data quality and limitations</h2>
+      <ReportRecordTables report={report} />
+
+      {coverage.length > 0 && (
+        <section className="space-y-2" aria-labelledby="report-ftl">
+          <h2 id="report-ftl" className="border-b border-border pb-2 text-[13px] font-semibold">FTL checks performed <span className="font-normal text-muted-foreground">· on the supplied records only</span></h2>
+          <ul className="divide-y divide-border/70 text-sm">
+            {coverage.map(([rule, c]) => (
+              <li key={rule} className="grid gap-1 py-2 sm:grid-cols-[16rem_12rem_1fr] print:grid-cols-[16rem_12rem_1fr]">
+                <span>{FTL_RULE_LABELS[rule] ?? rule}</span>
+                <span className={cn('flex items-center gap-1.5', c.status === 'failed' && 'font-medium')}>
+                  {c.status === 'passed' ? <Check className="h-3.5 w-3.5" aria-hidden /> : c.status === 'failed' ? <AlertTriangle className="h-3.5 w-3.5" aria-hidden /> : null}
+                  {FTL_STATUS_LABELS[c.status] ?? c.status.replace(/_/g, ' ')}
+                </span>
+                <span className="text-xs text-muted-foreground">{c.reason}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-muted-foreground">A scoped check, not a compliance certificate: history before the reporting period and operator-specific schemes are not known.</p>
+        </section>
+      )}
+
+      {(report.prior_sleep_wake || report.cumulative_deficit) && (
+        <section className="space-y-2" aria-labelledby="report-screen">
+          <h2 id="report-screen" className="border-b border-border pb-2 text-[13px] font-semibold">Sleep screening</h2>
+          {report.prior_sleep_wake && (
+            <ul className="space-y-1 text-sm">
+              {report.prior_sleep_wake.checks.map((c) => (
+                <li key={c.rule} className="flex items-center gap-2">
+                  {c.passed ? <Check className="h-4 w-4" aria-label="Met" /> : <AlertTriangle className="h-4 w-4 text-high" aria-label="Not met" data-print-keep />}
+                  {c.label}: <span className="tabular-nums">{formatDuration(c.value)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {report.cumulative_deficit && (
+            <p className="text-sm">Seven-day sleep shortfall against an 8 h/day need: <span className="tabular-nums">{formatDuration(report.cumulative_deficit.deficit_hours)}</span> over {report.cumulative_deficit.days.toFixed(1)} days ({report.cumulative_deficit.band}).</p>
+          )}
+          <p className="text-xs text-muted-foreground">{report.prior_sleep_wake?.source ?? ''} Screening references, not regulatory limits or individual fitness criteria.</p>
+        </section>
+      )}
+
+      {report.scientific_basis && (
+        <section className="space-y-3" aria-labelledby="report-science">
+          <h2 id="report-science" className="border-b border-border pb-2 text-[13px] font-semibold">Scientific basis</h2>
+          {report.scientific_basis.map((source) => (
+            <div key={source.url} className="text-sm">
+              <a href={source.url} target="_blank" rel="noreferrer" className="font-medium underline">{source.citation}</a>
+              <p className="mt-1 text-muted-foreground">{source.application}</p>
+            </div>
+          ))}
+        </section>
+      )}
+
+      <section className="space-y-2" aria-labelledby="report-limits">
+        <h2 id="report-limits" className="border-b border-border pb-2 text-[13px] font-semibold">Data quality and limitations</h2>
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-          {report.data_quality.notes.map((n) => <li key={n}>{n}</li>)}
-          {report.limitations.map((l) => <li key={l}>{l}</li>)}
+          {notes.map((n) => <li key={n}>{n}</li>)}
         </ul>
       </section>
     </div>
