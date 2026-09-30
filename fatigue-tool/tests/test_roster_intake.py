@@ -174,6 +174,13 @@ def test_csv_wrong_offset_base_explains_the_base_not_an_internal_id():
     assert 'start and end at DOH' in res.json()['detail'] and 'D_2026' not in res.json()['detail']
 
 
+def test_spreadsheet_csv_exports_are_read():
+    semicolons = (HEADER + DOH_ROWS).replace(',', ';')
+    for content in ('﻿' + HEADER + DOH_ROWS, semicolons, (HEADER + DOH_ROWS).replace(',', ', ')):
+        body = preview(content.encode('utf-8'), 'roster.csv').json()
+        assert (body['home_base'], body['total_duties']) == ('DOH', 4), body
+
+
 def test_empty_or_foreign_csv_is_rejected_clearly():
     res = preview(HEADER.encode(), 'roster.csv')
     assert res.status_code == 422 and res.json()['code'] == 'no_duties'

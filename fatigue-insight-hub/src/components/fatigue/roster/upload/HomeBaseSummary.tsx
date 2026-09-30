@@ -56,7 +56,7 @@ export function HomeBaseSummary({ preview, busy, error, onChange, onUseRosterBas
               <><PencilLine className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                 <span className="text-muted-foreground">Chosen by you instead of {headerBase} from the roster header</span></>
             ) : (
-              <><FileCheck2 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+              <>{fromHeader ? <FileCheck2 className="h-3.5 w-3.5 text-primary" aria-hidden="true" /> : <PencilLine className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />}
                 <span className="text-muted-foreground">{BASE_SOURCE_LABELS[source]}</span></>
             )}
           </p>

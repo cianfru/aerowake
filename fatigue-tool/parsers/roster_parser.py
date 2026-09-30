@@ -12,6 +12,7 @@ Scientific Note: Parser outputs standardized Roster objects
 for biomathematical analysis (Borbély model)
 """
 
+import csv
 import pdfplumber
 import pandas as pd
 import re
@@ -763,8 +764,10 @@ class CSVRosterParser:
     def load_frame(cls, csv_path: str) -> pd.DataFrame:
         """Read and check the template columns. Needs no base, so detection can use it."""
         try:
-            df = pd.read_csv(csv_path, nrows=1441, dtype=str, skipinitialspace=True)
-        except (pd.errors.ParserError, pd.errors.EmptyDataError, UnicodeDecodeError):
+            # Spreadsheet exports: UTF-8 byte-order mark and ';' separators are common.
+            df = pd.read_csv(csv_path, nrows=1441, dtype=str, skipinitialspace=True,
+                             sep=None, engine='python', encoding='utf-8-sig')
+        except (pd.errors.ParserError, pd.errors.EmptyDataError, UnicodeDecodeError, csv.Error):
             df = None
         if df is None or df.empty:
             from parsers.base_detection import no_duties_found
