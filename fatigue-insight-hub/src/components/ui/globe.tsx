@@ -154,7 +154,7 @@ const isMac = () => typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(n
 export function Globe(props: GlobeProps) {
   const {
     airports, routes, flat = false, center, fitTo, focus = null, autoRotate = false, interactive = true, showLabels = true,
-    appearance = 'app', terminator = false, flow = 'none', selectedKey = null, hoveredKey = null, onSelect, onHover,
+    appearance = 'app', flow = 'none', selectedKey = null, hoveredKey = null, onSelect, onHover,
     cooperative = true, controls = false, animate = true, className, ariaLabel = 'Route map', describedBy, children,
   } = props;
   const pal = usePalette(appearance);
