@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { classifyKss } from '@/lib/risk-scale';
 import { formatKssValue, kssBand, roundKss } from '@/components/landing/landingKss';
-import { HERO_COPY, HERO_COPY_OPTIONS, LANDING_ARC_HEX, LANDING_ROUTE_PAIRS, getRouteColor } from '@/components/landing/landingData';
+import { HERO_COPY, HERO_COPY_OPTIONS, LANDING_AIRPORTS, LANDING_ARC_HEX, LANDING_ROUTE_PAIRS, getRouteColor } from '@/components/landing/landingData';
 import { TOUR_DUTIES, TOUR_WEEK } from '@/components/landing/tourData';
 import { aggregateRoutes, dutiesToWatch, highestDuty } from '@/components/landing/tourModel';
 import { SCIENCE_PEAKS, SCIENCE_SCENARIO, clockAt, sciencePeakSummary } from '@/components/landing/scienceData';
 import { formatDay } from '@/components/landing/landingFormat';
+import ogHtml from '../../scripts/og-image/og.html?raw';
 
 describe('landing KSS display rules', () => {
   it.each([
@@ -45,6 +46,18 @@ describe('landing globe data', () => {
     for (const pair of LANDING_ROUTE_PAIRS) expect(pair.avgPerformance).toBeUndefined();
     expect(getRouteColor(20)).toBe(LANDING_ARC_HEX);
     expect(getRouteColor(95)).toBe(LANDING_ARC_HEX);
+  });
+
+  it('draws a multi-hub network, the same one as the social preview image', () => {
+    const codes = new Set(LANDING_AIRPORTS.map((a) => a.code));
+    for (const { from, to } of LANDING_ROUTE_PAIRS) {
+      expect(codes.has(from) && codes.has(to), `${from}-${to}`).toBe(true);
+    }
+    expect(new Set(LANDING_ROUTE_PAIRS.map((r) => r.from)).size).toBeGreaterThan(3);
+    const literal = ogHtml.match(/const PAIRS = (\[.*?\]);/)?.[1];
+    expect(literal).toBeTruthy();
+    const ogPairs = JSON.parse((literal as string).replace(/'/g, '"')) as [string, string][];
+    expect(ogPairs).toEqual(LANDING_ROUTE_PAIRS.map((r) => [r.from, r.to]));
   });
 });
 

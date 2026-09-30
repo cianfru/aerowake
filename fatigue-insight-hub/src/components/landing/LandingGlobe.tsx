@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Globe } from '@/components/ui/globe';
 import { LANDING_AIRPORTS, LANDING_ROUTE_PAIRS, getRouteColor } from './landingData';
 
-/** Hero background: slowly rotating keyless globe with the demo route network. */
+/** Hero background: slowly rotating keyless globe with a neutral multi-hub route network. */
 export function LandingGlobe() {
   const routes = useMemo(() => {
     const byCode = new Map(LANDING_AIRPORTS.map((a) => [a.code, a]));
@@ -17,9 +17,9 @@ export function LandingGlobe() {
     <div className="pointer-events-none relative flex items-center justify-center" aria-hidden="true">
       <div className="w-full">
         <Globe
-          airports={LANDING_AIRPORTS.map((a) => ({ code: a.code, lat: a.lat, lng: a.lng, emphasis: a.code === 'DOH' }))}
+          airports={LANDING_AIRPORTS.map((a) => ({ code: a.code, lat: a.lat, lng: a.lng }))}
           routes={routes}
-          center={[51.57, 25.26]}
+          center={[42, 18]}
           autoRotate
           interactive={false}
           showLabels={false}
