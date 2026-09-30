@@ -6,7 +6,7 @@
  */
 
 import type { DutyAnalysis, RiskLevelUpper } from '@/types/fatigue';
-import { classifyPerformance, indexToKss, isElevatedRisk, performanceHex, resolveKss, type RiskThresholds } from '@/lib/risk-scale';
+import { classifyPerformance, indexToKss, isElevatedRisk, performanceCssColor, resolveKss, type RiskThresholds } from '@/lib/risk-scale';
 
 /** Parse "HH:mm" time string to decimal hours (e.g., "18:30" → 18.5). */
 export const parseTimeToHours = (timeStr: string | undefined): number | undefined => {
@@ -81,7 +81,7 @@ export const getStrategyIcon = (strategy: string): string => {
 export const getPerformanceColor = (
   performance: number,
   thresholds?: RiskThresholds | null,
-): string => performanceHex(performance, thresholds);
+): string => performanceCssColor(performance, thresholds);
 
 // --- Training duty helpers ---
 
@@ -241,24 +241,6 @@ export function splitOvernightBar(
   }
 
   return results;
-}
-
-/**
- * Build standard flight phase breakdown for a flight segment.
- * Phases: Takeoff (15%), Climb (10%), Cruise (50%), Descent (10%), Approach (10%), Landing (5%).
- */
-export function buildFlightPhases(
-  segPerformance: number,
-  landingPerformance: number | undefined,
-): { phase: FlightPhase; performance: number; widthPercent: number }[] {
-  return [
-    { phase: 'takeoff', performance: segPerformance + 5, widthPercent: 15 },
-    { phase: 'climb', performance: segPerformance + 3, widthPercent: 10 },
-    { phase: 'cruise', performance: segPerformance, widthPercent: 50 },
-    { phase: 'descent', performance: segPerformance - 2, widthPercent: 10 },
-    { phase: 'approach', performance: segPerformance - 4, widthPercent: 10 },
-    { phase: 'landing', performance: landingPerformance ?? segPerformance - 5, widthPercent: 5 },
-  ];
 }
 
 /**
