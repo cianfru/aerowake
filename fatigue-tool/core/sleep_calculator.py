@@ -271,13 +271,15 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         if 4 <= report_hour < self.EARLY_REPORT_THRESHOLD:
             return self._early_morning_strategy(duty, previous_duty)
 
-        # 5. Nap — night departure (report ≥20:00 or <04:00).
-        #    Morning sleep + pre-duty nap before evening/night flight.
-        if report_hour >= self.NIGHT_FLIGHT_THRESHOLD or report_hour < 4:
+        # 5. Evening/night departure (report from the nap-ramp start, 18:00,
+        #    or <04:00). Night sleep + a pre-duty nap whose length ramps with
+        #    report time and nap habit (PreDutyNapAssumptions), so there is no
+        #    step change in the assumed sleep at any single report time.
+        if report_hour >= self.config.nap_assumptions.ramp_start_hour or report_hour < 4:
             return self._night_departure_strategy(duty, previous_duty)
 
-        # 6. Afternoon nap — late report (14:00-20:00 local).
-        #    Normal previous-night sleep + afternoon nap before duty.
+        # 6. Late report (14:00-18:00 local): normal previous-night sleep,
+        #    no pre-duty nap assumed.
         if report_hour >= self.AFTERNOON_REPORT_THRESHOLD:
             return self._afternoon_nap_strategy(duty, previous_duty)
 
@@ -569,6 +571,20 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         if sleep_end.astimezone(pytz.utc) > latest_wake_utc:
             sleep_end = latest_wake_utc.astimezone(sleep_tz)
 
+        # Afternoon/early-evening release: sleep onset waits for the body-clock
+        # evening. When that leaves a short evening sleep before a night report,
+        # model a bounded afternoon nap plus the evening sleep instead of one
+        # long afternoon block (DaytimeSleepBounds).
+        if 12.0 <= bio_release_hour < 20.0:
+            bounded = self._bounded_afternoon_release_sleep(
+                previous_duty=previous_duty, sleep_start=sleep_start, sleep_end=sleep_end,
+                latest_wake_utc=latest_wake_utc, report_local=report_local, sleep_tz=sleep_tz,
+                bio_tz=bio_tz, bio_tz_str=bio_tz_str, sleep_location=sleep_location,
+                is_layover=is_layover, duty_duration_hours=duty_duration_hours,
+                prior_wake_estimate=prior_wake_estimate)
+            if bounded is not None:
+                return bounded
+
         # Ensure minimum viable sleep (2h)
         actual_hours = (sleep_end - sleep_start).total_seconds() / 3600
         if actual_hours < 2.0:
@@ -647,6 +663,101 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         )
 
     # _two_block_recovery is inherited from SleepStrategyMixin
+
+    def _bounded_afternoon_release_sleep(
+        self, previous_duty: Duty, sleep_start: datetime, sleep_end: datetime,
+        latest_wake_utc: datetime, report_local: datetime, sleep_tz: Any, bio_tz: Any,
+        bio_tz_str: str, sleep_location: str, is_layover: bool,
+        duty_duration_hours: float, prior_wake_estimate: float,
+    ) -> Optional[SleepStrategy]:
+        """Afternoon nap + evening sleep after a release 12:00–20:00 body time.
+
+        Returns None when the evening sleep alone reaches the target (the
+        caller keeps its single block). Every length below changes smoothly
+        with release and report time, so a later report never gains a long
+        afternoon sleep that an earlier one lacked.
+        """
+        b = self.config.daytime_sleep_bounds
+        hour = timedelta(hours=1)
+        release_utc = previous_duty.release_time_utc
+
+        def at_bio_hour(reference: datetime, bio_hour: float) -> datetime:
+            ref_bio = reference.astimezone(bio_tz)
+            midnight = bio_tz.localize(datetime.combine(ref_bio.date(), time(0, 0)))
+            return midnight + timedelta(hours=bio_hour)
+
+        # Evening sleep: the delayed onset computed by the caller, advanced
+        # towards the earliest evening onset only when the report leaves less
+        # than two hours before the wake buffer.
+        onset = sleep_start.astimezone(pytz.utc)
+        earliest_evening = at_bio_hour(release_utc, b.evening_earliest_bio_hour).astimezone(pytz.utc)
+        onset = max(earliest_evening, min(onset, latest_wake_utc - 2 * hour))
+        onset = max(onset, release_utc + timedelta(hours=b.nap_onset_delay_hours))
+        evening_end = min(sleep_end.astimezone(pytz.utc), latest_wake_utc)
+        if evening_end < onset:
+            evening_end = onset
+        evening_hours = (evening_end - onset).total_seconds() / 3600
+        if evening_hours >= b.target_total_hours:
+            return None
+
+        # Afternoon recovery nap, topping total sleep up towards the target.
+        nap_start = release_utc + timedelta(hours=b.nap_onset_delay_hours)
+        nap_latest_end = min(
+            at_bio_hour(release_utc, b.nap_latest_end_bio_hour).astimezone(pytz.utc),
+            (onset - timedelta(hours=b.gap_before_evening_hours)) if evening_hours >= b.min_block_hours
+            else latest_wake_utc,
+            latest_wake_utc,
+        )
+        nap_hours = min(b.nap_max_hours,
+                        (nap_latest_end - nap_start).total_seconds() / 3600,
+                        b.target_total_hours - max(evening_hours, 0.0))
+        windows = []
+        if nap_hours >= b.min_block_hours:
+            windows.append((nap_start, nap_start + timedelta(hours=nap_hours), True))
+        if evening_hours >= b.min_block_hours:
+            windows.append((onset, evening_end, False))
+        if not windows:
+            return SleepStrategy(
+                strategy_type='restricted', sleep_blocks=[], confidence=0.20,
+                explanation='No sleep window between the afternoon release and the night report',
+                quality_analysis=[])
+
+        blocks, qualities = [], []
+        previous_end = release_utc
+        for start_utc, end_utc, is_nap in windows:
+            start, end = start_utc.astimezone(sleep_tz), end_utc.astimezone(sleep_tz)
+            quality = self.calculate_sleep_quality(
+                sleep_start=start, sleep_end=end, location=sleep_location,
+                previous_duty_end=previous_end, next_event=report_local, is_nap=is_nap,
+                location_timezone=sleep_tz.zone, biological_timezone=bio_tz_str if is_layover else None)
+            ss_day, ss_hour = self._home_tz_day_hour(start)
+            se_day, se_hour = self._home_tz_day_hour(end)
+            blocks.append(SleepBlock(
+                start_utc=start_utc, end_utc=end_utc, location_timezone=sleep_tz.zone,
+                duration_hours=quality.actual_sleep_hours, quality_factor=quality.sleep_efficiency,
+                effective_sleep_hours=quality.effective_sleep_hours, is_anchor_sleep=not is_nap,
+                environment=sleep_location, sleep_start_day=ss_day, sleep_start_hour=ss_hour,
+                sleep_end_day=se_day, sleep_end_hour=se_hour))
+            qualities.append(quality)
+            previous_end = end_utc
+
+        total = sum(q.actual_sleep_hours for q in qualities)
+        confidence = 0.55 * (0.90 if is_layover else 1.0)
+        parts = []
+        for blk in blocks:
+            s, e = blk.start_utc.astimezone(sleep_tz), blk.end_utc.astimezone(sleep_tz)
+            kind = 'afternoon nap' if not blk.is_anchor_sleep else 'evening sleep'
+            parts.append(f"{kind} {s:%H:%M}–{e:%H:%M} ({blk.duration_hours:.1f}h)")
+        location_desc = f"{sleep_location} (layover)" if is_layover else sleep_location
+        return SleepStrategy(
+            strategy_type='inter_duty_recovery',
+            sleep_blocks=blocks,
+            confidence=confidence,
+            explanation=(f"Inter-duty recovery at {location_desc} after a {duty_duration_hours:.0f}h duty "
+                         f"released in the afternoon: " + ' + '.join(parts) +
+                         f" = {total:.1f}h. Afternoon sleep is limited by the body clock."),
+            quality_analysis=qualities,
+        )
 
     def _circadian_gated_wake(
         self,

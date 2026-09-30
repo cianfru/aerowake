@@ -14,22 +14,83 @@ import pytz
 from models.data_models import Duty, CrewComposition, RestFacilityClass
 from core.parameters import EASAFatigueFramework
 
+def _offset_hours(tz_name: str, at_utc: datetime) -> float:
+    return at_utc.astimezone(pytz.timezone(tz_name)).utcoffset().total_seconds() / 3600
+
+
+def determine_acclimatisation(duties: List[Duty], home_timezone: str) -> Dict[str, Dict]:
+    """State of acclimatisation per duty — ORO.FTL.105(1) and Table 1 of
+    AMC1 ORO.FTL.105(1) (via AcclimatizationCalculator).
+
+    The reference is the place where the crew member was last acclimatised;
+    the crew member is acclimatised to a 2-hour-wide band around it. When a
+    duty takes them more than 2 h away, the clock starts at the report for
+    that duty ("time elapsed since reporting at reference time"). Each later
+    departure is looked up in Table 1 by time-zone difference to the
+    reference and elapsed time: B keeps the reference, D makes the current
+    location the new reference, X is unknown (Table 3 applies).
+
+    Assumption (disclosed in the FDP check coverage): before the roster's
+    first duty the crew member is acclimatised to the home base. A duty that
+    departs more than 2 h from the reference with no known time of leaving
+    it (e.g. the roster starts at an outstation) gets ``basis='unknown'`` and
+    no FDP verdict.
+
+    Returns {duty_id: {'state', 'reference_timezone', 'basis'}}.
+    """
+    from core.extended_operations import AcclimatizationCalculator
+    from models.data_models import AcclimatizationState
+
+    band = 2.0
+    ref_tz, left_at = home_timezone, None
+    result: Dict[str, Dict] = {}
+    for duty in sorted(duties, key=lambda d: d.report_time_utc):
+        report = duty.report_time_utc
+        dep_tz = duty.segments[0].departure_airport.timezone if duty.segments else ref_tz
+        diff = abs(_offset_hours(dep_tz, report) - _offset_hours(ref_tz, report))
+        basis = 'determined'
+        if diff <= band:
+            state, table_tz, left_at = AcclimatizationState.ACCLIMATIZED, ref_tz, None
+        elif left_at is None:
+            # Away from the reference with no known time of leaving it
+            # (e.g. the roster starts at an outstation).
+            state, table_tz, basis = AcclimatizationState.UNKNOWN, None, 'unknown'
+        else:
+            elapsed = (report - left_at).total_seconds() / 3600
+            state = AcclimatizationCalculator.determine_state(diff, elapsed)
+            table_tz = ref_tz if state == AcclimatizationState.ACCLIMATIZED else None
+            if state == AcclimatizationState.DEPARTED:
+                ref_tz, left_at, table_tz = dep_tz, None, dep_tz
+        result[duty.duty_id] = {'state': state, 'reference_timezone': table_tz, 'basis': basis}
+        # Leaving the reference band starts the elapsed-time clock.
+        if duty.segments and left_at is None and basis == 'determined':
+            arr_tz = duty.segments[-1].arrival_airport.timezone
+            if abs(_offset_hours(arr_tz, report) - _offset_hours(ref_tz, report)) > band:
+                left_at = report
+    return result
+
+
 class EASAComplianceValidator:
     """Validate duties against EASA FTL regulations"""
-    
+
     def __init__(self, framework: EASAFatigueFramework = None):
         self.framework = framework or EASAFatigueFramework()
-    
-    def calculate_fdp_limits(self, duty: Duty, augmented_params=None, ulr_params=None) -> Dict[str, float]:
+
+    def calculate_fdp_limits(self, duty: Duty, augmented_params=None, ulr_params=None,
+                             reference_timezone: Optional[str] = None) -> Dict[str, float]:
         """
         Calculate EASA FDP limits based on ORO.FTL.205.
 
         Supports:
-        - Standard 2-pilot operations (Table 1)
+        - Standard 2-pilot operations (Table 2 at reference time; Table 3
+          when the state of acclimatisation is unknown)
         - Augmented crew 3/4-pilot operations (CS FTL.1.205(c)(2))
         - ULR operations (Qatar FTL 7.18)
+
+        ``reference_timezone`` is the time zone the crew member is
+        acclimatised to (determine_acclimatisation); home base by default.
         """
-        tz = pytz.timezone(duty.home_base_timezone)
+        tz = pytz.timezone(reference_timezone or duty.home_base_timezone)
         report_local = duty.report_time_utc.astimezone(tz)
         report_hour = report_local.hour
         sectors = sum(not seg.is_deadhead for seg in duty.segments)
@@ -87,7 +148,7 @@ class EASAComplianceValidator:
         else:
             base = 11.0
         from models.data_models import AcclimatizationState
-        if duty.acclimatization_state != AcclimatizationState.ACCLIMATIZED:
+        if duty.acclimatization_state == AcclimatizationState.UNKNOWN:
             base = 11.0  # Table 3; no assumption of an approved FRM extension.
         max_fdp = max(9.0, base - 0.5 * max(0, sectors - 2)) if sectors else 0.0
         extended_fdp = max_fdp + 2.0

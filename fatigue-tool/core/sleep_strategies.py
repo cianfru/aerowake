@@ -19,6 +19,7 @@ References:
 """
 
 from datetime import datetime, timedelta
+import math
 from typing import Optional, Any
 import pytz
 
@@ -115,11 +116,30 @@ class SleepStrategyMixin:
         )
 
         nap_end = report_local - timedelta(hours=self.MIN_WAKE_BEFORE_REPORT)
-        # Adaptive nap duration: use available window between morning wake and
-        # MIN_WAKE_BEFORE_REPORT, capped at 2.5h (one full NREM-REM cycle + margin)
+        # Pre-duty nap: length ramps with the body-clock report time and the
+        # pilot's nap habit (core/parameters.py PreDutyNapAssumptions), limited
+        # by the window between the morning wake-up and the report buffer.
         morning_wake_utc = morning_sleep_end.astimezone(pytz.utc)
         available_for_nap = (nap_end.astimezone(pytz.utc) - morning_wake_utc).total_seconds() / 3600
-        nap_hours = min(2.5, max(1.0, available_for_nap - 2.0))
+        report_body = duty.report_time_utc.astimezone(pytz.timezone(bio_tz) if bio_tz else sleep_tz)
+        nap_hours = self.config.nap_assumptions.nap_hours(
+            report_body.hour + report_body.minute / 60.0, available_for_nap)
+        habit = self.config.nap_assumptions.habit
+        if nap_hours <= 0:
+            confidence = 0.65 if not morning_warnings else 0.50
+            if self.is_layover:
+                confidence *= 0.90
+            location_desc = f"{sleep_location} (layover)" if self.is_layover else sleep_location
+            return SleepStrategy(
+                strategy_type='normal',
+                sleep_blocks=[morning_sleep],
+                confidence=confidence,
+                explanation=(
+                    f"Normal night at {location_desc}: {morning_quality.actual_sleep_hours:.1f}h before the "
+                    f"{report_local.strftime('%H:%M')} report; no pre-duty nap assumed (nap habit: {habit})"
+                ),
+                quality_analysis=[morning_quality],
+            )
         nap_start = nap_end - timedelta(hours=nap_hours)
 
         nap_start_utc, nap_end_utc, nap_warnings = self._validate_sleep_no_overlap(
@@ -166,8 +186,10 @@ class SleepStrategyMixin:
             strategy_type='nap',
             sleep_blocks=[morning_sleep, afternoon_nap],
             confidence=confidence,
-            explanation=f"Night departure at {location_desc}: {morning_quality.actual_sleep_hours:.1f}h + "
-                       f"{nap_quality.actual_sleep_hours:.1f}h nap = {total_effective:.1f}h effective",
+            explanation=(f"Night departure at {location_desc}: {morning_quality.actual_sleep_hours:.1f}h + "
+                         f"assumed {math.floor(nap_quality.actual_sleep_hours * 10 + 0.5) / 10:.1f}h pre-duty nap "
+                         f"{nap_start.strftime('%H:%M')}–{nap_end.strftime('%H:%M')} local "
+                         f"(nap habit: {habit}) = {total_effective:.1f}h effective"),
             quality_analysis=[morning_quality, nap_quality]
         )
 

@@ -163,10 +163,11 @@ def test_continuous_timeline_is_real_model_output():
     assert tl and all(p['kss'] is None for p in tl if p['asleep'])
     awake = [p for p in tl if not p['asleep']]
     assert all(1 <= p['kss'] <= 9 for p in awake)
-    # Curve agrees with the duty scores (30-min sampling may miss the exact peak minute).
+    # Curve agrees with the duty scores and carries each duty's peak samples.
     for t, d in zip(res.duty_timelines, res.roster.duties):
         on = [p['kss'] for p in awake if d.report_time_utc.isoformat() <= p['t'] <= d.release_time_utc.isoformat()]
-        assert max(on) == pytest.approx(t.max_kss, abs=0.2)
+        assert max(on) == pytest.approx(t.kss_peak_duty, abs=0.02)
+        assert t.max_kss in on
 
 
 def test_continuous_timeline_stops_where_sleep_estimates_stop():

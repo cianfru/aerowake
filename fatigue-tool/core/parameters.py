@@ -347,6 +347,113 @@ class AdaptationRates:
         return self.westward_hours_per_day if timezone_shift_hours < 0 else self.eastward_hours_per_day
 
 
+# ---------------------------------------------------------------------------
+# Headline duty risk window
+# ---------------------------------------------------------------------------
+# 'fdp'  — peak predicted KSS from report to the last operating on-blocks
+#          (the flight duty period, ORO.FTL.105(17)). Owner decision
+#          (September 2026): the post-flight period after on-blocks is inferred
+#          by the parser (+30 min), so it should not set a duty's band.
+# 'duty' — peak from report to release (the whole duty period).
+# Both peaks are returned by the API (kss_peak_fdp and kss_peak_duty); this
+# only chooses which one is the headline (max_kss / risk_level).
+HEADLINE_RISK_WINDOWS = ('duty', 'fdp')
+HEADLINE_RISK_WINDOW = 'fdp'
+
+# Pre-duty nap habit (owner decision, September 2026: "I can't nap, others
+# do — strike something sensible in between"). Selected per analysis.
+NAP_HABITS = ('usually', 'sometimes', 'rarely')
+DEFAULT_NAP_HABIT = 'sometimes'
+
+
+@dataclass
+class PreDutyNapAssumptions:
+    """Modelling assumption for a nap before a late or night report.
+
+    Evidence: before evening and night departures about half of crew nap
+    (Signal et al. 2014, Aviat Space Environ Med 85:1199-1208: 54 % napped;
+    typical naps 1–2 h), and total pre-trip sleep including naps averages
+    about 7.8 h (Gander et al. 2014, Aviat Space Environ Med 85:833-840).
+    Those studies report group averages, not a rule for any one pilot, so
+    the values below are modelling assumptions. They are not fitted to data
+    and should be calibrated with pilot debrief data.
+
+    Shape: the assumed nap length rises linearly with report time on the body
+    clock, from 0 h at ``ramp_start_hour`` to the full nap at
+    ``ramp_full_hour`` and stays full for reports up to 04:00. This avoids
+    a step change in risk for a small change in report time (the previous
+    rule added a 2–2.5 h nap only from 20:00). The full nap is the existing
+    night-departure nap: up to ``max_nap_hours``, limited by the window
+    between the last wake-up (plus ``min_wake_before_nap_hours``) and the
+    wake buffer before report.
+
+    Habits: 'usually' = the ramp; 'sometimes' = the ramp capped at
+    ``sometimes_fraction`` of the full nap (about 1 h); 'rarely' = no nap.
+    """
+
+    ramp_start_hour: float = 18.0
+    ramp_full_hour: float = 22.0
+    ramp_end_hour: float = 4.0            # reports 04:00+ use the early-start rules
+    max_nap_hours: float = 2.5            # one NREM–REM cycle plus margin
+    min_wake_before_nap_hours: float = 6.0
+    min_nap_hours: float = 1.0 / 3.0      # shorter naps are not modelled
+    sometimes_fraction: float = 0.5
+    habit: str = DEFAULT_NAP_HABIT
+
+    def ramp_fraction(self, report_body_hour: float) -> float:
+        """0–1 share of the full nap for a report at this body-clock hour."""
+        h = report_body_hour % 24
+        if h < self.ramp_end_hour:
+            return 1.0
+        if h < self.ramp_start_hour:
+            return 0.0
+        return min(1.0, (h - self.ramp_start_hour) / (self.ramp_full_hour - self.ramp_start_hour))
+
+    def full_nap_hours(self, available_hours: float) -> float:
+        """Night-departure nap limited by the window since the last wake-up."""
+        return max(0.0, min(self.max_nap_hours, available_hours - self.min_wake_before_nap_hours))
+
+    def nap_hours(self, report_body_hour: float, available_hours: float, habit: str = None) -> float:
+        """Assumed nap length (hours); 0 when no nap is modelled."""
+        habit = habit or self.habit
+        if habit == 'rarely':
+            return 0.0
+        full = self.full_nap_hours(available_hours)
+        hours = full * self.ramp_fraction(report_body_hour)
+        if habit == 'sometimes':
+            hours = min(hours, full * self.sometimes_fraction)
+        return hours if hours >= self.min_nap_hours else 0.0
+
+
+@dataclass
+class DaytimeSleepBounds:
+    """Bounds for sleep after an afternoon release before a night report.
+
+    Sleep that starts in the afternoon runs against the circadian wake
+    signal and the evening wake maintenance zone (Lavie 1986, Electroenceph
+    Clin Neurophysiol 63:414-425; Dijk & Czeisler 1994, Neurosci Lett
+    166:63-68), so a long afternoon sleep is not plausible. Daytime naps
+    after deprivation are typically truncated to a few hours (National
+    Academies 2011 review). The values are modelling assumptions:
+
+    - an afternoon recovery nap of at most ``nap_max_hours`` that ends by
+      ``nap_latest_end_bio_hour`` on the body clock and at least
+      ``gap_before_evening_hours`` before evening sleep;
+    - evening sleep no earlier than ``evening_earliest_bio_hour``;
+    - the nap only tops total sleep up to ``target_total_hours``, so it is
+      assumed only when the evening sleep before a night report is short,
+      and it shrinks smoothly as that evening sleep gets longer.
+    """
+
+    nap_onset_delay_hours: float = 0.5
+    nap_max_hours: float = 2.5
+    nap_latest_end_bio_hour: float = 18.0
+    gap_before_evening_hours: float = 3.0
+    evening_earliest_bio_hour: float = 21.0
+    target_total_hours: float = 4.5
+    min_block_hours: float = 1.0 / 3.0
+
+
 # KSS-anchored bands on the 20–100 index (index = 110 − 10·KSS; see
 # core/alertness.py). Band edges are the midpoints between KSS verbal
 # anchors: 5.5 / 6.5 / 7.5 / 8.5 → index 55 / 45 / 35 / 25.
@@ -390,6 +497,10 @@ class RiskThresholds:
     def classify(self, performance: float) -> str:
         if performance is None or not 0 <= performance <= 100:
             return 'unknown'
+        if self.thresholds == KSS_INDEX_THRESHOLDS:
+            # One convention everywhere: band on KSS rounded to one decimal.
+            from core.alertness import classify_kss, index_to_kss
+            return classify_kss(index_to_kss(performance))
         for level, (low, high) in self.thresholds.items():
             if low < performance <= high or (performance == 0 and low == 0):
                 return level
@@ -429,8 +540,21 @@ class ModelConfig:
     sleep_quality_params: SleepQualityParameters
     augmented_fdp_params: 'Any' = None  # AugmentedFDPParameters (from core.extended_operations)
     ulr_params: 'Any' = None            # QatarFTL718Parameters (Qatar FTL 7.18)
+    nap_assumptions: PreDutyNapAssumptions = field(default_factory=PreDutyNapAssumptions)
+    daytime_sleep_bounds: DaytimeSleepBounds = field(default_factory=DaytimeSleepBounds)
+    headline_risk_window: str = HEADLINE_RISK_WINDOW
+
+    @property
+    def assumptions(self) -> Dict[str, str]:
+        """Analysis-level assumptions echoed in API responses."""
+        return {'nap_habit': self.nap_assumptions.habit,
+                'headline_risk_window': self.headline_risk_window}
 
     def __post_init__(self):
+        if self.nap_assumptions.habit not in NAP_HABITS:
+            raise ValueError(f'nap_habit must be one of {NAP_HABITS}')
+        if self.headline_risk_window not in HEADLINE_RISK_WINDOWS:
+            raise ValueError(f'headline_risk_window must be one of {HEADLINE_RISK_WINDOWS}')
         # Lazy import to avoid circular dependency
         if self.augmented_fdp_params is None:
             from core.extended_operations import AugmentedFDPParameters
@@ -440,9 +564,13 @@ class ModelConfig:
             self.ulr_params = ULRParameters()
 
     @classmethod
-    def aerowake(cls):
+    def aerowake(cls, nap_habit: str = None, headline_risk_window: str = None):
         """
-        The single AeroWake model configuration (engine aerowake-4.0-kss).
+        The single AeroWake model configuration (engine aerowake-4.1-kss).
+
+        ``nap_habit`` ('usually' | 'sometimes' | 'rarely') and
+        ``headline_risk_window`` ('fdp' | 'duty') are stated assumptions, not
+        separate models; both are echoed with every analysis.
 
         There is deliberately one model: the KSS core (core/alertness.py) is
         fixed to published parameters, and one set of sleep-estimation
@@ -528,7 +656,9 @@ class ModelConfig:
             adaptation_rates=AdaptationRates(),
             sleep_quality_params=SleepQualityParameters(
                 quality_hotel_typical=0.87,
-            )
+            ),
+            nap_assumptions=PreDutyNapAssumptions(habit=nap_habit or DEFAULT_NAP_HABIT),
+            headline_risk_window=headline_risk_window or HEADLINE_RISK_WINDOW,
         )
 
     # Legacy preset names resolve to the single model so stored analyses

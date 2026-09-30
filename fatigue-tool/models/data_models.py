@@ -287,6 +287,11 @@ class Roster:
     standbys: List['Duty'] = field(default_factory=list)
     # Predicted KSS through the month (30-min steps), set by simulate_roster.
     alertness_timeline: List[Dict[str, Any]] = field(default_factory=list)
+    # Stated modelling assumptions for this analysis ({nap_habit,
+    # headline_risk_window}); kept with the inputs so replays match.
+    analysis_assumptions: Dict[str, str] = field(default_factory=dict)
+    # Days of the month with sleep estimates (avg sleep denominator).
+    sleep_coverage_days: Optional[float] = None
 
     # Initial conditions (defaults = well-rested; overridden by fatigue continuity)
     initial_sleep_pressure: float = 0.15
@@ -800,6 +805,7 @@ class DutyTimeline:
     ulr_compliance: Optional[ULRComplianceResult] = None
     return_to_deck_performance: Optional[float] = None  # Performance at wake from last rest
     acclimatization_state: AcclimatizationState = AcclimatizationState.ACCLIMATIZED
+    acclimatization_basis: Optional[str] = None  # 'determined' | 'unknown' (ORO.FTL.105(1))
 
     # KSS summary (engine aerowake-4.0-kss)
     max_kss: Optional[float] = None
@@ -808,6 +814,15 @@ class DutyTimeline:
     max_p_severe_sleepiness: Optional[float] = None
     max_hours_awake: Optional[float] = None
     sleep_deficit_7d: Optional[Dict[str, Any]] = None
+    # Peaks by window (engine aerowake-4.1-kss). max_kss is the headline peak
+    # for the configured window (core/parameters.py HEADLINE_RISK_WINDOW).
+    headline_window: str = 'duty'
+    peak_time_utc: Optional[datetime] = None
+    kss_peak_fdp: Optional[float] = None      # report → last operating on-blocks
+    kss_peak_duty: Optional[float] = None     # report → release
+    kss_at_release: Optional[float] = None
+    segment_kss: List[Dict[str, Any]] = field(default_factory=list)  # per segment, from the timeline
+    assumed_nap_hours: Optional[float] = None
 
 
 @dataclass
@@ -826,6 +841,7 @@ class MonthlyAnalysis:
     
     # Sleep statistics
     average_sleep_per_night: float = 0.0
+    sleep_coverage_days: float = 0.0  # days of the month with sleep estimates (avg denominator)
     max_sleep_debt: float = 0.0
     average_sleep_debt: float = 0.0
     

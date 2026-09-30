@@ -1,5 +1,5 @@
 """
-AeroWake alertness core (engine ``aerowake-4.0-kss``)
+AeroWake alertness core (engine ``aerowake-4.1-kss``)
 =====================================================
 
 Replaces the legacy weighted S/C "performance" index, whose output range was
@@ -34,7 +34,9 @@ a direct linear re-expression of predicted KSS:
 
     index = 110 − 10 · KSS      (KSS 1 → 100, KSS 5 → 60, KSS 9 → 20)
 
-Risk bands follow the KSS verbal anchors (rounded predicted KSS):
+Risk bands follow the KSS verbal anchors. Classification uses predicted KSS
+rounded to one decimal (half up, from the two-decimal value the API sends),
+lower bound inclusive — so a displayed "6.5" is always High:
     low       KSS < 5.5   "alert" … "neither alert nor sleepy"
     moderate  5.5 – 6.5   "some signs of sleepiness"
     high      6.5 – 7.5   "sleepy, no effort to stay awake"
@@ -60,7 +62,16 @@ import pytz
 
 from core import published_tpm as tpm
 
-ENGINE_VERSION = "aerowake-4.0-kss"
+ENGINE_VERSION = "aerowake-4.1-kss"
+# Engines whose outputs are on the same KSS scale. 4.1 changed sleep
+# estimation (continuous pre-duty nap, debt ledger, bounded daytime sleep) and
+# the headline window; the KSS core and bands are unchanged, so stored state
+# and analyses from 4.0 remain KSS-valued.
+KSS_ENGINE_VERSIONS = ("aerowake-4.0-kss", "aerowake-4.1-kss")
+
+
+def is_kss_engine(version) -> bool:
+    return version in KSS_ENGINE_VERSIONS
 
 P = tpm.PARAMETERS
 HA, LA = P['ha'], P['la']
@@ -114,11 +125,25 @@ def index_thresholds() -> Dict[str, Tuple[float, float]]:
     }
 
 
+def round_half_up(value: float, digits: int) -> float:
+    """Round half up, matching JavaScript ``Math.round(x * 10**d) / 10**d``."""
+    scale = 10 ** digits
+    return math.floor(value * scale + 0.5) / scale
+
+
+def band_kss(kss: float) -> float:
+    """The KSS value bands are decided on: two decimals, then one decimal."""
+    return round_half_up(round_half_up(kss, 2), 1)
+
+
 def classify_kss(kss: float) -> str:
+    """Band of a predicted KSS, on the value rounded to one decimal
+    (lower bound inclusive): 6.45 displays as 6.5 and is High."""
     if kss is None or not math.isfinite(kss):
         return 'unknown'
+    value = band_kss(kss)
     for name, upper in KSS_BANDS:
-        if kss < upper:
+        if value < upper:
             return name
     return 'extreme'
 

@@ -29,7 +29,7 @@ from models.data_models import (
 )
 from core.parameters import ModelConfig
 from core.sleep_calculator import UnifiedSleepCalculator, SleepStrategy
-from core.compliance import EASAComplianceValidator
+from core.compliance import EASAComplianceValidator, determine_acclimatisation
 from core.workload import WorkloadModel
 from core.extended_operations import (
     AugmentedFDPParameters, ULRParameters,
@@ -37,6 +37,7 @@ from core.extended_operations import (
 )
 from core.strategy_references import get_confidence_basis, get_strategy_references
 from core import alertness as aw
+from core.sleep_attribution import attribute_sleep
 
 class BorbelyFatigueModel:
     """
@@ -697,12 +698,44 @@ class BorbelyFatigueModel:
         kss_points = [p for p in operating if p.kss is not None]
         landing_kss = min((p for p in landing_points if p.kss is not None),
                           key=lambda p: p.raw_performance, default=None)
+
+        # Peaks by window. The FDP ends at the last operating on-blocks; the
+        # post-flight period after it is inferred by the parser.
+        operating_segments = [s for s in duty.segments if not getattr(s, 'is_deadhead', False)]
+        fdp_end = (max(s.scheduled_arrival_utc for s in operating_segments)
+                   if operating_segments else duty.release_time_utc)
+        fdp_points = [p for p in kss_points if p.timestamp_utc <= fdp_end] or kss_points
+        window = getattr(self.config, 'headline_risk_window', 'duty')
+        headline = fdp_points if window == 'fdp' else kss_points
+        peak = max(headline, key=lambda p: p.kss, default=None)
+        if peak is not None:
+            min_perf = peak.raw_performance
+            min_point = peak
+
+        segment_kss = []
+        for seg in duty.segments:
+            pts = [p for p in kss_points
+                   if seg.scheduled_departure_utc <= p.timestamp_utc <= seg.scheduled_arrival_utc]
+            at_arrival = max((p for p in kss_points if p.timestamp_utc <= seg.scheduled_arrival_utc),
+                             key=lambda p: p.timestamp_utc, default=None)
+            seg_peak = max(pts, key=lambda p: p.kss, default=None)
+            segment_kss.append({
+                'kss_peak': seg_peak.kss if seg_peak else None,
+                'kss_peak_time_utc': seg_peak.timestamp_utc if seg_peak else None,
+                'kss_at_arrival': at_arrival.kss if (pts and at_arrival) else None,
+            })
         return DutyTimeline(
-            max_kss=max((p.kss for p in kss_points), default=None),
+            max_kss=peak.kss if peak else None,
             landing_kss=landing_kss.kss if landing_kss else None,
-            max_kss_90=max((p.kss_90 for p in kss_points), default=None),
-            max_p_severe_sleepiness=max((p.p_severe_sleepiness for p in kss_points), default=None),
+            max_kss_90=max((p.kss_90 for p in headline), default=None),
+            max_p_severe_sleepiness=max((p.p_severe_sleepiness for p in headline), default=None),
             max_hours_awake=max((p.hours_awake for p in kss_points), default=None),
+            headline_window=window,
+            peak_time_utc=peak.timestamp_utc if peak else None,
+            kss_peak_fdp=max((p.kss for p in fdp_points), default=None),
+            kss_peak_duty=max((p.kss for p in kss_points), default=None),
+            kss_at_release=kss_points[-1].kss if kss_points else None,
+            segment_kss=segment_kss,
             duty_id=duty.duty_id,
             duty_date=duty.date,
             timeline=timeline,
@@ -912,7 +945,8 @@ class BorbelyFatigueModel:
             )
 
         self.sleep_strategies = sleep_strategies
-        
+        acclimatisation = determine_acclimatisation(roster.duties, roster.home_base_timezone)
+
         previous_duty = None
         previous_timeline = None
         
@@ -947,23 +981,11 @@ class BorbelyFatigueModel:
             # Account for the interval preceding this report before scoring it.
             period_start = (previous_duty.report_time_utc if previous_duty else
                             duty.report_time_utc - timedelta(days=1))
-            days = max(0.0, (duty.report_time_utc - period_start).total_seconds() / 86400)
             prior_bunk = previous_timeline.inflight_rest_blocks if previous_timeline else []
-            intervals = sorted((max(period_start, b.start_utc), min(duty.report_time_utc, b.end_utc))
-                               for b in [*all_sleep, *prior_bunk]
-                               if b.end_utc > period_start and b.start_utc < duty.report_time_utc)
-            # Union intervals so overlapping sources cannot double-credit sleep.
-            sleep_hours = 0.0
-            end = period_start
-            for start, stop in intervals:
-                start = max(start, end)
-                if stop > start:
-                    sleep_hours += (stop - start).total_seconds() / 3600
-                    end = stop
-            cumulative_sleep_debt *= math.exp(-self.params.sleep_debt_decay_rate * days)
-            balance = sleep_hours - self.params.baseline_sleep_need_hours * days
-            cumulative_sleep_debt = max(0.0, cumulative_sleep_debt -
-                                        (balance / 1.15 if balance > 0 else balance))
+            cumulative_sleep_debt = self._advance_sleep_debt(
+                cumulative_sleep_debt,
+                [(b.start_utc, b.end_utc) for b in [*all_sleep, *prior_bunk]],
+                period_start, duty.report_time_utc)
 
             timeline_obj = self.simulate_duty(
                 duty, relevant_sleep, phase_shift,
@@ -978,11 +1000,23 @@ class BorbelyFatigueModel:
             
             # Calculate EASA FDP limits (augmented-crew-aware)
             # Training duties are "other duty" per EASA — not FDP, no FDP limits.
-            if duty.duty_type == DutyType.FLIGHT:
+            accl = acclimatisation.get(duty.duty_id)
+            if accl is not None:
+                duty.acclimatization_state = accl['state']
+                timeline_obj.acclimatization_state = accl['state']
+                timeline_obj.acclimatization_basis = accl['basis']
+            if duty.duty_type == DutyType.FLIGHT and accl is not None and accl['basis'] == 'unknown':
+                # State of acclimatisation cannot be determined from the
+                # supplied duties: no FDP verdict (reported as not assessed).
+                duty.max_fdp_hours = None
+                duty.extended_fdp_hours = None
+                duty.used_discretion = False
+            elif duty.duty_type == DutyType.FLIGHT:
                 fdp_limits = self.validator.calculate_fdp_limits(
                     duty,
                     augmented_params=self.config.augmented_fdp_params if hasattr(self.config, 'augmented_fdp_params') else None,
                     ulr_params=self.config.ulr_params if hasattr(self.config, 'ulr_params') else None,
+                    reference_timezone=accl['reference_timezone'] if accl else None,
                 )
                 duty.max_fdp_hours = fdp_limits['max_fdp']
                 duty.extended_fdp_hours = fdp_limits['extended_fdp']
@@ -1000,6 +1034,11 @@ class BorbelyFatigueModel:
                 timeline_obj.ulr_compliance = ulr_result
             
             timeline_obj.cumulative_sleep_debt = cumulative_sleep_debt
+            # Estimated sleep in the 24 h before report, from every modelled
+            # block (the simulation input stops at the previous release).
+            timeline_obj.prior_sleep_hours = self._sleep_hours_between(
+                [(b.start_utc, b.end_utc) for b in [*all_sleep, *prior_bunk]],
+                duty.report_time_utc - timedelta(hours=24), duty.report_time_utc)
             timeline_obj.sleep_deficit_7d = aw.cumulative_deficit(
                 [aw.SleepInterval(b.start_utc, b.end_utc) for b in all_sleep if b.start_utc < duty.report_time_utc],
                 duty.report_time_utc)
@@ -1010,7 +1049,8 @@ class BorbelyFatigueModel:
                 timeline_obj.sleep_strategy_type = strategy_data.get('strategy_type')
                 timeline_obj.sleep_confidence = strategy_data.get('confidence')
                 timeline_obj.sleep_quality_data = strategy_data
-            
+                timeline_obj.assumed_nap_hours = strategy_data.get('assumed_nap_hours')
+
             # Update current S for next iteration
             if timeline_obj.timeline:
                 current_s = timeline_obj.timeline[-1].homeostatic_component
@@ -1025,8 +1065,40 @@ class BorbelyFatigueModel:
         
         roster.alertness_timeline = self._continuous_alertness(
             roster, all_sleep, duty_timelines, body_clock_timeline)
-        return self._build_monthly_analysis(roster, duty_timelines, body_clock_timeline, all_sleep)
+        roster.analysis_assumptions = dict(self.config.assumptions)
+        monthly = self._build_monthly_analysis(roster, duty_timelines, body_clock_timeline, all_sleep)
+        roster.sleep_coverage_days = monthly.sleep_coverage_days
+        return monthly
     
+    @staticmethod
+    def _sleep_hours_between(intervals, start_utc: datetime, end_utc: datetime) -> float:
+        """Hours of sleep in [start, end), unioned so overlaps count once."""
+        clipped = sorted((max(start_utc, a), min(end_utc, b)) for a, b in intervals
+                         if b > start_utc and a < end_utc)
+        hours, cursor = 0.0, start_utc
+        for start, stop in clipped:
+            start = max(start, cursor)
+            if stop > start:
+                hours += (stop - start).total_seconds() / 3600
+                cursor = stop
+        return hours
+
+    def _advance_sleep_debt(self, debt: float, intervals, period_start: datetime,
+                            period_end: datetime) -> float:
+        """Exponential sleep-debt ledger over one period (report to report).
+
+        Sleep in [period_start, period_end) is unioned so overlapping sources
+        cannot double-credit; debt decays at sleep_debt_decay_rate per day and
+        moves by the balance against baseline_sleep_need_hours per day
+        (surplus repays at 1/1.15). Used by both the sleep estimator and the
+        simulation so they cannot disagree.
+        """
+        days = max(0.0, (period_end - period_start).total_seconds() / 86400)
+        sleep_hours = self._sleep_hours_between(intervals, period_start, period_end)
+        debt *= math.exp(-self.params.sleep_debt_decay_rate * days)
+        balance = sleep_hours - self.params.baseline_sleep_need_hours * days
+        return max(0.0, debt - (balance / 1.15 if balance > 0 else balance))
+
     def _extract_sleep_from_roster(
         self,
         roster: Roster,
@@ -1234,19 +1306,6 @@ class BorbelyFatigueModel:
 
             for sleep_block in strategy.sleep_blocks:
                 sleep_blocks.append(sleep_block)
-
-            # Update running debt estimate (lightweight — mirrors simulation loop logic)
-            if previous_duty:
-                days_gap = max(1, (duty.date - previous_duty.date).days)
-                period_sleep = sum(b.duration_hours for b in strategy.sleep_blocks)
-                period_need = self.params.baseline_sleep_need_hours * days_gap
-                balance = period_sleep - period_need
-                if balance < 0:
-                    running_debt_estimate += abs(balance)
-                elif balance > 0 and running_debt_estimate > 0:
-                    running_debt_estimate = max(0, running_debt_estimate - balance / 1.15)
-                # Exponential decay
-                running_debt_estimate *= math.exp(-self.params.sleep_debt_decay_rate * days_gap)
 
             if getattr(duty, 'is_augmented_crew', False):
                 blk_dates = [(b.start_utc.isoformat()[:10], b.end_utc.isoformat()[:10]) for b in strategy.sleep_blocks]
@@ -1596,34 +1655,35 @@ class BorbelyFatigueModel:
                 # hours before report. This mirrors the nap generated by
                 # _night_departure_strategy() for standard inter-duty gaps.
                 report_local_for_nap = duty.report_time_utc.astimezone(rest_tz)
-                report_hour_local = report_local_for_nap.hour + report_local_for_nap.minute / 60.0
+                # Nap length follows the body clock: home time at home or on a
+                # short layover, local time after 48 h (as the sleep strategies).
+                gap_hours = (duty.report_time_utc - previous_duty.release_time_utc).total_seconds() / 3600
+                body_tz = rest_tz if (not is_at_home and gap_hours > 48) else home_tz
+                report_body = duty.report_time_utc.astimezone(body_tz)
 
-                # Only add nap if: late report AND the last sleep block
-                # ended ≥10h before report (pilot would be awake too long)
                 last_generated_end = max(
                     (b.end_utc for b in sleep_blocks
                      if b.end_utc <= duty.report_time_utc),
                     default=None
                 )
-                if last_generated_end:
-                    hours_awake_without_nap = (
-                        duty.report_time_utc - last_generated_end
-                    ).total_seconds() / 3600
-                else:
-                    hours_awake_without_nap = 0
-
-                if (report_hour_local >= 20 or report_hour_local < 4) and hours_awake_without_nap >= 10:
-                    nap_end_utc = duty.report_time_utc - timedelta(
-                        hours=self.sleep_calculator.MIN_WAKE_BEFORE_REPORT
-                    )
-                    # Adaptive nap: 1.5-2.5h depending on available window
-                    # Cap so nap doesn't start before ~12:00 local (unrealistic)
+                nap_end_utc = duty.report_time_utc - timedelta(
+                    hours=self.sleep_calculator.MIN_WAKE_BEFORE_REPORT
+                )
+                nap_hours = 0.0
+                if last_generated_end is not None and not getattr(duty, 'is_augmented_crew', False):
+                    # Continuous in report time and in time since the last
+                    # wake-up (PreDutyNapAssumptions in core/parameters.py).
                     available_window = (nap_end_utc - last_generated_end).total_seconds() / 3600
-                    nap_hours = min(2.5, max(1.5, available_window - 6.0))
-                    nap_start_utc = nap_end_utc - timedelta(hours=nap_hours)
+                    nap_hours = self.config.nap_assumptions.nap_hours(
+                        report_body.hour + report_body.minute / 60.0, available_window)
 
-                    # Ensure nap doesn't overlap existing sleep
-                    if nap_start_utc > last_generated_end + timedelta(hours=1):
+                min_nap = timedelta(hours=self.config.nap_assumptions.min_nap_hours)
+                nap_start_utc = max(last_generated_end or nap_end_utc, nap_end_utc - timedelta(hours=nap_hours),
+                                    previous_duty.release_time_utc + timedelta(hours=1))
+                if nap_hours > 0 and nap_end_utc - nap_start_utc >= min_nap:
+                    nap_start_utc, nap_end_utc, _ = self.sleep_calculator._validate_sleep_no_overlap(
+                        nap_start_utc, nap_end_utc, duty, previous_duty)
+                    if nap_end_utc - nap_start_utc >= min_nap and nap_start_utc >= last_generated_end:
                         nap_start_local = nap_start_utc.astimezone(rest_tz)
                         nap_end_local = nap_end_utc.astimezone(rest_tz)
 
@@ -1655,6 +1715,20 @@ class BorbelyFatigueModel:
                             f"({nap_quality.actual_sleep_hours:.1f}h, "
                             f"duty reports {report_local_for_nap.strftime('%H:%M')} local)"
                         )
+
+            # Debt ledger up to this report, from every block generated so far
+            # (inter-duty, gap-fill nights and naps) — the same ledger the
+            # simulation keeps, so the next inter-duty rebound sees true debt.
+            prior_bunk = []
+            if previous_duty is not None and getattr(previous_duty, 'inflight_rest_plan', None):
+                prior_bunk = [(p.start_utc, p.end_utc) for p in previous_duty.inflight_rest_plan.rest_periods
+                              if p.start_utc and p.end_utc]
+            running_debt_estimate = self._advance_sleep_debt(
+                running_debt_estimate,
+                [(b.start_utc, b.end_utc) for b in sleep_blocks] + prior_bunk,
+                previous_duty.report_time_utc if previous_duty else duty.report_time_utc - timedelta(days=1),
+                duty.report_time_utc,
+            )
 
         # Resolve overlapping sleep blocks with SWS-aware truncation.
         # First hours of sleep contain disproportionate SWS recovery
@@ -1706,6 +1780,10 @@ class BorbelyFatigueModel:
             resolved_blocks.append(block)
         sleep_blocks = resolved_blocks
 
+        # Describe exactly the blocks the model uses (naps included), with
+        # each duty's entry holding its last main sleep before report.
+        sleep_strategies = attribute_sleep(roster, sleep_blocks, sleep_strategies, home_tz,
+                                           self.config.nap_assumptions.habit)
         return sleep_blocks, sleep_strategies
 
     # ------------------------------------------------------------------
@@ -1719,118 +1797,89 @@ class BorbelyFatigueModel:
         sleep_overrides: Dict[str, Any],
         roster: 'Roster',
     ) -> Tuple[List[SleepBlock], Dict[str, Any]]:
-        """Replace auto-generated sleep blocks with user-specified overrides.
+        """Replace one estimated sleep block per override with user times.
 
-        For each duty_id in *sleep_overrides*, all SleepBlock entries that
-        belong to that duty's strategy are removed and replaced by a single
-        block with the user-specified start/end times. Sleep quality is
-        recalculated from scratch so the Borbely model receives scientifically
-        valid quality factors.
-
-        Returns the modified (all_sleep, sleep_strategies) tuple.
+        Each override value holds ``start_utc``, ``end_utc``, optional
+        ``environment``, optional ``duty_id`` (defaults to the dict key) and
+        optional ``block_start_utc``. Without ``block_start_utc`` the target is
+        the duty's last main sleep before report (the block its sleep panel
+        shows); with it, exactly that block is replaced, whichever night it is.
+        Estimated blocks that overlap the user's sleep are removed; naps that
+        do not overlap are kept. Quality is recalculated for the new block.
         """
-        from core.strategy_references import get_strategy_references
+        from core.sleep_attribution import block_key, main_block, summarise, block_dict
 
         home_tz = pytz.timezone(roster.home_base_timezone)
 
-        for duty_id, override in sleep_overrides.items():
-            s_start = override["start_utc"]
-            s_end = override["end_utc"]
-            env_override = override.get("environment")  # None = keep original
+        def owner_of(start_iso: str) -> Optional[str]:
+            for key, data in sleep_strategies.items():
+                if any(b.get('sleep_start_utc') == start_iso for b in data.get('sleep_blocks', [])):
+                    return key
+            return None
 
-            # Find the existing strategy for this duty
-            existing_strat = sleep_strategies.get(duty_id)
-            if existing_strat is None:
-                logger.warning(f"[SLEEP-OVERRIDE] No existing strategy for {duty_id}, skipping")
+        for key, override in sleep_overrides.items():
+            duty_id = override.get('duty_id', key)
+            s_start = override["start_utc"].astimezone(pytz.utc)
+            s_end = override["end_utc"].astimezone(pytz.utc)
+            by_start = {block_key(b): b for b in all_sleep}
+
+            target_iso = override.get('block_start_utc')
+            if target_iso:
+                target_iso = datetime.fromisoformat(
+                    str(target_iso).replace('Z', '+00:00')).astimezone(pytz.utc).isoformat()
+                entry_key = owner_of(target_iso) or duty_id
+            else:
+                entry_key = duty_id
+                members = [by_start[b['sleep_start_utc']] for b in
+                           sleep_strategies.get(duty_id, {}).get('sleep_blocks', [])
+                           if b.get('sleep_start_utc') in by_start]
+                main = main_block(members)
+                target_iso = block_key(main) if main is not None else None
+            target = by_start.get(target_iso) if target_iso else None
+            if target is None and entry_key not in sleep_strategies:
+                logger.warning("[SLEEP-OVERRIDE] No estimated sleep to replace, skipping")
                 continue
 
-            # Determine environment — prefer user override, fall back to original
-            original_env = 'home'
-            if existing_strat.get('sleep_blocks') and len(existing_strat['sleep_blocks']) > 0:
-                original_env = existing_strat['sleep_blocks'][0].get('environment', 'home')
-            env = env_override or original_env
+            env = override.get("environment") or (target.environment if target else 'home')
+            location_timezone = (target.location_timezone if target else None) or home_tz.zone
+            if env == 'home':
+                location_timezone = home_tz.zone
 
-            # Remove old sleep blocks belonging to this duty from all_sleep
-            # Strategy blocks correspond to the time window of the strategy.
-            # Match by UTC time range overlap with original strategy blocks.
-            original_block_utcs = set()
-            if existing_strat.get('sleep_blocks'):
-                for ob in existing_strat['sleep_blocks']:
-                    if 'sleep_start_utc' in ob:
-                        original_block_utcs.add(ob['sleep_start_utc'])
-
-            new_all_sleep = []
-            for block in all_sleep:
-                block_utc_iso = block.start_utc.astimezone(pytz.utc).isoformat()
-                if block_utc_iso in original_block_utcs:
-                    continue  # Remove old block
-                new_all_sleep.append(block)
-            all_sleep = new_all_sleep
-
-            # Compute duration
-            duration_hours = (s_end - s_start).total_seconds() / 3600.0
-
-            # Find the duty object for context
             duty_obj = roster.get_duty_by_id(duty_id)
-            prev_duty_end = None
-            next_event = s_end + timedelta(hours=12)  # fallback
-            if duty_obj:
+            next_reports = [d.report_time_utc for d in roster.duties if d.report_time_utc >= s_end]
+            prev_releases = [d.release_time_utc for d in roster.duties if d.release_time_utc <= s_start]
+            if duty_obj is not None and duty_obj.report_time_utc >= s_end:
                 next_event = duty_obj.report_time_utc
-                # Find previous duty
-                duty_idx = roster.get_duty_index(duty_id)
-                if duty_idx is not None and duty_idx > 0:
-                    prev_duty = roster.duties[duty_idx - 1]
-                    prev_duty_end = prev_duty.release_time_utc
-
-            # Recalculate sleep quality with user-specified times
-            location_timezone = home_tz.zone  # default
-            if env == 'hotel' and duty_obj and duty_obj.segments:
-                # Use previous arrival airport timezone for hotel sleep
-                duty_idx = roster.get_duty_index(duty_id)
-                if duty_idx is not None and duty_idx > 0:
-                    prev_segments = roster.duties[duty_idx - 1].segments
-                    if prev_segments:
-                        location_timezone = prev_segments[-1].arrival_airport.timezone
-
+            else:
+                next_event = min(next_reports) if next_reports else s_end + timedelta(hours=12)
             quality = self.sleep_calculator.calculate_sleep_quality(
-                sleep_start=s_start,
-                sleep_end=s_end,
-                location=env,
-                previous_duty_end=prev_duty_end,
-                next_event=next_event,
-                is_nap=False,
-                location_timezone=location_timezone,
+                sleep_start=s_start, sleep_end=s_end, location=env,
+                previous_duty_end=max(prev_releases) if prev_releases else None,
+                next_event=next_event, is_nap=False, location_timezone=location_timezone,
             )
-
-            # Pre-compute home-base day/hour for chronogram positioning
-            ss_home = s_start.astimezone(home_tz)
-            se_home = s_end.astimezone(home_tz)
-            ss_utc = s_start.astimezone(pytz.utc)
-            se_utc = s_end.astimezone(pytz.utc)
-
-            # Create replacement SleepBlock
+            ss_home, se_home = s_start.astimezone(home_tz), s_end.astimezone(home_tz)
             replacement = SleepBlock(
-                start_utc=ss_utc,
-                end_utc=se_utc,
-                location_timezone=location_timezone,
-                duration_hours=quality.actual_sleep_hours,
-                quality_factor=quality.sleep_efficiency,
-                effective_sleep_hours=quality.effective_sleep_hours,
-                environment=env,
-                sleep_start_day=ss_home.day,
-                sleep_start_hour=ss_home.hour + ss_home.minute / 60.0,
-                sleep_end_day=se_home.day,
-                sleep_end_hour=se_home.hour + se_home.minute / 60.0,
+                start_utc=s_start, end_utc=s_end, location_timezone=location_timezone,
+                duration_hours=quality.actual_sleep_hours, quality_factor=quality.sleep_efficiency,
+                effective_sleep_hours=quality.effective_sleep_hours, environment=env,
+                sleep_start_day=ss_home.day, sleep_start_hour=ss_home.hour + ss_home.minute / 60.0,
+                sleep_end_day=se_home.day, sleep_end_hour=se_home.hour + se_home.minute / 60.0,
             )
-            all_sleep.append(replacement)
 
-            # Re-sort by start_utc (maintain ordering)
-            all_sleep.sort(key=lambda b: b.start_utc)
-
-            # Build replacement strategy response
-            location_tz_obj = pytz.timezone(location_timezone)
-            ss_local = s_start.astimezone(location_tz_obj)
-            se_local = s_end.astimezone(location_tz_obj)
+            # Drop the target and every estimated block the user's sleep overlaps.
+            removed = {target_iso} if target_iso else set()
+            removed |= {block_key(b) for b in all_sleep if b.start_utc < s_end and b.end_utc > s_start}
+            all_sleep = sorted([b for b in all_sleep if block_key(b) not in removed] + [replacement],
+                               key=lambda b: b.start_utc)
+            for k in list(sleep_strategies):
+                data = sleep_strategies[k]
+                blocks = data.get('sleep_blocks', [])
+                kept = [b for b in blocks if b.get('sleep_start_utc') not in removed]
+                if len(kept) != len(blocks):
+                    if not kept and k != entry_key:
+                        del sleep_strategies[k]
+                        continue
+                    data['sleep_blocks'] = kept
 
             qf = {
                 'base_efficiency': quality.base_efficiency,
@@ -1840,68 +1889,37 @@ class BorbelyFatigueModel:
                 'time_pressure_factor': quality.time_pressure_factor,
                 'insufficient_penalty': quality.insufficient_penalty,
             }
-
-            sleep_strategies[duty_id] = {
-                'strategy_type': existing_strat.get('strategy_type', 'user_override'),
-                'confidence': 1.0,  # User-specified = max confidence
-                'total_sleep_hours': quality.total_sleep_hours,
-                'effective_sleep_hours': quality.effective_sleep_hours,
-                'sleep_efficiency': quality.sleep_efficiency,
-                'wocl_overlap_hours': quality.wocl_overlap_hours,
+            existing = sleep_strategies.get(entry_key, {})
+            by_start = {block_key(b): b for b in all_sleep}
+            members = sorted([by_start[b['sleep_start_utc']] for b in existing.get('sleep_blocks', [])
+                              if b.get('sleep_start_utc') in by_start] + [replacement],
+                             key=lambda b: b.start_utc)
+            old_factors = {b['sleep_start_utc']: b.get('quality_factors')
+                           for b in existing.get('sleep_blocks', [])}
+            old_factors[block_key(replacement)] = qf
+            entry = dict(existing)
+            entry.update({
+                'strategy_type': existing.get('strategy_type', 'user_override'),
+                'confidence': 1.0,
                 'warnings': [w['message'] for w in quality.warnings],
                 'sleep_start_time': ss_home.strftime('%H:%M'),
                 'sleep_end_time': se_home.strftime('%H:%M'),
-                'sleep_blocks': [{
-                    'sleep_start_time': ss_home.strftime('%H:%M'),
-                    'sleep_end_time': se_home.strftime('%H:%M'),
-                    'sleep_start_iso': ss_home.isoformat(),
-                    'sleep_end_iso': se_home.isoformat(),
-                    'sleep_start_utc': ss_utc.isoformat(),
-                    'sleep_end_utc': se_utc.isoformat(),
-                    'sleep_start_day': ss_home.day,
-                    'sleep_start_hour': ss_home.hour + ss_home.minute / 60.0,
-                    'sleep_end_day': se_home.day,
-                    'sleep_end_hour': se_home.hour + se_home.minute / 60.0,
-                    'location_timezone': location_timezone,
-                    'environment': env,
-                    'sleep_start_time_home_tz': ss_home.strftime('%H:%M'),
-                    'sleep_end_time_home_tz': se_home.strftime('%H:%M'),
-                    'sleep_start_day_home_tz': ss_home.day,
-                    'sleep_start_hour_home_tz': ss_home.hour + ss_home.minute / 60.0,
-                    'sleep_end_day_home_tz': se_home.day,
-                    'sleep_end_hour_home_tz': se_home.hour + se_home.minute / 60.0,
-                    'sleep_start_day_utc': ss_utc.day,
-                    'sleep_start_hour_utc': ss_utc.hour + ss_utc.minute / 60.0,
-                    'sleep_end_day_utc': se_utc.day,
-                    'sleep_end_hour_utc': se_utc.hour + se_utc.minute / 60.0,
-                    'sleep_start_time_utc': ss_utc.strftime('%H:%M'),
-                    'sleep_end_time_utc': se_utc.strftime('%H:%M'),
-                    'sleep_start_time_location_tz': ss_local.strftime('%H:%M'),
-                    'sleep_end_time_location_tz': se_local.strftime('%H:%M'),
-                    'sleep_type': 'main',
-                    'duration_hours': quality.actual_sleep_hours,
-                    'effective_hours': quality.effective_sleep_hours,
-                    'quality_factor': quality.sleep_efficiency,
-                    'quality_factors': qf,
-                }],
+                'sleep_blocks': [block_dict(b, home_tz, quality_factors=old_factors.get(block_key(b)))
+                                 for b in members],
                 'explanation': (
-                    f'User-specified sleep override: {ss_home.strftime("%H:%M")}-'
-                    f'{se_home.strftime("%H:%M")} ({duration_hours:.1f}h, '
+                    f'User-specified sleep: {ss_home.strftime("%H:%M")}-'
+                    f'{se_home.strftime("%H:%M")} ({(s_end - s_start).total_seconds() / 3600:.1f}h, '
                     f'{quality.sleep_efficiency:.0%} efficiency).'
                 ),
                 'confidence_basis': 'User-specified sleep times — highest confidence.',
                 'quality_factors': qf,
-                'references': get_strategy_references(
-                    existing_strat.get('strategy_type', 'normal')
-                ),
+                'references': get_strategy_references(existing.get('strategy_type', 'normal')),
                 'is_user_override': True,
-            }
+            })
+            entry.update(summarise(members, home_tz))
+            sleep_strategies[entry_key] = entry
 
-            logger.info(
-                f"[SLEEP-OVERRIDE] duty={duty_id} "
-                f"sleep={ss_utc.isoformat()[:16]}→{se_utc.isoformat()[:16]} "
-                f"env={env} eff={quality.effective_sleep_hours:.1f}h"
-            )
+            logger.info(f"[SLEEP-OVERRIDE] sleep={s_start.isoformat()[:16]}→{s_end.isoformat()[:16]} env={env}")
 
         return all_sleep, sleep_strategies
 
@@ -2101,6 +2119,28 @@ class BorbelyFatigueModel:
                     point['kss'] = round(ap.kss, 2)
                 out.append(point)
             t += step
+        # Add each duty's peak instants from the duty simulation itself, so the
+        # 30-minute curve never misses a duty peak (same model and sleep).
+        seen = {p['t']: p for p in out}
+        for tl in duty_timelines:
+            peaks = {}
+            kss_points = [p for p in tl.timeline if p.kss is not None and not p.is_in_rest]
+            if tl.peak_time_utc is not None:
+                peaks[tl.peak_time_utc] = tl.max_kss
+            duty_peak = max(kss_points, key=lambda p: p.kss, default=None)
+            if duty_peak is not None:
+                peaks[duty_peak.timestamp_utc] = duty_peak.kss
+            for at, kss in peaks.items():
+                iso = at.astimezone(pytz.utc).isoformat()
+                if kss is None or not (month_start <= at <= month_end):
+                    continue
+                if iso in seen:  # same instant: use the duty simulation's value
+                    seen[iso].update(kss=kss, asleep=False, on_duty=True, duty_peak=tl.duty_id)
+                    continue
+                seen[iso] = {'t': iso, 'asleep': False, 'on_duty': True, 'kss': kss,
+                             'duty_peak': tl.duty_id}
+                out.append(seen[iso])
+        out.sort(key=lambda p: p['t'])
         return out
 
     def _get_phase_shift_at_time(
@@ -2132,21 +2172,25 @@ class BorbelyFatigueModel:
         
         total_pinch = sum(len(dt.pinch_events) for dt in duty_timelines)
         
-        # Compute true per-night average from all roster sleep blocks.
-        # all_sleep includes ROFF fill blocks from the start of the calendar
-        # month (not just the duty span), so the denominator must be the full
-        # month length to avoid inflating the average.
-        if all_sleep and roster.month:
-            total_sleep_hours = sum(s.duration_hours for s in all_sleep)
-            year_m, mon_m = int(roster.month[:4]), int(roster.month[5:7])
-            from datetime import date as _date
-            if mon_m == 12:
-                month_days = (_date(year_m + 1, 1, 1) - _date(year_m, mon_m, 1)).days
-            else:
-                month_days = (_date(year_m, mon_m + 1, 1) - _date(year_m, mon_m, 1)).days
-            avg_sleep = round(total_sleep_hours / month_days, 2)
-        else:
-            avg_sleep = 0.0
+        # Average estimated sleep per 24 h over the part of the month that has
+        # sleep estimates: from the month start (home time) to the end of the
+        # last estimated sleep. Nothing is estimated after the last duty, so
+        # dividing by the whole month would dilute the average.
+        avg_sleep, coverage_days = 0.0, 0.0
+        if all_sleep:
+            home_tz = pytz.timezone(roster.home_base_timezone)
+            try:
+                year_m, mon_m = int(roster.month[:4]), int(roster.month[5:7])
+                start = home_tz.localize(datetime(year_m, mon_m, 1)).astimezone(pytz.utc)
+                end = home_tz.localize(datetime(year_m + (mon_m == 12), mon_m % 12 + 1, 1)).astimezone(pytz.utc)
+            except (TypeError, ValueError):
+                start, end = min(b.start_utc for b in all_sleep), max(b.end_utc for b in all_sleep)
+            start = max(start, min(b.start_utc for b in all_sleep))
+            end = min(end, max(b.end_utc for b in all_sleep))
+            coverage_days = max(0.0, (end - start).total_seconds() / 86400)
+            if coverage_days >= 1.0:
+                slept = self._sleep_hours_between([(b.start_utc, b.end_utc) for b in all_sleep], start, end)
+                avg_sleep = round(slept / coverage_days, 2)
         
         max_debt = max(dt.cumulative_sleep_debt for dt in duty_timelines)
         avg_debt = round(
@@ -2185,6 +2229,7 @@ class BorbelyFatigueModel:
             critical_risk_duties=critical_risk,
             total_pinch_events=total_pinch,
             average_sleep_per_night=avg_sleep,
+            sleep_coverage_days=round(coverage_days, 2),
             max_sleep_debt=max_debt,
             average_sleep_debt=avg_debt,
             lowest_performance_duty=worst_duty.duty_id,

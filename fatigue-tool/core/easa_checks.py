@@ -227,7 +227,10 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
     coverage['fdp_max'] = {'status': 'not_assessed' if assessed < len(flights) or not flights else
                          ('failed' if any(f['rule'] == 'fdp_max' for f in findings) else 'passed'),
                          'assessed': assessed, 'eligible': len(flights),
-                         'reason': 'Crew/acclimatization context is required; operator approval is outside this check.'}
+                         'reason': ('Acclimatisation is derived from the supplied duties (ORO.FTL.105(1), '
+                                    'assuming acclimatised to the home base before the first duty); duties '
+                                    'where it cannot be determined are not assessed. Planned extensions, '
+                                    'split duty and operator approvals are outside this check.')}
     if not roster.pilot_base:
         coverage['min_rest'] = {'status': 'not_assessed', 'reason': 'Home base identity is missing.'}
     summary['coverage'] = coverage
