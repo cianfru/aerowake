@@ -9,6 +9,7 @@ import { PrivacySection } from './PrivacySection';
 import { StepsSection } from './StepsSection';
 import { FinalCta } from './FinalCta';
 import { LandingFooter } from './LandingFooter';
+import { useLandingHead } from './useLandingHead';
 
 interface LandingPageProps {
   onEnter: () => void;
@@ -16,6 +17,7 @@ interface LandingPageProps {
 
 /** Public landing: always daylight, planning first, credibility below the fold. */
 export function LandingPage({ onEnter }: LandingPageProps) {
+  useLandingHead();
   return (
     <div className="light landing-daylight min-h-screen bg-[#f8fbfd] text-[#142e45]">
       <LandingHeader onEnter={onEnter} />

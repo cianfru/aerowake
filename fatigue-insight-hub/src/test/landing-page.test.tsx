@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { LandingPage } from '@/components/landing/LandingPage';
 import { HERO_COPY, NON_AFFILIATION_NOTE } from '@/components/landing/landingData';
 import { RISK_LEVEL_LABELS, classifyKss } from '@/lib/risk-scale';
+import { LANDING_CANONICAL_URL, LANDING_THEME_COLOR } from '@/components/landing/useLandingHead';
 
 function renderLanding(onEnter = vi.fn()) {
   render(<MemoryRouter><LandingPage onEnter={onEnter} /></MemoryRouter>);
@@ -68,5 +69,14 @@ describe('landing page', () => {
     for (const id of ['how-it-works', 'science', 'privacy', 'operations', 'tour']) {
       expect(document.getElementById(id)).not.toBeNull();
     }
+  });
+
+  it('declares the canonical link and daylight browser colour only while mounted', () => {
+    const { unmount } = render(<MemoryRouter><LandingPage onEnter={vi.fn()} /></MemoryRouter>);
+    expect(document.head.querySelector('link[rel="canonical"]')).toHaveAttribute('href', LANDING_CANONICAL_URL);
+    expect(document.head.querySelector('meta[name="theme-color"]')).toHaveAttribute('content', LANDING_THEME_COLOR);
+    unmount();
+    expect(document.head.querySelector('link[rel="canonical"]')).toBeNull();
+    expect(document.head.querySelector('meta[name="theme-color"]')).toBeNull();
   });
 });
