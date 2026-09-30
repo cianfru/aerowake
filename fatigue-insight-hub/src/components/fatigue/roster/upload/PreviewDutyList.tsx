@@ -39,7 +39,8 @@ export function PreviewDutyList({ preview }: { preview: RosterPreview }) {
             </button>
           ))}
         </div>
-        <ul className="max-h-72 divide-y divide-border overflow-auto text-sm" aria-label={`Duties, times in ${utc ? 'UTC' : homeLabel}`}>
+        {/* Focusable so the scrolling list can be read with the keyboard. */}
+        <ul tabIndex={0} className="max-h-72 divide-y divide-border overflow-auto rounded-sm text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Duties, times in ${utc ? 'UTC' : homeLabel}`}>
           {preview.duties.map(duty => {
             const t = dutyTimes(duty, zone);
             return (
