@@ -101,7 +101,7 @@ export function SelectionCard({ pair, distanceNm, names, onClear, className }: {
   const blockOut = formatBlock(median(out?.blockHours ?? []));
   const blockBack = formatBlock(median(back?.blockHours ?? []));
   return (
-    <div role="status" aria-live="polite" className={cn('rounded-xl border border-border/80 bg-card/95 p-4 shadow-[var(--shadow-elevated)] backdrop-blur-md', className)}>
+    <div role="status" aria-live="polite" className={cn('rounded-xl border border-border/80 bg-card/95 p-4 shadow-[var(--shadow-elevated)]', className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-mono text-base font-semibold tracking-tight">

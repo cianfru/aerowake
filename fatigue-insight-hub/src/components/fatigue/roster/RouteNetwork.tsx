@@ -167,7 +167,7 @@ export function RouteNetwork({ duties, homeBase }: { duties: DutyAnalysis[]; hom
     >
       {!inDialog && (
         <button type="button" onClick={() => setExpanded(true)} aria-label="Expand map to full screen"
-          className="absolute right-3 top-3 z-10 grid h-11 w-11 place-items-center rounded-xl border border-border/80 bg-card/90 text-foreground/80 shadow-[var(--shadow-card)] backdrop-blur-md transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:w-9">
+          className="absolute right-3 top-3 z-10 grid h-11 w-11 place-items-center rounded-xl border border-border/80 bg-card/90 text-foreground/80 shadow-[var(--shadow-card)] transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:w-9">
           <Maximize2 className="h-4 w-4" aria-hidden="true" />
         </button>
       )}
@@ -248,7 +248,7 @@ export function RouteNetwork({ duties, homeBase }: { duties: DutyAnalysis[]; hom
             </div>
             <div className="relative min-h-0 flex-1">
               {expanded && renderMap(true)}
-              <div className="absolute left-3 top-3 z-10 flex max-h-[calc(100%-12rem)] w-[min(20rem,calc(100%-5rem))] flex-col overflow-hidden rounded-xl border border-border/80 bg-card/95 shadow-[var(--shadow-elevated)] backdrop-blur-md lg:max-h-[calc(100%-1.5rem)]">
+              <div className="absolute left-3 top-3 z-10 flex max-h-[calc(100%-12rem)] w-[min(20rem,calc(100%-5rem))] flex-col overflow-hidden rounded-xl border border-border/80 bg-card/95 shadow-[var(--shadow-elevated)] lg:max-h-[calc(100%-1.5rem)]">
                 <button type="button" aria-expanded={drawerOpen} onClick={() => setDrawerOpen((o) => !o)}
                   className="flex min-h-11 items-center justify-between gap-2 px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
                   Routes ({pairs.length})

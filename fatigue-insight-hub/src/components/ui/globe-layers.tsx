@@ -1,22 +1,19 @@
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { NIGHT_RADII } from '@/lib/map-geometry';
 import type { Palette } from './globe-palette';
 import type { GlobeAirport, GlobeRoute } from './globe';
 
 /**
- * SVG structure of the globe and flat map. React renders the elements once
- * per data change; `draw()` in globe.tsx writes their geometry directly, found
- * through the data-* attributes below.
+ * SVG layers of the globe and flat map (routes, markers, labels); the base map
+ * is drawn on a canvas underneath. React renders the elements once per data
+ * change; `draw()` in globe.tsx writes their geometry directly, found through
+ * the data-* attributes below.
  */
 
 export const FLOW_DASH = '3 13';
 export const FLOW_PERIOD = 16;
 
 interface GlobeLayersProps {
-  uid: string;
   pal: Palette;
-  flat: boolean;
-  terminator: boolean;
   routes: GlobeRoute[];
   airports: GlobeAirport[];
   selectedKey: string | null;
@@ -27,29 +24,11 @@ interface GlobeLayersProps {
   onRouteHover: (key: string | null, e: ReactPointerEvent<SVGPathElement>) => void;
 }
 
-export function GlobeLayers({ uid, pal, flat, terminator, routes, airports, selectedKey, hoveredKey, flowFor, interactive, showLabels, onRouteHover }: GlobeLayersProps) {
+export function GlobeLayers({ pal, routes, airports, selectedKey, hoveredKey, flowFor, interactive, showLabels, onRouteHover }: GlobeLayersProps) {
   const selectedEnds = new Set(routes.find((r) => r.key === selectedKey)?.endpoints ?? []);
   const hasSelection = !!selectedKey && routes.some((r) => r.key === selectedKey);
-  const gid = (name: string) => `${uid}-${name}`;
-  const stops = (list: Array<[number, string, number]>) => list.map(([o, c, a], i) => <stop key={i} offset={o} stopColor={c} stopOpacity={a} />);
   return (
     <>
-      <defs>
-        <radialGradient id={gid('halo')} data-grad="halo" gradientUnits="userSpaceOnUse">{stops(pal.haloStops)}</radialGradient>
-        <radialGradient id={gid('ocean')} data-grad="ocean" gradientUnits="userSpaceOnUse">{stops(pal.oceanStops)}</radialGradient>
-        <radialGradient id={gid('shade')} data-grad="shade" gradientUnits="userSpaceOnUse">{stops(pal.shadeStops)}</radialGradient>
-        <radialGradient id={gid('rim')} data-grad="rim" gradientUnits="userSpaceOnUse">{stops(pal.rimStops)}</radialGradient>
-      </defs>
-      {!flat && <circle data-layer="halo" fill={`url(#${gid('halo')})`} />}
-      <path data-layer="sphere" fill={flat ? pal.flatOcean[0] : `url(#${gid('ocean')})`} fillOpacity={flat ? pal.flatOcean[1] : 1}
-        stroke={pal.sphereStroke[0]} strokeOpacity={flat ? 0 : pal.sphereStroke[1]} strokeWidth={1} />
-      <path data-layer="graticule" fill="none" stroke={pal.graticule[0]} strokeOpacity={pal.graticule[1]} strokeWidth={0.6} />
-      <path data-layer="land" fill={pal.land.fill} fillOpacity={pal.land.fillOpacity} stroke={pal.land.stroke}
-        strokeOpacity={pal.land.strokeOpacity} strokeWidth={0.6} strokeLinejoin="round" />
-      {terminator && NIGHT_RADII.map((r, i) => <path key={r} data-night={i} fill={pal.night} fillOpacity={pal.nightOpacity} />)}
-      <path data-layer="shade" fill={`url(#${gid('shade')})`} pointerEvents="none" />
-      <path data-layer="rim" fill={`url(#${gid('rim')})`} pointerEvents="none" />
-
       <g data-routes="">
         {routes.map((r) => {
           const width = r.width ?? 1.6;

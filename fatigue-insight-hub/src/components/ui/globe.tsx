@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { geoPath, type GeoProjection } from 'd3-geo';
 import type { Polygon } from 'geojson';
 import { cn } from '@/lib/utils';
@@ -48,6 +48,7 @@ import { MapZoomControls } from './map-zoom-controls';
 import { usePalette } from './globe-palette';
 import { FLOW_PERIOD, GlobeLayers } from './globe-layers';
 import { collectElements, setAttr, setD, type Elements } from './globe-dom';
+import { drawBase } from './globe-canvas';
 
 /**
  * Keyless SVG globe and flat route map (d3-geo + Natural Earth land).
@@ -120,7 +121,15 @@ export interface GlobeProps {
   children?: ReactNode;
 }
 
-const SPHERE = { type: 'Sphere' } as const;
+/** 2D context, or null where canvas is unavailable (e.g. jsdom in unit tests). */
+function canvasContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
+  if (typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent)) return null;
+  try {
+    return canvas.getContext('2d');
+  } catch {
+    return null;
+  }
+}
 /** Flow dashes: stepped in JS at the draw rate. */
 const FLOW_PX_PER_MS = 0.01;
 const DETAIL_IDLE_MS = 150;
@@ -148,13 +157,14 @@ export function Globe(props: GlobeProps) {
     appearance = 'app', terminator = false, flow = 'none', selectedKey = null, hoveredKey = null, onSelect, onHover,
     cooperative = true, controls = false, animate = true, className, ariaLabel = 'Route map', describedBy, children,
   } = props;
-  const uid = useId().replace(/:/g, '');
   const pal = usePalette(appearance);
   const palRef = useRef(pal);
   palRef.current = pal;
   const rootRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const styleFor = useRef<{ pal: string; style: CSSStyleDeclaration | null }>({ pal: '', style: null });
   const [size, setSize] = useState<Size>({ w: 600, h: 600 });
   const reducedMotion = useMemo(() => prefersReducedMotion(), []);
   const budget = useMemo(() => motionBudget(), []);
@@ -249,30 +259,21 @@ export function Globe(props: GlobeProps) {
     const now = Date.now();
     if (p.terminator && now - night.current.at > 60_000) night.current = { at: now, polygons: nightCircles(new Date(now)) };
     const viewKey = p.flat ? `f${v.flat.k},${v.flat.x},${v.flat.y}` : `g${v.globe.rotate},${v.globe.k}`;
-    const baseKey = `${viewKey}|${s.w}x${s.h}|${useDetail}|${night.current.at}|${pl.halo}`;
+    const baseKey = `${viewKey}|${s.w}x${s.h}|${useDetail}|${moving.current}|${night.current.at}|${pl.name}`;
     if (baseKey !== lastBase.current) {
       lastBase.current = baseKey;
-      const sphere = path(SPHERE);
-      setD(e.layers.get('sphere'), sphere);
-      setD(e.layers.get('shade'), p.flat ? '' : sphere);
-      setD(e.layers.get('rim'), p.flat ? '' : sphere);
-      setD(e.layers.get('graticule'), path(graticuleFor(pxPerDeg, centre, lite)));
-      setD(e.layers.get('land'), path(useDetail ? detailed! : lite ? LAND_110_LITE : LAND_110));
-      e.night.forEach((el, i) => setD(el, p.terminator ? path(night.current.polygons[i]) : ''));
-      if (!p.flat) {
-        const R = r0 * v.globe.k;
-        const cx = s.w / 2;
-        const cy = s.h / 2;
-        const geo: Record<string, [number, number, number]> = {
-          halo: [cx, cy, R * pl.halo], ocean: [cx - 0.24 * R, cy - 0.36 * R, 1.5 * R],
-          shade: [cx - 0.28 * R, cy - 0.4 * R, 1.6 * R], rim: [cx, cy, R],
-        };
-        for (const [name, [gx, gy, gr]] of Object.entries(geo)) {
-          const g = e.gradients.get(name);
-          setAttr(g, 'cx', gx.toFixed(1)); setAttr(g, 'cy', gy.toFixed(1)); setAttr(g, 'r', gr.toFixed(1));
-        }
-        const halo = e.layers.get('halo');
-        setAttr(halo, 'cx', cx.toFixed(1)); setAttr(halo, 'cy', cy.toFixed(1)); setAttr(halo, 'r', (R * pl.halo).toFixed(1));
+      const canvas = canvasRef.current;
+      const ctx = canvas ? canvasContext(canvas) : null;
+      if (canvas && ctx) {
+        if (styleFor.current.pal !== pl.name) styleFor.current = { pal: pl.name, style: getComputedStyle(canvas) };
+        drawBase(canvas, ctx, {
+          projection, size: s, dpr: Math.min(2, window.devicePixelRatio || 1), pal: pl, style: styleFor.current.style,
+          flat: !!p.flat, disc: p.flat ? null : { cx: s.w / 2, cy: s.h / 2, r: r0 * v.globe.k },
+          graticule: graticuleFor(pxPerDeg, centre, lite),
+          // While moving, the lighter coastline keeps frames cheap; the full one returns at rest.
+          land: useDetail ? detailed! : lite || moving.current ? LAND_110_LITE : LAND_110,
+          night: p.terminator ? night.current.polygons : [],
+        });
       }
     }
 
@@ -345,8 +346,8 @@ export function Globe(props: GlobeProps) {
       const extra = text.querySelector('[data-extra]');
       const suffix = l.text.slice(code.length);
       if (extra && extra.textContent !== suffix) extra.textContent = suffix;
-      text.style.pointerEvents = l.more ? 'auto' : 'none';
-      text.style.cursor = l.more ? 'zoom-in' : '';
+      setAttr(text, 'pointer-events', l.more ? 'auto' : 'none');
+      setAttr(text, 'cursor', l.more ? 'zoom-in' : 'default');
     }
   }, [currentProjection, ensureViews]);
 
@@ -701,10 +702,11 @@ export function Globe(props: GlobeProps) {
         onClick={interactive ? onSurfaceClick : undefined}
         style={{ touchAction: interactive ? (cooperative ? 'pan-y' : 'none') : undefined }}
       >
-        <svg ref={svgRef} className="block h-full w-full" width={size.w} height={size.h} viewBox={`0 0 ${size.w} ${size.h}`}
+        <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true" />
+        <svg ref={svgRef} className="relative block h-full w-full [&_*]:transition-none" width={size.w} height={size.h} viewBox={`0 0 ${size.w} ${size.h}`}
           aria-hidden="true" focusable="false" data-mode={flat ? 'flat' : 'globe'}>
           <GlobeLayers
-            uid={uid} pal={pal} flat={flat} terminator={terminator} routes={routes} airports={airports}
+            pal={pal} routes={routes} airports={airports}
             selectedKey={selectedKey} hoveredKey={hoveredKey} flowFor={flowFor} interactive={interactive}
             showLabels={showLabels} onRouteHover={onRouteHover}
           />

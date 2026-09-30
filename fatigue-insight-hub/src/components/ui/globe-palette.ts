@@ -5,15 +5,19 @@ import { useEffect, useState } from 'react';
  * (dark: token-driven glow; light: pale chart paper); the daylight palette is
  * the landing page's, which stays light in dark mode.
  */
+/** Gradient stop: [offset 0–1, colour, alpha]. */
+export type Stop = [number, string, number];
+
 export interface Palette {
+  name: 'dark' | 'light' | 'daylight';
   halo: number;
   /** Extra casing width (px) beyond the route stroke. */
   casingWidth: number;
   casingOpacity: number;
-  haloStops: Array<[number, string, number]>;
-  oceanStops: Array<[number, string, number]>;
-  shadeStops: Array<[number, string, number]>;
-  rimStops: Array<[number, string, number]>;
+  haloStops: Stop[];
+  oceanStops: Stop[];
+  shadeStops: Stop[];
+  rimStops: Stop[];
   flatOcean: [string, number];
   sphereStroke: [string, number];
   graticule: [string, number];
@@ -30,6 +34,7 @@ export interface Palette {
 
 /** Dark theme: token-driven, glowing on the dark surface. */
 export const APP_DARK: Palette = {
+  name: 'dark',
   halo: 1.07,
   casingWidth: 3,
   casingOpacity: 0.9,
@@ -52,6 +57,7 @@ export const APP_DARK: Palette = {
 
 /** Light theme: a pale chart-paper globe with white casings under the routes. */
 export const APP_LIGHT: Palette = {
+  name: 'light',
   halo: 1.07,
   casingWidth: 3,
   casingOpacity: 0.95,
@@ -74,6 +80,7 @@ export const APP_LIGHT: Palette = {
 
 /** Fixed daylight palette of the landing page (it stays light in dark mode). */
 export const DAYLIGHT: Palette = {
+  name: 'daylight',
   halo: 1.15,
   casingWidth: 0,
   casingOpacity: 0,

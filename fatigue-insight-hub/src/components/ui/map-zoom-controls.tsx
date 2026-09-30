@@ -32,11 +32,11 @@ function ControlButton({ label, onClick, disabled, children }: { label: string; 
 export function MapZoomControls({ canZoomIn, canZoomOut, onZoomIn, onZoomOut, onFit, onWorld, worldLabel, className }: MapZoomControlsProps) {
   return (
     <div className={cn('absolute bottom-3 right-3 z-10 flex flex-col gap-2', className)}>
-      <div className="flex flex-col divide-y divide-border/70 overflow-hidden rounded-xl border border-border/80 bg-card/90 shadow-[var(--shadow-card)] backdrop-blur-md">
+      <div className="flex flex-col divide-y divide-border/70 overflow-hidden rounded-xl border border-border/80 bg-card/95 shadow-[var(--shadow-card)]">
         <ControlButton label="Zoom in" onClick={onZoomIn} disabled={!canZoomIn}><Plus className="h-4 w-4" aria-hidden="true" /></ControlButton>
         <ControlButton label="Zoom out" onClick={onZoomOut} disabled={!canZoomOut}><Minus className="h-4 w-4" aria-hidden="true" /></ControlButton>
       </div>
-      <div className="flex flex-col divide-y divide-border/70 overflow-hidden rounded-xl border border-border/80 bg-card/90 shadow-[var(--shadow-card)] backdrop-blur-md">
+      <div className="flex flex-col divide-y divide-border/70 overflow-hidden rounded-xl border border-border/80 bg-card/95 shadow-[var(--shadow-card)]">
         <ControlButton label="Fit my routes" onClick={onFit}><LocateFixed className="h-4 w-4" aria-hidden="true" /></ControlButton>
         <ControlButton label={worldLabel} onClick={onWorld}><Earth className="h-4 w-4" aria-hidden="true" /></ControlButton>
       </div>
