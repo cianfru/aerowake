@@ -73,10 +73,11 @@ export function RosterUploadCard() {
   };
 
   return (
-    <Card variant="glass">
-      <CardContent className="p-4 md:p-6 space-y-5">
-        <div className="space-y-1">
-          <h1 className="text-lg md:text-xl font-semibold">Check your roster</h1>
+    <Card variant="elevated" className="overflow-hidden rounded-2xl">
+      <CardContent className="p-6 md:p-9 space-y-6">
+        <div className="space-y-3">
+          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary"><FileText className="h-6 w-6" aria-hidden="true" /></div>
+          <h1 className="text-3xl font-semibold tracking-tight">Check your roster</h1>
           <p className="text-sm text-muted-foreground">
             Upload your monthly roster (PDF or CSV). You will see which duties need attention and which scoped duty and rest checks need review.
           </p>
@@ -90,8 +91,8 @@ export function RosterUploadCard() {
             onDragOver={onDrag}
             onDrop={(e) => { onDrag(e); setIsDragging(false); accept(e.dataTransfer.files?.[0]); }}
             className={cn(
-              'relative rounded-xl border-2 border-dashed p-6 text-center transition-colors',
-              isDragging ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50 hover:bg-secondary/30',
+              'relative rounded-xl border-2 border-dashed px-5 py-9 text-center transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+              isDragging ? 'border-primary bg-primary/10' : 'border-primary/30 bg-primary/5 hover:border-primary/60 hover:bg-primary/10',
             )}
           >
             <input
@@ -102,7 +103,7 @@ export function RosterUploadCard() {
               onChange={(e) => accept(e.target.files?.[0])}
               className="absolute inset-0 cursor-pointer opacity-0"
             />
-            <Upload className={cn('h-7 w-7 mx-auto mb-2', isDragging ? 'text-primary' : 'text-muted-foreground')} aria-hidden="true" />
+            <Upload className="h-8 w-8 mx-auto mb-3 text-primary" aria-hidden="true" />
             <p className="text-sm font-medium">Drop your roster here or tap to choose</p>
             <p className="text-xs text-muted-foreground">PDF or CSV</p>
           </div>
@@ -158,7 +159,7 @@ export function RosterUploadCard() {
         {/* Step 3: run */}
         <Button
           variant="glow"
-          className="w-full sm:w-auto"
+          className="h-12 w-full sm:w-auto sm:px-7"
           onClick={onRun}
           disabled={!uploadedFile || !baseValid || isAnalyzing || previewBusy || (!!preview && !confirmed)}
         >

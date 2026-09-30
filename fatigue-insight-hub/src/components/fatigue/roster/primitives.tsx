@@ -43,8 +43,8 @@ export function Figure({ label, value, sub, className, valueClassName }: {
 /** Section heading row with an optional right-aligned aside. */
 export function SectionHeading({ id, title, aside }: { id?: string; title: string; aside?: ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-border pb-2">
-      <h2 id={id} className="text-[13px] font-semibold tracking-[-0.005em] text-foreground">{title}</h2>
+    <div className="flex items-baseline justify-between gap-3 pb-2">
+      <h2 id={id} className="text-lg font-semibold tracking-tight text-foreground">{title}</h2>
       {aside && <div className="hidden text-right text-xs text-muted-foreground sm:block">{aside}</div>}
     </div>
   );
@@ -62,7 +62,7 @@ export function TextAction({ children, onClick, ariaLabel, emphasis }: {
       className={cn(
         'inline-flex items-center gap-1.5 rounded-[5px] px-2 py-1 text-[13px] font-medium transition-colors',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-        emphasis ? 'text-primary hover:bg-primary/10' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+        emphasis ? 'bg-primary/10 text-primary hover:bg-primary/20' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
       )}
     >
       {children}

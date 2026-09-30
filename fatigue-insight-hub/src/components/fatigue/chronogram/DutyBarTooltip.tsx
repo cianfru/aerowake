@@ -32,7 +32,7 @@ import {
   getFHASeverity,
   getKSSLabel,
 } from '@/lib/fatigue-calculations';
-import { indexToKss, normalizeRiskLevel, resolveKss, riskColorClass } from '@/lib/risk-scale';
+import { classifyPerformance, indexToKss, normalizeRiskLevel, resolveKss, riskColorClass } from '@/lib/risk-scale';
 import type { TimelineDutyBar } from '@/lib/timeline-types';
 import type { DutyAnalysis } from '@/types/fatigue';
 import { format } from 'date-fns';
@@ -84,7 +84,7 @@ export function DutyBarTooltip({
             aria-label={`Open duty on ${format(bar.duty.date, 'EEE d MMM')}: ${bar.duty.flightSegments.map(s => s.flightNumber).join(', ') || bar.duty.trainingCode || 'Duty'}${bar.isOvernightContinuation ? ' (continued)' : ''}`}
             onClick={() => onDutySelect(bar.duty)}
             className={cn(
-              "absolute z-10 transition-all hover:ring-2 cursor-pointer overflow-hidden flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "calendar-duty absolute z-10 transition-shadow hover:ring-2 cursor-pointer overflow-hidden flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               selectedDuty?.date.getTime() === bar.duty.date.getTime() && "ring-2 ring-foreground",
               usedDiscretion ? "ring-2 ring-critical hover:ring-critical/80" : "hover:ring-foreground"
             )}
@@ -134,7 +134,7 @@ export function DutyBarTooltip({
                         )}
                         {/* Phase label — only show for cruise when wide enough */}
                         {phase.phase === 'cruise' && segmentWidth > 15 && (
-                          <span className="text-[6px] font-medium text-background/90 truncate">
+                          <span className="text-[10px] font-semibold truncate" style={{ color: classifyPerformance(phase.performance) === 'unknown' ? '#f8fbfd' : '#081019' }}>
                             {indexToKss(phase.performance).toFixed(1)}
                           </span>
                         )}
@@ -164,7 +164,7 @@ export function DutyBarTooltip({
                     }}
                   >
                     {segmentWidth > 6 && (
-                      <span className="text-[8px] font-semibold text-white/90 truncate px-0.5">
+                      <span className="text-[10px] font-semibold text-white truncate px-1">
                         {bar.duty.trainingCode || getTrainingDutyLabel(bar.duty.dutyType || '')}
                       </span>
                     )}
@@ -200,13 +200,13 @@ export function DutyBarTooltip({
                   )}
                   {/* Flight number label for flights */}
                   {segment.type === 'flight' && segment.flightNumber && segmentWidth > 8 && (
-                    <span className="text-[8px] font-medium text-background truncate px-0.5">
+                    <span className="text-[10px] font-semibold truncate px-1" style={{ color: classifyPerformance(segment.performance) === 'unknown' ? '#f8fbfd' : '#081019' }}>
                       {segment.flightNumber}
                     </span>
                   )}
                   {/* Check-in indicator */}
                   {segment.type === 'checkin' && segmentWidth > 5 && (
-                    <span className="text-[8px] text-background/80">{'\u2713'}</span>
+                    <span className="text-[10px]" style={{ color: classifyPerformance(segment.performance) === 'unknown' ? '#f8fbfd' : '#081019' }}>{'\u2713'}</span>
                   )}
                 </div>
               );

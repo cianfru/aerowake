@@ -10,6 +10,8 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   await page.goto('/');
   await page.getByRole('button',{name:'Analyse a roster',exact:true}).click();
   await expect(page).toHaveURL(/\/roster$/);
+  await page.evaluate(()=>window.scrollTo(0,0));
+  await page.screenshot({path:testInfo.outputPath('roster-upload.png'),fullPage:true});
   await page.getByLabel('Home base (IATA)').fill('DOH');
   await page.getByLabel('Choose roster file (PDF or CSV)').setInputFiles({name:'synthetic.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});
   await page.getByRole('button',{name:'Review roster',exact:true}).click();
@@ -41,6 +43,7 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   expect((await dutyResponse).status()).toBe(200);
   const dutyDialog=page.getByRole('dialog',{name:'Duty Details — Sep 05, 2026',exact:true});
   await expect(dutyDialog).toBeVisible();
+  await page.screenshot({path:testInfo.outputPath('duty-details.png')});
   await dutyDialog.getByRole('button',{name:'Close',exact:true}).click();
   await calendar.getByRole('tab',{name:'UTC',exact:true}).click();
   await expect(calendar.getByRole('tab',{name:'UTC',exact:true})).toHaveAttribute('aria-selected','true');

@@ -8,7 +8,6 @@ const HistoryPage = lazy(() => import('@/components/fatigue/hubs/HistoryPage').t
 const LearnHubPage = lazy(() => import('@/components/fatigue/hubs/LearnHubPage').then(m => ({ default: m.LearnHubPage })));
 
 import { LandingPage } from '@/components/landing/LandingPage';
-import { AuroraBackground } from '@/components/ui/aurora-background';
 import { useTheme } from '@/hooks/useTheme';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -60,8 +59,7 @@ const Index = () => {
   }
 
   return (
-    <div className="relative min-h-screen bg-background">
-      <AuroraBackground />
+    <div className="workspace-shell relative min-h-screen">
       <div className="relative z-10 min-h-screen flex flex-col">
         {/* Header (full-width, includes hamburger sidebar) */}
         <Header

@@ -52,9 +52,9 @@ export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDu
 
   return <Tabs value={view} onValueChange={navigate} className="min-w-0">
     <div ref={nav} className="sticky top-14 z-10 scroll-mt-14 bg-background/95 pb-4 pt-2 backdrop-blur-xl">
-      <TabsList aria-label="Roster views" className="grid h-auto w-full grid-cols-5 gap-1 rounded-xl border border-border bg-muted/40 p-1">
+      <TabsList aria-label="Roster views" className="roster-view-rail grid h-auto w-full grid-cols-5 gap-1 rounded-2xl bg-card p-1.5">
         {views.map(({ id, label, icon: Icon }) => <TabsTrigger key={id} value={id}
-          className="min-w-0 flex-col gap-1.5 whitespace-normal rounded-lg px-1 py-3 text-center text-[11px] leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground md:flex-row md:gap-2 md:px-3 md:text-sm">
+          className="roster-view-tab min-w-0 flex-col gap-1.5 whitespace-normal rounded-xl px-1 py-3.5 text-center text-[11px] leading-tight data-[state=active]:bg-primary data-[state=active]:text-primary-foreground md:flex-row md:gap-2 md:px-3 md:text-sm">
           <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{label}</span>
         </TabsTrigger>)}
       </TabsList>
@@ -62,11 +62,11 @@ export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDu
 
     <TabsContent value="outlook" forceMount hidden={view !== 'outlook'} className="mt-5 space-y-8">
       <RosterForecast results={results} reference={reference} onReferenceChange={setReference} onDetails={onDutySelect} onConcern={onConcern} />
-      <section aria-labelledby="watch-heading" className="space-y-1">
+      <section aria-labelledby="watch-heading" className="space-y-4">
         <SectionHeading id="watch-heading" title="Duties to watch" aside={watch.length ? `${watch.length} ${watch.length === 1 ? 'duty' : 'duties'} · predicted KSS 6.5 or higher` : undefined} />
-        {watch.length ? <div className="divide-y divide-border/70" data-testid="duties-to-watch">
+        {watch.length ? <div className="space-y-3" data-testid="duties-to-watch">
           {watch.map((duty, i) => <DutyWatchCard key={duty.dutyId ?? i} duty={duty} onDetails={onDutySelect} onReportFatigue={onReportFatigue} />)}
-        </div> : <p className="py-4 text-sm text-muted-foreground" data-testid="duties-to-watch-empty">No duties reach the model watch band. You can still report fatigue whenever you feel it — how you feel always comes first.</p>}
+        </div> : <p className="instrument-surface text-sm text-muted-foreground" data-testid="duties-to-watch-empty">No duties reach the model watch band. You can still report fatigue whenever you feel it — how you feel always comes first.</p>}
       </section>
     </TabsContent>
 

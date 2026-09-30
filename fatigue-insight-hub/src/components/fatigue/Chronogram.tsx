@@ -53,7 +53,7 @@ export function Chronogram({ duties, statistics, month, pilotName, pilotBase, pi
   }), [statistics]);
 
   return (
-    <section id="roster-calendar" aria-labelledby="chronogram-heading" className="min-w-0 scroll-mt-24 space-y-4">
+    <section id="roster-calendar" aria-labelledby="chronogram-heading" className="instrument-surface min-w-0 scroll-mt-24 space-y-4">
       <div className="space-y-4">
         {/* Tab selector for timeline type */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ChronogramTab)}>

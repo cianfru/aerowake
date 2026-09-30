@@ -18,13 +18,13 @@ function monthLabel(results: AnalysisResults): string {
 /** The roster identity stays above the navigable views. */
 function RosterHeader({ results, onNewRoster }: { results: AnalysisResults; onNewRoster: () => void }) {
   const pilotLine = [results.pilotName, results.pilotBase, results.pilotAircraft].filter(Boolean).join(' · ');
-  return <header className="flex items-start justify-between gap-4">
+  return <header className="roster-identity flex flex-wrap items-start justify-between gap-5">
     <div className="min-w-0 space-y-2">
-      <p className="text-sm font-medium text-primary">Your roster</p>
-      <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">{monthLabel(results)}</h1>
-      <p className="text-sm text-muted-foreground">{results.duties.length} {results.duties.length === 1 ? 'duty' : 'duties'}{pilotLine ? ` · ${pilotLine}` : ''}</p>
+      <p className="text-sm font-medium text-[#c3e0e8]">Your roster</p>
+      <h1 className="text-3xl font-semibold tracking-tight md:text-[2.75rem] md:leading-tight">{monthLabel(results)}</h1>
+      <p className="text-sm text-[#d0e1e9]">{results.duties.length} {results.duties.length === 1 ? 'duty' : 'duties'}{pilotLine ? ` · ${pilotLine}` : ''}</p>
     </div>
-    <button type="button" onClick={onNewRoster} className="flex shrink-0 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+    <button type="button" onClick={onNewRoster} className="flex shrink-0 items-center gap-2 rounded-full border border-[#b9d9e3]/40 bg-[#edf6fa]/10 px-4 py-2.5 text-sm transition-colors hover:bg-[#edf6fa]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d2f3f7]">
       <RotateCcw className="h-4 w-4" aria-hidden="true" />New roster
     </button>
   </header>;
@@ -47,7 +47,7 @@ export function RosterPage() {
   if (!results) {
     return (
       <div className="flex-1 px-4 py-10 md:py-16">
-        <div className="mx-auto max-w-xl space-y-4 animate-fade-in">
+        <div className="mx-auto max-w-2xl space-y-4 animate-fade-in">
           <RosterUploadCard />
           <AirlineDetectionPrompt />
         </div>

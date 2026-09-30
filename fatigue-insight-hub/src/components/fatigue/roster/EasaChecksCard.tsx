@@ -14,10 +14,10 @@ function Gauge({ label, value, limit }: { label: string; value: number; limit: n
   const ratio = limit > 0 ? value / limit : 0;
   const tone = ratio > 1 ? 'bg-critical' : ratio >= 0.9 ? 'bg-warning' : 'bg-foreground/45';
   return (
-    <div className="min-w-0 space-y-2">
+    <div className="instrument-inset min-w-0 space-y-3 p-4">
       <p className="eyebrow">{label}</p>
       <p className="font-mono text-lg font-medium leading-none tabular">{formatLimit(value, limit)}</p>
-      <div className="h-[3px] w-full bg-border" aria-hidden="true">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-border" aria-hidden="true">
         <div className={cn('h-full', tone)} style={{ width: `${Math.min(100, ratio * 100)}%` }} />
       </div>
     </div>
@@ -31,7 +31,7 @@ export function EasaChecksCard({ findings, summary }: EasaChecksCardProps) {
   const infos = (findings ?? []).filter((f) => f.severity !== 'warning');
 
   return (
-    <section aria-labelledby="easa-checks-heading" className="space-y-4">
+    <section aria-labelledby="easa-checks-heading" className="instrument-surface space-y-5">
       <SectionHeading
         id="easa-checks-heading"
         title="EASA flight-time limitations"
