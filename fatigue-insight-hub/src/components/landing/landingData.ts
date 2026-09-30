@@ -1,5 +1,9 @@
-import { performanceHex } from '@/lib/risk-scale';
-// Static airport coordinates for landing page globe — avoids async API dependency
+/**
+ * Static landing content for the decorative globe network.
+ * Nothing here is a model output.
+ */
+
+// Static airport coordinates for the landing globe: no async API dependency.
 export interface LandingAirport {
   code: string;
   lat: number;
@@ -22,65 +26,23 @@ export const LANDING_AIRPORTS: LandingAirport[] = [
   { code: 'FCO', lat: 41.80, lng: 12.25, city: 'Rome' },
 ];
 
-export interface LandingRoute {
+export interface LandingRoutePair {
   from: string;
   to: string;
-  performance: number;
+  /**
+   * @deprecated Always undefined. The landing globe no longer carries any
+   * model index, so routes cannot imply a risk judgement about a network.
+   */
+  avgPerformance?: undefined;
 }
 
-// Route data extracted from mockAnalysisData flight segments
-// Each unique directional route with its performance score
-export const LANDING_ROUTES: LandingRoute[] = [
-  { from: 'DOH', to: 'DXB', performance: 78.5 },
-  { from: 'DXB', to: 'DOH', performance: 75.2 },
-  { from: 'DOH', to: 'LHR', performance: 64.2 },
-  { from: 'LHR', to: 'DOH', performance: 60.1 },
-  { from: 'DOH', to: 'BOM', performance: 70.5 },
-  { from: 'BOM', to: 'DOH', performance: 61.8 },
-  { from: 'DOH', to: 'JFK', performance: 57.3 },
-  { from: 'JFK', to: 'DOH', performance: 50.1 },
-  { from: 'DOH', to: 'SIN', performance: 52.8 },
-  { from: 'SIN', to: 'DOH', performance: 47.5 },
-  { from: 'DOH', to: 'CDG', performance: 54.2 },
-  { from: 'CDG', to: 'DOH', performance: 53.2 },
-  { from: 'DOH', to: 'BKK', performance: 48.8 },
-  { from: 'BKK', to: 'DOH', performance: 46.2 },
-  { from: 'DOH', to: 'IST', performance: 76.8 },
-  { from: 'IST', to: 'DOH', performance: 74.2 },
-  { from: 'DOH', to: 'SYD', performance: 70.2 },
-  { from: 'SYD', to: 'DOH', performance: 49.5 },
-  { from: 'DOH', to: 'NRT', performance: 65.2 },
-  { from: 'NRT', to: 'DOH', performance: 52.4 },
-  { from: 'DOH', to: 'FCO', performance: 48.2 },
-];
+/** Airport pairs drawn on the decorative globe (one arc per pair). */
+export const LANDING_ROUTE_PAIRS: LandingRoutePair[] = [
+  'DXB', 'LHR', 'BOM', 'JFK', 'SIN', 'CDG', 'BKK', 'IST', 'SYD', 'NRT', 'FCO',
+].map((to) => ({ from: 'DOH', to }));
 
-// Route colour by risk band (same scale as the roster route network)
-export const getRouteColor = (performance: number): string => performanceHex(performance);
+/** Neutral brand teal shared by every landing arc (never a risk colour). */
+export const LANDING_ARC_HEX = '#0e6f86';
 
-// Aggregate routes by unique pair (for display, take worst performance)
-export const LANDING_ROUTE_PAIRS = (() => {
-  const pairMap = new Map<string, { from: string; to: string; avgPerformance: number }>();
-
-  LANDING_ROUTES.forEach((route) => {
-    const key = [route.from, route.to].sort().join('-');
-    const existing = pairMap.get(key);
-    if (existing) {
-      existing.avgPerformance = Math.min(existing.avgPerformance, route.performance);
-    } else {
-      pairMap.set(key, { from: route.from, to: route.to, avgPerformance: route.performance });
-    }
-  });
-
-  return Array.from(pairMap.values());
-})();
-
-// Landing page metrics (from mockAnalysisData statistics)
-export const LANDING_METRICS = {
-  totalDuties: 14,
-  totalSectors: 23,
-  criticalRiskDuties: 7,
-  lowestPerformance: 44.8,
-  peakSleepDebt: 8.0,
-  totalPinchEvents: 12,
-  airports: 12,
-} as const;
+/** @deprecated Landing arcs are neutral; this returns LANDING_ARC_HEX for any input. */
+export const getRouteColor = (_legacy?: unknown): string => LANDING_ARC_HEX;
