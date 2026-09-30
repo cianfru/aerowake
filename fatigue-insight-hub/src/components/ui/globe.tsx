@@ -401,8 +401,8 @@ export function Globe(props: GlobeProps) {
       }
       const start = performance.now();
       setMoving(true);
-      const step = (now: number) => {
-        const t = Math.min(1, (now - start) / duration);
+      const step = () => {
+        const t = Math.min(1, (performance.now() - start) / duration);
         apply(t === 1 ? 1 : easeCubicInOut(t));
         draw();
         if (t < 1) {
