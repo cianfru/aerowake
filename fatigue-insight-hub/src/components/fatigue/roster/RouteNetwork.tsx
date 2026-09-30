@@ -82,7 +82,7 @@ export function RouteNetwork({ duties, homeBase }: { duties: DutyAnalysis[]; hom
     .map((a) => ({ code: a.code, lat: a.lat, lng: a.lng, emphasis: a.code === homeBase }));
 
   return (
-    <section aria-labelledby="routes-heading" className="space-y-4">
+    <section aria-labelledby="routes-heading" className="instrument-surface space-y-4">
       <SectionHeading id="routes-heading" title="Route network" aside={`${stats.length} routes · ${codes.length} airports · drag to rotate`} />
       <div className="flex flex-wrap items-center gap-2" aria-label="Map view">{(['globe', 'flat', 'list'] as const).map(v => <button key={v} aria-pressed={view === v} onClick={() => setView(v)} className="rounded border border-border px-3 py-2 text-sm capitalize aria-pressed:bg-secondary">{v === 'flat' ? 'Flat routes' : v}</button>)}<button onClick={() => { setReset(n => n + 1); setSelection(null); }} className="px-3 py-2 text-sm text-primary">Reset to base</button></div>
       {loading && <p role="status" className="text-sm text-muted-foreground">Loading airport locations…</p>}

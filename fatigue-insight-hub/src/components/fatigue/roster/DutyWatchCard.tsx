@@ -25,13 +25,13 @@ export function DutyWatchCard({ duty, onDetails, onReportFatigue }: DutyWatchCar
   const reasons = (duty.riskReasons ?? []).slice(0, 3);
 
   return (
-    <article className="group flex gap-4 py-5 first:pt-4" data-testid="duty-watch-card">
+    <article className="duty-watch-surface group flex gap-4" data-testid="duty-watch-card">
       <SeverityRule level={level} />
       <div className="grid min-w-0 flex-1 grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-[minmax(0,1fr)_auto]">
         <div className="min-w-0 space-y-1.5 md:col-start-1 md:row-start-1">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h3 className="text-[15px] font-semibold">{date}</h3>
-            <p className="text-[15px] text-foreground/90 break-words">{route}</p>
+            <h3 className="text-base font-semibold">{date}</h3>
+            <p className="text-base text-foreground/90 break-words">{route}</p>
           </div>
           {times && (
             <p className="font-mono text-xs text-muted-foreground tabular">{times} <span className="font-sans">home-base time</span></p>
@@ -40,7 +40,7 @@ export function DutyWatchCard({ duty, onDetails, onReportFatigue }: DutyWatchCar
 
         {kss != null && (
           <div className="flex items-center gap-4 md:col-start-2 md:row-span-2 md:row-start-1 md:flex-col md:items-end md:gap-1.5 md:text-right">
-            <p className={cn('font-mono text-3xl font-medium leading-none tabular', rc.text)}>
+            <p className={cn('text-4xl font-semibold tracking-tight leading-none tabular', rc.text)}>
               {kss.toFixed(1)}
               <span className="ml-1 font-sans text-xs font-normal text-muted-foreground">KSS</span>
             </p>

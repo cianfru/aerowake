@@ -16,7 +16,7 @@ export function DayLabel({ label, rowHeight }: DayLabelProps) {
     <div
       className={cn(
         "relative flex items-center gap-1 pr-2 text-[11px]",
-        !label.hasDuty && "opacity-60",
+        label.hasDuty && "bg-primary/5 rounded-l-md",
         riskClass
       )}
       style={{ height: `${rowHeight}px` }}
@@ -41,7 +41,7 @@ export function DayLabel({ label, rowHeight }: DayLabelProps) {
         )}
       </div>
       <span className={cn(
-        "ml-auto font-medium text-[11px]",
+        "ml-auto font-medium text-xs",
         label.hasDuty ? "text-foreground" : "text-muted-foreground"
       )}>
         {label.label}

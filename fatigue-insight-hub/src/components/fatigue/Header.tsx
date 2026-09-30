@@ -64,7 +64,7 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 border-b border-border/80 bg-card/95 shadow-[0_2px_12px_-8px_hsl(208_40%_24%_/_0.3)] backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 md:px-8">
           {/* Navigation remains available on desktop and mobile. */}
           <div className="flex min-w-0 items-center gap-2 md:gap-8">

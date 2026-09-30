@@ -21,6 +21,11 @@ test('pilot outlook becomes a prospective concern with traceable evidence', asyn
   await page.evaluate(() => window.scrollTo(0, 0));
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('pilot-outlook.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Switch to dark theme', exact: true }).click();
+  await expect(page.locator('html')).toHaveClass(/dark/);
+  await page.screenshot({ path: testInfo.outputPath('pilot-outlook-dark.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Switch to light theme', exact: true }).click();
+  await expect(page.locator('html')).toHaveClass(/light/);
   await page.getByRole('tab', { name: 'Sleep & recovery', exact: true }).click();
   await page.getByRole('button', { name: /^Raise roster concern for/ }).last().click();
   await expect(page.getByRole('heading', { name: 'Raise a roster concern' })).toBeVisible();

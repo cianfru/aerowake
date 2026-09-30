@@ -4,13 +4,13 @@
 
 @layer base {
   :root {
-    --background: 222 42% 6%;
+    --background: 214 38% 10%;
     --foreground: 214 32% 96%;
 
-    --card: 222 38% 9%;
+    --card: 214 32% 15%;
     --card-foreground: 214 32% 96%;
 
-    --popover: 222 40% 9%;
+    --popover: 214 30% 17%;
     --popover-foreground: 214 32% 96%;
 
     --primary: 198 93% 60%;
@@ -76,21 +76,22 @@
 
     /* Shadows */
     --shadow-glow: 0 0 0 1px hsl(198 93% 60% / 0.25);
-    --shadow-card: 0 1px 2px hsl(240 10% 2% / 0.4);
-    --shadow-elevated: 0 12px 32px -12px hsl(240 10% 2% / 0.7);
+    --shadow-card: 0 2px 4px hsl(215 50% 3% / 0.25), 0 14px 32px -20px hsl(215 50% 3% / 0.65), inset 0 1px 0 hsl(210 30% 90% / 0.05);
+    --shadow-elevated: 0 6px 12px -6px hsl(215 50% 3% / 0.3), 0 24px 56px -24px hsl(215 50% 3% / 0.8);
+    --surface-recessed: 214 35% 12%;
   }
 
   .light {
-    --background: 210 40% 98%;
-    --foreground: 222 47% 11%;
+    --background: 208 28% 93%;
+    --foreground: 209 43% 19%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card: 200 33% 99%;
+    --card-foreground: 209 43% 19%;
 
-    --popover: 0 0% 100%;
+    --popover: 200 33% 99%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 201 68% 28%;
+    --primary: 199 64% 29%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 214 32% 94%;
@@ -140,8 +141,9 @@
 
     /* Light-mode shadows */
     --shadow-glow: 0 0 0 1px hsl(200 98% 39% / 0.25);
-    --shadow-card: 0 1px 2px hsl(240 10% 20% / 0.06);
-    --shadow-elevated: 0 12px 32px -16px hsl(240 10% 20% / 0.18);
+    --shadow-card: 0 2px 3px hsl(208 40% 24% / 0.04), 0 12px 28px -16px hsl(208 40% 24% / 0.22), inset 0 1px 0 hsl(200 33% 99% / 0.8);
+    --shadow-elevated: 0 4px 8px -4px hsl(208 40% 24% / 0.12), 0 24px 52px -24px hsl(208 40% 24% / 0.28);
+    --surface-recessed: 207 28% 95%;
 
     /* Light-mode gradients */
     --gradient-primary: linear-gradient(135deg, hsl(199 89% 42%), hsl(199 89% 35%));
@@ -184,11 +186,98 @@
   }
 }
 
+@layer components {
+  .workspace-shell {
+    background: hsl(var(--background));
+  }
+  .instrument-surface {
+    @apply rounded-2xl border border-border/80 bg-card p-5 md:p-8;
+    box-shadow: var(--shadow-card);
+  }
+  .instrument-inset {
+    @apply rounded-xl border border-border/70;
+    background: hsl(var(--surface-recessed));
+    box-shadow: inset 0 1px 3px hsl(210 40% 20% / 0.04);
+  }
+  .roster-identity {
+    @apply relative isolate overflow-hidden rounded-2xl border p-6 md:px-8 md:py-7;
+    color: #f4f8fa;
+    background: linear-gradient(110deg, #17384f 25%, #235669);
+    border-color: #376075;
+    box-shadow: 0 16px 30px -20px #16394f, inset 0 1px 0 #ffffff1c;
+  }
+  .roster-identity::after {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    width: 26rem;
+    height: 26rem;
+    right: -8rem;
+    top: -15rem;
+    border: 1px solid #b5dbe128;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3rem #b5dbe10b, 0 0 0 6rem #b5dbe107;
+    pointer-events: none;
+  }
+  .roster-view-rail {
+    @apply rounded-2xl border border-border/80 bg-card p-1.5;
+    box-shadow: var(--shadow-elevated);
+  }
+  .roster-view-tab {
+    @apply rounded-xl text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground;
+  }
+  .roster-view-tab[data-state='active'] {
+    @apply bg-primary text-primary-foreground;
+    box-shadow: 0 3px 8px -3px hsl(204 70% 20% / 0.45), inset 0 1px 0 hsl(200 40% 95% / 0.18);
+  }
+  .forecast-facts {
+    @apply grid gap-6 rounded-xl border border-border/70 p-5 sm:grid-cols-[1.15fr_1fr] md:p-6;
+    background: hsl(var(--surface-recessed));
+  }
+  .duty-watch-surface {
+    @apply rounded-xl border border-border/80 bg-card p-5 md:p-6;
+    box-shadow: var(--shadow-card);
+  }
+  .calendar-grid {
+    @apply isolate rounded-xl border border-border bg-card p-2 md:p-3;
+    box-shadow: inset 0 2px 4px hsl(210 40% 20% / 0.035);
+  }
+  .calendar-duty {
+    box-shadow: 0 2px 4px hsl(212 35% 15% / 0.22), inset 0 1px 0 #ffffff45;
+  }
+  .calendar-duty:hover, .calendar-duty:focus-visible {
+    z-index: 20;
+    box-shadow: 0 4px 10px hsl(212 35% 15% / 0.3);
+  }
+  .action-raised {
+    box-shadow: 0 3px 5px -2px hsl(205 65% 20% / 0.3), inset 0 1px 0 #ffffff26;
+  }
+  .action-raised:hover {
+    box-shadow: 0 5px 10px -4px hsl(205 65% 20% / 0.4), inset 0 1px 0 #ffffff26;
+  }
+  .landing-orbit {
+    @apply relative isolate rounded-[2rem] border p-5 sm:p-8;
+    background: #dce9ed;
+    border-color: #bed1d9;
+    box-shadow: inset 0 1px 0 #fafdfe, 0 28px 60px -34px #274e62;
+  }
+  .landing-orbit::before {
+    content: '';
+    position: absolute;
+    inset: 8%;
+    z-index: -1;
+    border: 1px solid #91b4c36b;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1.5rem #bdd3dc40;
+    pointer-events: none;
+  }
+}
+
 @layer utilities {
-  /* Surfaces: flat, hairline-bordered, lightly translucent. */
+  /* Three levels: the canvas, raised working surfaces, and floating controls. */
   .glass {
     @apply bg-card/70 backdrop-blur-xl border-border;
-    box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.03);
+    box-shadow: var(--shadow-card);
   }
 
   .glass-subtle {
@@ -300,7 +389,7 @@
   }
 
   .light .wocl-hatch {
-    background: hsl(var(--wocl) / 0.22);
+    background: hsl(var(--wocl) / 0.10);
     border-left: 1px solid hsl(var(--wocl) / 0.35);
     border-right: 1px solid hsl(var(--wocl) / 0.35);
   }
@@ -313,7 +402,7 @@
   }
 
   .light .wmz-band {
-    background: hsl(var(--warning) / 0.14);
+    background: hsl(var(--warning) / 0.08);
     border-left: 1px solid hsl(var(--warning) / 0.25);
     border-right: 1px solid hsl(var(--warning) / 0.25);
   }

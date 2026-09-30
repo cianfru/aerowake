@@ -93,7 +93,7 @@ export function TimelineGrid({
   }, []);
 
   return (
-    <div className="flex">
+    <div className="calendar-grid flex">
       {/* ----------------------------------------------------------------- */}
       {/* Y-axis labels                                                     */}
       {/* ----------------------------------------------------------------- */}
@@ -204,7 +204,7 @@ export function TimelineGrid({
                 key={hour}
                 className={cn(
                   'flex-1 border-r',
-                  hour % 3 === 0 ? 'border-border/50' : 'border-border/50',
+                  hour % 3 === 0 ? 'border-border/70' : 'border-border/25',
                 )}
               />
             ))}
@@ -217,7 +217,7 @@ export function TimelineGrid({
             <div
               key={label.rowIndex}
               ref={setRowRef(label.rowIndex)}
-              className="relative border-b border-border/50"
+              className={cn('relative border-b border-border/50 transition-colors hover:bg-primary/5', label.hasDuty && 'bg-primary/[0.025]')}
               style={{ height: `${rowHeight}px` }}
             >
               {/* Sleep bars */}

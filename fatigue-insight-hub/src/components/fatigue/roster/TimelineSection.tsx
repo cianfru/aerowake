@@ -6,7 +6,7 @@ import type { AnalysisResults } from '@/types/fatigue';
 
 /** The month-long sleepiness chart and recovery trends have one dedicated view. */
 export function TimelineSection({ results, homeBase }: { results: AnalysisResults; homeBase: string }) {
-  return <section aria-labelledby="recovery-heading" className="min-w-0 space-y-5">
+  return <section aria-labelledby="recovery-heading" className="instrument-surface min-w-0 space-y-5">
     <div className="space-y-2">
       <h2 id="recovery-heading" className="text-xl font-semibold">Sleep &amp; recovery</h2>
       <p className="max-w-2xl text-sm text-muted-foreground">Follow predicted sleepiness through the month, then review the sleep and recovery assumptions behind it.</p>
