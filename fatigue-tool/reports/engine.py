@@ -454,7 +454,7 @@ def analyse(inp: ReportInput) -> Dict:
                 hours_awake_at_start=at_start['hours_awake'],
                 hours_awake_at_end=on[-1]['hours_awake'],
                 risk_level=aw.classify_kss(worst['kss']),
-                kss_label=aw.KSS_LABELS[int(round(worst['kss']))],
+                kss_label=aw.KSS_LABELS[int(aw.round_half_up(worst['kss'], 0))],
             )
             if worst['kss'] >= 7.0:
                 findings.append(_finding(

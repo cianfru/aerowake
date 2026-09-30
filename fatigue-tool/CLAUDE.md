@@ -14,7 +14,7 @@ Use [launch hardening](../docs/LAUNCH_HARDENING.md) and [roster reference](../do
 
 ## Project Overview
 
-Roster analysis and fatigue reporting for airline pilots. The current engine is aerowake-4.0-kss (Three Process Model, Ingre et al. 2014). Predictions and scoped checks are not operational fitness or compliance certification.
+Roster analysis and fatigue reporting for airline pilots. The current engine is aerowake-4.1-kss (Three Process Model, Ingre et al. 2014; 4.1 changed sleep estimation and the headline window, not the KSS core). Predictions and scoped checks are not operational fitness or compliance certification.
 
 **Purpose**: Predict pilot fatigue across multi-day rosters, identify WOCL (Window of Circadian Low, 02:00-05:59) risks, calculate sleep debt, and generate safety recommendations aligned with EU Regulation 965/2012 (EASA ORO.FTL).
 
@@ -98,13 +98,13 @@ The `UnifiedSleepCalculator.estimate_sleep_blocks()` routes to one of 5 strategi
 
 | Strategy | Trigger | Behavior |
 |----------|---------|----------|
-| Night Departure | Report >= 20:00 or < 04:00 | Morning sleep + 2h pre-duty nap |
+| Night Departure | Report >= 18:00 or < 04:00 | Night sleep + pre-duty nap ramped by report time and nap habit |
 | Early Morning | Report < 07:00 | Roach (2012) regression, 4-6.6h |
 | WOCL Anchor | WOCL crossing + >6h duty | 4.5h consolidated anchor sleep |
 | Recovery | Post-duty hotel/home | Environment-adjusted sleep block |
 | Normal | Default | 23:00-07:00 home bed |
 
-### Alertness Calculation (engine `aerowake-4.0-kss`, `core/alertness.py`)
+### Alertness Calculation (engine `aerowake-4.1-kss`, `core/alertness.py`)
 Open Three Process Model as validated on airline crew (Ingre et al. 2014, model 5c):
 ```
 X   = S_B + C + U            # homeostat with brake + circadian + ultradian
@@ -113,6 +113,11 @@ P(KSS ≥ 7) = logistic(−0.599·X + 4.30)
 performance index = 110 − 10·KSS   # legacy 20–100 field, linear in KSS
 ```
 Bands (index): low ≥55 (KSS<5.5), moderate 45–55, high 35–45, critical 25–35, extreme <25.
+Bands are decided on KSS rounded to one decimal (half up, lower bound inclusive) everywhere
+(`alertness.classify_kss`); `RiskThresholds.classify(index)` converts to KSS first.
+Headline duty risk = peak KSS over `HEADLINE_RISK_WINDOW` (`core/parameters.py`, default
+'fdp' = report → last operating on-blocks; 'duty' = report → release). Both peaks, the peak
+time and per-sector peak/on-blocks KSS come from the duty timeline (`DutyTimeline.segment_kss`).
 Acclimatization: body clock closes 30 %/day of the gap to local time (process A).
 Workload, time-on-task, hypoxia, inertia and "resilience" are NOT in the score.
 Cumulative restriction (7-day deficit) and the Dawson & McCulloch prior sleep/wake
@@ -146,12 +151,28 @@ names (`operational`, `default_easa`, `conservative`, `liberal`, `research`) and
 the same configuration.
 
 ### Sleep-estimation rules worth knowing
-- Late reports (12:00–20:00 home time): normal night sleep only, **no pre-duty nap
-  assumed** (Signal et al. 2014). The ≥16h-awake risk reason suggests a 1–2h nap.
+- Pre-duty nap (`PreDutyNapAssumptions`): stated per analysis as `nap_habit`
+  ('usually' | 'sometimes' | 'rarely', default 'sometimes'; form field on analyze /
+  reanalyze / what-if, echoed as `assumptions`). Length ramps from 0 h at 18:00 to the
+  night-departure nap (≤2.5 h, window-limited) at 22:00 body time; 'sometimes' caps at half;
+  'rarely' none. Modelling assumption to calibrate with pilot debrief data. The duty's
+  sleep explanation, `assumed_nap_hours` and risk reasons state it.
+- Afternoon release before a night report (`DaytimeSleepBounds`): ≤2.5 h afternoon nap
+  ending by 18:00 body time + evening sleep from 21:00 — never one long afternoon block.
+- The pre-simulation debt estimate uses the simulation ledger (`_advance_sleep_debt`) over
+  every generated block — do not reintroduce a per-strategy estimate.
 - After-midnight reports anchor the previous night's sleep (night-departure strategy).
+- `core/sleep_attribution.py` makes the API sleep entries match `all_sleep` exactly: a duty's
+  `sleep_quality` is its last main sleep before report (+ later naps); earlier recovery
+  sleep moves to `post_duty_<prev id>`. Top-level sleep start/end = that main block (what-if
+  baseline). What-if overrides replace the main block, or any block via `block_start_utc`.
+- Acclimatisation: `compliance.determine_acclimatisation` (ORO.FTL.105(1) Table 1). Unknown
+  state → Table 3; undeterminable (e.g. roster starts abroad) → no FDP verdict.
 - `Roster.alertness_timeline` (API `alertness_timeline`): 30-min KSS samples across the
-  month from the same engine; `kss=None` while asleep; ends at the last estimated
-  sleep / last release + 2h — no points without a sleep estimate behind them.
+  month from the same engine, plus each duty's peak instants (`duty_peak`); `kss=None`
+  while asleep; ends at the last estimated sleep / last release + 2h — no points without a
+  sleep estimate behind them.
+- `avg_sleep_per_night` covers only `sleep_coverage_days` (month start → last estimate).
 - Qatar CrewLink simulator codes: OPTR, FFS, FS1, AFTD, 77LP, AW8, PSIM (bare `SIM`
   is an annotation, not a duty).
 
