@@ -34,7 +34,7 @@ describe('pilot fatigue outlook', () => {
     expect(dutyFromAnalysis(results.duties[0], 0)?.status).toBe('planned');
   });
 
-  it('carries scientific sources and the personal reference into the operator text export', () => {
+  it('carries scientific sources but keeps the personal reference out of the operator text export', () => {
     const report = { event: { type: 'roster_concern' }, pilot: {}, summary: { headline: 'Review this pattern.' },
       data_quality: { confidence: 'medium' }, narrative: [], findings: [], limitations: [],
       watch_reference: { kss: 6, duty_ids: ['D2'], explanation: 'Personal review prompt.' },
@@ -42,7 +42,7 @@ describe('pilot fatigue outlook', () => {
     } as unknown as FatigueReport;
     const text = reportToText(report);
     expect(text).toContain('PROSPECTIVE ROSTER CONCERN');
-    expect(text).toContain('KSS 6.0; 1 assessed duties');
+    expect(text).not.toContain('Personal review prompt.');
     expect(text).toContain('Ingre et al. (2014)');
   });
 });

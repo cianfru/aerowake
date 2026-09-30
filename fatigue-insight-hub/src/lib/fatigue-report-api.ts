@@ -64,7 +64,19 @@ export interface FatigueReportRequest {
   contributing_factors: string[];
   narrative: string;
   pilot: { name?: string; staff_number?: string; rank?: string; fleet?: string; operator?: string };
+  crew_position?: CrewPosition | '';
+  pilot_role?: PilotRole | '';
+  phase_of_flight?: PhaseOfFlight | '';
+  mitigations?: MitigationCode[];
+  effect_on_operation?: EffectCode | '';
+  suggested_action?: string;
 }
+
+export type CrewPosition = 'captain' | 'first_officer' | 'second_officer' | 'other';
+export type PilotRole = 'pilot_flying' | 'pilot_monitoring';
+export type PhaseOfFlight = 'pre_flight' | 'taxi' | 'takeoff_climb' | 'cruise' | 'descent_approach' | 'landing' | 'post_flight';
+export type MitigationCode = 'strategic_nap' | 'controlled_rest' | 'caffeine' | 'informed_crew' | 'informed_operator' | 'removed_from_duty' | 'none';
+export type EffectCode = 'none_noticed' | 'reduced_performance' | 'error_or_lapse' | 'microsleep' | 'duty_not_operated';
 
 // ── Response types ───────────────────────────────────────────
 
@@ -84,6 +96,12 @@ export interface ReportDutyRow {
   id: string;
   label: string;
   route: string;
+  /** Flight numbers in sector order (report 1.3+). */
+  flights?: string[];
+  /** Compact flight numbers, e.g. 'QR460/461' (report 1.3+). */
+  flights_label?: string;
+  /** Sector block times as supplied (report 1.3+). */
+  sector_times?: { flight_number: string; departure: string; arrival: string; departure_utc: string; arrival_utc: string; is_deadhead: boolean }[];
   status: DutyStatus;
   duty_type: string;
   report_utc: string;
@@ -113,6 +131,40 @@ export interface SleepWakeCheck {
   source: string;
 }
 
+/** Supplied sleep before the event, independent of the model (report 1.3+). */
+export interface SleepSummary {
+  anchor_utc: string;
+  anchor_local: string;
+  sleep_24h: number;
+  sleep_48h: number;
+  sleep_72h: number;
+  reported_72h: number;
+  estimated_72h: number;
+  last_wake_utc: string | null;
+  last_wake_local: string | null;
+  last_wake_z: string | null;
+  hours_awake_at_event: number | null;
+  basis: 'reported' | 'estimated' | 'mixed' | 'none';
+  diary_complete: boolean;
+}
+
+export interface OperationalContext {
+  crew_position: CrewPosition | null;
+  crew_position_label: string | null;
+  pilot_role: PilotRole | null;
+  pilot_role_label: string | null;
+  phase_of_flight: PhaseOfFlight | null;
+  phase_of_flight_label: string | null;
+  mitigations: { code: MitigationCode; label: string }[];
+  effect_on_operation: EffectCode | null;
+  effect_on_operation_label: string | null;
+  suggested_action: string;
+}
+
+export interface TimelinePointRow { time_utc: string; kss: number | null; kss_90: number | null; p_severe?: number | null; hours_awake: number; asleep: boolean }
+
+export interface EasaCoverage { status: string; reason?: string; assessed?: number; eligible?: number }
+
 export interface FatigueReport {
   watch_reference?: { kss: number; kind: string; duty_ids: string[]; explanation: string };
   scientific_basis?: { title: string; citation: string; url: string; application: string }[];
@@ -128,10 +180,17 @@ export interface FatigueReport {
     time_utc: string;
     time_local: string;
     time_z: string;
+    /** 'Tue 29 Sep 2026 04:00' (report 1.3+). */
+    time_local_long?: string;
+    /** 'UTC+3' at the event (report 1.3+). */
+    utc_offset?: string;
     affected_duty_id: string | null;
     affected_duty_label: string | null;
   };
-  period: { start_utc: string; end_utc: string; start_local: string; end_local: string };
+  period: { start_utc: string; end_utc: string; start_local: string; end_local: string; start_local_long?: string; end_local_long?: string };
+  sleep_summary?: SleepSummary;
+  operational?: OperationalContext;
+  easa_summary?: { status?: string; coverage?: Record<string, EasaCoverage>; [key: string]: unknown };
   data_quality: {
     confidence: 'high' | 'medium' | 'low';
     reported_sleeps: number;
@@ -141,9 +200,12 @@ export interface FatigueReport {
     notes: string[];
     model_available: boolean;
     prediction_basis?: 'reported_sleep' | 'estimated_sleep' | 'mixed_sleep' | 'unavailable';
+    diary_complete?: boolean;
   };
   summary: {
-    overall_level: 'low' | 'moderate' | 'high' | 'critical' | 'unknown';
+    /** Canonical band of the predicted peak KSS (report 1.3+); 'unknown' without a prediction. */
+    overall_level: 'low' | 'moderate' | 'high' | 'critical' | 'extreme' | 'unknown';
+    highest_severity?: Severity | null;
     objective_support: boolean;
     headline: string;
     counts: Record<Severity, number>;
@@ -168,6 +230,8 @@ export interface FatigueReport {
     samn_perelli: number | null;
     samn_perelli_label: string | null;
     rated_at_local: string;
+    rated_at_utc?: string;
+    rated_at_z?: string;
     model_kss_at_rating: number | null;
   };
   contributing_factors: { code: string; label: string }[];
@@ -175,7 +239,9 @@ export interface FatigueReport {
   findings: ReportFinding[];
   duties: ReportDutyRow[];
   sleeps: { start_local: string; end_local: string; hours: number; kind: string; location: string; quality: number | null; source: string; start_utc: string; end_utc: string }[];
-  timeline: { time_utc: string; kss: number | null; kss_90: number | null; p_severe: number | null; hours_awake: number; asleep: boolean }[];
+  timeline: TimelinePointRow[];
+  /** Diary not confirmed: an illustration only, never used for findings (report 1.3+). */
+  provisional_timeline?: TimelinePointRow[];
   limitations: string[];
   narrative: { title: string; text: string }[];
 }
@@ -236,6 +302,46 @@ export const FACTOR_OPTIONS: { code: string; label: string }[] = [
   { code: 'personal', label: 'Personal / domestic reasons' },
   { code: 'workload', label: 'High workload (weather, technical, ATC)' },
   { code: 'other', label: 'Other' },
+];
+
+export const CREW_POSITION_OPTIONS: { code: CrewPosition; label: string }[] = [
+  { code: 'captain', label: 'Captain' },
+  { code: 'first_officer', label: 'First officer' },
+  { code: 'second_officer', label: 'Second officer' },
+  { code: 'other', label: 'Other crew position' },
+];
+
+export const PILOT_ROLE_OPTIONS: { code: PilotRole; label: string }[] = [
+  { code: 'pilot_flying', label: 'Pilot flying' },
+  { code: 'pilot_monitoring', label: 'Pilot monitoring' },
+];
+
+export const PHASE_OPTIONS: { code: PhaseOfFlight; label: string }[] = [
+  { code: 'pre_flight', label: 'Pre-flight' },
+  { code: 'taxi', label: 'Taxi' },
+  { code: 'takeoff_climb', label: 'Take-off and climb' },
+  { code: 'cruise', label: 'Cruise' },
+  { code: 'descent_approach', label: 'Descent and approach' },
+  { code: 'landing', label: 'Landing' },
+  { code: 'post_flight', label: 'Post-flight' },
+];
+
+export const MITIGATION_OPTIONS: { code: MitigationCode; label: string }[] = [
+  { code: 'strategic_nap', label: 'Strategic nap before duty' },
+  { code: 'controlled_rest', label: 'Controlled rest per operator procedure' },
+  { code: 'caffeine', label: 'Caffeine' },
+  { code: 'informed_crew', label: 'Informed the other pilot / crew' },
+  { code: 'informed_operator', label: 'Informed crew control / duty manager' },
+  { code: 'removed_from_duty', label: 'Removed from duty or replaced' },
+  { code: 'none', label: 'None taken' },
+];
+
+export const EFFECT_OPTIONS: { code: EffectCode; label: string }[] = [
+  { code: 'none_noticed', label: 'No effect noticed' },
+  { code: 'reduced_performance', label: 'Reduced performance noticed' },
+  { code: 'error_or_lapse', label: 'Error or lapse' },
+  { code: 'microsleep', label: 'Microsleep or involuntary sleep' },
+  { code: 'duty_not_operated', label: 'Duty not operated' },
 ];
 
 // ── Time-zone helpers (datetime-local <-> UTC ISO) ───────────
@@ -326,11 +432,45 @@ export function dutyFromAnalysis(duty: DutyAnalysis, index: number): ReportDuty 
   };
 }
 
+/** Backend sleep environments mapped onto report locations; unknown values stay undefined. */
+export function reportLocationFromEnvironment(env: string | null | undefined): SleepLocation | undefined {
+  switch (env) {
+    case 'home': return 'home';
+    case 'hotel': case 'layover': case 'airport_hotel': return 'hotel';
+    case 'crew_rest': return 'crew_rest';
+    case 'other': return 'other';
+    default: return undefined;
+  }
+}
+
+/**
+ * Where the pilot was when a sleep started: the arrival airport of the last
+ * sector landed before it, else the home base. Home base → 'home'; anywhere
+ * else → 'hotel' (layover).
+ */
+function inferLocation(startIso: string, arrivals: { at: number; airport: string }[], base: string | undefined): SleepLocation {
+  const t = Date.parse(startIso);
+  let where = base;
+  for (const a of arrivals) {
+    if (a.at <= t) where = a.airport;
+    else break;
+  }
+  if (!base || !where) return 'home';
+  return where.toUpperCase() === base.toUpperCase() ? 'home' : 'hotel';
+}
+
 export function estimatedSleepsFromAnalysis(results: AnalysisResults, startIso: string, endIso: string): ReportSleep[] {
   const start = new Date(startIso).getTime() - 36 * 3600e3;  // include the night before the period
   const end = new Date(endIso).getTime();
+  const base = results.pilotBase?.trim() || undefined;
+  const arrivals = results.duties
+    .map((d, i) => dutyFromAnalysis(d, i))
+    .filter((d): d is ReportDuty => !!d)
+    .flatMap((d) => d.sectors.map((s) => ({ at: Date.parse(s.arrival_utc), airport: s.arrival })))
+    .filter((a) => Number.isFinite(a.at))
+    .sort((a, b) => a.at - b.at);
   const out: ReportSleep[] = [];
-  const push = (s?: string, e?: string, kind?: string, env?: string) => {
+  const push = (s?: string, e?: string, kind?: string, env?: string | null) => {
     const a = validIso(s);
     const b = validIso(e);
     if (!a || !b || b <= a) return;
@@ -340,7 +480,8 @@ export function estimatedSleepsFromAnalysis(results: AnalysisResults, startIso: 
       start_utc: a,
       end_utc: b,
       kind: kind === 'nap' ? 'nap' : kind === 'inflight_rest' ? 'inflight_rest' : 'main',
-      location: env === 'home' ? 'home' : env === 'crew_rest' ? 'crew_rest' : env ? 'hotel' : 'other',
+      // Per block first; otherwise where the pilot was. Never a silent 'other'.
+      location: reportLocationFromEnvironment(env) ?? inferLocation(a, arrivals, base),
       quality: null,
       source: 'estimated',
     });
@@ -349,7 +490,11 @@ export function estimatedSleepsFromAnalysis(results: AnalysisResults, startIso: 
     const est = d.sleepEstimate;
     if (!est) continue;
     if (est.sleepBlocks?.length) {
-      for (const b of est.sleepBlocks) push(b.sleepStartUtc, b.sleepEndUtc, b.sleepType, est.environment);
+      for (const b of est.sleepBlocks) {
+        // Block environment when the API passes it through; a single block may use the estimate's.
+        const blockEnv = (b as { environment?: string | null }).environment;
+        push(b.sleepStartUtc, b.sleepEndUtc, b.sleepType, blockEnv ?? (est.sleepBlocks.length === 1 ? est.environment : undefined));
+      }
     } else {
       push(est.sleepStartIso, est.sleepEndIso, 'main', est.environment);
     }
@@ -378,24 +523,98 @@ export function dutiesInPeriod(results: AnalysisResults, startIso: string, endIs
     .sort((a, b) => a.report_utc.localeCompare(b.report_utc));
 }
 
-/** Plain-text export suitable for pasting into an operator's FRMS form. */
+const SEVERITY_WORD: Record<Severity, string> = { critical: 'Critical', warning: 'Warning', caution: 'Caution', info: 'Info' };
+
+function titleCaseKey(key: string): string {
+  const k = key.replace(/_/g, ' ');
+  return k.charAt(0).toUpperCase() + k.slice(1);
+}
+
+/** '30 Sep 2026 12:14Z' from an ISO instant. */
+export function formatGeneratedAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getUTCDate())} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}Z`;
+}
+
+function formatH(h: number | null | undefined): string {
+  if (h == null || !Number.isFinite(h)) return '—';
+  const minutes = Math.round(Math.max(0, h) * 60);
+  return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, '0')}`;
+}
+
+export const FTL_RULE_LABELS: Record<string, string> = {
+  duty_7d: 'Duty hours, 7 days (ORO.FTL.210)',
+  duty_14d: 'Duty hours, 14 days (ORO.FTL.210)',
+  duty_28d: 'Duty hours, 28 days (ORO.FTL.210)',
+  block_28d: 'Flight time, 28 days (ORO.FTL.210)',
+  min_rest: 'Minimum rest (ORO.FTL.235)',
+  recovery_rest: 'Recovery rest (ORO.FTL.235(d))',
+  fdp_max: 'Maximum FDP (ORO.FTL.205)',
+  standby: 'Standby (ORO.FTL.225)',
+};
+
+export const FTL_STATUS_LABELS: Record<string, string> = {
+  passed: 'No exceedance found',
+  failed: 'Exceedance found',
+  incomplete_history: 'Partial: supplied records only',
+  not_assessed: 'Not assessed',
+};
+
+/**
+ * Full plain-text report for an operator's FRM form or e-mail. Each section
+ * appears once. The personal watch reference is a private roster setting and
+ * stays in the JSON export only.
+ */
 export function reportToText(r: FatigueReport): string {
   const lines: string[] = [];
-  lines.push(r.event?.type === 'roster_concern' ? 'PROSPECTIVE ROSTER CONCERN' : 'FATIGUE REPORT', `Generated ${r.generated_at} · ${r.report_version} · ${r.engine_version}`, '');
-  const pilot = Object.entries(r.pilot).map(([k, v]) => `${k.replace('_', ' ')}: ${v}`).join(' · ');
-  if (pilot) lines.push(pilot, '');
-  lines.push(`SUMMARY: ${r.summary.headline}`, `Data confidence: ${r.data_quality.confidence}`, '');
-  for (const p of r.narrative) lines.push(`${p.title.toUpperCase()}`, p.text, '');
-  if (r.watch_reference) lines.push('PERSONAL WATCH REFERENCE', `KSS ${r.watch_reference.kss.toFixed(1)}; ${r.watch_reference.duty_ids.length} assessed duties reach this reference. ${r.watch_reference.explanation}`, '');
-  if (r.findings.length) {
-    lines.push('FINDINGS');
-    for (const f of r.findings) {
-      lines.push(`- [${f.severity.toUpperCase()}] ${f.title}: ${f.detail}${f.reference ? ` (${f.reference})` : ''}`);
-    }
-    lines.push('');
+  const section = (title: string) => lines.push('', title.toUpperCase());
+  lines.push(r.event?.type === 'roster_concern' ? 'PROSPECTIVE ROSTER CONCERN' : 'FATIGUE REPORT');
+  lines.push([
+    `Generated ${formatGeneratedAt(r.generated_at)}`, r.report_id ? `Report ${r.report_id}` : '',
+    r.report_version, `model ${r.engine_version}`,
+  ].filter(Boolean).join(' · '));
+  const pilot = Object.entries(r.pilot ?? {}).filter(([, v]) => v).map(([k, v]) => `${titleCaseKey(k)}: ${v}`);
+  if (r.home_base) pilot.push(`Base: ${r.home_base}`);
+  if (pilot.length) lines.push(pilot.join(' · '));
+  if (r.event?.time_z) {
+    const zone = [r.home_base, `(${r.event.utc_offset ?? r.home_timezone})`].filter(Boolean).join(' ');
+    lines.push(`Event: ${r.event.time_local_long ?? r.event.time_local} ${zone} / ${r.event.time_z}`);
   }
-  if (r.pilot_narrative) lines.push('PILOT STATEMENT', r.pilot_narrative, '');
-  if (r.scientific_basis?.length) lines.push('SCIENTIFIC BASIS', ...r.scientific_basis.map(s => `${s.citation}: ${s.application} ${s.url}`), '');
-  lines.push('LIMITATIONS', ...r.limitations.map((l) => `- ${l}`));
+  lines.push('', `SUMMARY: ${r.summary.headline}`, `Record coverage: ${r.data_quality.confidence}`);
+  if (r.pilot_narrative) { section('Pilot statement'); lines.push(r.pilot_narrative); }
+  for (const p of r.narrative ?? []) { section(p.title); lines.push(p.text); }
+  const ss = r.sleep_summary;
+  if (ss) {
+    section('Sleep before the event');
+    lines.push(`24 h ${formatH(ss.sleep_24h)} · 48 h ${formatH(ss.sleep_48h)} · 72 h ${formatH(ss.sleep_72h)} (in 72 h: reported ${formatH(ss.reported_72h)}, estimated ${formatH(ss.estimated_72h)})`);
+    if (ss.last_wake_local) lines.push(`Last wake ${ss.last_wake_local} (${ss.last_wake_z})${ss.hours_awake_at_event != null ? `; awake ${formatH(ss.hours_awake_at_event)} at the event` : ''}`);
+  }
+  if (r.duties?.length) {
+    section('Duties (home-base time, Z in brackets)');
+    for (const d of r.duties) {
+      const flights = d.flights_label ? `${d.flights_label} ` : '';
+      const kss = d.predicted_kss_max != null ? `; predicted peak KSS ${d.predicted_kss_max.toFixed(1)}` : '';
+      lines.push(`- ${d.report_local} to ${d.release_local} (${d.report_z}) ${flights}${d.route}; ${formatH(d.duty_hours)}; ${d.status.replace(/_/g, ' ')}${d.is_affected ? '; affected duty' : ''}${kss}`);
+    }
+  }
+  if (r.sleeps?.length) {
+    section('Sleep (reported and estimated shown separately)');
+    for (const s of r.sleeps) lines.push(`- ${s.start_local} to ${s.end_local}: ${formatH(s.hours)}, ${s.kind.replace(/_/g, ' ')}, ${s.location.replace(/_/g, ' ')}; ${s.source}`);
+  }
+  if (r.findings?.length) {
+    section('Findings');
+    for (const f of r.findings) lines.push(`- [${SEVERITY_WORD[f.severity].toUpperCase()}] ${f.title}: ${f.detail}${f.reference ? ` (${f.reference})` : ''}`);
+  }
+  const coverage = r.easa_summary?.coverage;
+  if (coverage && Object.keys(coverage).length) {
+    section('FTL checks performed (supplied records only)');
+    for (const [rule, c] of Object.entries(coverage)) lines.push(`- ${FTL_RULE_LABELS[rule] ?? rule}: ${FTL_STATUS_LABELS[c.status] ?? c.status.replace(/_/g, ' ')}`);
+  }
+  if (r.scientific_basis?.length) { section('Scientific basis'); lines.push(...r.scientific_basis.map((s) => `${s.citation}: ${s.application} ${s.url}`)); }
+  const notes = [...new Set([...(r.data_quality?.notes ?? []), ...(r.limitations ?? [])])];
+  if (notes.length) { section('Data quality and limitations'); lines.push(...notes.map((l) => `- ${l}`)); }
   return lines.join('\n');
 }
