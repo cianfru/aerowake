@@ -642,6 +642,9 @@ def analyse(inp: ReportInput) -> Dict:
         pat = _duty_patterns(d, tz)
         row = dict(id=d.id, label=_duty_label(d, tz), route=_duty_route(d), flights=_flight_numbers(d),
                    flights_label=_flights_label(_flight_numbers(d)), status=d.status, duty_type=d.duty_type,
+                   sector_times=[dict(flight_number=s.flight_number, departure=s.departure, arrival=s.arrival,
+                                      departure_utc=s.departure_utc.isoformat(), arrival_utc=s.arrival_utc.isoformat(),
+                                      is_deadhead=s.is_deadhead) for s in d.sectors],
                    report_utc=d.report_utc.isoformat(), release_utc=d.release_utc.isoformat(),
                    report_local=_fmt(d.report_utc, tz), release_local=_fmt(d.release_utc, tz),
                    report_z=_fmt_z(d.report_utc), release_z=_fmt_z(d.release_utc),
