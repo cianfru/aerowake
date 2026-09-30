@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { mapTimelinePoints } from '@/lib/transform-analysis';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { DutyAnalysis } from '@/types/fatigue';
 import { getDutyDetail } from '@/lib/api-client';
+import { zoneOffsetLabel } from '@/lib/home-time';
 import { DutyDetailsHeader } from './DutyDetailsHeader';
 import { DutyInfoColumn } from './DutyInfoColumn';
+import { DutySectors } from './DutySectors';
 import { PerformanceColumn } from './PerformanceColumn';
+import { PerformanceSummaryCard } from './PerformanceSummaryCard';
 import { FatigueReport } from './report/FatigueReport';
 import { format } from 'date-fns';
 
@@ -14,6 +17,10 @@ interface DutyDetailsDialogProps {
   analysisId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Home-base IANA zone: every time in the dialog is home-base 24-hour. */
+  homeTz?: string;
+  /** Home base code for time labels, e.g. "DOH". */
+  homeBase?: string;
   dutyCrewOverride?: 'crew_a' | 'crew_b';
   onCrewChange?: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
   onCrewReset?: (dutyId: string) => void;
@@ -22,22 +29,19 @@ interface DutyDetailsDialogProps {
 }
 
 /**
- * DutyDetailsDialog — full-screen two-column overlay.
+ * Duty details: one scrolling sheet in the workspace design language.
  *
- * Layout:
- *  - Compact header: date, stats, risk badge
- *  - Two columns:
- *    Left  → DutyInfoColumn (segments, FDP, sleep, risk, crew)
- *    Right → PerformanceColumn (summary, S/C/W chart, phase performance)
- *
- * Desktop: side-by-side, no scrolling for typical 1-3 sector duties.
- * Mobile: stacked vertically, scrollable.
+ * Desktop: the prediction (peak, drivers, KSS through the duty) on the left,
+ * the roster facts (sectors, sleep, FDP, crew) on the right.
+ * Phones: full-screen, in reading order — peak → sectors → sleep and FDP → chart.
  */
 export function DutyDetailsDialog({
   duty,
   analysisId,
   open,
   onOpenChange,
+  homeTz,
+  homeBase,
   dutyCrewOverride,
   onCrewChange,
   onCrewReset,
@@ -51,12 +55,11 @@ export function DutyDetailsDialog({
     return `${analysisId}:${duty.dutyId}`;
   }, [analysisId, duty?.dutyId]);
 
-  // Fetch detailed duty (timeline_points etc.) when dialog opens.
+  // Fetch the detailed duty timeline when the dialog opens.
   useEffect(() => {
     let cancelled = false;
 
     async function run() {
-      // Always start from the base duty passed in.
       setDetailedDuty(duty);
       setReportMode(false);
 
@@ -66,21 +69,12 @@ export function DutyDetailsDialog({
       try {
         const detail = await getDutyDetail(analysisId, duty.dutyId);
         if (cancelled) return;
-
-        // Backend returns 'timeline' array — map to timelinePoints
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rawTimeline = detail?.timeline ?? detail?.timeline_points ?? detail?.timelinePoints;
-
-        // Map snake_case fields to TimelinePoint interface
         const timelinePoints = mapTimelinePoints(rawTimeline);
-
-        setDetailedDuty({
-          ...duty,
-          timelinePoints: timelinePoints ?? duty.timelinePoints,
-        });
+        setDetailedDuty({ ...duty, timelinePoints: timelinePoints ?? duty.timelinePoints });
       } catch (err) {
         console.error('Failed to fetch duty detail:', err);
-        // Silent fail: dialog still renders base duty data.
+        // The dialog still renders the base duty data.
       }
     }
 
@@ -91,10 +85,11 @@ export function DutyDetailsDialog({
   }, [open, dutyKey, analysisId, duty]);
 
   const displayDuty = detailedDuty ?? duty;
-
   if (!displayDuty) return null;
 
-  // Determine if this duty has crew/ULR content worth showing
+  const offset = homeTz ? zoneOffsetLabel(homeTz, displayDuty.reportTimeUtc || undefined) : '';
+  const zoneLabel = [homeBase, offset].filter(Boolean).join(' · ');
+
   const hasCrewContent =
     (displayDuty.crewComposition === 'augmented_4' && !!onCrewChange) ||
     (displayDuty.isUlr && !!displayDuty.ulrCompliance) ||
@@ -105,54 +100,53 @@ export function DutyDetailsDialog({
       <DialogContent
         hideClose={reportMode}
         className="
-          max-w-[95vw] w-full max-h-[92vh] h-full p-0
-          flex flex-col gap-0
-          sm:rounded-2xl
-          overflow-hidden
+          flex h-[100dvh] max-h-[100dvh] w-full max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0
+          sm:h-[92vh] sm:max-h-[92vh] sm:max-w-[min(95vw,72rem)] sm:rounded-2xl sm:border
           data-[state=open]:duration-300
         "
       >
-        {/* Accessible title (visually hidden since header has its own) */}
-        <DialogTitle className="sr-only">
-          Duty Details — {format(displayDuty.date, 'MMM dd, yyyy')}
-        </DialogTitle>
+        <DialogTitle className="sr-only">Duty details, {format(displayDuty.date, 'EEE d MMM yyyy')}</DialogTitle>
+        <DialogDescription className="sr-only">Predicted sleepiness, sectors, estimated sleep and flight duty period for this duty.</DialogDescription>
 
-        {/* Compact header */}
         {!reportMode && (
-          <div className="flex-shrink-0 border-b border-border/30 bg-background/90 backdrop-blur-xl px-5 md:px-7 py-3 md:py-3.5">
+          <div className="flex-shrink-0 border-b border-border bg-card/95 px-4 py-3 backdrop-blur-xl md:px-6 md:py-4">
             <DutyDetailsHeader
               duty={displayDuty}
+              zoneLabel={zoneLabel}
               onGenerateReport={() => setReportMode(true)}
               onReportFatigue={onReportFatigue ? () => onReportFatigue(displayDuty) : undefined}
-              reportMode={reportMode}
             />
           </div>
         )}
 
         {reportMode ? (
-          /* Full-width fatigue report */
-          <FatigueReport
-            duty={displayDuty}
-            analysisId={analysisId}
-            onBack={() => setReportMode(false)}
-          />
+          <FatigueReport duty={displayDuty} analysisId={analysisId} onBack={() => setReportMode(false)} />
         ) : (
-          /* Two-column duty details */
-          <div className="flex-1 min-h-0 px-4 md:px-6 py-4 md:py-5">
-            <div className="h-full grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 overflow-y-auto md:overflow-hidden">
-              {/* Left: Duty Info */}
-              <div className="md:overflow-y-auto md:pr-2 space-y-3 scrollbar-thin">
-                <DutyInfoColumn
-                  duty={displayDuty}
-                  dutyCrewOverride={dutyCrewOverride}
-                  onCrewChange={hasCrewContent ? onCrewChange : undefined}
-                  onCrewReset={hasCrewContent ? onCrewReset : undefined}
-                  hasCrewContent={!!hasCrewContent}
-                />
+          <div className="min-h-0 flex-1 overflow-y-auto bg-background/60 px-4 py-4 md:px-6 md:py-6">
+            {/* `contents` on phones lets `order` interleave the two columns into reading order. */}
+            <div className="flex flex-col gap-4 md:grid md:grid-cols-[1.1fr_1fr] md:items-start md:gap-5">
+              <div className="contents md:flex md:flex-col md:gap-4">
+                <div className="order-1 md:order-none">
+                  <PerformanceSummaryCard duty={displayDuty} homeTz={homeTz} homeLabel={homeBase} />
+                </div>
+                <div className="order-4 md:order-none">
+                  <PerformanceColumn duty={displayDuty} homeTz={homeTz} zoneLabel={zoneLabel} />
+                </div>
               </div>
-              {/* Right: Performance */}
-              <div className="md:overflow-y-auto md:pl-2 space-y-3 scrollbar-thin">
-                <PerformanceColumn duty={displayDuty} />
+              <div className="contents md:flex md:flex-col md:gap-4">
+                <div className="order-2 md:order-none">
+                  <DutySectors duty={displayDuty} homeLabel={homeBase} />
+                </div>
+                <div className="order-3 md:order-none">
+                  <DutyInfoColumn
+                    duty={displayDuty}
+                    homeTz={homeTz}
+                    dutyCrewOverride={dutyCrewOverride}
+                    onCrewChange={hasCrewContent ? onCrewChange : undefined}
+                    onCrewReset={hasCrewContent ? onCrewReset : undefined}
+                    hasCrewContent={!!hasCrewContent}
+                  />
+                </div>
               </div>
             </div>
           </div>

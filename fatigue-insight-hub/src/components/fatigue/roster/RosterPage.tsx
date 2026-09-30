@@ -15,16 +15,24 @@ function monthLabel(results: AnalysisResults): string {
   }
 }
 
-/** The roster identity stays above the navigable views. */
+/**
+ * The roster identity stays above the navigable views. The pilot's name is
+ * deliberately left out so screenshots can be shared: base, fleet, month and
+ * duty count are enough to recognise the roster.
+ */
 function RosterHeader({ results, onNewRoster }: { results: AnalysisResults; onNewRoster: () => void }) {
-  const pilotLine = [results.pilotName, results.pilotBase, results.pilotAircraft].filter(Boolean).join(' · ');
+  const facts = [
+    `${results.duties.length} ${results.duties.length === 1 ? 'duty' : 'duties'}`,
+    results.pilotBase ? `${results.pilotBase} base` : null,
+    results.pilotAircraft || null,
+  ].filter(Boolean).join(' · ');
   return <header className="roster-identity flex flex-wrap items-start justify-between gap-5">
     <div className="min-w-0 space-y-2">
-      <p className="text-sm font-medium text-[#c3e0e8]">Your roster</p>
-      <h1 className="text-3xl font-semibold tracking-tight md:text-[2.75rem] md:leading-tight">{monthLabel(results)}</h1>
-      <p className="text-sm text-[#d0e1e9]">{results.duties.length} {results.duties.length === 1 ? 'duty' : 'duties'}{pilotLine ? ` · ${pilotLine}` : ''}</p>
+      <p className="text-sm font-medium text-hero-muted">Your roster</p>
+      <h1 data-analysis-heading tabIndex={-1} className="text-3xl font-semibold tracking-tight focus:outline-none md:text-[2.75rem] md:leading-tight">{monthLabel(results)}</h1>
+      <p className="text-sm text-hero-muted">{facts}</p>
     </div>
-    <button type="button" onClick={onNewRoster} className="flex shrink-0 items-center gap-2 rounded-full border border-[#b9d9e3]/40 bg-[#edf6fa]/10 px-4 py-2.5 text-sm transition-colors hover:bg-[#edf6fa]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d2f3f7]">
+    <button type="button" onClick={onNewRoster} className="flex shrink-0 items-center gap-2 rounded-full border border-hero-on/30 bg-hero-on/10 px-4 py-2.5 text-sm transition-colors hover:bg-hero-on/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hero-on">
       <RotateCcw className="h-4 w-4" aria-hidden="true" />New roster
     </button>
   </header>;
@@ -77,6 +85,8 @@ export function RosterPage() {
         analysisId={results.analysisId}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
+        homeTz={results.homeBaseTimezone}
+        homeBase={results.pilotBase || settings.homeBase}
         dutyCrewOverride={dutyCrewOverrides.get(selectedDuty?.dutyId || '')}
         onCrewChange={setCrewOverride}
         onCrewReset={clearCrewOverride}

@@ -1,145 +1,81 @@
 import { Plane, Monitor, BookOpen, FileText, FileWarning } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DutyAnalysis } from '@/types/fatigue';
 import { format } from 'date-fns';
 import { isTrainingDuty, getTrainingDutyLabel } from '@/lib/fatigue-utils';
-import { cn } from '@/lib/utils';
-import {
-  classifyPerformance,
-  kssLabel,
-  normalizeRiskLevel,
-  resolveKss,
-  riskBadgeVariant,
-  riskColorClass,
-  type RiskThresholds,
-} from '@/lib/risk-scale';
+import { classifyKss, resolveKss } from '@/lib/risk-scale';
+import { RiskLabel } from './roster/primitives';
 
 interface DutyDetailsHeaderProps {
   duty: DutyAnalysis;
+  /** e.g. "DOH · UTC+3" — the zone every time in the dialog uses. */
+  zoneLabel?: string;
   onGenerateReport?: () => void;
   onReportFatigue?: () => void;
-  reportMode?: boolean;
 }
 
-/** Risk badge for the header. */
-function RiskBadge({ risk }: { risk: string }) {
-  return (
-    <Badge variant={riskBadgeVariant(normalizeRiskLevel(risk))} className="text-[10px] md:text-xs">
-      {risk}
-    </Badge>
-  );
+/** "DOH → NJF → DOH" (in-flight rest rows excluded). */
+export function dutyRoute(duty: DutyAnalysis): string {
+  const segs = duty.flightSegments.filter((s) => s.activityCode !== 'IR');
+  if (!segs.length) return duty.trainingCode || getTrainingDutyLabel(duty.dutyType || '');
+  const stops = [segs[0].departure];
+  for (const s of segs) {
+    if (stops[stops.length - 1] !== s.departure) stops.push(s.departure);
+    stops.push(s.arrival);
+  }
+  return stops.join(' → ');
 }
 
 /**
- * DutyDetailsHeader — compact single-row header for the full-screen dialog.
- *
- * Shows: icon, date, duty/block/sectors, peak/avg/landing predicted KSS, risk badge.
- * Flight segments and FDP bar are now in the left column (DutyInfoColumn).
+ * Details header: date, route, times and the band. The right edge leaves
+ * room for the dialog's close button; on phones the actions sit on their own
+ * row with visible labels.
  */
-export function DutyDetailsHeader({ duty, onGenerateReport, onReportFatigue, reportMode }: DutyDetailsHeaderProps) {
+export function DutyDetailsHeader({ duty, zoneLabel, onGenerateReport, onReportFatigue }: DutyDetailsHeaderProps) {
   const isTraining = isTrainingDuty(duty);
+  const peak = resolveKss(duty.maxKss, duty.minPerformance, duty.modelVersion);
+  const Icon = isTraining ? (duty.dutyType === 'simulator' ? Monitor : BookOpen) : Plane;
+  const times = duty.reportTimeLocal && duty.releaseTimeLocal ? `${duty.reportTimeLocal}–${duty.releaseTimeLocal}` : '';
 
   return (
-    <div className="flex items-center justify-between gap-4 flex-wrap">
-      {/* Left: icon + title + training badge */}
-      <div className="flex items-center gap-2.5 min-w-0">
-        <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-primary/10 text-primary flex-shrink-0">
-          {isTraining
-            ? (duty.dutyType === 'simulator' ? <Monitor className="h-3.5 w-3.5" /> : <BookOpen className="h-3.5 w-3.5" />)
-            : <Plane className="h-3.5 w-3.5" />}
+    <div className="flex flex-col gap-3 pr-10 md:flex-row md:items-center md:justify-between md:gap-6 md:pr-12">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Icon className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 space-y-0.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h2 className="text-lg font-semibold tracking-tight">{format(duty.date, 'EEE d MMM')}</h2>
+            {peak != null && <RiskLabel level={classifyKss(peak)} />}
+          </div>
+          <p className="truncate text-sm text-muted-foreground">
+            <span className="text-foreground">{dutyRoute(duty)}</span>
+            {times && <span className="font-mono tabular"> · {times}</span>}
+            {zoneLabel && <span> {zoneLabel}</span>}
+          </p>
+          <p className="font-mono text-xs text-muted-foreground tabular">
+            Duty {(duty.dutyHours ?? 0).toFixed(1)}h
+            {!isTraining && <> · Block {Math.max(0, duty.blockHours ?? 0).toFixed(1)}h · {duty.sectors} {duty.sectors === 1 ? 'sector' : 'sectors'}</>}
+          </p>
         </div>
-        <div className="min-w-0">
-          <h2 className="text-sm md:text-base font-semibold truncate tracking-tight">
-            {duty.dayOfWeek}, {format(duty.date, 'MMM dd')}
-          </h2>
-        </div>
-        {isTraining && (
-          <Badge variant="info" className="text-[10px] flex-shrink-0">
-            {getTrainingDutyLabel(duty.dutyType!)}
-          </Badge>
-        )}
       </div>
 
-      {/* Center: stats as subtle chips */}
-      <div className="flex flex-wrap items-center gap-1.5 text-xs">
-        <StatChip label="Duty" value={`${(duty.dutyHours ?? 0).toFixed(1)}h`} />
-        <StatChip label="Block" value={`${Math.max(0, duty.blockHours ?? 0).toFixed(1)}h`} />
-        {!isTraining && <StatChip label="Sectors" value={String(duty.sectors)} />}
-        <div className="w-px h-4 bg-border/30 mx-1 hidden sm:block" />
-        <StatKssChip label="Peak KSS" index={duty.minPerformance} kss={duty.maxKss} thresholds={duty.riskThresholds} />
-        <StatKssChip label="Avg" index={duty.avgPerformance} thresholds={duty.riskThresholds} />
-        {!isTraining && (
-          <StatKssChip label="Ldg" index={duty.landingPerformance} kss={duty.landingKss} thresholds={duty.riskThresholds} />
-        )}
-      </div>
-
-      {/* Right: report button + risk badge */}
-      <div className="flex items-center gap-2.5">
-        {onReportFatigue && !reportMode && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onReportFatigue}
-            className="gap-1.5 text-xs rounded-lg h-8"
-            aria-label="Report fatigue for this duty"
-          >
-            <FileWarning className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Report fatigue</span>
-          </Button>
-        )}
-        {onGenerateReport && !reportMode && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onGenerateReport}
-            className="gap-1.5 text-xs rounded-lg h-8"
-            aria-label="Full duty report"
-            title="Full duty report (PDF)"
-          >
-            <FileText className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Full duty report</span>
-          </Button>
-        )}
-        <RiskBadge risk={duty.overallRisk} />
-      </div>
+      {(onReportFatigue || onGenerateReport) && (
+        <div className="flex shrink-0 items-center gap-2">
+          {onReportFatigue && (
+            <Button variant="outline" size="sm" onClick={onReportFatigue} className="h-9 gap-1.5 rounded-lg text-[13px]">
+              <FileWarning className="h-4 w-4" aria-hidden="true" />
+              Report fatigue
+            </Button>
+          )}
+          {onGenerateReport && (
+            <Button variant="ghost" size="sm" onClick={onGenerateReport} className="h-9 gap-1.5 rounded-lg text-[13px]" title="Full duty report (PDF)">
+              <FileText className="h-4 w-4" aria-hidden="true" />
+              Full report
+            </Button>
+          )}
+        </div>
+      )}
     </div>
-  );
-}
-
-/* ── tiny helper sub-components ─────────────────────────────── */
-
-function StatChip({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="inline-flex items-baseline gap-1.5">
-      <span className="text-[11px] text-muted-foreground">{label}</span>
-      <span className="font-mono text-[13px] font-medium text-foreground tabular">{value}</span>
-    </span>
-  );
-}
-
-function StatKssChip({
-  label,
-  index,
-  kss,
-  thresholds,
-}: {
-  label: string;
-  index: number | null | undefined;
-  kss?: number;
-  thresholds?: RiskThresholds;
-}) {
-  const k = resolveKss(kss, index);
-  if (k == null) return null;
-  const level = classifyPerformance(index, thresholds);
-  const color = level === 'low' ? 'text-foreground' : riskColorClass(level);
-  return (
-    <span
-      className="inline-flex items-baseline gap-1.5"
-      title={`${kssLabel(k)} · index ${Math.round(index ?? 0)}`}
-    >
-      <span className="text-[11px] text-muted-foreground">{label}</span>
-      <span className={cn('font-mono text-[13px] font-medium tabular', color)}>{k.toFixed(1)}</span>
-    </span>
   );
 }
