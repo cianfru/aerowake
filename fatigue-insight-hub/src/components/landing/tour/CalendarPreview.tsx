@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 import { riskClasses } from '@/lib/risk-scale';
-import { inkOnBandFill, kssBand } from '../landingKss';
-import { formatDay } from '../landingFormat';
+import { formatKssValue, inkOnBandFill, kssBand } from '../landingKss';
+import { formatDay, formatRoute } from '../landingFormat';
 import { TOUR_DUTIES, TOUR_WEEK } from '../tourData';
 import { LegendKey } from './PreviewParts';
 
@@ -27,7 +27,8 @@ const pct = (h: number) => `${(h / 24) * 100}%`;
 /** Calendar: one week of duties, estimated sleep and the WOCL on a 24-hour home-base clock. */
 export function CalendarPreview() {
   return <div className="space-y-4">
-    <div className="rounded-xl border border-[#dbe7ed] bg-[#fcfdfe] p-3">
+    <p className="sr-only">Week of {formatDay(DAYS[0])}, home-base time: {WEEK_DUTIES.map((d) => `${formatRoute(d.route)} on ${formatDay(d.date)}, ${d.report} to ${d.release}, peak KSS ${formatKssValue(d.peakKss)}`).join('; ')}. Estimated sleep falls between duties.</p>
+    <div aria-hidden="true" className="rounded-xl border border-[#dbe7ed] bg-[#fcfdfe] p-3">
       <div className="grid grid-cols-[3.25rem_1fr] gap-2 pb-1.5">
         <span />
         <div className="relative h-3.5 font-mono text-[10px] text-[#526579]">

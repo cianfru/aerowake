@@ -25,7 +25,7 @@ export function HeroSection({ onEnter }: { onEnter: () => void }) {
 
       <div className="relative mx-auto w-full max-w-[18.75rem] sm:mb-10 sm:max-w-md lg:mb-12 lg:max-w-[31rem] lg:justify-self-end">
         <div className="landing-orbit"><LandingGlobe /></div>
-        <div className="landing-glass absolute -bottom-10 left-0 hidden w-[min(18rem,80%)] p-5 sm:block lg:-left-10 lg:-bottom-12">
+        <div className="landing-glass absolute -bottom-10 left-0 hidden w-[min(18rem,80%)] p-5 sm:block lg:-bottom-12 lg:-left-6 xl:-left-10">
           <p className="mb-3.5 text-sm font-semibold text-[#142e45]">Every duty has a before and after.</p>
           <ul className="space-y-2.5 text-sm text-[#425d73]">
             {DUTY_FRAME.map(({ icon: Icon, label }) => <li key={label} className="flex items-center gap-3"><Icon aria-hidden="true" className="h-4 w-4 text-[#087478]" />{label}</li>)}
