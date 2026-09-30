@@ -7,11 +7,10 @@ test('pilot outlook becomes a prospective concern with traceable evidence', asyn
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
   await page.getByRole('button', { name: 'Analyse a roster', exact: true }).click();
-  await page.getByLabel('Home base (IATA)').fill('DOH');
   await page.getByLabel('Choose roster file (PDF or CSV)').setInputFiles({ name: 'synthetic-outlook.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
-  await page.getByRole('button', { name: 'Review roster', exact: true }).click();
-  await page.getByLabel('I have reviewed the dates, time zones, and assumptions. Continue with these inputs.').check();
-  await page.getByRole('button', { name: 'Run analysis', exact: true }).click();
+  await page.getByLabel('Home base', { exact: true }).fill('DOH');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('button', { name: 'Analyse roster', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Your fatigue outlook' })).toBeVisible();
   const modelWatchCount = await page.getByTestId('duty-watch-card').count();
   await page.getByLabel('My watch level (KSS)').selectOption('9');

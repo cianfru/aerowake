@@ -13,17 +13,18 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   await expect(page.getByRole('heading',{name:'Check your roster',exact:true})).toBeVisible();
   await page.evaluate(()=>window.scrollTo(0,0));
   await page.screenshot({path:testInfo.outputPath('roster-upload.png'),fullPage:true});
-  await page.getByLabel('Home base (IATA)').fill('DOH');
+  // The roster is read on selection; no base is typed first.
   await page.getByLabel('Choose roster file (PDF or CSV)').setInputFiles({name:'synthetic.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});
-  await page.getByRole('button',{name:'Review roster',exact:true}).click();
   await expect(page.getByRole('alert')).toContainText('Roster import is temporarily unavailable.');
-  await expect(page.getByRole('button',{name:'Run analysis',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Analyse roster',exact:true})).toHaveCount(0);
   previewUnavailable=false;
-  await page.getByRole('button',{name:'Review roster',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Review the import'})).toBeVisible();
-  await expect(page.getByRole('button',{name:'Run analysis',exact:true})).toBeDisabled();
-  await page.getByLabel('I have reviewed the dates, time zones, and assumptions. Continue with these inputs.').check();
-  await page.getByRole('button',{name:'Run analysis',exact:true}).click();
+  await page.getByRole('button',{name:'Try again',exact:true}).click();
+  // Half the duty ends are away from DOH, so the CSV base is asked for rather than guessed.
+  await page.getByLabel('Home base',{exact:true}).fill('DOH');
+  await page.getByRole('button',{name:'Continue',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'September 2026 roster'})).toBeFocused();
+  await expect(page.getByText('Entered by you',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Analyse roster',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Your fatigue outlook'})).toBeVisible();
   await expect(page.getByRole('region',{name:'Roster calendar',exact:true})).toHaveCount(0);
   await page.getByRole('button',{name:'Open navigation',exact:true}).click();
