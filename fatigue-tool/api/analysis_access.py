@@ -77,7 +77,8 @@ async def load(analysis_id, principal, db):
         if not snapshot:
             raise HTTPException(409, 'This legacy analysis has no reproducible inputs. Re-upload the original roster.')
         roster = restore(snapshot)
-        model = BorbelyFatigueModel(ModelConfig.aerowake())
+        stored = getattr(roster, 'analysis_assumptions', None) or {}
+        model = BorbelyFatigueModel(ModelConfig.aerowake(nap_habit=stored.get('nap_habit')))
         monthly = await run_compute(model.simulate_roster, roster)
         remember(analysis_id, (monthly, roster, model.sleep_strategies), principal, record.roster_id)
     return analysis_store[analysis_id].value

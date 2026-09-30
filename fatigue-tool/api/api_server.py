@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 # Import your fatigue model
 from core import BorbelyFatigueModel, ModelConfig, RiskThresholds
+from core.alertness import ENGINE_VERSION, KSS_ENGINE_VERSIONS, is_kss_engine, classify_kss, round_half_up
 from parsers.roster_parser import PDFRosterParser, CSVRosterParser, AirportDatabase
 from models.data_models import MonthlyAnalysis, DutyTimeline
 
@@ -146,6 +147,9 @@ class AirportResponse(BaseModel):
     utc_offset_hours: Optional[float] = None  # Current UTC offset (accounts for DST)
     latitude: float = 0.0
     longitude: float = 0.0
+    name: Optional[str] = None      # Airport name (airportsdata)
+    city: Optional[str] = None
+    country: Optional[str] = None   # ISO 3166-1 alpha-2
 
 
 class DutySegmentResponse(BaseModel):
@@ -183,6 +187,11 @@ class DutySegmentResponse(BaseModel):
     line_training_codes: Optional[List[str]] = None
     # Per-segment aircraft type from PDF trailing tokens (e.g. "351", "359", "77W")
     aircraft_type: Optional[str] = None
+    # Model sleepiness for this sector, from the duty timeline (engine 4.1).
+    # None when the timeline has no awake point inside the sector.
+    kss_peak: Optional[float] = None         # max predicted KSS, off-blocks → on-blocks
+    kss_at_arrival: Optional[float] = None   # predicted KSS at on-blocks
+    risk_level: Optional[str] = None         # band of kss_peak (KSS rounded to 0.1)
 
 
 class QualityFactorsResponse(BaseModel):
@@ -352,14 +361,24 @@ class DutyResponse(BaseModel):
     landing_performance: Optional[float]
     
     # Fatigue metrics
-    sleep_debt: float
+    # Deprecated for pilot-facing use: internal exponential debt ledger that
+    # drives recovery-sleep length. Pilot-facing cumulative restriction is
+    # sleep_deficit_7d (one ledger, one set of bands).
+    sleep_debt: float  # deprecated for pilot-facing use (see comment above)
     wocl_hours: float
-    prior_sleep: float
+    prior_sleep: float                 # estimated sleep in the 24 h before report
     pre_duty_awake_hours: float = 0.0  # hours awake before report
-    
-    # KSS-anchored alertness (engine aerowake-4.0-kss)
+
+    # KSS-anchored alertness (engine aerowake-4.1-kss)
     risk_reasons: List[str] = []                  # up to 3 plain-language reasons
-    max_kss: Optional[float] = None               # worst predicted KSS on deck
+    max_kss: Optional[float] = None               # headline peak KSS (window: headline_window)
+    peak_time_utc: Optional[str] = None           # when the headline peak occurs (ISO)
+    headline_window: str = "fdp"                  # 'fdp' (report → last on-blocks) | 'duty'
+    kss_peak_fdp: Optional[float] = None          # peak, report → last operating on-blocks
+    kss_peak_duty: Optional[float] = None         # peak, report → release
+    kss_at_release: Optional[float] = None        # predicted KSS at release
+    assumed_nap_hours: Optional[float] = None     # pre-duty nap assumed by the sleep estimate
+    acclimatization_basis: Optional[str] = None   # 'determined' | 'unknown' (ORO.FTL.105(1))
     landing_kss: Optional[float] = None
     max_kss_90: Optional[float] = None            # 90th-percentile pilot
     max_p_severe_sleepiness: Optional[float] = None  # P(KSS >= 7)
@@ -370,7 +389,7 @@ class DutyResponse(BaseModel):
     risk_thresholds: Optional[dict] = None
     model_version: Optional[str] = None
     model_parameters: Optional[dict] = None
-    risk_basis: str = "landing_or_minimum"
+    risk_basis: str = "peak_kss_fdp"  # peak_kss_fdp | peak_kss_duty (headline window)
     risk_level: str  # "low", "moderate", "high", "critical", "extreme"
     is_reportable: bool  # Deprecated — use risk_advisory instead
     risk_advisory: str = "monitor"  # "routine", "monitor", "consider_reporting", "report_recommended"
@@ -455,10 +474,14 @@ class AnalysisResponse(BaseModel):
     total_pinch_events: int
     
     # Sleep metrics
-    avg_sleep_per_night: float
-    max_sleep_debt: float
-    average_sleep_debt: float = 0.0
-    
+    avg_sleep_per_night: float            # estimated sleep per 24 h over sleep_coverage_days
+    sleep_coverage_days: Optional[float] = None  # days of the month with sleep estimates
+    max_sleep_debt: float                 # deprecated for pilot-facing use (internal ledger)
+    average_sleep_debt: float = 0.0       # deprecated for pilot-facing use (internal ledger)
+    # Stated assumptions of this analysis: {nap_habit, headline_risk_window}
+    assumptions: Optional[dict] = None
+    engine_version: Optional[str] = None
+
     # Worst case
     worst_duty_id: str
     worst_performance: float
@@ -481,7 +504,7 @@ class AnalysisResponse(BaseModel):
     # Company detection (included only on first upload when user has no company)
     company_detection: Optional[dict] = None
 
-    # Roster verdict (engine aerowake-4.0-kss)
+    # Roster verdict (engine aerowake-4.1-kss)
     duties_to_watch: List[str] = []        # duty_ids at high risk or worse, worst first
     easa_findings: List[dict] = []         # ORO.FTL.210 / .235 / .205 roster checks
     easa_summary: Optional[dict] = None    # rolling duty / block totals vs limits
@@ -507,16 +530,35 @@ from api.hardening import BoundedStore, RateLimitMiddleware, validate_upload
 # HELPER FUNCTIONS
 # ============================================================================
 
+def _model_config(nap_habit: Optional[str] = None, stored: Optional[dict] = None) -> ModelConfig:
+    """The single model with the analysis's stated nap habit.
+
+    ``nap_habit`` from the request wins; otherwise the habit stored with the
+    analysis inputs; otherwise the default ('sometimes').
+    """
+    from core.parameters import NAP_HABITS
+    habit = (nap_habit or '').strip().lower() or (stored or {}).get('nap_habit') or None
+    if habit is not None and habit not in NAP_HABITS:
+        raise HTTPException(422, f"nap_habit must be one of: {', '.join(NAP_HABITS)}")
+    return ModelConfig.aerowake(nap_habit=habit)
+
+
 def classify_risk(performance: Optional[float], thresholds=None) -> str:
     return RiskThresholds(thresholds=thresholds).classify(performance) if thresholds else RiskThresholds().classify(performance)
 
 
-def _build_segments(duty, home_tz) -> list:
-    """Serialize flight segments with timezone conversions."""
+def _build_segments(duty, home_tz, segment_kss: Optional[list] = None) -> list:
+    """Serialize flight segments with timezone conversions.
+
+    ``segment_kss`` (DutyTimeline.segment_kss) carries the model's per-sector
+    peak and on-blocks KSS; the API never interpolates sector values.
+    """
     import pytz
 
+    segment_kss = segment_kss or []
     segments = []
-    for seg in duty.segments:
+    for index, seg in enumerate(duty.segments):
+        kss = segment_kss[index] if index < len(segment_kss) else {}
         dep_utc = seg.scheduled_departure_utc
         arr_utc = seg.scheduled_arrival_utc
 
@@ -564,6 +606,9 @@ def _build_segments(duty, home_tz) -> list:
             is_deadhead=getattr(seg, 'is_deadhead', False),
             line_training_codes=getattr(seg, 'line_training_codes', None),
             aircraft_type=getattr(seg, 'aircraft_type', None),
+            kss_peak=_round_opt(kss.get('kss_peak')),
+            kss_at_arrival=_round_opt(kss.get('kss_at_arrival')),
+            risk_level=classify_kss(kss['kss_peak']) if kss.get('kss_peak') is not None else None,
         ))
     return segments
 
@@ -585,8 +630,10 @@ def _validate_duty_times(duty) -> list:
 def _build_sleep_quality(duty_timeline) -> Optional[SleepQualityResponse]:
     """Assemble SleepQualityResponse from strategy data.
 
-    Top-level positioning spans the full sleep window (earliest start → latest
-    end) so multi-block strategies are represented correctly.
+    ``sleep_blocks`` lists every modelled block attributed to this duty (the
+    last main sleep before report and any pre-duty nap). The top-level
+    start/end fields describe the last main sleep — the block the what-if
+    editor adjusts — not the span of all blocks.
     """
     if not duty_timeline.sleep_quality_data:
         return None
@@ -594,17 +641,8 @@ def _build_sleep_quality(duty_timeline) -> Optional[SleepQualityResponse]:
     sqd = duty_timeline.sleep_quality_data
     blocks = sqd.get('sleep_blocks', [])
 
-    if blocks:
-        earliest = blocks[0]
-        latest = blocks[0]
-        for b in blocks[1:]:
-            if (b.get('sleep_start_iso') or '') < (earliest.get('sleep_start_iso') or ''):
-                earliest = b
-            if (b.get('sleep_end_iso') or '') > (latest.get('sleep_end_iso') or ''):
-                latest = b
-    else:
-        earliest = {}
-        latest = {}
+    mains = [b for b in blocks if b.get('sleep_type') == 'main']
+    earliest = latest = (mains[-1] if mains else (blocks[-1] if blocks else {}))
 
     return SleepQualityResponse(
         total_sleep_hours=sqd.get('total_sleep_hours', 0.0),
@@ -751,11 +789,18 @@ def _roster_insights(roster, duties_response) -> dict:
         })
     return dict(duties_to_watch=[d.duty_id for d in watch], easa_findings=easa['findings'],
                 easa_summary=easa['summary'], standby_periods=standbys,
-                alertness_timeline=getattr(roster, 'alertness_timeline', []) or [])
+                alertness_timeline=getattr(roster, 'alertness_timeline', []) or [],
+                assumptions=getattr(roster, 'analysis_assumptions', None) or None,
+                sleep_coverage_days=getattr(roster, 'sleep_coverage_days', None),
+                engine_version=ENGINE_VERSION)
 
 
 def _risk_reasons(duty_timeline, duty, roster) -> List[str]:
-    """Up to three plain-language reasons behind a duty's predicted sleepiness."""
+    """Up to three plain-language reasons behind a duty's predicted sleepiness.
+
+    A duty rated High or above always gets at least one reason. When the sleep
+    estimate assumes a pre-duty nap, its length is stated (it lowers the score).
+    """
     import pytz
     home_tz = pytz.timezone(duty.home_base_timezone)
     shift = getattr(duty_timeline, 'circadian_phase_shift', 0.0) or 0.0
@@ -766,6 +811,7 @@ def _risk_reasons(duty_timeline, duty, roster) -> List[str]:
         body = (home.hour + home.minute / 60 + shift) % 24
         return home, body
 
+    points = [p for p in duty_timeline.timeline if not p.is_in_rest]
     last_arrival = duty.segments[-1].scheduled_arrival_utc if duty.segments else None
     if last_arrival is not None:
         home, body = clock(last_arrival)
@@ -773,17 +819,16 @@ def _risk_reasons(duty_timeline, duty, roster) -> List[str]:
             where = 'home-base time' if abs(shift) < 1 else f'home-base time ({int(body):02d}:{int(body % 1 * 60):02d} body clock)'
             reasons.append((5, f"Lands {home:%H:%M} {where}, during the body-clock low"))
     if not any(r[0] == 5 for r in reasons):
-        points = [p for p in duty_timeline.timeline if not p.is_in_rest]
         low = [p for p in points if 2 <= clock(p.timestamp_utc)[1] < 6]
         if low:
             reasons.append((4, "On duty during the body-clock low (02:00–06:00)"))
     awake = duty_timeline.max_hours_awake
     if awake is not None and awake >= 16:
-        text = f"About {awake:.0f}h awake by the end of the duty"
-        report_hour = duty.report_time_utc.astimezone(home_tz).hour
-        if 12 <= report_hour < 20:
-            text += " — a 1–2h nap before report would reduce this"
-        reasons.append((4 if awake >= 18 else 3, text))
+        reasons.append((4 if awake >= 18 else 3, f"About {awake:.0f}h awake by the end of the duty"))
+    elif awake is not None and awake >= 14:
+        late = [p for p in points if clock(p.timestamp_utc)[1] >= 23 or clock(p.timestamp_utc)[1] < 2]
+        if late:
+            reasons.append((3, f"Late finish after about {awake:.0f}h awake, as the body clock winds down for the night"))
     if duty_timeline.prior_sleep_hours is not None and duty_timeline.prior_sleep_hours < 6:
         reasons.append((3, f"Only about {duty_timeline.prior_sleep_hours:.1f}h estimated sleep in the 24h before report"))
     idx = roster.get_duty_index(duty.duty_id)
@@ -801,7 +846,25 @@ def _risk_reasons(duty_timeline, duty, roster) -> List[str]:
     if duty.segments and len([s for s in duty.segments if not s.is_deadhead]) >= 4:
         reasons.append((1, f"{len(duty.segments)} sectors"))
     reasons.sort(key=lambda r: -r[0])
-    return [text for _, text in reasons[:3]]
+
+    risk = classify_kss(duty_timeline.max_kss) if duty_timeline.max_kss is not None else 'unknown'
+    elevated = RISK_ORDER.get(risk, -1) >= RISK_ORDER['high']
+    if elevated and not reasons:
+        peak = getattr(duty_timeline, 'peak_time_utc', None)
+        when = f" at {peak.astimezone(home_tz):%H:%M} home-base time" if peak else ''
+        text = f"Predicted sleepiness peaks{when}"
+        if awake is not None:
+            text += f" after about {awake:.0f}h awake"
+        reasons.append((1, text))
+    texts = [text for _, text in reasons[:3]]
+    nap = getattr(duty_timeline, 'assumed_nap_hours', None)
+    if nap:
+        note = f"Assumes a {round_half_up(nap, 1):.1f}h nap before report; without it the score would be higher"
+        texts = texts[:2] + [note]
+    elif awake is not None and awake >= 16 and 12 <= report.hour < 20:
+        texts = [t + " — a 1–2h nap before report would reduce this" if t.startswith('About') and 'awake' in t else t
+                 for t in texts]
+    return texts
 
 def _round_opt(value, digits=2):
     return None if value is None else round(value, digits)
@@ -811,10 +874,17 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
     """Shared serialization for a single duty — used by both POST and GET endpoints."""
     import pytz
 
-    risk = classify_risk(duty_timeline.min_performance, getattr(duty_timeline, "risk_thresholds", None))
+    # Headline risk: band of the headline peak KSS, rounded to one decimal
+    # (the value the client displays), lower bound inclusive.
+    if duty_timeline.max_kss is not None:
+        risk = classify_kss(duty_timeline.max_kss)
+    else:
+        risk = classify_risk(duty_timeline.min_performance, getattr(duty_timeline, "risk_thresholds", None))
     home_tz = pytz.timezone(duty.home_base_timezone)
+    window = getattr(duty_timeline, 'headline_window', 'duty') or 'duty'
+    peak_time = getattr(duty_timeline, 'peak_time_utc', None)
 
-    segments = _build_segments(duty, home_tz)
+    segments = _build_segments(duty, home_tz, getattr(duty_timeline, 'segment_kss', None))
     time_warnings = _validate_duty_times(duty)
     sleep_quality = _build_sleep_quality(duty_timeline)
     ulr_compliance_dict, inflight_blocks = _build_ulr_data(duty_timeline, duty)
@@ -911,6 +981,14 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
         landing_risk=classify_risk(duty_timeline.landing_performance, getattr(duty_timeline, "risk_thresholds", None)),
         risk_reasons=_risk_reasons(duty_timeline, duty, roster),
         max_kss=_round_opt(duty_timeline.max_kss),
+        peak_time_utc=peak_time.isoformat() if peak_time else None,
+        headline_window=window,
+        risk_basis=f"peak_kss_{window}",
+        kss_peak_fdp=_round_opt(getattr(duty_timeline, 'kss_peak_fdp', None)),
+        kss_peak_duty=_round_opt(getattr(duty_timeline, 'kss_peak_duty', None)),
+        kss_at_release=_round_opt(getattr(duty_timeline, 'kss_at_release', None)),
+        assumed_nap_hours=_round_opt(getattr(duty_timeline, 'assumed_nap_hours', None)),
+        acclimatization_basis=getattr(duty_timeline, 'acclimatization_basis', None),
         landing_kss=_round_opt(duty_timeline.landing_kss),
         max_kss_90=_round_opt(duty_timeline.max_kss_90),
         max_p_severe_sleepiness=_round_opt(duty_timeline.max_p_severe_sleepiness, 3),
@@ -1077,7 +1155,7 @@ async def root():
         "status": "ok",
         "service": "Fatigue Analysis API",
         "version": "5.0.0",
-        "model": "aerowake-4.0-kss",
+        "model": ENGINE_VERSION,
         "parser": "roster-1.1",
         "build": os.environ.get("RAILWAY_GIT_COMMIT_SHA", "local")
     }
@@ -1106,6 +1184,7 @@ async def analyze_roster(
     timezone_format: str = Form("auto"),
     crew_set: str = Form("crew_b"),
     duty_crew_overrides: str = Form("{}"),
+    nap_habit: Optional[str] = Form(None),
     user: Optional[User] = Depends(get_optional_user),
     principal: Principal = Depends(analysis_principal),
     db=Depends(get_db),
@@ -1224,7 +1303,8 @@ async def analyze_roster(
 
         # Get config
         # Single model: legacy preset names are accepted and ignored.
-        config = ModelConfig.aerowake()
+        config = _model_config(nap_habit)
+        roster.analysis_assumptions = dict(config.assumptions)
 
         # Use the month actually parsed from the roster (not the form default)
         effective_month = roster.month or month
@@ -1239,7 +1319,7 @@ async def analyze_roster(
                     sa_select(FatigueState)
                     .where(FatigueState.user_id == user.id)
                     .where(FatigueState.month < effective_month)
-                    .where(FatigueState.engine_version == "aerowake-4.0-kss")
+                    .where(FatigueState.engine_version.in_(KSS_ENGINE_VERSIONS))
                     .order_by(FatigueState.month.desc(), FatigueState.created_at.desc())
                     .limit(1)
                 )
@@ -1394,7 +1474,7 @@ async def analyze_roster(
                             roster_id=_pending_db_roster.id,
                             month=effective_month,
                             period_end_utc=last_duty.release_time_utc,
-                            engine_version="aerowake-4.0-kss",
+                            engine_version=ENGINE_VERSION,
                             final_process_s=last_tl.final_process_s,
                             final_sleep_debt=last_tl.cumulative_sleep_debt,
                             final_phase_shift=fc.current_phase_shift_hours if fc else 0.0,
@@ -1757,6 +1837,7 @@ async def reanalyze_roster(
     roster_id: UUID,
     config_preset: str = Form("default"),
     crew_set: str = Form("crew_b"),
+    nap_habit: Optional[str] = Form(None),
     user: User = Depends(_get_current_user),
     db=Depends(get_db),
 ):
@@ -1786,7 +1867,8 @@ async def reanalyze_roster(
 
     # Run analysis
     # Single model: legacy preset names are accepted and ignored.
-    config = ModelConfig.aerowake()
+    config = _model_config(nap_habit, getattr(roster_obj, 'analysis_assumptions', None))
+    roster_obj.analysis_assumptions = dict(config.assumptions)
 
     # ── Fatigue continuity for re-analysis ────────────────────
     reanalyze_effective_month = roster_obj.month or db_roster.month or "2026-02"
@@ -1798,7 +1880,7 @@ async def reanalyze_roster(
             sa_select(FatigueState)
             .where(FatigueState.user_id == user.id)
             .where(FatigueState.month < reanalyze_effective_month)
-            .where(FatigueState.engine_version == "aerowake-4.0-kss")
+            .where(FatigueState.engine_version.in_(KSS_ENGINE_VERSIONS))
                     .order_by(FatigueState.month.desc(), FatigueState.created_at.desc())
             .limit(1)
         )
@@ -1907,7 +1989,7 @@ async def reanalyze_roster(
                     roster_id=db_roster.id,
                     month=reanalyze_effective_month,
                     period_end_utc=last_duty.release_time_utc,
-                    engine_version="aerowake-4.0-kss",
+                    engine_version=ENGINE_VERSION,
                             final_process_s=last_tl.final_process_s,
                     final_sleep_debt=last_tl.cumulative_sleep_debt,
                     final_phase_shift=fc.current_phase_shift_hours if fc else 0.0,
@@ -1962,6 +2044,9 @@ class SleepModification(BaseModel):
     sleep_start_utc: str                         # ISO 8601 datetime
     sleep_end_utc: str                           # ISO 8601 datetime
     environment: Optional[str] = None            # "home" | "hotel" (optional override)
+    # Optional: replace exactly this estimated block (its sleep_start_utc).
+    # Without it the duty's last main sleep before report is replaced.
+    block_start_utc: Optional[str] = None
 
 
 class WhatIfRequest(BaseModel):
@@ -1970,6 +2055,7 @@ class WhatIfRequest(BaseModel):
     modifications: List[DutyModification] = []           # existing (backward compatible)
     sleep_modifications: List[SleepModification] = []    # NEW: sleep overrides
     config_preset: str = "default"
+    nap_habit: Optional[str] = None   # 'usually' | 'sometimes' | 'rarely'; default: the analysis's
 
 
 @app.post("/api/what-if")
@@ -2082,14 +2168,18 @@ async def run_what_if(request: WhatIfRequest, db=Depends(get_db), principal=Depe
             if duty_obj is None:
                 raise HTTPException(400, f"Duty {sm.duty_id} not found in roster (sleep override)")
 
-            if not duty_obj.report_time_utc - timedelta(hours=36) <= s_start < s_end <= duty_obj.report_time_utc:
+            if not sm.block_start_utc and not (
+                    duty_obj.report_time_utc - timedelta(hours=36) <= s_start < s_end <= duty_obj.report_time_utc):
                 raise HTTPException(422, 'Pre-duty sleep must end before report and start within 36 hours of it.')
             if any(d.report_time_utc < s_end and d.release_time_utc > s_start for d in modified_roster.duties):
-                raise HTTPException(422, 'Pre-duty sleep overlaps a duty.')
-            sleep_overrides[sm.duty_id] = {
+                raise HTTPException(422, 'Sleep overlaps a duty.')
+            key = f"{sm.duty_id}@{sm.block_start_utc}" if sm.block_start_utc else sm.duty_id
+            sleep_overrides[key] = {
+                "duty_id": sm.duty_id,
                 "start_utc": s_start,
                 "end_utc": s_end,
                 "environment": sm.environment,  # None = keep auto-detected
+                "block_start_utc": sm.block_start_utc,
             }
 
     from parsers.validation import validate_roster
@@ -2099,7 +2189,7 @@ async def run_what_if(request: WhatIfRequest, db=Depends(get_db), principal=Depe
         raise HTTPException(422, str(exc))
     # 9. Run fatigue model on modified roster
     # Single model: legacy preset names are accepted and ignored.
-    config = ModelConfig.aerowake()
+    config = _model_config(request.nap_habit, getattr(original_roster, 'analysis_assumptions', None))
     model = BorbelyFatigueModel(config)
     monthly_analysis = await run_compute(model.simulate_roster, modified_roster, sleep_overrides=sleep_overrides)
 
@@ -2299,7 +2389,7 @@ async def get_yearly_dashboard(
 
         # Extract per-duty metrics from stored JSONB
         duties = aj.get("duties", [])
-        if not duties or any(d.get("model_version") != "aerowake-4.0-kss" for d in duties):
+        if not duties or any(not is_kss_engine(d.get("model_version")) for d in duties):
             continue
 
         risk_counts = {"low": 0, "moderate": 0, "high": 0, "critical": 0}
@@ -2309,7 +2399,7 @@ async def get_yearly_dashboard(
         flight_count = sim_count = ground_count = 0
 
         for d in duties:
-            rl = RiskThresholds().classify(d.get("min_performance"))
+            rl = d.get("risk_level") or RiskThresholds().classify(d.get("min_performance"))
             if rl in risk_counts:
                 risk_counts[rl] += 1
             elif rl == "extreme":
@@ -2464,12 +2554,17 @@ async def get_airports_batch(request: BatchAirportRequest):
         except Exception:
             utc_offset = None
 
+        from parsers.roster_parser import _IATA_DB
+        record = _IATA_DB.get(airport.code) or {}
         results.append(AirportResponse(
             code=airport.code,
             timezone=airport.timezone,
             utc_offset_hours=utc_offset,
             latitude=airport.latitude,
             longitude=airport.longitude,
+            name=record.get('name') or None,
+            city=record.get('city') or None,
+            country=record.get('country') or None,
         ))
 
     return results

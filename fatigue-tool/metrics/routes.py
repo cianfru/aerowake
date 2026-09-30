@@ -18,6 +18,7 @@ from auth.dependencies import get_current_user
 from db.models import User, Roster, Analysis, AggregateMetrics
 from db.session import get_db
 from metrics.aggregator import MIN_SAMPLE_SIZE
+from core.alertness import is_kss_engine
 
 logger = logging.getLogger(__name__)
 
@@ -248,7 +249,7 @@ async def get_comparative_trend(
         analysis = roster.analyses[0]
         aj = analysis.analysis_json or {}
         duties = aj.get("duties", [])
-        if not duties or any(d.get("model_version") != "aerowake-4.0-kss" for d in duties):
+        if not duties or any(not is_kss_engine(d.get("model_version")) for d in duties):
             continue
         all_perf = [d.get("avg_performance") for d in duties if d.get("avg_performance") is not None]
         pilot_perf = round(sum(all_perf) / len(all_perf), 1) if all_perf else None
@@ -311,7 +312,7 @@ async def _get_pilot_metrics(db: AsyncSession, user_id, month: str) -> PilotMetr
     analysis = roster.analyses[0]
     aj = analysis.analysis_json or {}
     duties = aj.get("duties", [])
-    if not duties or any(d.get("model_version") != "aerowake-4.0-kss" for d in duties):
+    if not duties or any(not is_kss_engine(d.get("model_version")) for d in duties):
         return PilotMetrics()
 
     all_perf = [d.get("avg_performance") for d in duties if d.get("avg_performance") is not None]

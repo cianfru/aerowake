@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from db.models import AggregateMetrics, Roster, Analysis, User
+from core.alertness import is_kss_engine
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +138,7 @@ class _PilotMonthData:
 def _extract_pilot_data(roster: Roster, analysis: Analysis) -> Optional[_PilotMonthData]:
     """Extract aggregate metrics from a single roster+analysis pair."""
     aj = analysis.analysis_json
-    if not aj or not aj.get("duties") or any(d.get("model_version") != "aerowake-4.0-kss" for d in aj["duties"]):
+    if not aj or not aj.get("duties") or any(not is_kss_engine(d.get("model_version")) for d in aj["duties"]):
         return None
 
     d = _PilotMonthData()
