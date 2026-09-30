@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import {
   ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
-import { KSS_BAND_BOUNDARIES, RISK_LEVEL_LABELS, classifyKss, kssLabel, riskCssColor, riskInkColor } from '@/lib/risk-scale';
+import { KSS_BAND_BOUNDARIES, classifyKss, kssLabel, riskCssColor, riskInkColor } from '@/lib/risk-scale';
 import { localInputToUtcIso } from '@/lib/fatigue-report-api';
 import type { AlertnessSample, DutyAnalysis } from '@/types/fatigue';
 import { dutyRiskLevel, dutyRoute } from './roster-utils';
@@ -93,11 +93,12 @@ export function MonthlyAlertnessChart({ samples, duties, month, homeTz }: Props)
           <span className="inline-flex items-center gap-1.5"><span className="h-[2px] w-4 bg-primary" aria-hidden="true" />Predicted KSS (awake)</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-3 rounded-[2px] bg-primary/15" aria-hidden="true" />Estimated sleep</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-4 rounded-[1px]" style={{ background: riskCssColor('high') }} aria-hidden="true" />Duty, in its peak band</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t border-dotted border-muted-foreground" aria-hidden="true" />Band limits 5.5 · 6.5 · 7.5 · 8.5</span>
         </span>
       </figcaption>
       <div className="h-64 sm:h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -22 }}>
+            <ComposedChart data={data} margin={{ top: 8, right: 30, bottom: 0, left: -22 }}>
               <CartesianGrid vertical={false} horizontal={false} />
               {weekends.map(([a, b], i) => (
                 <ReferenceArea key={`w${i}`} x1={a} x2={b} y1={0.3} y2={9} fill="hsl(var(--foreground))" fillOpacity={0.03} ifOverflow="hidden" />
@@ -114,7 +115,7 @@ export function MonthlyAlertnessChart({ samples, duties, month, homeTz }: Props)
               ))}
               {KSS_BAND_BOUNDARIES.map((k) => (
                 <ReferenceLine key={k} y={k} stroke={riskCssColor(classifyKss(k))} strokeDasharray="2 4" strokeOpacity={0.7}
-                  label={{ value: `${RISK_LEVEL_LABELS[classifyKss(k)]} ${k}`, position: 'insideTopRight', fontSize: 11, fill: riskInkColor(classifyKss(k)) }} />
+                  label={{ value: `${k}`, position: 'right', fontSize: 11, fill: riskInkColor(classifyKss(k)) }} />
               ))}
               {/* Duties: a strip under the curve, in the duty's peak band, so sleep shading stays readable. */}
               {dutyAreas.map((d, i) => (

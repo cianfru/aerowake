@@ -135,7 +135,7 @@ export function PerformanceSummaryCard({ duty, homeTz, homeLabel }: PerformanceS
           <RiskLabel level={level} />
         </div>
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <p className={cn('text-figure font-semibold tabular', riskClasses(level).text)}>
+          <p className={cn('text-[40px] font-semibold leading-none tracking-tight tabular', riskClasses(level).text)}>
             {kss.toFixed(1)}<span className="ml-1 text-sm font-normal text-muted-foreground">KSS</span>
           </p>
           <div className="min-w-0">

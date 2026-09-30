@@ -109,7 +109,7 @@ export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDu
     <div className="roster-rail-strip py-2" data-stuck={stuck ? '' : undefined}>
       <TabsList aria-label="Roster views" className="roster-view-rail">
         {views.map(({ id, label, short, icon: Icon }) => <TabsTrigger key={id} value={id} aria-label={label} className="roster-view-tab">
-          <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <Icon className="hidden h-4 w-4 shrink-0 sm:block" aria-hidden="true" />
           <span className="sm:hidden">{short}</span><span className="hidden sm:inline">{label}</span>
         </TabsTrigger>)}
       </TabsList>

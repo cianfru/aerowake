@@ -48,7 +48,7 @@ export function DutyDetailsHeader({ duty, zoneLabel, onGenerateReport, onReportF
             <h2 className="text-lg font-semibold tracking-tight">{format(duty.date, 'EEE d MMM')}</h2>
             {peak != null && <RiskLabel level={classifyKss(peak)} />}
           </div>
-          <p className="truncate text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground md:truncate">
             <span className="text-foreground">{dutyRoute(duty)}</span>
             {times && <span className="font-mono tabular"> · {times}</span>}
             {zoneLabel && <span> {zoneLabel}</span>}
