@@ -872,6 +872,11 @@ class BorbelyFatigueModel:
         if not roster.duties or len(roster.duties) == 0:
             raise ValueError("Cannot simulate roster: No duties found.")
 
+        # Sleep and sleep pressure are chained duty to duty, so the order must be
+        # chronological whatever the input order (e.g. a hand-made CSV). Sorted in
+        # place so roster.duties stays aligned with the returned duty_timelines.
+        roster.duties.sort(key=lambda d: d.report_time_utc)
+
         duty_timelines = []
         current_s = roster.initial_sleep_pressure
         cumulative_sleep_debt = roster.initial_sleep_debt
