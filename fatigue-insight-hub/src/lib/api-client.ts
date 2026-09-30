@@ -450,17 +450,24 @@ export interface Statistics {
 // API FUNCTIONS
 // ============================================================================
 
+/**
+ * Analyse a roster. `homeBase` is optional: the backend reads it from the
+ * roster header. Send it for header-less rosters, a confirmed CSV base, or
+ * with `override` to replace the header base on purpose.
+ */
 export async function analyzeRoster(
   file: File,
   pilotId: string,
-  homeBase: string,
-  dutyCrewOverrides?: Map<string, ULRCrewSet>
+  homeBase?: string | null,
+  dutyCrewOverrides?: Map<string, ULRCrewSet>,
+  options: { override?: boolean } = {},
 ): Promise<AnalysisResult> {
 
   const formData = new FormData();
   formData.append('file', file);
   formData.append('pilot_id', pilotId);
-  formData.append('home_base', homeBase);
+  if (homeBase) formData.append('home_base', homeBase);
+  if (homeBase && options.override) formData.append('home_base_override', 'true');
   // One model only (aerowake-4.0-kss) — the backend ignores presets.
 
   // Per-duty crew set overrides (parser auto-detection provides defaults)
@@ -469,18 +476,11 @@ export async function analyzeRoster(
     formData.append('duty_crew_overrides', JSON.stringify(overridesObj));
   }
 
-  const response = await apiFetch(`${API_BASE_URL}/api/analyze`, {
-    method: 'POST',
-    headers: { ...getAuthHeaders() },
-    body: formData,
+  const response = await rosterRequest(`${API_BASE_URL}/api/analyze`, formData);
+  return readRosterResponse<AnalysisResult>(response, {
+    unavailable: 'Analysis is temporarily unavailable. Please try again shortly.',
+    fallback: 'The roster could not be analysed.',
   });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Analysis failed');
-  }
-  
-  return response.json();
 }
 
 export async function getDutyDetail(
@@ -803,25 +803,108 @@ export async function getComparativeTrend(): Promise<TrendData> {
   return response.json();
 }
 
+// ── Roster import (preview + analyse) ───────────────────────────────────────
+
+/** How the home base was chosen. The header is authoritative; a duty pattern needs confirmation. */
+export type BaseSource = 'roster_header' | 'duty_pattern' | 'entered';
+
+export interface RosterPreviewCheck {
+  code: string;
+  severity: 'warning' | 'info';
+  message: string;
+}
+
+export interface RosterPreviewDuty {
+  id: string; report_utc: string; release_utc: string; type: string; route: string;
+  sectors?: number;
+  release_inferred?: boolean;
+}
+
 export interface RosterPreview {
   month: string; home_base: string; home_timezone: string; time_convention: string;
   total_duties: number; total_sectors: number; standby_periods: number;
   whole_duty_block_hours: number; calendar_month_block_hours: number;
   source_block_hours: number | null; source_duty_hours: number | null;
   block_total_matches_source: boolean | null; warnings: string[];
-  duties: Array<{ id: string; report_utc: string; release_utc: string; type: string; route: string }>;
+  duties: RosterPreviewDuty[];
+  // Additive fields; older backends omit them.
+  roster_format?: string;
+  base_source?: BaseSource | null;
+  detected_base?: string | null;
+  detected_base_source?: BaseSource | null;
+  entered_base?: string | null;
+  base_conflict?: boolean;
+  base_override?: boolean;
+  base_city?: string | null;
+  base_country?: string | null;
+  base_airport_name?: string | null;
+  base_utc_offsets?: string[];
+  flight_duties?: number;
+  training_duties?: number;
+  airport_standbys?: number;
+  duties_touching_base?: number;
+  inferred_release_count?: number;
+  checks?: RosterPreviewCheck[];
+  needs_confirmation?: boolean;
 }
-export async function previewRoster(file: File, homeBase: string): Promise<RosterPreview> {
-  const form = new FormData(); form.append('file', file); form.append('home_base', homeBase);
-  const response = await apiFetch(`${API_BASE_URL}/api/roster/preview`, { method: 'POST', headers: getAuthHeaders(), body: form });
+
+/** A roster request that failed, with the backend's stable code when it sent one. */
+export class RosterRequestError extends Error {
+  constructor(message: string, readonly code: string, readonly status: number) {
+    super(message);
+    this.name = 'RosterRequestError';
+  }
+}
+
+async function rosterRequest(url: string, body: FormData): Promise<Response> {
+  try {
+    return await apiFetch(url, { method: 'POST', headers: { ...getAuthHeaders() }, body });
+  } catch (error) {
+    if (error instanceof Error && /session/i.test(error.message)) throw error;
+    throw new RosterRequestError("Can't reach Aerowake. Check your connection and try again.", 'network', 0);
+  }
+}
+
+async function readRosterResponse<T>(response: Response, text: { unavailable: string; fallback: string }): Promise<T> {
   // A stale deployment or unavailable proxy is a service failure, not a bad roster.
   // Check before decoding: proxies may return HTML instead of JSON.
   if (response.status === 404 || response.status >= 500) {
-    throw new Error('Roster import is temporarily unavailable. Please try again shortly. If this continues, contact support.');
+    throw new RosterRequestError(`${text.unavailable} If this continues, contact support.`, 'service_unavailable', response.status);
   }
-  const body = await response.json().catch(() => {
-    throw new Error('The roster service returned an unreadable response. Please try again.');
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new RosterRequestError('The roster service returned an unreadable response. Please try again.', 'unreadable_response', response.status);
+  }
+  if (!response.ok) {
+    const { detail, code } = (body ?? {}) as { detail?: unknown; code?: unknown };
+    throw new RosterRequestError(
+      typeof detail === 'string' && detail ? detail : text.fallback,
+      typeof code === 'string' ? code : `http_${response.status}`,
+      response.status,
+    );
+  }
+  return body as T;
+}
+
+/**
+ * Read a roster for review. Without `homeBase` the backend detects it from the
+ * header (PDF) or duty pattern (CSV); a `home_base_required` error means the
+ * pilot must enter it. `override` replaces a header base on purpose.
+ */
+export async function previewRoster(
+  file: File,
+  homeBase?: string | null,
+  options: { override?: boolean } = {},
+): Promise<RosterPreview> {
+  const form = new FormData();
+  form.append('file', file);
+  if (homeBase) form.append('home_base', homeBase);
+  if (homeBase && options.override) form.append('home_base_override', 'true');
+  const response = await rosterRequest(`${API_BASE_URL}/api/roster/preview`, form);
+  return readRosterResponse<RosterPreview>(response, {
+    unavailable: 'Roster import is temporarily unavailable. Please try again shortly.',
+    fallback: 'Roster could not be read.',
   });
-  if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : 'Roster could not be read.');
-  return body;
 }
