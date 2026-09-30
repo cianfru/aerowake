@@ -4,8 +4,10 @@
  * A synthetic October roster (DOH base, generic flight numbers, no real pilot
  * or schedule) was run through the Aerowake engine; the values below are that
  * engine's own outputs, rounded to two decimals. Times are home-base local
- * (DOH, UTC+3). Regenerate them from the engine if the model changes; never
- * edit a number by hand.
+ * (DOH, UTC+3). The roster is in fatigue-tool/scripts/landing_data.py;
+ * regenerate with `python scripts/landing_data.py` (run from fatigue-tool) and
+ * never edit a number by hand. fatigue-tool/tests/test_landing_data.py fails
+ * when these literals drift from the engine.
  */
 
 export interface TourDuty {
@@ -20,7 +22,11 @@ export interface TourDuty {
   peakKss: number;
   /** True when the duty overlaps the WOCL, 02:00–05:59 home-base time. */
   wocl: boolean;
-  /** A reason the engine gave for the duty, wording shortened. */
+  /**
+   * A reason the engine gave for the duty, wording shortened. A landing cited
+   * against the body-clock low must carry its body-clock time when the
+   * home-base time falls outside 02:00–05:59.
+   */
   reason?: string;
 }
 
@@ -32,7 +38,7 @@ export const TOUR_WATCH_KSS = 6.5;
 export const TOUR_DUTIES: TourDuty[] = [
   { date: '2026-10-01', route: ['DOH', 'MCT', 'DOH'], report: '06:15', release: '12:15', peakKss: 5.26, wocl: false },
   { date: '2026-10-03', route: ['DOH', 'LHR'], report: '08:00', release: '16:45', peakKss: 4.6, wocl: false },
-  { date: '2026-10-05', route: ['LHR', 'DOH'], report: '22:15', release: '06:30', peakKss: 6.79, wocl: true, reason: 'Lands 06:00 home-base time, during the body-clock low' },
+  { date: '2026-10-05', route: ['LHR', 'DOH'], report: '22:15', release: '06:30', peakKss: 6.79, wocl: true, reason: 'Lands 06:00 home-base time (04:47 body clock), inside the body-clock low' },
   { date: '2026-10-07', route: ['DOH', 'BKK'], report: '00:40', release: '08:40', peakKss: 7.14, wocl: true, reason: 'Only about 5 hours of estimated sleep in the 24 hours before report' },
   { date: '2026-10-09', route: ['BKK', 'DOH'], report: '14:05', release: '22:35', peakKss: 6.97, wocl: false, reason: 'About 20 hours awake by the end of the duty' },
   { date: '2026-10-12', route: ['DOH', 'NJF', 'DOH'], report: '17:15', release: '00:45', peakKss: 6.95, wocl: false, reason: 'About 18 hours awake by the end of the duty' },

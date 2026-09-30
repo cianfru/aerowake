@@ -59,6 +59,23 @@ describe('illustrative tour data', () => {
     }
   });
 
+  it('never cites the body-clock low for a landing outside 02:00–05:59 without its body-clock time', () => {
+    const inWocl = (hhmm: string) => {
+      const [h] = hhmm.split(':').map(Number);
+      return h >= 2 && h < 6;
+    };
+    const cited = TOUR_DUTIES.filter((d) => d.reason && /body-clock low/i.test(d.reason) && /\bLands\b/i.test(d.reason));
+    expect(cited.length).toBeGreaterThan(0);
+    for (const d of cited) {
+      const reason = d.reason as string;
+      const homeTime = reason.match(/(\d{2}:\d{2}) home-base time/)?.[1];
+      const bodyClock = reason.match(/\((\d{2}:\d{2}) body clock\)/)?.[1];
+      expect(homeTime ?? bodyClock, reason).toBeTruthy();
+      if (bodyClock) expect(inWocl(bodyClock), reason).toBe(true);
+      else expect(inWocl(homeTime as string), reason).toBe(true);
+    }
+  });
+
   it('describes one full week at 30-minute steps with non-overlapping sleep and duty', () => {
     expect(TOUR_WEEK.kss).toHaveLength(7 * 48);
     const spans = [...TOUR_WEEK.sleep, ...TOUR_WEEK.duties].sort((a, b) => a[0] - b[0]);

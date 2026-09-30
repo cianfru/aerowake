@@ -11,7 +11,9 @@ import { formatKssValue, kssBand } from './landingKss';
  * "Nap" adds a 15:00–17:00 sleep. Values every 15 minutes from 08:00 on day 1
  * to 10:00 on day 2, null while asleep and for the first hour after waking,
  * because sleep inertia is not part of the model. Group-average pilot; engine
- * outputs rounded to two decimals, never edited by hand.
+ * outputs rounded to two decimals, never edited by hand: regenerate with
+ * `python scripts/landing_data.py` from fatigue-tool, where
+ * tests/test_landing_data.py checks these literals against the model.
  */
 export const SCIENCE_SCENARIO = {
   /** Clock hour of the first sample. */
