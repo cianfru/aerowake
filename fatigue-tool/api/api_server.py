@@ -760,6 +760,9 @@ def _build_ulr_data(duty_timeline, duty) -> tuple:
             'crew_set': period.crew_set if period else None,
             'is_during_wocl': period.is_during_wocl if period else False,
             'source': 'roster_ir' if has_pdf_ir else 'planned',
+            # Qatar FTL 7.18.11 figure when the rest comes from an approved city-pair plan.
+            'approved_plan': (period.crew_member_id.split('_')[2]
+                              if period and str(period.crew_member_id or '').startswith('qatar_fig_') else None),
         })
     return ulr_compliance_dict, inflight_blocks
 

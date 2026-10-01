@@ -19,8 +19,34 @@ confirmed here, the app must label the check as EASA-referenced or not assessed.
 | 7.18 post-ULR rest | 4 local nights at base; away: 48 h including 2 local nights | same |
 | 7.18 monthly limit | at most 2 ULR duties per calendar month | same |
 | ULR city pairs | DOH–AKL permanent; DOH–DFW, DOH–MIA seasonal | same (check each season) |
-| 7.6.1 Table 7-1 acclimatisation | B/X/D by time-zone difference and elapsed time | `AcclimatizationCalculator`; used by `compliance.determine_acclimatisation` |
+| 7.6.1 Table 7-1 acclimatisation | B/X/D by time-zone difference and elapsed time; rows > 2 & < 4, ≥ 4 & ≤ 6, > 6 & ≤ 9, > 9 & ≤ 12 (exactly 4 h is the second row) | `AcclimatizationCalculator`; used by `compliance.determine_acclimatisation` |
+| 7.18.4.3 pre-ULR | 48 h free of duty **including 2 local nights**, checked before departures from base | `QatarFTL718Validator` |
+| 7.18.4.3 post-ULR | at base: **4 consecutive local nights**; away: 48 h including 2 local nights (arrival time zone) | same |
+| 7.18.11 rest patterns | Figures 7-3 to 7-8, per crew (table below), scaled to the scheduled block | `QATAR_ULR_REST_PATTERNS`, `ULRRestPlanner.approved_pattern` |
+| 7.18.6 / 7.18.7 | discretion: FDP + up to 3 h (> 2 h reported to QCAA); reduced rest away ≥ 24 h incl. 1 local night | params (reduced rest not yet checked) |
 | Compliance check | `QatarFTL718Validator` → `ulr_compliance` on each ULR duty | API `DutyResponse.ulr_compliance` |
+
+Source: OM-A Chapter 7, Section 7.6.1 and Supplement 7.18 (excerpts supplied by the owner,
+October 2026; the documents themselves are not stored in the repository).
+
+### Approved ULR rest patterns (7.18.11), hours from off-blocks
+
+| Sector | Block | Crew A rest | Crew B rest |
+|---|---|---|---|
+| DOH–AKL (Fig 7-3) | 16:10 | 3:30–8:00, 12:30–15:30 (7:30) | 0:30–3:30, 8:00–12:30 (7:30) |
+| AKL–DOH (Fig 7-4) | 17:30 | 0:30–4:00, 8:40–13:20 (8:10) | 4:00–8:40, 13:20–16:50 (8:10) |
+| DOH–DFW (Fig 7-5) | 16:25 | 4:20–8:20, 12:10–15:55 (7:45) | 0:20–4:20, 8:20–12:10 (7:50) |
+| DFW–DOH (Fig 7-6) | 14:20 | 0:20–3:20, 7:20–11:20 (7:00) | 3:20–7:20, 11:20–13:50 (6:30) |
+| DOH–MIA (Fig 7-7) | 15:40 | 3:50–11:10 (7:20) | 0:20–3:50, 11:10–15:10 (7:30) |
+| MIA–DOH (Fig 7-8) | 14:20 | 0:20–3:30, 9:50–13:50 (7:10) | 3:30–9:50 (6:20) |
+
+Read from the labelled durations laid end to end; every sector adds up exactly to the
+figure's block time and per-crew rest totals. Notes for the owner: in Figure 7-4 (AKL–DOH)
+the two middle blocks carry crew labels that look copy-pasted ("Crew B Operates" printed in
+Crew A's column); the bar positions and totals were used. DOH–MIA Crew A and MIA–DOH Crew B
+have a single rest period, so the 7.18.4.3 "at least 2 periods, one ≥ 4 h" rule is checked on
+the plan (both crews), not per pilot. Routes without an approved pattern use the generic
+rotation (no rest in the first/last 90 min).
 
 ## Augmented crew (3 or 4 pilots) — how it works
 
@@ -54,6 +80,10 @@ These values are from EASA and are **not yet confirmed** as Qatar's:
 | Standard-crew FDP table | ORO.FTL.205(b) Table 2 / Table 3, 30 min per sector after the 2nd, minimum 9 h | `core/compliance.py` |
 | Disruptive schedules | EASA "early type" definitions | `core/compliance.py` |
 | Rest facility class default | Class 1 (bunk) when the pilot sets 3/4 pilots without a class | `_apply_crew_overrides` |
+
+Not in the supplied excerpts (still needed): **Table 7-6** Maximum Daily FDP (acclimatised),
+the unknown-acclimatisation FDP table, the **augmented-crew / in-flight rest FDP table**, and
+**Table 7-12** minimum local nights of rest to compensate for time-zone differences.
 
 When the owner supplies the OM-A Chapter 7 tables, replace these values, cite the
 Qatar paragraph in the parameter docstring, move the row to the table above, and add

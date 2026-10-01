@@ -38,6 +38,7 @@ export interface InFlightRestBlock {
   crew_set: ULRCrewSet | null;
   is_during_wocl: boolean;
   source?: 'roster_ir' | 'planned';
+  approved_plan?: string | null;
 }
 
 export interface ULRCompliance {

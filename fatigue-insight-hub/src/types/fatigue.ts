@@ -266,6 +266,8 @@ export interface DutyAnalysis {
     isDuringWocl: boolean;
     /** 'roster_ir' = an IR sector on the roster; 'planned' = the standard rest rotation, to confirm. */
     source: 'roster_ir' | 'planned';
+    /** Qatar FTL 7.18.11 figure (e.g. '7-3') when the times follow an approved ULR rest plan. */
+    approvedPlan: string | null;
   }[];
   returnToDeckPerformance: number | null;
   preDutyAwakeHours: number;

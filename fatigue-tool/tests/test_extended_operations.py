@@ -430,8 +430,9 @@ class TestULRRestPlanner:
         assert max_period >= 4.0, f"Longest rest period is {max_period}h, need >= 4h"
 
     def test_rest_avoids_takeoff_landing_window(self):
-        """ULR rest avoids first 90min and last 90min."""
+        """Generic plan (no approved city-pair pattern) avoids the first and last 90 min."""
         duty = make_ulr_duty()
+        duty.segments[0].arrival_airport = SIN  # not an approved 7.18.11 city pair
         plan = self.planner.generate_rest_plan(
             duty, ULRCrewSet.CREW_B, HOME_TZ, sector="outbound"
         )
@@ -828,3 +829,68 @@ class TestPilotCrewOverrides:
             assert len(resp.inflight_rest_blocks) == len(tl.inflight_rest_blocks) > 0
             expected = 'roster_ir' if duty.duty_id == 'ret' else 'planned'
             assert {b['source'] for b in resp.inflight_rest_blocks} == {expected}
+
+
+
+class TestQatarApprovedULRRestPatterns:
+    """Qatar FTL 7.18.11 Figures 7-3 to 7-8: per-crew rest from the approved plans."""
+
+    @pytest.mark.parametrize('pair,block,rest_a,rest_b', [
+        (('DOH', 'AKL'), 16 + 10 / 60, 7.5, 7.5),
+        (('AKL', 'DOH'), 17.5, 8 + 10 / 60, 8 + 10 / 60),
+        (('DOH', 'DFW'), 16 + 25 / 60, 7.75, 7 + 50 / 60),
+        (('DFW', 'DOH'), 14 + 20 / 60, 7.0, 6.5),
+        (('DOH', 'MIA'), 15 + 40 / 60, 7 + 20 / 60, 7.5),
+        (('MIA', 'DOH'), 14 + 20 / 60, 7 + 10 / 60, 6 + 20 / 60),
+    ])
+    def test_pattern_totals_match_the_figures(self, pair, block, rest_a, rest_b):
+        from core.extended_operations import QATAR_ULR_REST_PATTERNS
+        p = QATAR_ULR_REST_PATTERNS[pair]
+        assert p['block'] == pytest.approx(block)
+        assert sum(e - s for s, e in p['crew_a']) == pytest.approx(rest_a)
+        assert sum(e - s for s, e in p['crew_b']) == pytest.approx(rest_b)
+        for s, e in p['crew_a'] + p['crew_b']:
+            assert 0 <= s < e <= block
+        # 7.18.4.3: the plan has at least 2 rest periods, one of at least 4 h.
+        periods = p['crew_a'] + p['crew_b']
+        assert len(periods) >= 2 and max(e - s for s, e in periods) >= 4.0
+
+    def test_planner_uses_the_approved_pattern_for_each_crew(self):
+        from core.extended_operations import ULRRestPlanner
+        duty = make_ulr_duty()  # DOH-AKL
+        dep = duty.segments[0].scheduled_departure_utc
+        block = duty.segments[0].block_time_hours
+        scale = block / (16 + 10 / 60)
+        b = ULRRestPlanner().generate_rest_plan(duty, ULRCrewSet.CREW_B, HOME_TZ)
+        a = ULRRestPlanner().generate_rest_plan(duty, ULRCrewSet.CREW_A, HOME_TZ)
+        assert [(round((p.start_utc - dep).total_seconds() / 3600 / scale, 2), round((p.end_utc - dep).total_seconds() / 3600 / scale, 2)) for p in b.rest_periods] == [(0.5, 3.5), (8.0, 12.5)]
+        assert [(round((p.start_utc - dep).total_seconds() / 3600 / scale, 2), round((p.end_utc - dep).total_seconds() / 3600 / scale, 2)) for p in a.rest_periods] == [(3.5, 8.0), (12.5, 15.5)]
+
+    def test_table_7_1_puts_exactly_four_hours_in_the_second_row(self):
+        from core.extended_operations import AcclimatizationCalculator
+        # '>= 4 and <= 6': 48-71:59 h elapsed is X (unknown), not D.
+        assert AcclimatizationCalculator.determine_state(4.0, 50) == AcclimatizationState.UNKNOWN
+        assert AcclimatizationCalculator.determine_state(3.9, 50) == AcclimatizationState.DEPARTED
+        assert AcclimatizationCalculator.determine_state(6.0, 80) == AcclimatizationState.DEPARTED
+        assert AcclimatizationCalculator.determine_state(6.1, 80) == AcclimatizationState.UNKNOWN
+
+
+def test_post_ulr_rest_at_base_needs_four_local_nights():
+    """7.18.4.3: four consecutive local nights free of duty at base after a ULR pairing."""
+    from core.extended_operations import QatarFTL718Validator
+    base = datetime(2026, 10, 5, tzinfo=UTC)
+    ret_dep = base.replace(hour=4)
+    ret = make_duty('ret', base, ret_dep - timedelta(hours=1), ret_dep + timedelta(hours=18),
+                    [make_segment('QR921', AKL, DOH, ret_dep, ret_dep + timedelta(hours=17, minutes=30))],
+                    crew_comp=CrewComposition.AUGMENTED_4, is_ulr=True, ulr_crew_set=ULRCrewSet.CREW_A)
+    def next_after(days):
+        rep = ret.release_time_utc + timedelta(days=days)
+        return make_duty('next', rep, rep, rep + timedelta(hours=8),
+                         [make_segment('QR1', DOH, DXB, rep + timedelta(hours=1), rep + timedelta(hours=2))])
+    v = QatarFTL718Validator()
+    short = Roster(roster_id='r', pilot_id='p', month='2026-10', duties=[ret, next_after(3)],
+                   home_base_timezone=HOME_TZ, pilot_base='DOH')
+    assert not v.validate_ulr_duty(ret, short, 0).post_ulr_rest_compliant
+    long = Roster(roster_id='r', pilot_id='p', month='2026-10', duties=[ret, next_after(5)],
+                  home_base_timezone=HOME_TZ, pilot_base='DOH')
+    assert v.validate_ulr_duty(ret, long, 0).post_ulr_rest_compliant

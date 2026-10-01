@@ -27,7 +27,7 @@ describe('launch contracts', () => {
   it('can render crew rest when a previously empty duty is populated', () => {
     const duty=transformAnalysisResult(rosterFixture,new Date(2026,8,1)).duties[0];
     const view=render(<CrewRestTimeline duty={{...duty,inflightRestBlocks:[]}} />);
-    view.rerender(<CrewRestTimeline duty={{...duty,inflightRestBlocks:[{startUtc:'2026-09-01T09:00:00Z',endUtc:'2026-09-01T10:00:00Z',startHomeTz:null,endHomeTz:null,startDayHomeTz:null,startHourHomeTz:null,endDayHomeTz:null,endHourHomeTz:null,startIsoHomeTz:null,endIsoHomeTz:null,qualityFactor:.7,environment:'bunk',crewMemberId:null,durationHours:1,effectiveSleepHours:.7,crewSet:'crew_a',isDuringWocl:false,source:'roster_ir'}]}} />);
+    view.rerender(<CrewRestTimeline duty={{...duty,inflightRestBlocks:[{startUtc:'2026-09-01T09:00:00Z',endUtc:'2026-09-01T10:00:00Z',startHomeTz:null,endHomeTz:null,startDayHomeTz:null,startHourHomeTz:null,endDayHomeTz:null,endHourHomeTz:null,startIsoHomeTz:null,endIsoHomeTz:null,qualityFactor:.7,environment:'bunk',crewMemberId:null,durationHours:1,effectiveSleepHours:.7,crewSet:'crew_a',isDuringWocl:false,source:'roster_ir',approvedPlan:null}]}} />);
     expect(screen.getByText(/Crew A/i)).toBeInTheDocument();
   });
 });

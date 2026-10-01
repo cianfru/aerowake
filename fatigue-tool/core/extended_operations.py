@@ -142,6 +142,34 @@ class QatarFTL718Parameters:
     ])
 
 
+# Approved in-flight rest patterns, Qatar FTL 7.18.11 Figures 7-3 to 7-8.
+# Hours from off-blocks for each crew's rest periods, read from the labelled
+# durations in each figure (laid end to end they add up exactly to the block
+# time and to each crew's rest total in the figure's break-down table).
+# Key: (departure, arrival). Crew B is the relief crew outbound from DOH and
+# operates the return; Crew A operates the outbound departure.
+QATAR_ULR_REST_PATTERNS: Dict[Tuple[str, str], Dict] = {
+    ('DOH', 'AKL'): {'figure': '7-3', 'block': 16 + 10 / 60,
+                     'crew_a': [(3.5, 8.0), (12.5, 15.5)],             # 4:30 + 3:00 = 7:30
+                     'crew_b': [(0.5, 3.5), (8.0, 12.5)]},             # 3:00 + 4:30 = 7:30
+    ('AKL', 'DOH'): {'figure': '7-4', 'block': 17.5,
+                     'crew_a': [(0.5, 4.0), (8 + 40 / 60, 13 + 20 / 60)],   # 3:30 + 4:40 = 8:10
+                     'crew_b': [(4.0, 8 + 40 / 60), (13 + 20 / 60, 16 + 50 / 60)]},  # 4:40 + 3:30 = 8:10
+    ('DOH', 'DFW'): {'figure': '7-5', 'block': 16 + 25 / 60,
+                     'crew_a': [(4 + 20 / 60, 8 + 20 / 60), (12 + 10 / 60, 15 + 55 / 60)],  # 4:00 + 3:45 = 7:45
+                     'crew_b': [(20 / 60, 4 + 20 / 60), (8 + 20 / 60, 12 + 10 / 60)]},     # 4:00 + 3:50 = 7:50
+    ('DFW', 'DOH'): {'figure': '7-6', 'block': 14 + 20 / 60,
+                     'crew_a': [(20 / 60, 3 + 20 / 60), (7 + 20 / 60, 11 + 20 / 60)],      # 3:00 + 4:00 = 7:00
+                     'crew_b': [(3 + 20 / 60, 7 + 20 / 60), (11 + 20 / 60, 13 + 50 / 60)]}, # 4:00 + 2:30 = 6:30
+    ('DOH', 'MIA'): {'figure': '7-7', 'block': 15 + 40 / 60,
+                     'crew_a': [(3 + 50 / 60, 11 + 10 / 60)],                               # 7:20
+                     'crew_b': [(20 / 60, 3 + 50 / 60), (11 + 10 / 60, 15 + 10 / 60)]},    # 3:30 + 4:00 = 7:30
+    ('MIA', 'DOH'): {'figure': '7-8', 'block': 14 + 20 / 60,
+                     'crew_a': [(20 / 60, 3.5), (9 + 50 / 60, 13 + 50 / 60)],              # 3:10 + 4:00 = 7:10
+                     'crew_b': [(3.5, 9 + 50 / 60)]},                                       # 6:20
+}
+
+
 # ============================================================================
 # ACCLIMATIZATION CALCULATOR (Table 7-1)
 # ============================================================================
@@ -162,12 +190,23 @@ class AcclimatizationCalculator:
     # Table 7-1: rows = time zone diff bands, cols = elapsed time bands
     # Values: 'B' (base), 'X' (unknown), 'D' (departed/destination)
     TABLE_7_1 = {
+        # Rows as printed in Table 7-1: > 2 and < 4; >= 4 and <= 6; > 6 and <= 9; > 9 and <= 12.
         # (min_tz_diff, max_tz_diff): [<48h, 48-71:59, 72-95:59, 96-119:59, >=120h]
         (2, 4):   ['B', 'D', 'D', 'D', 'D'],
         (4, 6):   ['B', 'X', 'D', 'D', 'D'],
         (6, 9):   ['B', 'X', 'X', 'D', 'D'],
         (9, 12):  ['B', 'X', 'X', 'X', 'D'],
     }
+
+    @staticmethod
+    def _row_for(abs_diff: float):
+        if abs_diff < 4:
+            return (2, 4)
+        if abs_diff <= 6:
+            return (4, 6)
+        if abs_diff <= 9:
+            return (6, 9)
+        return (9, 12)  # > 12 h is not in Table 7-1; the most conservative row is used
 
     @classmethod
     def determine_state(
@@ -191,18 +230,7 @@ class AcclimatizationCalculator:
         if abs_diff <= 2:
             return AcclimatizationState.ACCLIMATIZED
 
-        # Find the row in Table 7-1
-        row_key = None
-        for (min_diff, max_diff) in cls.TABLE_7_1:
-            if min_diff < abs_diff <= max_diff:
-                row_key = (min_diff, max_diff)
-                break
-
-        if row_key is None:
-            # > 12h difference — same as 9-12h row (most conservative)
-            row_key = (9, 12)
-
-        row = cls.TABLE_7_1[row_key]
+        row = cls.TABLE_7_1[cls._row_for(abs_diff)]
 
         # Determine column from elapsed time
         if time_elapsed_hours < 48:
@@ -387,6 +415,15 @@ class ULRRestPlanner:
         seg = max(duty.segments, key=lambda s: s.block_time_hours)
         flight_hours = seg.block_time_hours
 
+        # Approved Qatar rest pattern for this city pair (7.18.11), when one exists.
+        approved = self.approved_pattern(seg, crew_set, pytz.timezone(home_timezone), duty.report_time_utc)
+        if approved is not None:
+            return InFlightRestPlan(
+                rest_periods=approved,
+                crew_composition=duty.crew_composition,
+                rest_facility_class=RestFacilityClass.CLASS_1,
+            )
+
         # Protect first 90min and last 90min (all pilots on deck)
         protect_start_hours = 1.5
         protect_end_hours = 1.5
@@ -431,6 +468,35 @@ class ULRRestPlanner:
             crew_composition=duty.crew_composition,  # Use duty's actual composition
             rest_facility_class=RestFacilityClass.CLASS_1,
         )
+
+    @staticmethod
+    def approved_pattern(seg, crew_set, home_tz, report_utc) -> Optional[List[InFlightRestPeriod]]:
+        """Rest periods from the approved Qatar pattern (Figures 7-3 to 7-8).
+
+        Offsets are scaled to the scheduled block time, so a seasonal or
+        delayed schedule keeps the approved proportions of the rotation.
+        """
+        key = (seg.departure_airport.code, seg.arrival_airport.code)
+        pattern = QATAR_ULR_REST_PATTERNS.get(key)
+        if pattern is None:
+            return None
+        scale = seg.block_time_hours / pattern['block'] if pattern['block'] else 1.0
+        label = 'A' if crew_set == ULRCrewSet.CREW_A else 'B'
+        periods = []
+        for i, (start_h, end_h) in enumerate(pattern['crew_a' if label == 'A' else 'crew_b']):
+            start = seg.scheduled_departure_utc + timedelta(hours=start_h * scale)
+            end = seg.scheduled_departure_utc + timedelta(hours=end_h * scale)
+            start_local = start.astimezone(home_tz)
+            periods.append(InFlightRestPeriod(
+                start_offset_hours=(start - report_utc).total_seconds() / 3600,
+                duration_hours=(end - start).total_seconds() / 3600,
+                start_utc=start,
+                end_utc=end,
+                is_during_wocl=0 <= start_local.hour < 7 or start_local.hour >= 22,
+                crew_member_id=f"qatar_fig_{pattern['figure']}_{label}{i + 1}",
+                crew_set=label,
+            ))
+        return periods
 
     def _crew_b_outbound(self, avail_start, avail_end, avail_hours, home_tz, report_utc):
         """Crew B outbound: relief crew, rests earlier in flight."""
@@ -582,9 +648,20 @@ class QatarFTL718Validator:
                     f"({self.params.ulr_max_planned_fdp_hours + self.params.ulr_discretion_max_hours}h)"
                 )
 
-        # 2. Rest period validity
+        # 2. Rest period validity. 7.18.4.3: the city-pair rest PLAN specifies at
+        # least 2 rest periods, one of at least 4 h. The approved plans give one
+        # crew a single long rest on some sectors (e.g. DOH-MIA Crew A), so the
+        # rule is checked on the plan (both crews), not on one pilot.
         rest_ok = True
-        if duty.inflight_rest_plan:
+        seg = max(duty.segments, key=lambda s: s.block_time_hours) if duty.segments else None
+        approved = QATAR_ULR_REST_PATTERNS.get(
+            (seg.departure_airport.code, seg.arrival_airport.code)) if seg else None
+        if approved is not None:
+            plan = approved['crew_a'] + approved['crew_b']
+            if len(plan) < self.params.ulr_min_rest_periods or max(e - s for s, e in plan) < self.params.ulr_min_long_rest_hours:
+                violations.append(f"Approved rest plan (Figure {approved['figure']}) does not meet 7.18.4.3")
+                rest_ok = False
+        elif duty.inflight_rest_plan:
             periods = duty.inflight_rest_plan.rest_periods
             if len(periods) < self.params.ulr_min_rest_periods:
                 violations.append(
@@ -611,21 +688,34 @@ class QatarFTL718Validator:
         post_ok = True
 
         if roster and duty_index is not None:
-            # Pre-ULR: 48h duty-free + 2 local nights
-            if duty_index > 0:
+            from core.easa_checks import _local_nights
+            home_tz = roster.home_base_timezone
+            # Pre-ULR (7.18.4.3): the 48 h before the FDP free of duty, including 2 local nights.
+            # Only checked before a departure from base; the return leg's rest is post-ULR rest away.
+            departs_base = bool(duty.segments) and duty.segments[0].departure_airport.code == roster.pilot_base
+            if duty_index > 0 and departs_base:
                 prev_duty = roster.duties[duty_index - 1]
                 gap_hours = (duty.report_time_utc - prev_duty.release_time_utc).total_seconds() / 3600
+                nights = _local_nights(prev_duty.release_time_utc, duty.report_time_utc, home_tz)
                 if gap_hours < self.params.pre_ulr_duty_free_hours:
                     violations.append(
                         f"Pre-ULR rest {gap_hours:.1f}h < required {self.params.pre_ulr_duty_free_hours}h"
                     )
                     pre_ok = False
+                elif nights < self.params.pre_ulr_local_nights:
+                    violations.append(
+                        f"Pre-ULR rest includes {nights} local night(s); {self.params.pre_ulr_local_nights} required"
+                    )
+                    pre_ok = False
 
             # Monthly count
             duty_month = duty.date.strftime('%Y-%m')
+            # 7.18.1: ULR duties (flights and/or standbys) planned in the calendar month.
+            # ULR standbys cannot be identified on the roster, so only ULR flights count here.
             monthly_count = sum(
                 1 for d in roster.duties
-                if d.date.strftime('%Y-%m') == duty_month and d.fdp_hours > self.params.ulr_fdp_threshold_hours
+                if d.date.strftime('%Y-%m') == duty_month
+                and (getattr(d, 'is_ulr', False) or d.fdp_hours > self.params.ulr_fdp_threshold_hours)
             )
             if monthly_count > self.params.max_ulr_per_calendar_month:
                 violations.append(
@@ -640,18 +730,23 @@ class QatarFTL718Validator:
                 post_gap = (next_duty.report_time_utc - duty.release_time_utc).total_seconds() / 3600
                 arrival = duty.segments[-1].arrival_airport.code if duty.segments else None
                 if arrival == roster.pilot_base:
-                    required_hours = self.params.post_ulr_base_local_nights * 24
-                    if post_gap < required_hours:
-                        warnings.append(
-                            f"Post-ULR rest at base {post_gap:.0f}h may not include "
-                            f"{self.params.post_ulr_base_local_nights} local nights"
+                    # 7.18.4.3: four consecutive local nights free of duty at base.
+                    nights = _local_nights(duty.release_time_utc, next_duty.report_time_utc, home_tz)
+                    if nights < self.params.post_ulr_base_local_nights:
+                        violations.append(
+                            f"Post-ULR rest at base includes {nights} local night(s); "
+                            f"{self.params.post_ulr_base_local_nights} consecutive local nights required"
                         )
                         post_ok = False
                 else:
-                    if post_gap < self.params.post_ulr_away_duty_free_hours:
+                    # Away from base: at least 48 h free of flying duties, with 2 local nights.
+                    away_tz = duty.segments[-1].arrival_airport.timezone if duty.segments else home_tz
+                    nights = _local_nights(duty.release_time_utc, next_duty.report_time_utc, away_tz)
+                    if post_gap < self.params.post_ulr_away_duty_free_hours or nights < self.params.post_ulr_away_local_nights:
                         violations.append(
-                            f"Post-ULR rest away from base {post_gap:.1f}h < required "
-                            f"{self.params.post_ulr_away_duty_free_hours}h"
+                            f"Post-ULR rest away from base {post_gap:.1f}h with {nights} local night(s); "
+                            f"required {self.params.post_ulr_away_duty_free_hours:.0f}h including "
+                            f"{self.params.post_ulr_away_local_nights} local nights"
                         )
                         post_ok = False
 

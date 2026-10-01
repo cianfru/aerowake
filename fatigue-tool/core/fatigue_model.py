@@ -1255,10 +1255,12 @@ class BorbelyFatigueModel:
                 ulr_params = self.config.ulr_params if hasattr(self.config, 'ulr_params') else None
                 ulr_planner = ULRRestPlanner(ulr_params)
                 crew_set = getattr(duty, 'ulr_crew_set', None) or ULRCrewSet.CREW_B
+                outbound = bool(duty.segments) and duty.segments[0].departure_airport.code == roster.pilot_base
                 duty.inflight_rest_plan = ulr_planner.generate_rest_plan(
                     duty=duty,
                     crew_set=crew_set,
                     home_timezone=roster.home_base_timezone,
+                    sector='outbound' if outbound else 'return',
                 )
             elif duty.crew_composition == CrewComposition.AUGMENTED_3:
                 if not duty.rest_facility_class:

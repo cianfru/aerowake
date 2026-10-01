@@ -227,7 +227,9 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                 <CrewRestTimeline duty={duty} />
                 <p className="text-xs text-muted-foreground">
                   In-flight sleep credited: <span className="font-mono tabular text-foreground">{inflightSleepHours(duty).toFixed(1)}h</span>
-                  {duty.inflightRestBlocks.some((b) => b.source === 'planned') ? ' · from the standard rest rotation (the roster shows no IR sector) — adjust the crew above if yours differs' : ' · from the IR sectors on your roster'}
+                  {duty.inflightRestBlocks[0]?.approvedPlan
+                    ? ` · times from the approved Qatar ULR rest plan (FTL 7.18.11, Figure ${duty.inflightRestBlocks[0].approvedPlan}), Crew ${duty.ulrCrewSet === 'crew_a' ? 'A' : 'B'}`
+                    : duty.inflightRestBlocks.some((b) => b.source === 'planned') ? ' · from the standard rest rotation (the roster shows no IR sector) — adjust the crew above if yours differs' : ' · from the IR sectors on your roster'}
                 </p>
                 <ul className="space-y-1 rounded-xl border border-border bg-card p-3 text-xs" aria-label="In-flight rest">
                   {duty.inflightRestBlocks.map((block, i) => (

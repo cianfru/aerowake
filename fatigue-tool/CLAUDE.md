@@ -137,8 +137,10 @@ ORO.FTL.105(8) (`EASAComplianceValidator.is_disruptive_duty`).
 ### Augmented crew and Qatar FTL
 See `docs/QATAR_FTL.md`: IR sectors → 4-pilot (Crew B; paired legs Crew A); 3-pilot only by
 pilot override (`duty_crew_overrides` `{composition, crew_set}`, `_apply_crew_overrides`). All
-scored in-flight rest blocks are returned with `source` 'roster_ir' | 'planned'. ULR = Qatar
-FTL 7.18 (`QatarFTL718Validator`); augmented non-ULR FDP limits are still EASA CS FTL.1.205(c).
+scored in-flight rest blocks are returned with `source` 'roster_ir' | 'planned' and
+`approved_plan` (Qatar figure). ULR = Qatar FTL 7.18 (`QatarFTL718Validator`), with the approved
+rest patterns `QATAR_ULR_REST_PATTERNS` (Figures 7-3..7-8); augmented non-ULR FDP limits are
+still EASA CS FTL.1.205(c) pending OM-A Chapter 7 tables.
 
 ### Standby
 CrewLink PSBY/HSBY/SBY → `DutyType.HOME_STANDBY` on `Roster.standbys`: not scored
@@ -160,8 +162,8 @@ the same configuration.
 - Pre-duty nap (`PreDutyNapAssumptions`): stated per analysis as `nap_habit`
   ('usually' | 'sometimes' | 'rarely', default 'sometimes'; form field on analyze /
   reanalyze / what-if, echoed as `assumptions`). Length ramps from 0 h at 18:00 to the
-  night-departure nap (≤2.5 h, window-limited) at 22:00 body time; 'sometimes' caps at half;
-  'rarely' none. Modelling assumption to calibrate with pilot debrief data. The duty's
+  night-departure nap (≤2.5 h, window-limited) at 22:00 body time; 'sometimes' scales it by
+  the 54 % nap prevalence of Signal et al. (2014); 'rarely' none. Modelling assumption to calibrate with pilot debrief data. The duty's
   sleep explanation, `assumed_nap_hours` and risk reasons state it.
 - Afternoon release before a night report (`DaytimeSleepBounds`): ≤2.5 h afternoon nap
   ending by 18:00 body time + evening sleep from 21:00 — never one long afternoon block.
