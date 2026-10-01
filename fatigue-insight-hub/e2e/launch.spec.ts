@@ -75,8 +75,9 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   airportOffline=false;
   await page.getByRole('button',{name:'Retry map'}).click();
   await expect(page.getByRole('button',{name:'Retry map'})).toHaveCount(0);
-  await page.getByRole('button',{name:'Flat routes',exact:true}).click();
-  await page.getByRole('button',{name:'list',exact:true}).click();
+  await page.getByRole('button',{name:'Map',exact:true}).click();
+  await expect(page.locator('svg[data-mode="flat"]')).toBeVisible();
+  await page.getByRole('button',{name:'List',exact:true}).click();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.getByRole('tab',{name:'Outlook',exact:true}).click();
   await page.getByRole('button',{name:/Report fatigue for duty/}).first().click();
