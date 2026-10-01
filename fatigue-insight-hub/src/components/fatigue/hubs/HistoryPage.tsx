@@ -5,13 +5,22 @@ import { Button } from '@/components/ui/button';
 import { AuthSheet } from '@/components/auth/AuthSheet';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { HISTORY_SUB_TABS, type HistorySubTab } from '@/lib/navigation';
+import { HISTORY_SUB_TABS, type HistorySubTab, type SubTab } from '@/lib/navigation';
 import { RostersPage } from '../RostersPage';
 import { YearlyDashboardPage } from '../YearlyDashboardPage';
 import { ComparativeMetricsPage } from '../ComparativeMetricsPage';
 import { SubTabBar } from './SubTabBar';
+import { DebriefHistory } from '../debrief/DebriefHistory';
 
-/** History hub: saved rosters, 12-month view and peer comparison (signed-in only). */
+// Debriefs live beside saved rosters. TODO(integration): move this entry into
+// HISTORY_SUB_TABS in lib/navigation.ts so 'history:debriefs' links resolve.
+type HistoryTab = HistorySubTab | 'debriefs';
+const TABS: Array<{ id: HistoryTab; label: string }> = [
+  ...HISTORY_SUB_TABS.filter((t) => (t.id as string) !== 'debriefs'),
+  { id: 'debriefs', label: 'Debriefs' },
+];
+
+/** History hub: saved rosters, 12-month view, peer comparison and study debriefs (signed-in only). */
 export function HistoryPage() {
   const { state, setSubTab } = useAnalysis();
   const { isAuthenticated } = useAuth();
@@ -25,7 +34,7 @@ export function HistoryPage() {
             <History className="h-8 w-8 text-primary mx-auto" aria-hidden="true" />
             <h2 className="text-lg font-semibold">Sign in to see your history</h2>
             <p className="text-sm text-muted-foreground">
-              Signed-in pilots keep every analysed roster, a 12-month view and a comparison with peers.
+              Signed-in pilots keep every analysed roster, a 12-month view, a comparison with peers and their private duty debriefs.
             </p>
             <Button variant="glow" onClick={() => setAuthOpen(true)}>
               <LogIn className="h-4 w-4 mr-2" />
@@ -38,16 +47,17 @@ export function HistoryPage() {
     );
   }
 
-  const active: HistorySubTab = HISTORY_SUB_TABS.some((t) => t.id === state.activeSubTab)
-    ? (state.activeSubTab as HistorySubTab)
+  const active: HistoryTab = TABS.some((t) => t.id === state.activeSubTab)
+    ? (state.activeSubTab as HistoryTab)
     : 'rosters';
 
   return (
     <div className="flex-1">
-      <SubTabBar label="History sections" tabs={HISTORY_SUB_TABS} active={active} onChange={setSubTab} />
+      <SubTabBar label="History sections" tabs={TABS} active={active} onChange={(id) => setSubTab(id as SubTab)} />
       {active === 'rosters' && <RostersPage />}
       {active === 'yearly' && <YearlyDashboardPage />}
       {active === 'compare' && <ComparativeMetricsPage />}
+      {active === 'debriefs' && <DebriefHistory />}
     </div>
   );
 }

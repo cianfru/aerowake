@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { getAuthHeaders, useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { StudyParticipation } from '@/components/fatigue/debrief/StudyParticipation';
 const api = import.meta.env.VITE_API_URL || 'https://aerowake-production.up.railway.app';
 
 export default function AccountPage() {
@@ -32,8 +33,9 @@ export default function AccountPage() {
     {!user ? <p><Link to="/login" className="underline">Sign in</Link> to manage saved data.</p> : <>
       <section className="space-y-3"><h2 className="text-lg font-medium">Email verification</h2><p className="text-sm text-muted-foreground">{user.email} · {user.email_verified ? 'Verified' : 'Not verified'}</p>{!user.email_verified && <Button disabled={busy} onClick={() => act('verification/request')}>Send verification email</Button>}</section>
       <section className="space-y-3"><h2 className="text-lg font-medium">Optional comparisons</h2><p className="text-sm text-muted-foreground">Compare with pilots who opt in to the same self-declared airline group. Membership is not employer-verified. Groups smaller than five are hidden; this does not guarantee anonymity.</p><label className="flex items-start gap-3 text-sm"><input type="checkbox" disabled={busy} checked={user.metrics_consent ?? false} onChange={e => act('consent', 'PUT', { enabled: e.target.checked })} /><span>Include my roster statistics in cohort comparisons. I can withdraw at any time.</span></label></section>
+      <section className="space-y-3"><h2 className="text-lg font-medium">Pilot study participation</h2><p className="text-sm text-muted-foreground">Optional. Duty debriefs and the sleep diary are private to you, never sent to your operator or any company. Export or delete individual debriefs under History › Debriefs; withdrawing here stops new entries and can delete everything you gave.</p><StudyParticipation /></section>
       <section className="space-y-3"><h2 className="text-lg font-medium">Export saved data</h2><p className="text-sm text-muted-foreground">Download your saved analysis snapshots and study observations.</p><Button disabled={busy} variant="outline" onClick={() => act('export', 'GET')}>Download account data</Button></section>
-      <section className="space-y-3 border-t pt-6"><h2 className="text-lg font-medium">Delete account</h2><p className="text-sm text-muted-foreground">Permanently delete your account, uploaded rosters, analysis history, and study observations. Export any records you need first.</p><label className="block space-y-2 text-sm"><span>Confirm your current password</span><Input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} /></label><Button variant="destructive" disabled={busy || !password} onClick={() => act('account', 'DELETE', { password })}>Permanently delete my account</Button></section>
+      <section className="space-y-3 border-t pt-6"><h2 className="text-lg font-medium">Delete account</h2><p className="text-sm text-muted-foreground">Permanently delete your account, uploaded rosters, analysis history, study debriefs and diary entries. Export any records you need first.</p><label className="block space-y-2 text-sm"><span>Confirm your current password</span><Input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} /></label><Button variant="destructive" disabled={busy || !password} onClick={() => act('account', 'DELETE', { password })}>Permanently delete my account</Button></section>
     </>}
     <Link to="/privacy" className="block text-sm text-primary">Privacy and retention</Link>
   </main>;

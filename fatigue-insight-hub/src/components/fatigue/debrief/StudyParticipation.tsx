@@ -1,0 +1,76 @@
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { withdraw } from '@/lib/debrief-api';
+import { STUDY_RETENTION } from '@/lib/study-config';
+import { ConfirmDialog } from './ConfirmDialog';
+import { StudyEnrolmentDialog } from './StudyEnrolmentDialog';
+import { formatInZone } from './time';
+import { useEnrolment, useRefreshStudy } from './useStudy';
+
+/** Study status with join / withdraw. Used on Account and in History › Debriefs. */
+export function StudyParticipation({ compact }: { compact?: boolean }) {
+  const enrolment = useEnrolment();
+  const refresh = useRefreshStudy();
+  const [joinOpen, setJoinOpen] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [deleteData, setDeleteData] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  async function leave() {
+    setBusy(true); setMessage('');
+    try {
+      const result = await withdraw(deleteData);
+      setLeaveOpen(false);
+      await refresh();
+      setMessage(deleteData
+        ? `You have left the study. Deleted ${result.deleted.debriefs} debriefs and ${result.deleted.observations} diary entries.`
+        : 'You have left the study. Your existing entries are kept until you delete them.');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Could not withdraw.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (enrolment.isLoading) return <p className="text-sm text-muted-foreground" role="status">Loading study status…</p>;
+  if (enrolment.isError) return <p className="text-sm text-destructive" role="alert">{enrolment.error.message}</p>;
+  const data = enrolment.data;
+  const since = formatInZone(data?.enrolled_at, 'UTC', { day: 'numeric', month: 'short', year: 'numeric' });
+  return (
+    <div className="space-y-3">
+      {data?.enrolled ? (
+        <p className="text-sm">
+          <span className="font-medium">Taking part</span>
+          <span className="text-muted-foreground"> · since {since} · {data.debriefs} debriefs, {data.observations} diary entries</span>
+        </p>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          {data?.withdrawn_at ? 'You have left the study. You can rejoin at any time.' : 'Not taking part. The study is optional and Aerowake works fully without it.'}
+        </p>
+      )}
+      {!compact && <p className="text-xs text-muted-foreground">Retention: {STUDY_RETENTION}.</p>}
+      <div className="flex flex-wrap gap-2">
+        {data?.enrolled
+          ? <Button variant="outline" size="sm" onClick={() => setLeaveOpen(true)}>Withdraw from the study</Button>
+          : <Button size="sm" onClick={() => setJoinOpen(true)}>{data?.withdrawn_at ? 'Rejoin the study' : 'Read about the study'}</Button>}
+      </div>
+      {message && <p role="status" className="text-sm">{message}</p>}
+      <StudyEnrolmentDialog open={joinOpen} onOpenChange={setJoinOpen} />
+      <ConfirmDialog
+        open={leaveOpen}
+        onOpenChange={setLeaveOpen}
+        title="Withdraw from the study?"
+        description="No new debriefs or diary entries can be saved after you withdraw. You can rejoin later."
+        confirmLabel="Withdraw"
+        onConfirm={leave}
+        busy={busy}
+      >
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]" checked={deleteData} onChange={(e) => setDeleteData(e.target.checked)} />
+          Also delete all my debriefs and diary entries now. Exports already shared cannot be recalled.
+        </label>
+      </ConfirmDialog>
+    </div>
+  );
+}
