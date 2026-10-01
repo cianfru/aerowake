@@ -31,6 +31,7 @@ from core.parameters import ModelConfig
 from core.sleep_calculator import UnifiedSleepCalculator, SleepStrategy
 from core.compliance import EASAComplianceValidator, determine_acclimatisation
 from core.workload import WorkloadModel
+from core.crew_inference import infer_crew
 from core.extended_operations import (
     AugmentedFDPParameters, ULRParameters,
     AugmentedCrewRestPlanner, ULRRestPlanner, ULRComplianceValidator
@@ -935,6 +936,12 @@ class BorbelyFatigueModel:
             )
             body_clock_timeline.append((duty.report_time_utc, body_clock))
 
+        # Crew size from the planned FDP where the roster does not print it (captains see
+        # no IR code); before sleep, which depends on the crew (core/crew_inference.py).
+        acclimatisation = determine_acclimatisation(roster.duties, roster.home_base_timezone)
+        infer_crew(roster.duties, acclimatisation, self.validator,
+                   self.config.augmented_fdp_params, self.config.ulr_params)
+
         # Extract all sleep opportunities
         all_sleep, sleep_strategies = self._extract_sleep_from_roster(roster, body_clock_timeline)
 
@@ -945,7 +952,6 @@ class BorbelyFatigueModel:
             )
 
         self.sleep_strategies = sleep_strategies
-        acclimatisation = determine_acclimatisation(roster.duties, roster.home_base_timezone)
 
         previous_duty = None
         previous_timeline = None

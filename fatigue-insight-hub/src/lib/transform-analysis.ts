@@ -435,6 +435,7 @@ export function transformAnalysisResult(
         crewComposition: duty.crew_composition || 'standard',
         ulrCrewSet: duty.ulr_crew_set || null,
         augmentationSuggested: duty.augmentation_suggested ?? false,
+        crewSource: duty.crew_source ?? null,
         restFacilityClass: duty.rest_facility_class || null,
         isUlr: duty.is_ulr || false,
         acclimatizationState: duty.acclimatization_state || 'acclimatized',

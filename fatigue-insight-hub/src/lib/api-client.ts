@@ -268,6 +268,7 @@ export interface Duty {
   crew_composition?: CrewComposition;
   ulr_crew_set?: 'crew_a' | 'crew_b' | null;
   augmentation_suggested?: boolean;
+  crew_source?: 'roster_ir' | 'fdp' | 'pilot' | null;
   rest_facility_class?: RestFacilityClass | null;
   is_ulr?: boolean;
   acclimatization_state?: AcclimatizationState;

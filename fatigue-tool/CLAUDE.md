@@ -135,9 +135,11 @@ ORO.FTL.235 minimum rest; ORO.FTL.235(d) recovery rest (36h incl. 2 local nights
 ORO.FTL.105(8) (`EASAComplianceValidator.is_disruptive_duty`).
 
 ### Augmented crew and Qatar FTL
-See `docs/QATAR_FTL.md`: IR = the pilot is relief on that sector → 4-pilot; one crew per pairing
-(IR leaving base → Crew B both legs; IR returning to base → Crew A both legs); 3-pilot only by
-pilot override (`duty_crew_overrides` `{composition, crew_set}`, `_apply_crew_overrides`). All
+See `docs/QATAR_FTL.md`: IR (first officers only) = relief on that sector → augmented; one crew
+per pairing (IR leaving base → Crew B both legs; IR returning to base → Crew A both legs). Crew
+size (3/4, ULR) from the planned FDP for every long-haul duty without a pilot setting
+(`core/crew_inference.py`, run at the start of `simulate_roster`, before sleep); `crew_source`
+'roster_ir' | 'fdp' | 'pilot'. Pilot override: `duty_crew_overrides` `{composition, crew_set}`. All
 scored in-flight rest blocks are returned with `source` 'roster_ir' | 'planned' and
 `approved_plan` (Qatar figure). ULR = Qatar FTL 7.18 (`QatarFTL718Validator`), with the approved
 rest patterns `QATAR_ULR_REST_PATTERNS` (Figures 7-3..7-8); augmented non-ULR FDP limits are
@@ -192,9 +194,9 @@ the same configuration.
   simulator, standby → standby, day off/leave/contactable → not a duty, else ground; without
   a legend entry it is ground. Each is listed in the import review (`unrecognised_activity`).
   Duties return `training_legend` (code → roster meaning) for the code and its notes.
-- Crew not on roster: a 2-pilot duty above the basic FDP maximum with a sector ≥ 7 h block
-  returns `augmentation_suggested` and the FDP finding asks the pilot to set the crew
-  (`easa_checks.augmentation_likely`); it is never assumed augmented.
+- Crew not on roster: beyond the 2-pilot basic maximum + 1 h the crew is inferred
+  (`core/crew_inference.py`); between the basic maximum and + 1 h (possible planned extension)
+  it stays 2 pilots, returns `augmentation_suggested` and the FDP finding asks the pilot.
 
 ## Code Conventions
 

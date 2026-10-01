@@ -58,9 +58,17 @@ rotation (no rest in the first/last 90 min).
   (`parsers/roster_parser.py::auto_detect_crew_augmentation`). Both crews rest in flight on
   both sectors; the crew set selects the approved pattern. Until October 2026 the code
   assigned the crew per sector (IR leg = B, other leg = A), which put one leg of every
-  pairing on the wrong rest pattern. A 3-pilot crew cannot be read from the PDF. A long sector
-  (≥ 7 h block) whose FDP is above the 2-pilot maximum, with no crew stated, is flagged
-  `augmentation_suggested` and the pilot is asked to set the crew; it is never assumed.
+  pairing on the wrong rest pattern.
+- **Crew size from the FDP** (`core/crew_inference.py`). IR appears only on a first officer's
+  roster; a captain's shows PIC (owner, October 2026). So for every long-haul duty (a sector
+  ≥ 7 h block) whose crew the pilot has not set: FDP > 18 h or a ULR city pair → 4 pilots, ULR;
+  FDP above the 2-pilot basic maximum + 1 h (ORO.FTL.205(d) planned extension) → the smallest
+  augmented crew whose CS FTL.1.205(c)(2) class-1 limit covers it (3 pilots 16 h, 4 pilots 17 h,
+  +1 h with ≤ 2 sectors and one > 9 h). IR duties are sized by the same rule (3 or 4). Inferred
+  4-pilot duties without IR default to Crew A. Between the basic maximum and + 1 h the crew
+  stays 2 pilots (a planned extension is possible) and the pilot is asked
+  (`augmentation_suggested`). `crew_source` = 'roster_ir' | 'fdp' | 'pilot'. The 3/4-pilot
+  limits are EASA-referenced until the Qatar augmented FDP table is supplied.
 - **Pilot override.** In duty details the pilot can set 2 / 3 / 4 pilots (and Crew A/B for
   4-pilot ULR). The analysis is re-run with `duty_crew_overrides`
   (`{duty_id: 'crew_a' | 'crew_b' | {composition, crew_set}}`) — `api_server._apply_crew_overrides`.

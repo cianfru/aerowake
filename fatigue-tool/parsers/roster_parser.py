@@ -43,11 +43,10 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
       • The paired outbound duty that arrived at the same layover station
         → pilot was Crew A (operating) on that leg; the aircraft still had 4 pilots.
 
-    3-pilot augmented crew CANNOT be reliably auto-detected from the PDF.
-    The roster has no code for it.  If the operator nominates 3-pilot crew it will
-    show no differently to a 2-pilot duty in CrewLink.  Rather than guess wrong
-    and apply incorrect FDP limits, we leave unlabelled long duties as STANDARD and
-    let the user (or API caller) override via the crew_composition parameter.
+    IR appears only on a first officer's roster (a captain's shows PIC), and it does not
+    say 3 or 4 pilots. This pass marks IR pairings; core/crew_inference.py then sizes them
+    and every other long-haul duty from the planned FDP (EASA in-flight rest table, Qatar
+    ULR), before simulation.
 
     Crew A / Crew B (Qatar FTL 7.18.4.1, 7.18.9.3): a pilot belongs to ONE crew for the
     whole pairing. Crew A operates the outbound sector from base and is the relief crew on
@@ -59,12 +58,12 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
     Both crews rest in flight on both sectors; the crew set selects which approved rest
     pattern applies (`ULRRestPlanner`).
 
-    Rules (all derived from PDF IR codes — no city-pair lists, no FDP heuristics):
+    Rules here (IR codes only; crew size comes later from the FDP):
       1. Duty has an IR segment → AUGMENTED_4, crew from the IR sector's direction.
       2. Duty arrives at / departs from the layover station of an IR duty → AUGMENTED_4,
          the same crew set (the other leg of the pairing; same 4-pilot aircraft).
 
-    Everything else stays STANDARD.  No FDP thresholds, no city-pair lists.
+    Everything else stays STANDARD here.
 
     DH (Deadhead): pilot is a passenger, not operating.  Does not change crew
     composition — a DH sector within a STANDARD duty remains STANDARD.
@@ -103,6 +102,7 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
         duty.is_ulr = True
         duty.ulr_crew_set = crew
         duty.rest_facility_class = RestFacilityClass.CLASS_1
+        duty.crew_source = 'roster_ir'  # size (3/4) and ULR settled from the FDP: core/crew_inference.py
         logger.info(f"Duty {duty.duty_id}: {why} → AUGMENTED_4 / {crew.value}")
 
     # MAIN PASS
