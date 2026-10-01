@@ -76,7 +76,8 @@ class CrewLinkRosterParser:
     Supported: Qatar Airways, Emirates, Etihad, and other airlines with CrewLink rosters
     """
     
-    def __init__(self, auto_create_airports: bool = True, timezone_format: str = 'auto'):
+    def __init__(self, auto_create_airports: bool = True, timezone_format: str = 'auto',
+                 home_base: Optional[str] = None, home_timezone: Optional[str] = None):
         """
         Initialize parser
 
@@ -86,7 +87,10 @@ class CrewLinkRosterParser:
                 - 'auto': Detect from PDF header (default, recommended)
                 - 'local': Times in roster are in local timezone of each airport
                 - 'zulu': Times in roster are in UTC/Zulu (all times are UTC)
-                - 'homebase': Times are in home base timezone (DOH)
+                - 'homebase': Times are in home base timezone
+            home_base / home_timezone: base the pilot entered, used only when the
+                header does not state one. A header base always sets how the
+                roster's own times are read.
         """
         self.airport_cache = {}  # Runtime cache for resolved Airport objects
         self.auto_create_airports = auto_create_airports
@@ -96,8 +100,13 @@ class CrewLinkRosterParser:
         if self.timezone_format not in ['auto', 'local', 'zulu', 'homebase']:
             raise ValueError(f"timezone_format must be 'auto', 'local', 'zulu', or 'homebase', got '{timezone_format}'")
 
-        self.home_timezone = 'Asia/Qatar'  # Default DOH, will be updated from pilot_info
-        self.home_base_code = 'DOH'  # Default, will be updated from pilot_info
+        # No assumed base. Without a header or entered base the zone is a
+        # provisional UTC so a file can be inspected; intake refuses to analyse it.
+        self.home_base_code: Optional[str] = home_base
+        self.home_timezone = home_timezone or 'UTC'
+        # Duties whose release is not printed and is set after the last landing
+        # or session end (reported to the pilot as a counted review note).
+        self.inferred_release_ids: set = set()
 
     def _get_or_create_airport(self, code: str) -> Optional[Airport]:
         """
@@ -134,8 +143,8 @@ class CrewLinkRosterParser:
 
         return placeholder
     
-    def _get_home_base_code(self) -> str:
-        """Return the pilot's home base IATA code (e.g. 'DOH')."""
+    def _get_home_base_code(self) -> Optional[str]:
+        """Return the pilot's home base IATA code (e.g. 'DOH'), or None when unknown."""
         return self.home_base_code
 
     def parse_roster(self, pdf_path: str) -> Dict:
@@ -157,12 +166,15 @@ class CrewLinkRosterParser:
             # Extract pilot info from header
             pilot_info = self._extract_pilot_info(page)
             
-            # FIXED: Update home timezone and base code from pilot base
-            if pilot_info.get('base'):
-                self.home_base_code = pilot_info['base']
-                base_airport = self._get_or_create_airport(pilot_info['base'])
-                if base_airport:
-                    self.home_timezone = base_airport.timezone
+            # The header base (when it is a known airport) sets how times are read.
+            header_base = pilot_info.get('base')
+            base_airport = _lookup_airport(header_base) if header_base else None
+            if base_airport:
+                self.home_base_code = base_airport.code
+                self.home_timezone = base_airport.timezone
+            elif header_base:
+                pilot_info['base_unrecognised'] = header_base
+                pilot_info['base'] = None
             
             pilot_info['timezone_format'] = self.timezone_format
             
@@ -259,18 +271,19 @@ class CrewLinkRosterParser:
         pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         pass  # Parser diagnostics are returned to the caller, never logged with personal data.
         
-        # Initialize with defaults
+        # Start empty: a base or aircraft is only what the header states.
         info = {
             'name': None,
             'id': None,
-            'base': 'DOH',  # Default
-            'aircraft': 'A320',  # Default
+            'base': None,
+            'aircraft': None,
             'year': None,
             'month': None,
             'period_start': None,
             'period_end': None,
-            'block_hours': '00:00',
-            'duty_hours': '00:00'
+            # Source totals only when the header prints them (never a 00:00 placeholder)
+            'block_hours': None,
+            'duty_hours': None
         }
         
         # ----
@@ -298,7 +311,7 @@ class CrewLinkRosterParser:
         # Format in PDF: "ID    :134614 (DOH CP-A320)" or "ID :134811 (DOH FO-A350)"
         # Role prefix can be CP (Captain), FO (First Officer), or other 2-letter codes.
         # Improved pattern with flexible spacing and generic role prefix.
-        id_pattern = r'ID\s+:\s*(\d+)\s*\(\s*([A-Z]{3})\s+([A-Z]{2})-(\w+)\)'
+        id_pattern = r'ID\s*:\s*(\d+)\s*\(\s*([A-Z]{3})\s+([A-Z]{2,3})-(\w+)\)'
         id_match = re.search(id_pattern, text_clean)
 
         if id_match:
@@ -312,6 +325,10 @@ class CrewLinkRosterParser:
             id_match_simple = re.search(r'ID\s*:\s*(\d+)', text_clean)
             if id_match_simple:
                 info['id'] = id_match_simple.group(1)
+            # Text extraction can separate the "(BBB RR-TYPE)" block from the ID.
+            details = re.search(r'\(\s*([A-Z]{3})\s+([A-Z]{2,3})-([\w-]+)\)', text_clean)
+            if details:
+                info['base'], info['role'], info['aircraft'] = details.groups()
                 pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             else:
                 pass  # Parser diagnostics are returned to the caller, never logged with personal data.
@@ -531,7 +548,11 @@ class CrewLinkRosterParser:
         # Training columns have: RPT:HH:MM, training code, DOH, start_time, end_time, annotations
         training_code = self._detect_training_code(lines)
         if training_code:
-            return self._parse_training_duty(lines, date, training_code)
+            duty = self._parse_training_duty(lines, date, training_code)
+            if duty is not None:
+                # Release is set 30 min after the session; CrewLink does not print it.
+                self.inferred_release_ids.add(duty.duty_id)
+            return duty
 
         # Extract report time (RPT) and flight segments first
         # We need to know the departure airport to properly localize report time
@@ -636,7 +657,9 @@ class CrewLinkRosterParser:
             segments=segments,
             home_base_timezone=self.home_timezone
         )
-        
+        # CrewLink prints no release; it is set 30 min after the last landing above.
+        self.inferred_release_ids.add(duty.duty_id)
+
         return duty
 
     # ========================================================================
@@ -778,7 +801,7 @@ class CrewLinkRosterParser:
                 # Split by comma and clean
                 for part in line.strip().split(','):
                     part = part.strip()
-                    if part and part.upper() not in {'DOH', training_code}:
+                    if part and part.upper() not in {self.home_base_code, training_code}:
                         annotations.append(part)
 
         # 5. Determine duty type

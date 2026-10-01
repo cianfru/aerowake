@@ -86,10 +86,11 @@ describe('RosterPage', () => {
     expect(screen.getByText('No exceedances found in the supplied activities')).toBeInTheDocument();
   });
 
-  it('asks for the home base before analysing when no roster is loaded', () => {
+  it('starts with the roster picker, not a base to type, when no roster is loaded', () => {
     render(<AnalysisProvider><RosterPage /></AnalysisProvider>);
-    expect(screen.getByLabelText(/Home base \(IATA\)/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Review roster/ })).toBeDisabled();
+    expect(screen.getByLabelText('Choose roster file (PDF or CSV)')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Home base/)).toBeNull();
+    expect(screen.getByRole('link', { name: /Download CSV template/ })).toBeInTheDocument();
   });
 
   it('preserves model warnings when a pilot raises their personal watch level and carries it to a concern', async () => {

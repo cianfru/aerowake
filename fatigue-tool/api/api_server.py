@@ -1177,8 +1177,9 @@ async def readiness():
 async def analyze_roster(
     file: UploadFile = File(...),
     pilot_id: str = Form("P12345"),
-    month: str = Form("2026-02"),
-    home_base: str = Form("DOH"),
+    month: Optional[str] = Form(None),
+    home_base: Optional[str] = Form(None),
+    home_base_override: bool = Form(False),
     home_timezone: Optional[str] = Form(None),
     config_preset: str = Form("default"),
     timezone_format: str = Form("auto"),
@@ -1194,8 +1195,14 @@ async def analyze_roster(
 
     When authenticated: persists roster + analysis to database.
     When anonymous: stores in-memory only (lost on restart).
+
+    The home base comes from the roster header; ``home_base`` is used when the
+    header states none (or a CSV pattern is unclear), and replaces a header
+    base only with ``home_base_override``. Missing base: 422 ``home_base_required``.
     """
-    
+    from api.preview import intake_error, parse_upload
+    from parsers.base_detection import RosterIntakeError
+
     try:
         # Validate file
         if not file.filename:
@@ -1208,42 +1215,23 @@ async def analyze_roster(
         
         content = await read_upload(file)
         from parsers.validation import resolve_home_timezone, validate_roster
-        home_timezone = resolve_home_timezone(home_base, home_timezone)
         validate_upload(content, suffix)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            tmp.write(content)
-            tmp_path = tmp.name
-        
-        try:
-            # Validate timezone_format parameter
-            valid_tz_formats = ('auto', 'local', 'homebase', 'zulu')
-            if timezone_format.lower() not in valid_tz_formats:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid timezone_format '{timezone_format}'. Must be one of: {', '.join(valid_tz_formats)}"
-                )
 
-            # Parse roster
-            if suffix == '.pdf':
-                parser = PDFRosterParser(
-                    home_base=home_base,
-                    home_timezone=home_timezone,
-                    timezone_format=timezone_format.lower()
-                )
-                roster = await run_compute(parser.parse_pdf, tmp_path, pilot_id, month)
-            else:  # CSV
-                parser = CSVRosterParser(
-                    home_base=home_base,
-                    home_timezone=home_timezone
-                )
-                roster = await run_compute(parser.parse_csv, tmp_path, pilot_id, month)
-        finally:
-            # Clean up temp file
-            os.unlink(tmp_path)
-        
-        # Validate roster
-        if not roster.duties:
-            raise HTTPException(status_code=400, detail="No duties found in roster")
+        # Validate timezone_format parameter
+        valid_tz_formats = ('auto', 'local', 'homebase', 'zulu')
+        if timezone_format.lower() not in valid_tz_formats:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid timezone_format '{timezone_format}'. Must be one of: {', '.join(valid_tz_formats)}"
+            )
+
+        # Parse roster with the same base resolution as the preview (header >
+        # entered > confirmed CSV pattern); empty rosters are rejected there.
+        roster, parser, base_resolution, _ = await run_compute(
+            parse_upload, content, suffix, home_base, home_base_override,
+            timezone_format.lower(), pilot_id, month)
+        if home_timezone:
+            resolve_home_timezone(roster.pilot_base, home_timezone)
 
         # Apply per-duty crew set overrides (parser auto-detection is preserved as default)
         from models.data_models import ULRCrewSet
@@ -1350,7 +1338,8 @@ async def analyze_roster(
         model = BorbelyFatigueModel(config)
         validate_roster(roster)
         import hashlib
-        replay_input = snapshot(roster, {'format': suffix, 'source_sha256': hashlib.sha256(content).hexdigest(), 'timezone': roster.home_base_timezone})
+        replay_input = snapshot(roster, {'format': suffix, 'source_sha256': hashlib.sha256(content).hexdigest(), 'timezone': roster.home_base_timezone,
+                                         'home_base': roster.pilot_base, 'base_source': base_resolution.source})
         monthly_analysis = await run_compute(model.simulate_roster, roster)
 
         # Generate analysis ID
@@ -1368,7 +1357,7 @@ async def analyze_roster(
                     filename=file.filename or "roster.pdf",
                     month=effective_month,
                     pilot_id=pilot_id,
-                    home_base=home_base,
+                    home_base=roster.pilot_base,  # the base actually analysed
                     config_preset=config_preset,
                     total_duties=roster.total_duties,
                     total_sectors=roster.total_sectors,
@@ -1506,6 +1495,8 @@ async def analyze_roster(
 
     except HTTPException:
         raise
+    except RosterIntakeError as e:
+        return intake_error(e)
     except ValueError as e:
         raise HTTPException(422, str(e))
     except Exception:

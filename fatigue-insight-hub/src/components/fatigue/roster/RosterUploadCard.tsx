@@ -1,174 +1,205 @@
-import { previewRoster, type RosterPreview } from '@/lib/api-client';
-import { useCallback, useEffect, useId, useState, useRef } from 'react';
-import { Upload, FileText, X, Play, Loader2, MapPin } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AlertTriangle, Download, FileText, Loader2, X } from 'lucide-react';
+import { previewRoster, RosterRequestError, type RosterPreview } from '@/lib/api-client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAnalyzeRoster } from '@/hooks/useAnalyzeRoster';
+import { RosterDropZone } from './upload/RosterDropZone';
+import { HomeBaseField } from './upload/HomeBaseField';
+import { RosterImportSummary } from './upload/RosterImportSummary';
+import { formatFileSize, monthInWords, TEMPLATE_HREF, TEMPLATE_FILENAME } from './upload/import-format';
 
-const IATA_RE = /^[A-Z]{3}$/;
+type Phase =
+  | { name: 'idle' }
+  | { name: 'reading' }
+  | { name: 'needsBase'; message: string; error?: string }
+  | { name: 'failed'; message: string; code: string; retryable: boolean }
+  | { name: 'ready'; preview: RosterPreview; version: number };
 
-function formatFileSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+/** Errors about the base the pilot typed, shown next to the field rather than replacing the view. */
+const BASE_ERRORS = new Set(['unknown_airport', 'invalid_home_base', 'base_mismatch']);
+const RETRYABLE = new Set(['service_unavailable', 'unreadable_response', 'network', 'http_429']);
+
+function describe(error: unknown) {
+  if (error instanceof RosterRequestError) return { message: error.message, code: error.code };
+  return { message: error instanceof Error ? error.message : 'The roster could not be read.', code: 'unknown' };
 }
 
 /**
- * Upload a roster, confirm the home base, run the analysis.
- * The home base is always visible and must be a 3-letter IATA code —
- * the app never analyses with an assumed base.
+ * Upload a roster, confirm what was read, analyse.
+ *
+ * The home base comes from the roster header (PDF) or a duty pattern the
+ * pilot confirms (CSV). Typing a base is the fallback, and replacing a header
+ * base is an explicit, warned override. The analysis uses exactly the base
+ * shown in the summary.
  */
 export function RosterUploadCard() {
   const { state, uploadFile, removeFile, setSettings } = useAnalysis();
   const { user } = useAuth();
-  const { runAnalysis, isAnalyzing } = useAnalyzeRoster();
-  const [preview, setPreview] = useState<RosterPreview | null>(null);
-  const [previewBusy, setPreviewBusy] = useState(false);
-  const [previewError, setPreviewError] = useState('');
-  const [confirmed, setConfirmed] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [homeBase, setHomeBase] = useState(
-    (state.settings.homeBase || user?.home_base || '').toUpperCase(),
-  );
-  const previewGeneration = useRef(0);
-  useEffect(() => { previewGeneration.current++; setPreview(null); setConfirmed(false); setPreviewBusy(false); setPreviewError(''); }, [state.actualFileObject, homeBase]);
-  const baseId = useId();
-  const fileId = useId();
-
+  const { runAnalysis, isAnalyzing, error: analyseError, reset: resetAnalysis } = useAnalyzeRoster({ inlineErrors: true });
+  const [phase, setPhase] = useState<Phase>({ name: 'idle' });
+  const [refreshing, setRefreshing] = useState(false);
+  const [baseError, setBaseError] = useState<string>();
+  const generation = useRef(0);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const alertRef = useRef<HTMLDivElement>(null);
+  const file = state.actualFileObject;
   const { uploadedFile } = state;
-  const baseValid = IATA_RE.test(homeBase);
 
-  const accept = useCallback((file: File | undefined) => {
-    if (!file) return;
-    uploadFile(
-      { name: file.name, size: file.size, type: file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf') ? 'PDF' : 'CSV' },
-      file,
-    );
-  }, [uploadFile]);
+  const readRoster = useCallback(async (target: File, base: string | null, override: boolean, origin: 'auto' | 'needsBase' | 'change') => {
+    const current = ++generation.current;
+    setBaseError(undefined);
+    if (origin === 'auto') setPhase({ name: 'reading' });
+    else setRefreshing(true);
+    try {
+      const preview = await previewRoster(target, base, { override });
+      if (current !== generation.current) return;
+      setPhase({ name: 'ready', preview, version: current });
+    } catch (error) {
+      if (current !== generation.current) return;
+      const { message, code } = describe(error);
+      if (code === 'home_base_required') {
+        setPhase({ name: 'needsBase', message });
+      } else if (BASE_ERRORS.has(code) && origin === 'needsBase') {
+        setPhase(p => ({ name: 'needsBase', message: p.name === 'needsBase' ? p.message : message, error: message }));
+      } else if (BASE_ERRORS.has(code) && origin === 'change') {
+        setBaseError(message);
+      } else {
+        setPhase({ name: 'failed', message, code, retryable: RETRYABLE.has(code) });
+      }
+    } finally {
+      if (current === generation.current) setRefreshing(false);
+    }
+  }, []);
 
-  const onDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') setIsDragging(true);
-    else if (e.type === 'dragleave') setIsDragging(false);
-  };
-
-  const onRun = async () => {
-    if (!baseValid || !state.actualFileObject) return;
-    if (!preview) {
-      setPreviewBusy(true); setPreviewError('');
-      const generation = ++previewGeneration.current;
-      try { const value = await previewRoster(state.actualFileObject, homeBase); if (generation === previewGeneration.current) setPreview(value); }
-      catch (e) { if (generation === previewGeneration.current) setPreviewError(e instanceof Error ? e.message : 'Preview failed.'); }
-      finally { if (generation === previewGeneration.current) setPreviewBusy(false); }
+  // Read every newly chosen file straight away; nothing to type first.
+  useEffect(() => {
+    resetAnalysis?.(); // optional: lightweight test doubles omit it
+    if (!file) {
+      generation.current++;
+      setPhase({ name: 'idle' });
+      setRefreshing(false);
       return;
     }
-    if (!confirmed) return;
-    setSettings({ homeBase });
-    runAnalysis({ homeBase });
+    readRoster(file, null, false, 'auto');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [file, readRoster]);
+
+  // Move focus to what changed: the summary heading, the base field or the error.
+  const focusKey = phase.name === 'ready' ? `ready-${phase.version}` : phase.name;
+  useEffect(() => {
+    if (phase.name === 'ready') headingRef.current?.focus({ preventScroll: false });
+    if (phase.name === 'failed') alertRef.current?.focus();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey]);
+
+  const analyse = (preview: RosterPreview) => {
+    // Remember the base actually used (per browser), never the raw input.
+    setSettings({ homeBase: preview.home_base });
+    runAnalysis({ homeBase: preview.home_base, override: !!preview.base_override });
   };
+
+  const status = phase.name === 'reading' ? 'Reading your roster…'
+    : refreshing ? 'Updating the roster summary…'
+      : phase.name === 'needsBase' ? 'Enter your home base to continue.'
+        : phase.name === 'ready' && isAnalyzing ? 'Analysing your roster…'
+          : phase.name === 'ready' ? `Roster read: ${monthInWords(phase.preview.month)}, ${phase.preview.total_duties} duties, home base ${phase.preview.home_base}.`
+            : '';
 
   return (
     <Card variant="elevated" className="overflow-hidden rounded-2xl">
-      <CardContent className="p-6 md:p-9 space-y-6">
+      <CardContent className="space-y-6 p-5 sm:p-6 md:p-9">
         <div className="space-y-3">
           <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary"><FileText className="h-6 w-6" aria-hidden="true" /></div>
           <h1 className="text-3xl font-semibold tracking-tight">Check your roster</h1>
           <p className="text-sm text-muted-foreground">
-            Upload your monthly roster (PDF or CSV). You will see which duties need attention and which scoped duty and rest checks need review.
+            Upload your monthly roster to plan rest around the duties that need it. Aerowake reads your home base
+            and duties from the file, shows you what it found, then estimates sleepiness for each duty and runs
+            scoped EASA FTL checks.
           </p>
         </div>
 
-        {/* Step 1: file */}
-        {!uploadedFile ? (
-          <div
-            onDragEnter={onDrag}
-            onDragLeave={onDrag}
-            onDragOver={onDrag}
-            onDrop={(e) => { onDrag(e); setIsDragging(false); accept(e.dataTransfer.files?.[0]); }}
-            className={cn(
-              'relative rounded-xl border-2 border-dashed px-5 py-9 text-center transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
-              isDragging ? 'border-primary bg-primary/10' : 'border-primary/30 bg-primary/5 hover:border-primary/60 hover:bg-primary/10',
-            )}
-          >
-            <input
-              id={fileId}
-              type="file"
-              accept=".pdf,.csv"
-              aria-label="Choose roster file (PDF or CSV)"
-              onChange={(e) => accept(e.target.files?.[0])}
-              className="absolute inset-0 cursor-pointer opacity-0"
-            />
-            <Upload className="h-8 w-8 mx-auto mb-3 text-primary" aria-hidden="true" />
-            <p className="text-sm font-medium">Drop your roster here or tap to choose</p>
-            <p className="text-xs text-muted-foreground">PDF or CSV</p>
-          </div>
+        <p role="status" aria-live="polite" className="sr-only">{status}</p>
+
+        {!uploadedFile || !file ? (
+          <RosterDropZone onFile={(chosen, kind) => uploadFile({ name: chosen.name, size: chosen.size, type: kind }, chosen)} />
         ) : (
           <div className="flex items-center justify-between gap-2 rounded-lg bg-secondary/50 p-3">
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
               <FileText className="h-4 w-4 flex-shrink-0 text-primary" aria-hidden="true" />
               <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{uploadedFile.name}</p>
+                <p className="truncate text-sm font-medium">{uploadedFile.name}</p>
                 <p className="text-xs text-muted-foreground">{formatFileSize(uploadedFile.size)}</p>
               </div>
             </div>
-            <Button variant="ghost" size="icon" onClick={removeFile} className="h-8 w-8 flex-shrink-0" aria-label="Remove file">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => { if (!isAnalyzing) removeFile(); }}
+              aria-disabled={isAnalyzing || undefined}
+              className="h-8 w-8 flex-shrink-0"
+              aria-label="Remove file"
+            >
               <X className="h-4 w-4" />
             </Button>
           </div>
         )}
 
-        {/* Step 2: home base (always visible) */}
-        <div className="space-y-1.5">
-          <label htmlFor={baseId} className="flex items-center gap-1.5 text-sm font-medium">
-            <MapPin className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-            Home base (IATA)
-          </label>
-          <Input
-            id={baseId}
-            value={homeBase}
-            onChange={(e) => setHomeBase(e.target.value.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 3))}
-            placeholder="e.g. LGW"
-            autoComplete="off"
-            inputMode="text"
-            className="max-w-[10rem] font-mono uppercase tracking-wider"
-            aria-invalid={homeBase.length > 0 && !baseValid}
-            aria-describedby={`${baseId}-help`}
-          />
-          <p id={`${baseId}-help`} className="text-xs text-muted-foreground">
-            {homeBase.length > 0 && !baseValid
-              ? 'Enter a 3-letter airport code.'
-              : 'Body-clock and night-time (WOCL) checks use this base. Make sure it matches the roster.'}
+        {file && phase.name === 'reading' && (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
+            Reading your roster…
           </p>
-        </div>
+        )}
 
-        {previewError && <p role="alert" className="text-sm text-destructive">{previewError}</p>}
-        {preview && <section className="space-y-4 rounded-lg border border-border p-4" aria-label="Review parsed roster">
-          <h2 className="text-lg font-medium">Review the import</h2>
-          <p className="text-sm">{preview.month} · {preview.home_base} · {preview.home_timezone} · {preview.time_convention}</p>
-          <p className="font-mono text-sm">{preview.total_duties} duties · {preview.total_sectors} sectors · {preview.standby_periods} standby periods</p>
-          <p className="text-sm">Block hours: {preview.whole_duty_block_hours.toFixed(2)} for whole duties; {preview.calendar_month_block_hours.toFixed(2)} within the UTC month{preview.source_block_hours != null ? `; source total ${preview.source_block_hours.toFixed(2)}` : ''}.</p>
-          <ul className="space-y-2 text-sm text-muted-foreground">{preview.warnings.map(w => <li key={w}>{w}</li>)}</ul>
-          <details><summary className="cursor-pointer text-sm text-primary">Check parsed duty times (UTC)</summary><ul className="mt-3 max-h-64 space-y-3 overflow-auto text-sm">{preview.duties.map(d => <li key={d.id}><span className="font-medium">{d.route}</span><br /><span className="font-mono text-xs">{d.report_utc.slice(0,16).replace('T',' ')} → {d.release_utc.slice(0,16).replace('T',' ')} UTC</span></li>)}</ul></details>
-          <label className="flex items-start gap-3 text-sm"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} /><span>I have reviewed the dates, time zones, and assumptions. Continue with these inputs.</span></label>
-        </section>}
-        {/* Step 3: run */}
-        <Button
-          variant="glow"
-          className="h-12 w-full sm:w-auto sm:px-7"
-          onClick={onRun}
-          disabled={!uploadedFile || !baseValid || isAnalyzing || previewBusy || (!!preview && !confirmed)}
-        >
-          {isAnalyzing || previewBusy ? (
-            <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{previewBusy ? "Reading roster…" : "Analysing…"}</>
-          ) : (
-            <><Play className="mr-2 h-4 w-4" />{preview ? "Run analysis" : "Review roster"}</>
-          )}
-        </Button>
+        {file && phase.name === 'needsBase' && (
+          <HomeBaseField
+            label="Home base"
+            help={<>{phase.message} Report times, home or hotel sleep and home-base rest rules depend on it.</>}
+            initial={user?.home_base || state.settings.homeBase || ''}
+            submitLabel="Continue"
+            busy={refreshing}
+            error={phase.error}
+            autoFocus
+            onSubmit={(base) => readRoster(file, base, false, 'needsBase')}
+          />
+        )}
+
+        {file && phase.name === 'failed' && (
+          <div ref={alertRef} tabIndex={-1} role="alert" className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm focus:outline-none">
+            <p className="flex gap-2.5">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+              <span>{phase.message}</span>
+            </p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              {phase.retryable && <Button type="button" size="sm" onClick={() => readRoster(file, null, false, 'auto')}>Try again</Button>}
+              <Button type="button" size="sm" variant="outline" onClick={removeFile}>Choose another file</Button>
+              {!phase.retryable && (
+                <a href={TEMPLATE_HREF} download={TEMPLATE_FILENAME} className="inline-flex items-center gap-1.5 rounded-sm text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" />CSV template
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {file && phase.name === 'ready' && (
+          <RosterImportSummary
+            key={phase.version}
+            ref={headingRef}
+            preview={phase.preview}
+            refreshing={refreshing}
+            analysing={isAnalyzing}
+            baseError={baseError}
+            analyseError={analyseError?.message}
+            onChangeBase={(base, override) => readRoster(file, base, override, 'change')}
+            onUseRosterBase={() => readRoster(file, null, false, 'change')}
+            onAnalyse={() => { resetAnalysis?.(); analyse(phase.preview); }}
+            onChooseAnother={removeFile}
+          />
+        )}
       </CardContent>
     </Card>
   );

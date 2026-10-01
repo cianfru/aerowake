@@ -66,7 +66,7 @@ _TIME_RE = re.compile(r'^A?(\d{2}:\d{2})$')
 _AIRCRAFT_RE = re.compile(r'^\[(\d{3})\]$')
 # Date header in grid: DD/MM (possibly followed by newline + day name)
 _DATE_HEADER_RE = re.compile(r'^(\d{2})/(\d{2})')
-# Pilot header line: "17715 PELATTI ANGEL AGP,CP,319" (anchored to start of line)
+# Pilot header line: "12345 SURNAME GIVENNAME AGP,CP,319" (anchored to start of line)
 _PILOT_HEADER_RE = re.compile(
     r'^(\d{4,6})\s+([A-Z][A-Za-z\s]+?)\s+([A-Z]{3}),\s*([A-Z]{2}),\s*(\d{2,3})',
     re.MULTILINE
@@ -170,10 +170,13 @@ class EasyJetParser:
         # result = {'pilot_info': {...}, 'duties': [...], 'unknown_airports': [...]}
     """
 
-    def __init__(self):
-        self.home_base_code: str = 'AGP'       # updated from PDF header
-        self.home_timezone: str = 'Europe/Madrid'  # updated from PDF header
+    def __init__(self, home_base: Optional[str] = None, home_timezone: Optional[str] = None):
+        # The PDF header sets the base; an entered base is only a fallback.
+        # Without either, UTC is provisional and intake refuses to analyse.
+        self.home_base_code: Optional[str] = home_base
+        self.home_timezone: str = home_timezone or 'UTC'
         self.unknown_airports: set = set()
+        self.inferred_release_ids: set = set()
 
     # ── Public entry point ────────────────────────────────────────────────
 
@@ -195,18 +198,27 @@ class EasyJetParser:
             raw_text = page.extract_text() or ''
             pilot_info = self._extract_pilot_info(raw_text)
 
-            # Set instance state from extracted info
-            self.home_base_code = pilot_info.get('base', 'AGP')
-            base_airport = _get_airport(self.home_base_code)
-            if base_airport.timezone != 'UTC':
-                self.home_timezone = base_airport.timezone
+            # Set instance state from the header base when it is a known airport
+            header_base = pilot_info.get('base')
+            if header_base and header_base in _IATA_DB:
+                self.home_base_code = header_base
+                self.home_timezone = _IATA_DB[header_base]['tz']
+            elif header_base:
+                pilot_info['base_unrecognised'] = header_base
+                pilot_info['base'] = None
 
             pass  # Parser diagnostics are returned to the caller, never logged with personal data.
 
             table = self._extract_schedule_table(page)
 
-        year = pilot_info.get('year', datetime.now().year)
-        month = pilot_info.get('month', datetime.now().month)
+        year = pilot_info.get('year')
+        month = pilot_info.get('month')
+        if not (year and month):
+            from parsers.base_detection import RosterIntakeError
+            raise RosterIntakeError(
+                'This easyJet roster has no period line (for example 01/09/2025 - 30/09/2025), '
+                'so its dates cannot be read. Export the full monthly schedule and try again.',
+                'roster_period_missing')
         duties = self._parse_grid_to_duties(table, year, month)
         pass  # Parser diagnostics are returned to the caller, never logged with personal data.
 
@@ -223,7 +235,7 @@ class EasyJetParser:
         Extract pilot metadata from the easyJet PDF header.
 
         Expected header format:
-            17715 PELATTI ANGEL AGP,CP,319
+            12345 SURNAME GIVENNAME AGP,CP,319
             ...
             01/09/2025 - 30/09/2025 (All times in Local Station)
         """
@@ -243,23 +255,15 @@ class EasyJetParser:
             info['base'] = m.group(3).strip()
             info['role'] = m.group(4).strip()
             info['aircraft'] = m.group(5).strip()  # e.g. "319"
-        else:
-            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
-            info = {'id': 'UNKNOWN', 'name': 'UNKNOWN', 'base': 'AGP', 'role': 'CP', 'aircraft': '319'}
+        # Without a header nothing is assumed: base, role and aircraft stay unknown.
 
         # Period: extract year and month from start date
         pm = _PERIOD_RE.search(text)
         if pm:
-            day = int(pm.group(1))
             month = int(pm.group(2))
             year = int(pm.group(3))
             info['year'] = year
             info['month'] = month   # integer, unlike CrewLink which uses 3-letter abbrev
-        else:
-            pass  # Parser diagnostics are returned to the caller, never logged with personal data.
-            now = datetime.now()
-            info['year'] = now.year
-            info['month'] = now.month
 
         return info
 
@@ -273,7 +277,7 @@ class EasyJetParser:
         Returns a List[List[str|None]] — a 2D table.
 
         Real table structure:
-          Row 0: Pilot info header (e.g. "17715 PELATTI ANGEL AGP,CP,319")
+          Row 0: Pilot info header (e.g. "12345 SURNAME GIVENNAME AGP,CP,319")
           Row 1: Date headers ("01/09\nMon", "02/09\nTue", ...)
           Row 2: Duty data — one multi-line cell per date column
           Row 3: "F" (flight hours summary)
@@ -567,14 +571,17 @@ class EasyJetParser:
 
             # Find release time (last time token after segments)
             release_time_utc = segments[-1].scheduled_arrival_utc + timedelta(minutes=30)
+            release_inferred = True
             for tok, day_off in reversed(tokens[seg_end_idx:]):
                 ts = _parse_time_str(tok)
                 if ts:
                     arr_tz = segments[-1].arrival_airport.timezone
                     try:
                         release_time_utc = _localize_to_utc(ts, col_date, arr_tz, day_off)
+                        release_inferred = False
                         if release_time_utc < segments[-1].scheduled_arrival_utc:
                             release_time_utc = segments[-1].scheduled_arrival_utc + timedelta(minutes=30)
+                            release_inferred = True
                     except Exception:
                         pass
                     break
@@ -583,6 +590,8 @@ class EasyJetParser:
                 release_time_utc = report_time_utc + timedelta(hours=1)
 
             duty_id = f"D{col_date.strftime('%Y%m%d')}_{segments[0].flight_number}"
+            if release_inferred:
+                self.inferred_release_ids.add(duty_id)
             return Duty(
                 duty_id=duty_id,
                 date=col_date,
@@ -635,13 +644,16 @@ class EasyJetParser:
             pass  # Parser diagnostics are returned to the caller, never logged with personal data.
             return None
 
+        release_inferred = True
         if release_time_str:
             try:
                 release_time_utc = _localize_to_utc(release_time_str, col_date, arr_tz, release_day_offset)
+                release_inferred = False
                 # Safety: release must be after last arrival
                 last_arrival_utc = segments[-1].scheduled_arrival_utc
                 if release_time_utc < last_arrival_utc:
                     release_time_utc = last_arrival_utc + timedelta(minutes=30)
+                    release_inferred = True
             except Exception:
                 release_time_utc = segments[-1].scheduled_arrival_utc + timedelta(minutes=30)
         else:
@@ -653,6 +665,8 @@ class EasyJetParser:
             release_time_utc = report_time_utc + timedelta(hours=1)
 
         duty_id = f"D{col_date.strftime('%Y%m%d')}_{segments[0].flight_number}"
+        if release_inferred:
+            self.inferred_release_ids.add(duty_id)
 
         duty = Duty(
             duty_id=duty_id,

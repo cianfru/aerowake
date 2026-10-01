@@ -1,49 +1,87 @@
+import { useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { analyzeRoster } from '@/lib/api-client';
 import { transformAnalysisResult } from '@/lib/transform-analysis';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { toast } from 'sonner';
 
+export interface RunAnalysisOptions {
+  /** The base confirmed in the review. Omit to let the backend read the roster header. */
+  homeBase?: string | null;
+  /** Replace the roster-header base with `homeBase` on purpose. */
+  override?: boolean;
+}
+
+interface AnalyzeVariables extends RunAnalysisOptions {
+  file: File;
+}
+
+/**
+ * Bring the new workspace into view: scroll to the top and move focus to its
+ * heading, so keyboard and screen-reader users start at the roster summary.
+ */
+export function revealAnalysis() {
+  const run = () => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    const heading = document.querySelector<HTMLElement>('[data-analysis-heading]')
+      ?? document.querySelector<HTMLElement>('main h1')
+      ?? document.querySelector<HTMLElement>('h1');
+    if (!heading) return;
+    if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+    heading.focus({ preventScroll: true });
+  };
+  // Two frames: React commits the workspace, then the browser lays it out.
+  requestAnimationFrame(() => requestAnimationFrame(run));
+}
+
 /**
  * TanStack Query mutation for roster analysis.
  *
  * Reads file + settings from AnalysisContext, calls the backend,
  * transforms the response, and dispatches the result back into context.
+ * A result for a file that is no longer selected is dropped.
+ *
+ * `inlineErrors`: the caller renders `error` itself, so no error toast.
  */
-export function useAnalyzeRoster() {
+export function useAnalyzeRoster({ inlineErrors = false }: { inlineErrors?: boolean } = {}) {
   const { state, setAnalysisResults } = useAnalysis();
+  const currentFile = useRef<File | null>(state.actualFileObject);
+  currentFile.current = state.actualFileObject;
 
   const mutation = useMutation({
-    // `homeBase` lets the caller pass the base the pilot just confirmed
-    // (settings updates are async, so we don't read them back here).
-    mutationFn: async (vars?: { homeBase?: string } | void) => {
-      if (!state.uploadedFile || !state.actualFileObject) {
-        throw new Error('Please upload a roster file first');
-      }
-      const homeBase = ((vars && vars.homeBase) || state.settings.homeBase || '').trim().toUpperCase();
-      if (!homeBase) {
-        throw new Error('Please enter your home base (IATA code) first');
-      }
-      return analyzeRoster(
-        state.actualFileObject,
-        state.settings.pilotId,
-        homeBase,
-        state.dutyCrewOverrides,
-      );
+    mutationFn: async ({ file, homeBase, override }: AnalyzeVariables) => {
+      const base = (homeBase || '').trim().toUpperCase() || null;
+      return analyzeRoster(file, state.settings.pilotId, base, state.dutyCrewOverrides, { override: !!override && !!base });
     },
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
+      if (variables.file !== currentFile.current) return;
       const transformed = transformAnalysisResult(result, state.settings.selectedMonth);
       setAnalysisResults(transformed);
       toast.success('Analysis complete!');
+      revealAnalysis();
     },
-    onError: (error: Error) => {
-      console.error('[Analysis] API call failed:', error.message, error);
+    onError: (error: Error, variables) => {
+      if (inlineErrors || variables.file !== currentFile.current) return;
       toast.error('Analysis failed: ' + error.message);
     },
   });
 
+  const runAnalysis = (options: RunAnalysisOptions = {}) => {
+    const file = state.actualFileObject;
+    if (!state.uploadedFile || !file) {
+      if (!inlineErrors) toast.error('Please upload a roster file first');
+      return;
+    }
+    // Without an explicit base, reuse the last confirmed one only as a
+    // fallback; a roster header still wins on the server.
+    const homeBase = options.homeBase ?? (state.settings.homeBase || null);
+    mutation.mutate({ file, homeBase, override: options.override });
+  };
+
   return {
-    runAnalysis: mutation.mutate,
+    runAnalysis,
     isAnalyzing: mutation.isPending,
+    error: mutation.error,
+    reset: mutation.reset,
   };
 }

@@ -92,7 +92,7 @@ def test_disruptive_definitions(rep, rel, early, late, night):
 
 
 def test_home_standby_column_is_parsed():
-    p = CrewLinkRosterParser(timezone_format='local')
+    p = CrewLinkRosterParser(timezone_format='local', home_base='DOH', home_timezone='Asia/Qatar')
     duty = p._parse_column_to_duty(datetime(2026, 9, 22), ['RPT:22:00', 'PSBY', 'DOH', '22:00', '04:00'])
     assert duty.duty_type == DutyType.HOME_STANDBY
     assert duty.report_time_utc.astimezone(Q).strftime('%d %H:%M') == '22 22:00'
