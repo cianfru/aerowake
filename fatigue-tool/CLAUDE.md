@@ -135,7 +135,8 @@ ORO.FTL.235 minimum rest; ORO.FTL.235(d) recovery rest (36h incl. 2 local nights
 ORO.FTL.105(8) (`EASAComplianceValidator.is_disruptive_duty`).
 
 ### Augmented crew and Qatar FTL
-See `docs/QATAR_FTL.md`: IR sectors → 4-pilot (Crew B; paired legs Crew A); 3-pilot only by
+See `docs/QATAR_FTL.md`: IR = the pilot is relief on that sector → 4-pilot; one crew per pairing
+(IR leaving base → Crew B both legs; IR returning to base → Crew A both legs); 3-pilot only by
 pilot override (`duty_crew_overrides` `{composition, crew_set}`, `_apply_crew_overrides`). All
 scored in-flight rest blocks are returned with `source` 'roster_ir' | 'planned' and
 `approved_plan` (Qatar figure). ULR = Qatar FTL 7.18 (`QatarFTL718Validator`), with the approved

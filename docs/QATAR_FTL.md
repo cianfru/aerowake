@@ -50,10 +50,14 @@ rotation (no rest in the first/last 90 min).
 
 ## Augmented crew (3 or 4 pilots) — how it works
 
-- **Detection.** The CrewLink PDF marks in-flight rest with `IR` sectors. A duty with an
-  `IR` sector is 4-pilot (Crew B); the operating legs of the same pairing are 4-pilot
-  (Crew A) — `parsers/roster_parser.py::auto_detect_crew_augmentation`. A 3-pilot crew
-  cannot be read from the PDF.
+- **Detection.** The CrewLink PDF marks the sector on which the pilot is the relief crew
+  with `IR`. Qatar FTL 7.18.9.3: Crew A operates the outbound from base, Crew B the
+  return, and a pilot is in one crew for the whole pairing. So IR on the sector departing
+  base → Crew B on both legs; IR on the sector arriving at base → Crew A on both legs
+  (`parsers/roster_parser.py::auto_detect_crew_augmentation`). Both crews rest in flight on
+  both sectors; the crew set selects the approved pattern. Until October 2026 the code
+  assigned the crew per sector (IR leg = B, other leg = A), which put one leg of every
+  pairing on the wrong rest pattern. A 3-pilot crew cannot be read from the PDF.
 - **Pilot override.** In duty details the pilot can set 2 / 3 / 4 pilots (and Crew A/B for
   4-pilot ULR). The analysis is re-run with `duty_crew_overrides`
   (`{duty_id: 'crew_a' | 'crew_b' | {composition, crew_set}}`) — `api_server._apply_crew_overrides`.

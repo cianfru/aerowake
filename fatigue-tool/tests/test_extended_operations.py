@@ -894,3 +894,49 @@ def test_post_ulr_rest_at_base_needs_four_local_nights():
     long = Roster(roster_id='r', pilot_id='p', month='2026-10', duties=[ret, next_after(5)],
                   home_base_timezone=HOME_TZ, pilot_base='DOH')
     assert v.validate_ulr_duty(ret, long, 0).post_ulr_rest_compliant
+
+
+class TestCrewSetFromIR:
+    """Qatar FTL 7.18.9.3: Crew A operates the outbound, Crew B the return; one crew per pairing."""
+
+    def _pairing(self, ir_on):
+        from parsers.roster_parser import auto_detect_crew_augmentation
+        base = datetime(2026, 10, 5, tzinfo=UTC)
+        out_dep = base.replace(hour=1)
+        out_seg = make_segment('QR920', DOH, AKL, out_dep, out_dep + timedelta(hours=16, minutes=10))
+        ret_dep = out_dep + timedelta(days=2)
+        ret_seg = make_segment('QR921', AKL, DOH, ret_dep, ret_dep + timedelta(hours=17, minutes=30))
+        if ir_on == 'outbound':
+            out_seg.activity_code = 'IR'
+        else:
+            ret_seg.activity_code = 'IR'
+        out = make_duty('out', base, out_dep - timedelta(hours=1, minutes=15), out_seg.scheduled_arrival_utc + timedelta(minutes=30), [out_seg])
+        ret = make_duty('ret', base + timedelta(days=2), ret_dep - timedelta(hours=1), ret_seg.scheduled_arrival_utc + timedelta(minutes=30), [ret_seg])
+        roster = Roster(roster_id='r', pilot_id='p', month='2026-10', duties=[out, ret],
+                        home_base_timezone=HOME_TZ, pilot_base='DOH')
+        auto_detect_crew_augmentation(roster)
+        return out, ret
+
+    def test_relief_outbound_means_crew_b_on_both_legs(self):
+        out, ret = self._pairing('outbound')
+        assert (out.ulr_crew_set, ret.ulr_crew_set) == (ULRCrewSet.CREW_B, ULRCrewSet.CREW_B)
+        assert out.crew_composition == ret.crew_composition == CrewComposition.AUGMENTED_4
+
+    def test_relief_on_return_means_crew_a_on_both_legs(self):
+        out, ret = self._pairing('return')
+        assert (out.ulr_crew_set, ret.ulr_crew_set) == (ULRCrewSet.CREW_A, ULRCrewSet.CREW_A)
+
+    def test_each_leg_gets_its_approved_pattern_for_the_pilots_crew(self):
+        """Crew B: relief outbound (rests from 0:30), operates the return (first rest at 4:00)."""
+        import io, contextlib
+        from core import BorbelyFatigueModel, ModelConfig
+        out, ret = self._pairing('outbound')
+        roster = Roster(roster_id='r', pilot_id='p', month='2026-10', duties=[out, ret],
+                        home_base_timezone=HOME_TZ, pilot_base='DOH')
+        with contextlib.redirect_stdout(io.StringIO()):
+            BorbelyFatigueModel(ModelConfig.aerowake()).simulate_roster(roster)
+        def first_rest(d):
+            seg = d.segments[0]
+            return round((d.inflight_rest_plan.rest_periods[0].start_utc - seg.scheduled_departure_utc).total_seconds() / 3600, 2)
+        assert first_rest(out) == 0.5   # Figure 7-3, Crew B
+        assert first_rest(ret) == 4.0   # Figure 7-4, Crew B

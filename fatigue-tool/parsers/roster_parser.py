@@ -49,13 +49,19 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
     and apply incorrect FDP limits, we leave unlabelled long duties as STANDARD and
     let the user (or API caller) override via the crew_composition parameter.
 
+    Crew A / Crew B (Qatar FTL 7.18.4.1, 7.18.9.3): a pilot belongs to ONE crew for the
+    whole pairing. Crew A operates the outbound sector from base and is the relief crew on
+    the return; Crew B is the relief crew outbound and operates the return (Figures 7-3 to
+    7-8). An `IR` sector marks the sector on which the pilot is the relief crew, so:
+      • IR on the sector departing base  → Crew B for the outbound AND the return.
+      • IR on the sector arriving at base → Crew A for the outbound AND the return.
+    Both crews rest in flight on both sectors; the crew set selects which approved rest
+    pattern applies (`ULRRestPlanner`).
+
     Rules (all derived from PDF IR codes — no city-pair lists, no FDP heuristics):
-      1. Duty has IR segment → AUGMENTED_4, Crew B
-         (pilot is in bunk; aircraft is definitively 4-pilot)
-      2. Duty arrives at the layover station of an IR duty → AUGMENTED_4, Crew A
-         (pilot operated this outbound leg; same 4-pilot aircraft)
-      3. Duty departs from the layover station of an IR duty → AUGMENTED_4, Crew A
-         (return leg, paired with the IR inbound; same 4-pilot aircraft)
+      1. Duty has an IR segment → AUGMENTED_4, crew from the IR sector's direction.
+      2. Duty arrives at / departs from the layover station of an IR duty → AUGMENTED_4,
+         the same crew set (the other leg of the pairing; same 4-pilot aircraft).
 
     Everything else stays STANDARD.  No FDP thresholds, no city-pair lists.
 
@@ -67,75 +73,56 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
     import logging
     logger = logging.getLogger(__name__)
 
-    # ------------------------------------------------------------------
-    # PRE-PASS: build the set of layover stations from IR-marked duties.
-    #
-    # An IR duty either departs from OR arrives at a layover airport:
-    #   • Crew B on return leg (e.g. QR774 GRU→DOH): departs from GRU
-    #   • Crew B on outbound leg (e.g. QR729 DOH→DFW): arrives at DFW
-    #
-    # We collect BOTH departure and arrival airports of IR-marked duties
-    # (excluding home base) so the paired operating leg is always found:
-    #   • QR773 DOH→GRU (arrives GRU) → tagged via Rule 2
-    #   • QR730 DFW→DOH (departs DFW) → tagged via Rule 3
-    #
-    # Exclude the pilot's home base: in the normal outbound-then-return pattern
-    # the home base is never a layover station for IR purposes.  Including it
-    # would incorrectly tag every homebound flight as AUGMENTED_4.
-    # ------------------------------------------------------------------
     home_base = roster.pilot_base  # never assumed; None excludes no station
-    ir_layover_stations: set = set()   # non-home airports linked to IR duties
+
+    def ir_crew(duty) -> ULRCrewSet:
+        """Crew set implied by an IR duty's direction (relief outbound = B, relief return = A)."""
+        dep = duty.segments[0].departure_airport.code
+        arr = duty.segments[-1].arrival_airport.code
+        if home_base and arr == home_base and dep != home_base:
+            return ULRCrewSet.CREW_A
+        return ULRCrewSet.CREW_B  # departs base, or direction unknown (default B)
+
+    # PRE-PASS: layover stations of IR duties (excluding base) and the pilot's crew set
+    # for that pairing. Including the base would tag every homebound flight.
+    station_crew: dict = {}
     for duty in roster.duties:
         if duty.segments and duty.has_inflight_rest_segments:
-            dep = duty.segments[0].departure_airport.code
-            arr = duty.segments[-1].arrival_airport.code
-            if dep != home_base:
-                ir_layover_stations.add(dep)
-            if arr != home_base:
-                ir_layover_stations.add(arr)
+            crew = ir_crew(duty)
+            for code in (duty.segments[0].departure_airport.code, duty.segments[-1].arrival_airport.code):
+                if code != home_base:
+                    if code in station_crew and station_crew[code] != crew:
+                        # IR on both legs: the roster does not say which crew; keep the
+                        # outbound reading (Crew B) and let the pilot override.
+                        crew = ULRCrewSet.CREW_B
+                    station_crew[code] = crew
 
-    # ------------------------------------------------------------------
+    def mark(duty, crew, why):
+        duty.crew_composition = CrewComposition.AUGMENTED_4
+        duty.is_ulr = True
+        duty.ulr_crew_set = crew
+        duty.rest_facility_class = RestFacilityClass.CLASS_1
+        logger.info(f"Duty {duty.duty_id}: {why} → AUGMENTED_4 / {crew.value}")
+
     # MAIN PASS
-    # ------------------------------------------------------------------
     for duty in roster.duties:
         if not duty.segments:
             continue
-
-        # --- Rule 1: IR segment present → Crew B on this duty ---
-        if duty.has_inflight_rest_segments:
-            duty.crew_composition = CrewComposition.AUGMENTED_4
-            duty.is_ulr = True
-            duty.ulr_crew_set = ULRCrewSet.CREW_B
-            duty.rest_facility_class = RestFacilityClass.CLASS_1
-            logger.info(
-                f"Duty {duty.duty_id}: IR code detected → AUGMENTED_4 / CREW_B"
-            )
-            continue
-
-        # --- Rule 2: This duty arrives at an IR layover station → Crew A outbound ---
-        arr_code = duty.segments[-1].arrival_airport.code
-        if arr_code in ir_layover_stations:
-            duty.crew_composition = CrewComposition.AUGMENTED_4
-            duty.is_ulr = True
-            duty.ulr_crew_set = ULRCrewSet.CREW_A
-            duty.rest_facility_class = RestFacilityClass.CLASS_1
-            logger.info(
-                f"Duty {duty.duty_id}: arrives at IR layover {arr_code} "
-                f"→ AUGMENTED_4 / CREW_A (outbound operating leg)"
-            )
-            continue
-
-        # --- Rule 3: This duty departs from an IR layover station → Crew A return ---
         dep_code = duty.segments[0].departure_airport.code
-        if dep_code in ir_layover_stations:
-            duty.crew_composition = CrewComposition.AUGMENTED_4
-            duty.is_ulr = True
-            duty.ulr_crew_set = ULRCrewSet.CREW_A
-            duty.rest_facility_class = RestFacilityClass.CLASS_1
-            logger.info(
-                f"Duty {duty.duty_id}: departs IR layover {dep_code} "
-                f"→ AUGMENTED_4 / CREW_A (return operating leg)"
-            )
+        arr_code = duty.segments[-1].arrival_airport.code
+
+        # --- Rule 1: IR segment present → the pairing's crew set ---
+        if duty.has_inflight_rest_segments:
+            station = arr_code if arr_code != home_base else dep_code
+            mark(duty, station_crew.get(station, ir_crew(duty)), 'IR code')
+            continue
+
+        # --- Rule 2: other leg of an IR pairing → same crew set ---
+        if arr_code in station_crew:
+            mark(duty, station_crew[arr_code], f'arrives at IR layover {arr_code}')
+            continue
+        if dep_code in station_crew:
+            mark(duty, station_crew[dep_code], f'departs IR layover {dep_code}')
             continue
 
         # --- Everything else: leave as STANDARD ---
