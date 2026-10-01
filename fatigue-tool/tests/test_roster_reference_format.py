@@ -80,3 +80,48 @@ def test_roster_status_markers_are_not_training_notes():
     assert duty.training_annotations == ['op']
     duty = parser._parse_column_to_duty(day, ['RPT:07:00\n35LP\nDOH\n08:30\n12:30\nPA,aw,lpc,REQ'])
     assert duty.training_annotations == ['aw', 'lpc']
+
+
+class _FakePage:
+    """Word boxes laid out like the CrewLink legend, beside a hotel table."""
+    def __init__(self, rows):
+        self.rows = rows
+
+    def extract_words(self):
+        words = []
+        for top, items in self.rows:
+            words += [{'text': t, 'x0': x, 'top': top} for x, t in items]
+        return words
+
+
+def _legend_page():
+    return _FakePage([
+        (472, [(694, 'ACTIVITY'), (736, 'CODE/INDICATOR'), (1021, 'DESCRIPTION'), (100, 'HOTEL')]),
+        (485, [(692, 'ZSM'), (1020, 'A380'), (1042, 'Recency'), (1076, 'Sim'), (40, 'Grand')]),
+        (499, [(692, 'ZSB'), (1020, 'Standby'), (1054, 'at'), (1068, 'home')]),
+        (513, [(692, 'ZOF'), (1020, 'Day'), (1037, 'Off')]),
+        (527, [(692, 'ZCL'), (1020, 'Safety')]),
+        (537, [(1020, 'Classroom')]),
+        (551, [(692, '*'), (1020, '*'), (1030, 'Previous')]),
+    ])
+
+
+def test_code_legend_is_read_from_the_roster():
+    legend = CrewLinkRosterParser._extract_code_legend([_legend_page()])
+    assert legend == {'ZSM': 'A380 Recency Sim', 'ZSB': 'Standby at home',
+                      'ZOF': 'Day Off', 'ZCL': 'Safety Classroom'}
+
+
+def test_unknown_codes_take_their_type_from_the_legend():
+    parser = CrewLinkRosterParser(timezone_format='local', home_base='DOH', home_timezone='Asia/Qatar')
+    parser.code_legend = CrewLinkRosterParser._extract_code_legend([_legend_page()])
+    day = datetime(2026, 10, 3)
+    sim = parser._parse_column_to_duty(day, _base_column('ZSM', extra=['PA,ZCL']))
+    assert sim.duty_type == DutyType.SIMULATOR
+    assert sim.training_legend == {'ZSM': 'A380 Recency Sim', 'ZCL': 'Safety Classroom'}
+    assert parser._parse_column_to_duty(day, _base_column('ZSB')).duty_type == DutyType.HOME_STANDBY
+    assert parser._parse_column_to_duty(day, _base_column('ZOF')) is None
+    assert parser._parse_column_to_duty(day, _base_column('ZCL')).duty_type == DutyType.GROUND_TRAINING
+    roster = Roster('reference', 'synthetic', '2026-10', [sim], 'Asia/Qatar', pilot_base='DOH')
+    warnings = review(roster, parser, '.pdf')['warnings']
+    assert any('ZSM' in w and 'A380 Recency Sim' in w and 'simulator' in w for w in warnings)

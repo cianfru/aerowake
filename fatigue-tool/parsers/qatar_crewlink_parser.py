@@ -62,6 +62,19 @@ _RPT_RE = re.compile(r'R\s*P\s*T\s*:\s*(\d{2})\s*:\s*(\d{1,2})')
 _CLOCK_RE = re.compile(r'^\d{2}:\d{2}(\(\+1\))?$')
 
 
+def _type_from_description(description: str) -> Optional[DutyType]:
+    """Duty type of a code the parser does not list, from the roster's own legend.
+    None = not a duty (day off, leave, contactable, rest)."""
+    text = f' {description.lower()} '
+    if re.search(r'\b(day off|off day|leave|contactable|vacation|holiday|rest)\b', text) or text.strip() == 'off':
+        return None
+    if 'standby' in text or 'reserve' in text:
+        return DutyType.AIRPORT_STANDBY if 'airport' in text else DutyType.HOME_STANDBY
+    if re.search(r'\b(sim|simulator|ffs|lpc|opc|fstd)\b', text):
+        return DutyType.SIMULATOR
+    return DutyType.GROUND_TRAINING
+
+
 def _is_simulator_code(code: str) -> bool:
     return code in _SIMULATOR_CODES or bool(_SIMULATOR_PATTERN.match(code))
 
@@ -146,6 +159,8 @@ class CrewLinkRosterParser:
         # Base activity codes not in the known lists, read as ground duties
         # (reported to the pilot for review; see parsers/reconciliation.py).
         self.unrecognised_codes: List[str] = []
+        # Activity-code legend printed on the roster (code -> description).
+        self.code_legend: Dict[str, str] = {}
 
     def _get_or_create_airport(self, code: str) -> Optional[Airport]:
         """
@@ -217,6 +232,9 @@ class CrewLinkRosterParser:
             
             pilot_info['timezone_format'] = self.timezone_format
             
+            # The roster's own code legend explains codes the parser does not list.
+            self.code_legend = self._extract_code_legend(pdf.pages)
+
             # Extract the main schedule table
             table = self._extract_schedule_table(page)
             
@@ -230,6 +248,44 @@ class CrewLinkRosterParser:
                 'unknown_airports': list(self.unknown_airports)
             }
     
+    @staticmethod
+    def _extract_code_legend(pages) -> Dict[str, str]:
+        """Read the "ACTIVITY CODE/INDICATOR  DESCRIPTION" legend (bottom right of a
+        CrewLink roster) by word position: codes under ACTIVITY, meanings under
+        DESCRIPTION, one row per line; a line without a code continues the previous
+        description. The hotel table to its left is ignored by position."""
+        legend: Dict[str, str] = {}
+        for page in pages:
+            words = page.extract_words()
+            header = next((w for w in words if w['text'] == 'CODE/INDICATOR'), None)
+            if header is None:
+                continue
+            same_row = [w for w in words if abs(w['top'] - header['top']) < 3]
+            code_x = min(w['x0'] for w in same_row if w['text'] in ('ACTIVITY', 'CODE/INDICATOR'))
+            desc = next((w for w in same_row if w['text'] == 'DESCRIPTION'), None)
+            if desc is None:
+                continue
+            desc_x = desc['x0']
+            rows: Dict[int, List[dict]] = {}
+            for w in words:
+                if w['top'] <= header['top'] + 3 or w['x0'] < code_x - 4:
+                    continue
+                key = next((k for k in rows if abs(k - w['top']) < 3), round(w['top']))
+                rows.setdefault(key, []).append(w)
+            last = None
+            for top in sorted(rows):
+                line = sorted(rows[top], key=lambda w: w['x0'])
+                code = ' '.join(w['text'] for w in line if w['x0'] < desc_x - 4).strip()
+                text = ' '.join(w['text'] for w in line if w['x0'] >= desc_x - 4).strip()
+                if code and not re.fullmatch(r'[A-Za-z0-9*]{1,8}', code):
+                    break  # left the legend (another table below it)
+                if code and code != '*':
+                    legend[code] = text
+                    last = code
+                elif not code and text and last:
+                    legend[last] = f'{legend[last]} {text}'
+        return legend
+
     def _detect_timezone_format(self, page) -> str:
         """
         Auto-detect timezone format from PDF header.
@@ -611,10 +667,19 @@ class CrewLinkRosterParser:
             code = self._unknown_base_activity(lines)
             if code is None:
                 return None
+            described = self.code_legend.get(code)
+            duty_type = _type_from_description(described) if described else DutyType.GROUND_TRAINING
+            if duty_type is None:
+                return None  # the legend says it is not a duty
             duty = self._parse_training_duty(lines, date, code)
             if duty is not None:
+                duty.duty_type = duty_type
+                if duty_type in (DutyType.HOME_STANDBY, DutyType.AIRPORT_STANDBY):
+                    duty.release_time_utc -= timedelta(minutes=30)  # no debrief buffer on standby
+                    duty.duty_id = f"{duty.duty_id}_{code}"
+                else:
+                    self.inferred_release_ids.add(duty.duty_id)
                 self.unrecognised_codes.append(code)
-                self.inferred_release_ids.add(duty.duty_id)
             return duty
         
         # Now create report time using proper timezone conversion
@@ -903,6 +968,8 @@ class CrewLinkRosterParser:
             duty_type=duty_type,
             training_code=training_code,
             training_annotations=annotations if annotations else None,
+            training_legend={c: self.code_legend[c] for c in [training_code, *annotations]
+                             if c in self.code_legend} or None,
         )
 
         pass  # Parser diagnostics are returned to the caller, never logged with personal data.

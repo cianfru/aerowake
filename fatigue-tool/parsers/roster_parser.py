@@ -243,6 +243,8 @@ class PDFRosterParser:
         self.header_base: Optional[str] = None      # verified base printed in the roster
         self.detected_format: Optional[str] = None
         self.inferred_release_ids: set = set()
+        self.unrecognised_codes: list = []
+        self.code_legend: dict = {}
         self.pilot_info: Dict = {}
 
     def _use_base(self, base: Optional[str]) -> None:
@@ -326,6 +328,8 @@ class PDFRosterParser:
                 duties = result['duties']
                 pilot_info = result.get('pilot_info', {})
                 self.inferred_release_ids = set(grid_parser.inferred_release_ids)
+                self.unrecognised_codes = list(grid_parser.unrecognised_codes)
+                self.code_legend = dict(grid_parser.code_legend)
                 # Capture the effective timezone format (may differ from input
                 # if 'auto' was specified — the grid parser auto-detects it)
                 self.effective_timezone_format = grid_parser.timezone_format

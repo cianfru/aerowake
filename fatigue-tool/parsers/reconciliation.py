@@ -139,12 +139,15 @@ def review(roster, parser, suffix, resolution=None, roster_format=None):
             "Check them against your operator's records."))
 
     unknown = sorted(set(getattr(parser, 'unrecognised_codes', None) or ()))
-    if unknown:
+    legend = getattr(parser, 'code_legend', None) or {}
+    kinds = {d.training_code: _LABELS.get(d.duty_type, 'duty').lower()
+             for d in roster.duties + roster.standbys if getattr(d, 'training_code', None) in unknown}
+    for code in unknown:
+        meaning = legend.get(code)
+        source = (f'your roster\'s legend says "{meaning}", so it is read as {kinds.get(code, "ground training")}'
+                  if meaning else 'it is not explained on the roster, so it is read as ground training')
         checks.append(_check('unrecognised_activity', 'info',
-            f'Activity code{"s" if len(unknown) > 1 else ""} {", ".join(unknown)} '
-            f'{"are" if len(unknown) > 1 else "is"} not in Aerowake\'s list, so '
-            f'{"they are" if len(unknown) > 1 else "it is"} read as ground duty at base. '
-            'Check the times against your roster.'))
+            f'Activity code {code} is new to Aerowake: {source}. Check the times against your roster.'))
 
     base_source = resolution.source if resolution else None
     needs_confirmation = base_source == DUTY_PATTERN or any(c['severity'] == 'warning' for c in checks)

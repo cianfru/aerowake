@@ -481,6 +481,7 @@ export function transformAnalysisResult(
           : undefined,
         trainingCode: duty.training_code || undefined,
         trainingAnnotations: duty.training_annotations || undefined,
+        trainingLegend: duty.training_legend || undefined,
         // Cabin environment
         cabinAltitudeFt: duty.cabin_altitude_ft ?? null,
         aircraftType: duty.aircraft_type ?? null,

@@ -187,7 +187,11 @@ the same configuration.
   not a duty). Ground: EBTGR, TMTG, INAS, 6ESEC, 6EVS, EVNT, GTCT, GRND, AOFC. ISYU = home
   standby; CTC (contactable) is not a duty. PA (pre-assigned: instructor duties rostered
   before the general roster), REQ and PIC are roster-status markers, dropped from notes. Any other code in a base column (RPT, code, base,
-  start, end) is read as ground duty and listed in the import review (`unrecognised_activity`).
+  start, end) takes its type from the roster's own legend ("ACTIVITY CODE/INDICATOR
+  DESCRIPTION", bottom right; `CrewLinkRosterParser._extract_code_legend`): sim/LPC/OPC →
+  simulator, standby → standby, day off/leave/contactable → not a duty, else ground; without
+  a legend entry it is ground. Each is listed in the import review (`unrecognised_activity`).
+  Duties return `training_legend` (code → roster meaning) for the code and its notes.
 - Crew not on roster: a 2-pilot duty above the basic FDP maximum with a sector ≥ 7 h block
   returns `augmentation_suggested` and the FDP finding asks the pilot to set the crew
   (`easa_checks.augmentation_likely`); it is never assumed augmented.

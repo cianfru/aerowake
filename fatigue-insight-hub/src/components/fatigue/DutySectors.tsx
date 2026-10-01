@@ -4,13 +4,14 @@ import { formatAircraftType, getTrainingDutyLabel, isTrainingDuty } from '@/lib/
 import { RISK_LEVEL_LABELS, classifyKss, riskClasses } from '@/lib/risk-scale';
 import { cn } from '@/lib/utils';
 
-/** CrewLink legend for training annotations; unknown codes are shown as printed.
+/** Clarified meanings, ahead of the roster's own legend (duty.trainingLegend); other codes
+ *  use the legend, else are shown as printed.
  *  EQ/LQ: the pilot is the tutor training or checking a new instructor/examiner (owner, Oct 2026). */
 const TRAINING_NOTES: Record<string, string> = {
   EQ: 'tutor for a new instructor (TRT)', LQ: 'tutor for a new examiner (TRE/SFE)', aw: 'AWOPS', lpc: 'sim check',
   op: 'EBT recurrent day 2', rc: 'recency sim', rh: 'right-hand seat sim',
 };
-const trainingNoteLabel = (code: string) => TRAINING_NOTES[code] ?? code;
+const trainingNoteLabel = (code: string, legend?: Record<string, string>) => TRAINING_NOTES[code] ?? legend?.[code] ?? code;
 
 /**
  * The duty's sectors in home-base time. A sector shows its own predicted KSS
@@ -22,8 +23,8 @@ export function DutySectors({ duty, homeLabel }: { duty: DutyAnalysis; homeLabel
     return (
       <section className="rounded-2xl border border-border bg-card p-5" style={{ boxShadow: 'var(--shadow-card)' }} aria-labelledby="sectors-heading">
         <h3 id="sectors-heading" className="text-[15px] font-semibold">{getTrainingDutyLabel(duty.dutyType || '')}</h3>
-        <p className="mt-2 font-mono text-sm tabular">{duty.trainingCode ? `${duty.trainingCode} · ` : ''}{duty.reportTimeLocal}–{duty.releaseTimeLocal}</p>
-        {duty.trainingAnnotations?.length ? <p className="mt-1 text-xs text-muted-foreground">Notes: {duty.trainingAnnotations.map(trainingNoteLabel).join(', ')}</p> : null}
+        <p className="mt-2 font-mono text-sm tabular">{duty.trainingCode ? `${duty.trainingCode}${duty.trainingLegend?.[duty.trainingCode] ? ` (${duty.trainingLegend[duty.trainingCode]})` : ''} · ` : ''}{duty.reportTimeLocal}–{duty.releaseTimeLocal}</p>
+        {duty.trainingAnnotations?.length ? <p className="mt-1 text-xs text-muted-foreground">Notes: {duty.trainingAnnotations.map((c) => trainingNoteLabel(c, duty.trainingLegend)).join(', ')}</p> : null}
       </section>
     );
   }

@@ -188,6 +188,8 @@ class Duty:
     duty_type: DutyType = DutyType.FLIGHT
     training_code: Optional[str] = None          # Raw activity code: "OPTR", "EBTGR", etc.
     training_annotations: Optional[List[str]] = None  # Trailing codes: ["ea"], ["aw","lpc","rh"]
+    # Meanings printed in the roster's own activity-code legend, for the code and annotations.
+    training_legend: Optional[Dict[str, str]] = None
 
     # EASA FTL limits
     max_fdp_hours: Optional[float] = None  # Base FDP limit from EASA table

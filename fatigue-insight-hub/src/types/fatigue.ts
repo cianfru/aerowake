@@ -285,6 +285,8 @@ export interface DutyAnalysis {
   dutyType?: 'flight' | 'simulator' | 'ground_training' | 'airport_standby';
   trainingCode?: string;           // Raw activity code: "OPTR", "FFS", "EBTGR", etc.
   trainingAnnotations?: string[];  // Trailing codes: ["ea"], ["aw","lpc","rh"]
+  /** Meanings from the roster's own activity-code legend (code -> description). */
+  trainingLegend?: Record<string, string>;
 }
 
 // Sleep quality calculation factors

@@ -22,7 +22,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Query, Depen
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Dict, Optional, List
 import math
 import tempfile
 import os
@@ -357,6 +357,7 @@ class DutyResponse(BaseModel):
     duty_type: str = "flight"  # "flight", "simulator", "ground_training"
     training_code: Optional[str] = None  # Raw activity code: "OPTR", "FFS", "EBTGR", etc.
     training_annotations: Optional[List[str]] = None  # Trailing codes: ["ea"], ["aw","lpc","rh"]
+    training_legend: Optional[Dict[str, str]] = None  # code -> meaning from the roster's own legend
     
     # Performance metrics
     min_performance: float
@@ -1058,6 +1059,7 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
         duty_type=duty.duty_type.value if hasattr(duty, 'duty_type') else 'flight',
         training_code=getattr(duty, 'training_code', None),
         training_annotations=getattr(duty, 'training_annotations', None),
+        training_legend=getattr(duty, 'training_legend', None),
         # Augmented crew / ULR
         crew_composition=duty.crew_composition.value if hasattr(duty.crew_composition, 'value') else str(getattr(duty, 'crew_composition', 'standard')),
         rest_facility_class=duty.rest_facility_class.value if getattr(duty, 'rest_facility_class', None) else None,

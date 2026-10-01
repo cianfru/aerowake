@@ -280,6 +280,7 @@ export interface Duty {
   duty_type?: 'flight' | 'simulator' | 'ground_training' | 'airport_standby';
   training_code?: string;
   training_annotations?: string[];
+  training_legend?: Record<string, string> | null;
 
   /** Up to 3 plain-language reasons behind the risk level (aerowake-4.0-kss). */
   risk_reasons?: string[] | null;
