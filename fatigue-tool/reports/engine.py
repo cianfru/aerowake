@@ -411,6 +411,7 @@ def _sleep_summary(inp: ReportInput, sleeps: List[SleepIn], tz: str) -> Dict:
     last_wake = max((s.end_utc for s in sleeps if s.end_utc <= at), default=None)
     before = [s for s in sleeps if s.start_utc < at and s.end_utc > at - timedelta(hours=72)]
     kinds = {s.source for s in before}
+    since = None if asleep_at_event or last_wake is None else round((at - last_wake).total_seconds() / 3600, 2)
     basis = ('none' if not kinds else 'reported' if kinds == {'reported'}
              else 'estimated' if kinds == {'estimated'} else 'mixed')
     return dict(
@@ -419,8 +420,10 @@ def _sleep_summary(inp: ReportInput, sleeps: List[SleepIn], tz: str) -> Dict:
         reported_72h=total('reported', 72), estimated_72h=total('estimated', 72),
         last_wake_utc=last_wake.isoformat() if last_wake else None,
         last_wake_local=_fmt(last_wake, tz), last_wake_z=_fmt_z(last_wake),
-        hours_awake_at_event=None if asleep_at_event or last_wake is None
-        else round((at - last_wake).total_seconds() / 3600, 2),
+        # Time since the last sleep entered. It is time awake only when the pilot
+        # confirmed the diary complete; otherwise gaps are unknown, not wakefulness.
+        hours_since_last_sleep=since,
+        hours_awake_at_event=since if inp.diary_complete else None,
         basis=basis, diary_complete=inp.diary_complete,
     )
 
@@ -956,6 +959,9 @@ def _narrative(r: Dict, inp: ReportInput) -> List[Dict]:
             text += f"; last wake {ss['last_wake_local']}"
         if ss['hours_awake_at_event'] is not None:
             text += f", about {_hours(ss['hours_awake_at_event'])} awake at the event"
+        elif ss.get('hours_since_last_sleep') is not None:
+            text += (f", {_hours(ss['hours_since_last_sleep'])} since the last sleep entered "
+                     '(the sleep history is not confirmed complete, so this is not time awake)')
         text += '.'
         if sw:
             affected = next((d for d in inp.duties if d.id == inp.affected_duty_id), None)

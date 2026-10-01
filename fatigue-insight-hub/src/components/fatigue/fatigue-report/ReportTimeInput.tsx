@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { localInputToUtcIso, utcIsoToLocalInput } from '@/lib/fatigue-report-api';
-import { formatLocal, formatZ, normaliseClock } from '@/lib/report-time';
+import { formatLocal, formatZ, isCompleteClock, normaliseClock } from '@/lib/report-time';
 import { cn } from '@/lib/utils';
 
 /**
@@ -55,7 +55,7 @@ export function ReportTimeInput({ value, onChange, tz, zone, echoTz, label, erro
           onChange={(e) => { setDate(e.target.value); commit(e.target.value, time); }} />
         <Input aria-label={`${label}, time (24-hour)`} inputMode="numeric" placeholder="HH:MM" maxLength={5} value={time}
           disabled={locked} aria-invalid={!!message} aria-describedby={`${id}-m`} className="min-w-[4.75rem] flex-[2] scroll-mb-28 font-mono tabular-nums"
-          onChange={(e) => { setTime(e.target.value); if (normaliseClock(e.target.value)) commit(date, e.target.value); }}
+          onChange={(e) => { setTime(e.target.value); if (isCompleteClock(e.target.value) && normaliseClock(e.target.value)) commit(date, e.target.value); }}
           onBlur={(e) => { const c = normaliseClock(e.target.value); if (c) setTime(c); commit(date, e.target.value); }} />
       </div>
       <p id={`${id}-m`} className="min-h-[1rem] text-xs">

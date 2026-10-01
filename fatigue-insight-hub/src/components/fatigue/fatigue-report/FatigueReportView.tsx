@@ -118,7 +118,9 @@ export function FatigueReportView({ report, onEdit }: { report: FatigueReport; o
           <Fact label="Sleep 24 / 48 h" value={ss ? `${formatDuration(ss.sleep_24h)} / ${formatDuration(ss.sleep_48h)}` : '—'} hint="before the event" />
           <Fact label="Sleep 72 h" value={formatDuration(ss?.sleep_72h)}
             hint={ss ? (ss.basis === 'reported' ? 'all reported' : ss.basis === 'none' ? 'none entered' : `${formatDuration(ss.estimated_72h)} estimated`) : undefined} />
-          <Fact label="Awake at event" value={formatDuration(ss?.hours_awake_at_event)} hint={ss?.last_wake_local ? `woke ${ss.last_wake_local.slice(-5)}` : undefined} />
+          {ss?.hours_awake_at_event != null || !ss?.hours_since_last_sleep
+            ? <Fact label="Awake at event" value={formatDuration(ss?.hours_awake_at_event)} hint={ss?.last_wake_local ? `woke ${ss.last_wake_local.slice(-5)}` : undefined} />
+            : <Fact label="Since last sleep entered" value={formatDuration(ss.hours_since_last_sleep)} hint="sleep history not confirmed complete" />}
           <Fact label="Self-rating" value={sa ? [sa.kss != null ? `KSS ${sa.kss}` : '', sa.samn_perelli != null ? `SP ${sa.samn_perelli}` : ''].filter(Boolean).join(' · ') : '—'}
             hint={sa ? `at ${sa.rated_at_local.slice(-5)}` : 'none given'} />
         </dl>

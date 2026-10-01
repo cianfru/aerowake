@@ -231,3 +231,17 @@ def test_after_duty_report_names_the_sleep_screening_reference_time():
     assert '24 h before duty report at Tue 08 Sep 05:30' in sleep_text
     assert 'before the assessed point' not in sleep_text
     assert report['prior_sleep_wake']['sleep_24h'] == pytest.approx(4.0)
+
+
+def test_unconfirmed_diary_never_reports_gaps_as_time_awake():
+    """Missing sleep entries are unknown, not continuous wakefulness."""
+    body = base_request(diary_complete=False)
+    r = post(body)
+    ss = r['sleep_summary']
+    assert ss['hours_awake_at_event'] is None
+    assert ss['hours_since_last_sleep'] is not None
+    narrative = ' '.join(section['text'] for section in r['narrative'])
+    assert 'awake at the event' not in narrative
+
+    confirmed = post(base_request())['sleep_summary']
+    assert confirmed['hours_awake_at_event'] == confirmed['hours_since_last_sleep']

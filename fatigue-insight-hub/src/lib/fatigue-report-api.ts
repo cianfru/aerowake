@@ -144,6 +144,8 @@ export interface SleepSummary {
   last_wake_local: string | null;
   last_wake_z: string | null;
   hours_awake_at_event: number | null;
+  /** Since the last sleep entered; equals time awake only with a complete diary. */
+  hours_since_last_sleep?: number | null;
   basis: 'reported' | 'estimated' | 'mixed' | 'none';
   diary_complete: boolean;
 }

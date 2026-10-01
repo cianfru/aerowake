@@ -91,3 +91,12 @@ export function localHour(iso: string, tz: string): number {
   const shifted = new Date(d.getTime() + tzOffsetMinutes(d, tz || 'UTC') * 60000);
   return shifted.getUTCHours() + shifted.getUTCMinutes() / 60 + shifted.getUTCSeconds() / 3600;
 }
+
+/**
+ * True when typed clock text can only mean one time: 'HH:MM', 'H:MM' or four
+ * digits. '043' could still become '0430', so it waits for blur.
+ */
+export function isCompleteClock(text: string): boolean {
+  const t = text.trim();
+  return /^\d{1,2}:\d{2}$/.test(t) || /^\d{4}$/.test(t);
+}
