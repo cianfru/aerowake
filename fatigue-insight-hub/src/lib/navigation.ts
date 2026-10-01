@@ -10,7 +10,7 @@
 
 export type HubId = 'roster' | 'fatigue-report' | 'history' | 'learn';
 
-export type HistorySubTab = 'rosters' | 'yearly' | 'compare';
+export type HistorySubTab = 'rosters' | 'yearly' | 'compare' | 'debriefs';
 export type LearnSubTab = 'learn' | 'model' | 'pilot-study' | 'about';
 export type SubTab = HistorySubTab | LearnSubTab;
 
@@ -20,6 +20,7 @@ export const HISTORY_SUB_TABS: Array<{ id: HistorySubTab; label: string }> = [
   { id: 'rosters', label: 'Rosters' },
   { id: 'yearly', label: '12-Month' },
   { id: 'compare', label: 'Compare' },
+  { id: 'debriefs', label: 'Debriefs' },
 ];
 
 export const LEARN_SUB_TABS: Array<{ id: LearnSubTab; label: string }> = [

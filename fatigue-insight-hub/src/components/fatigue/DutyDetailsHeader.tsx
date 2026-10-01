@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Plane, Monitor, BookOpen, FileText, FileWarning } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DutyAnalysis } from '@/types/fatigue';
@@ -12,6 +13,8 @@ interface DutyDetailsHeaderProps {
   zoneLabel?: string;
   onGenerateReport?: () => void;
   onReportFatigue?: () => void;
+  /** Debrief control for a flown duty (renders nothing for future duties). */
+  debrief?: ReactNode;
 }
 
 /** "DOH → NJF → DOH" (in-flight rest rows excluded). */
@@ -31,7 +34,7 @@ export function dutyRoute(duty: DutyAnalysis): string {
  * room for the dialog's close button; on phones the actions sit on their own
  * row with visible labels.
  */
-export function DutyDetailsHeader({ duty, zoneLabel, onGenerateReport, onReportFatigue }: DutyDetailsHeaderProps) {
+export function DutyDetailsHeader({ duty, zoneLabel, onGenerateReport, onReportFatigue, debrief }: DutyDetailsHeaderProps) {
   const isTraining = isTrainingDuty(duty);
   const peak = resolveKss(duty.maxKss, duty.minPerformance, duty.modelVersion);
   const Icon = isTraining ? (duty.dutyType === 'simulator' ? Monitor : BookOpen) : Plane;
@@ -60,8 +63,9 @@ export function DutyDetailsHeader({ duty, zoneLabel, onGenerateReport, onReportF
         </div>
       </div>
 
-      {(onReportFatigue || onGenerateReport) && (
+      {(onReportFatigue || onGenerateReport || debrief) && (
         <div className="flex shrink-0 items-center gap-2">
+          {debrief}
           {onReportFatigue && (
             <Button variant="outline" size="sm" onClick={onReportFatigue} className="h-9 gap-1.5 rounded-lg text-[13px]">
               <FileWarning className="h-4 w-4" aria-hidden="true" />

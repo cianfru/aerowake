@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 export function StudyInformation({ className, headingLevel = 3 }: { className?: string; headingLevel?: 2 | 3 }) {
   const H = headingLevel === 2 ? 'h2' : 'h3';
   const heading = headingLevel === 2 ? 'text-base font-semibold' : 'text-sm font-semibold';
-  const contact = <a className="text-primary underline underline-offset-2" href={STUDY_SUPPORT_URL} target="_blank" rel="noreferrer">{STUDY_CONTACT}</a>;
+  const contact = <a className="text-primary underline underline-offset-2" href={STUDY_SUPPORT_URL} target="_blank" rel="noreferrer">{STUDY_CONTACT} (GitHub, opens in a new tab)<span className="sr-only">, public</span></a>;
   return (
     <div className={cn('space-y-4 text-sm leading-relaxed text-foreground', className)}>
       <section className="space-y-1">
@@ -21,7 +21,7 @@ export function StudyInformation({ className, headingLevel = 3 }: { className?: 
       </section>
       <section className="space-y-1">
         <H className={heading}>Who is responsible</H>
-        <p>The data controller is {STUDY_CONTROLLER}. For questions, or to exercise your data rights, use {contact}.</p>
+        <p>The data controller is {STUDY_CONTROLLER}. For questions, or to exercise your data rights, use {contact}. Messages there are public: do not post personal or health details — ask for a private contact and the owner will reply.</p>
       </section>
       <section className="space-y-1">
         <H className={heading}>Why</H>

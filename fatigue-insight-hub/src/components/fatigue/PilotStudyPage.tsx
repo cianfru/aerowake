@@ -34,8 +34,38 @@ const PHASES: Array<{ value: Phase; label: string }> = [
 ];
 const YES_NO = (yes: string, no: string): Array<{ value: YesNo; label: string }> => [{ value: 'yes', label: yes }, { value: 'no', label: no }];
 
-function browserZone(): string {
-  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; }
+const HOME_ZONE_KEY = 'aerowake-study-home-zone';
+
+function storedZone(): string {
+  try { return localStorage.getItem(HOME_ZONE_KEY) || ''; } catch { return ''; }
+}
+
+function zoneOptions(): string[] {
+  try {
+    const zones = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.('timeZone');
+    if (zones?.length) return zones;
+  } catch { /* fall through */ }
+  return ['UTC', 'Asia/Qatar', 'Asia/Dubai', 'Europe/London', 'Europe/Madrid', 'Europe/Paris', 'Asia/Singapore', 'America/New_York'];
+}
+
+/**
+ * The home zone sets the circadian phase of model 5c, so it is never guessed
+ * from the device (wrong on a layover): it comes from the analysed roster or
+ * the pilot chooses it.
+ */
+function HomeZonePicker({ value, onChange }: { value: string; onChange: (tz: string) => void }) {
+  const options = useMemo(zoneOptions, []);
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor="study-home-zone" className="block text-sm font-medium">Home base time zone</label>
+      <select id="study-home-zone" value={value} required onChange={(e) => onChange(e.target.value)}
+        className="min-h-[40px] w-full max-w-sm rounded-lg border border-input bg-card px-3 text-sm">
+        <option value="">Choose your home base time zone…</option>
+        {options.map((z) => <option key={z} value={z}>{z.replace(/_/g, ' ')}</option>)}
+      </select>
+      <p className="text-xs text-muted-foreground">Your body clock is modelled on home-base time. Analyse a roster to fill this in automatically.</p>
+    </div>
+  );
 }
 
 export function PilotStudyPage() {
@@ -87,8 +117,11 @@ export function PilotStudyPage() {
 
 function DiaryForm({ userId }: { userId: string }) {
   const { state } = useAnalysis();
-  const tz = state.analysisResults?.homeBaseTimezone || browserZone();
-  const zoneLabel = state.analysisResults?.homeBaseTimezone ? (state.analysisResults.pilotBase || 'home') : 'local';
+  const analysedZone = state.analysisResults?.homeBaseTimezone || '';
+  const [chosenZone, setChosenZone] = useState(storedZone);
+  const tz = analysedZone || chosenZone;
+  const zoneLabel = analysedZone ? (state.analysisResults?.pilotBase || 'home') : 'home';
+  const chooseZone = (z: string) => { setChosenZone(z); try { localStorage.setItem(HOME_ZONE_KEY, z); } catch { /* private mode */ } };
   const [draft, setDraftState] = useState<Draft>(() => drafts.get(userId) ?? EMPTY);
   const [kss, setKss] = useState<number | null>(null);
   const [ratedAt, setRatedAt] = useState<string | null>(null);
@@ -106,8 +139,8 @@ function DiaryForm({ userId }: { userId: string }) {
   useEffect(() => { void load(); }, []);
 
   const late = ratedAt !== null && now - Date.parse(ratedAt) > LATE_MS;
-  const sleepIsos = useMemo(() => draft.sleeps.map((s) => ({ start: localInputToUtcIso(s.start, tz), end: localInputToUtcIso(s.end, tz) })), [draft.sleeps, tz]);
-  const complete = kss !== null && draft.phase && draft.seen && draft.actual && draft.complete && draft.home
+  const sleepIsos = useMemo(() => draft.sleeps.map((s) => ({ start: tz ? localInputToUtcIso(s.start, tz) : null, end: tz ? localInputToUtcIso(s.end, tz) : null })), [draft.sleeps, tz]);
+  const complete = !!tz && kss !== null && draft.phase && draft.seen && draft.actual && draft.complete && draft.home
     && sleepIsos.every((s) => s.start && s.end);
 
   async function load() {
@@ -163,7 +196,7 @@ function DiaryForm({ userId }: { userId: string }) {
     finally { setBusy(false); }
   }
 
-  const zone = tz === 'UTC' ? 'UTC' : `${zoneLabel} time (${tz})`;
+  const zone = !tz ? 'home time (choose your time zone first)' : tz === 'UTC' ? 'UTC' : `${zoneLabel} time (${tz})`;
   return (
     <div className="space-y-6">
       {result ? (
@@ -177,6 +210,7 @@ function DiaryForm({ userId }: { userId: string }) {
       ) : (
         <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="space-y-6 rounded-xl border bg-card p-5 md:p-6">
           <fieldset disabled={busy || !!pending} className="space-y-6">
+            {!analysedZone && <HomeZonePicker value={chosenZone} onChange={chooseZone} />}
             <RatingScale
               name="diary-kss"
               legend={<span className="text-lg">1. How sleepy are you right now?</span>}

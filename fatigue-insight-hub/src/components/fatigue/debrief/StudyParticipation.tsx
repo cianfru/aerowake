@@ -13,7 +13,7 @@ export function StudyParticipation({ compact }: { compact?: boolean }) {
   const refresh = useRefreshStudy();
   const [joinOpen, setJoinOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
-  const [deleteData, setDeleteData] = useState(true);
+  const [deleteData, setDeleteData] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -61,8 +61,9 @@ export function StudyParticipation({ compact }: { compact?: boolean }) {
         open={leaveOpen}
         onOpenChange={setLeaveOpen}
         title="Withdraw from the study?"
-        description="No new debriefs or diary entries can be saved after you withdraw. You can rejoin later."
-        confirmLabel="Withdraw"
+        description="No new debriefs or diary entries can be saved after you withdraw. Your existing entries are kept unless you tick the box below. You can rejoin later."
+        confirmLabel={deleteData ? 'Withdraw and delete my entries' : 'Withdraw'}
+        destructive={deleteData}
         onConfirm={leave}
         busy={busy}
       >

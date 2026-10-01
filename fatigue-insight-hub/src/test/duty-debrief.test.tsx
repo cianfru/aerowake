@@ -73,6 +73,9 @@ describe('debrief helpers', () => {
     const late = duty('D20260928', '2026-09-28T04:00:00Z', '2026-09-28T12:00:00Z', 5.0);
     expect(debriefQueue([calm, FUTURE, old, FLOWN, late], [], NOW).map((d) => d.dutyId)).toEqual(['D20260929', 'D20260928', 'D20260927']);
     expect(debriefQueue([FLOWN], [saved()], NOW)).toEqual([]);
+    // Forecast-blind: a newer calm duty comes before an older flagged one.
+    const flaggedOlder = duty('D20260926', '2026-09-26T04:00:00Z', '2026-09-26T12:00:00Z', 7.4);
+    expect(debriefQueue([flaggedOlder, late], [], NOW).map((d) => d.dutyId)).toEqual(['D20260928', 'D20260926']);
     expect(dutyKey('D1', '2026-09-29T14:15:00Z')).toBe(dutyKey('D1', '2026-09-29T14:15:00+00:00'));
   });
 

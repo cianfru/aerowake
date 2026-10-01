@@ -20,6 +20,8 @@ vi.mock('@/components/fatigue/DutyDetailsDialog', () => ({
     open ? <div role="dialog">details {duty?.dutyId}</div> : null,
 }));
 vi.mock('@/hooks/useAnalyzeRoster', () => ({ useAnalyzeRoster: () => ({ runAnalysis: vi.fn(), isAnalyzing: false }) }));
+vi.mock('@/components/fatigue/debrief/DebriefQueue', () => ({ DebriefQueue: () => null }));
+vi.mock('@/components/fatigue/debrief/DutyDebriefAction', () => ({ DutyDebriefAction: () => null }));
 
 let tabSpy: string | null = null;
 let prefillSpy: { dutyId: string } | null = null;

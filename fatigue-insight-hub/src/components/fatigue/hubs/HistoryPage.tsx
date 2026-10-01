@@ -12,13 +12,8 @@ import { ComparativeMetricsPage } from '../ComparativeMetricsPage';
 import { SubTabBar } from './SubTabBar';
 import { DebriefHistory } from '../debrief/DebriefHistory';
 
-// Debriefs live beside saved rosters. TODO(integration): move this entry into
-// HISTORY_SUB_TABS in lib/navigation.ts so 'history:debriefs' links resolve.
-type HistoryTab = HistorySubTab | 'debriefs';
-const TABS: Array<{ id: HistoryTab; label: string }> = [
-  ...HISTORY_SUB_TABS.filter((t) => (t.id as string) !== 'debriefs'),
-  { id: 'debriefs', label: 'Debriefs' },
-];
+type HistoryTab = HistorySubTab;
+const TABS = HISTORY_SUB_TABS;
 
 /** History hub: saved rosters, 12-month view, peer comparison and study debriefs (signed-in only). */
 export function HistoryPage() {

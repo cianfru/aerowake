@@ -18,9 +18,9 @@ function readHidden(): boolean {
 }
 
 /**
- * Flown duties from the current analysis that have no debrief yet, flagged
- * duties first (unflagged ones are still asked: they measure false alarms).
- * The forecast is not shown here, so ratings stay blind.
+ * Flown duties from the current analysis that have no debrief yet, most
+ * recent first. Neither the order nor the card reveals the forecast, so
+ * ratings stay blind and unflagged duties (false alarms) are sampled fairly.
  */
 export function DebriefQueue({ now, className }: { now?: number; className?: string }) {
   const { state } = useAnalysis();

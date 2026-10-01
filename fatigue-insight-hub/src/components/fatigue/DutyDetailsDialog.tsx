@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { mapTimelinePoints } from '@/lib/transform-analysis';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { DutyDebriefAction } from '@/components/fatigue/debrief/DutyDebriefAction';
 import { DutyAnalysis } from '@/types/fatigue';
 import { getDutyDetail } from '@/lib/api-client';
 import { zoneOffsetLabel } from '@/lib/home-time';
@@ -115,6 +116,7 @@ export function DutyDetailsDialog({
               zoneLabel={zoneLabel}
               onGenerateReport={() => setReportMode(true)}
               onReportFatigue={onReportFatigue ? () => onReportFatigue(displayDuty) : undefined}
+              debrief={<DutyDebriefAction duty={displayDuty} analysisId={analysisId} />}
             />
           </div>
         )}

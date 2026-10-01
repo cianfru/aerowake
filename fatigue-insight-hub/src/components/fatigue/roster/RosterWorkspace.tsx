@@ -13,6 +13,7 @@ import { Chronogram } from '../Chronogram';
 import { ExportOptions } from '../ExportOptions';
 import { RosterForecast, RosterRecovery } from './RosterForecast';
 import { DutyWatchCard } from './DutyWatchCard';
+import { DebriefQueue } from '@/components/fatigue/debrief/DebriefQueue';
 import { EasaChecksCard } from './EasaChecksCard';
 import { TimelineSection } from './TimelineSection';
 import { RouteNetwork } from './RouteNetwork';
@@ -119,6 +120,7 @@ export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDu
 
     <div ref={panels}>
       <TabsContent value="outlook" data-view="outlook" forceMount hidden={view !== 'outlook'} className="mt-5 space-y-8">
+        <DebriefQueue />
         <RosterForecast results={results} reference={reference} onReferenceChange={setReference} onDetails={onDutySelect} onConcern={onConcern}
           napHabit={napHabit} canReanalyse={canReanalyse} isUpdating={isAnalyzing}
           onNapHabitChange={habit => { setSettings({ napHabit: habit }); if (canReanalyse) runAnalysis({ napHabit: habit, reveal: false }); }} />

@@ -203,12 +203,17 @@ export function dutyRoute(duty: Pick<DutyAnalysis, 'flightSegments'>): string {
   return [legs[0].departure, ...legs.map((s) => s.arrival)].join('–');
 }
 
-/** Flown duties in the recall window without a debrief: flagged first, then most recent. */
+/**
+ * Flown duties in the recall window without a debrief, most recent first.
+ * The order never depends on the forecast: prioritising flagged duties would
+ * reveal the hidden prediction and over-sample flagged duties, biasing the
+ * flag-discrimination evaluation (docs/PILOT_STUDY.md).
+ */
 export function debriefQueue(duties: DutyAnalysis[], debriefs: Debrief[], now: number = Date.now()): DutyAnalysis[] {
   const oldest = now - DEBRIEF_WINDOW_DAYS * 86400e3;
   return duties
     .filter((d) => d.dutyId && isFlown(d, now) && (instant(d.releaseTimeUtc) ?? 0) >= oldest && debriefsFor(d, debriefs).length === 0)
-    .sort((a, b) => Number(isFlagged(b)) - Number(isFlagged(a)) || (instant(b.releaseTimeUtc) ?? 0) - (instant(a.releaseTimeUtc) ?? 0));
+    .sort((a, b) => (instant(b.releaseTimeUtc) ?? 0) - (instant(a.releaseTimeUtc) ?? 0));
 }
 
 /** Descriptive personal summary once there are enough debriefs to be worth showing. */

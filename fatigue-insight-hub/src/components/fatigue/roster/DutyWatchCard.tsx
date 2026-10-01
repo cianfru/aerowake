@@ -4,6 +4,8 @@ import { riskClasses } from '@/lib/risk-scale';
 import type { DutyAnalysis } from '@/types/fatigue';
 import { dutyDateLabel, dutyPeakKss, dutyRiskLevel, dutyRoute, dutyTimes } from './roster-utils';
 import { RiskLabel, SeverityRule, TextAction } from './primitives';
+import { DutyDebriefAction } from '@/components/fatigue/debrief/DutyDebriefAction';
+import { useAnalysis } from '@/contexts/AnalysisContext';
 
 interface DutyWatchCardProps {
   duty: DutyAnalysis;
@@ -19,6 +21,7 @@ interface DutyWatchCardProps {
  * actions. The band's verbal anchor and shared reasons live in the group header.
  */
 export function DutyWatchCard({ duty, onDetails, onReportFatigue, sharedReasons }: DutyWatchCardProps) {
+  const analysisId = useAnalysis().state.analysisResults?.analysisId;
   const level = dutyRiskLevel(duty);
   const rc = riskClasses(level);
   const kss = dutyPeakKss(duty);
@@ -69,6 +72,7 @@ export function DutyWatchCard({ duty, onDetails, onReportFatigue, sharedReasons 
             <TextAction onClick={() => onReportFatigue(duty)} ariaLabel={`Report fatigue for duty on ${date}`} emphasis>
               Report fatigue <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
             </TextAction>
+            <DutyDebriefAction duty={duty} analysisId={analysisId} />
           </div>
         </div>
       </div>
