@@ -245,3 +245,21 @@ describe('sun', () => {
     expect(nightCircles(date)).toHaveLength(7);
   });
 });
+
+describe('arc bow stays near the true track', () => {
+  it('never offsets a zoomed-in flat route more than MAX_BOW_PX from its great circle', async () => {
+    const { flatArc, MAX_BOW_PX } = await import('@/lib/map-geometry');
+    const { geoEquirectangular, geoInterpolate } = await import('d3-geo');
+    // DOH -> TRV at a regional scale: a long chord on screen.
+    const projection = geoEquirectangular().scale(2400).center([62, 18]).translate([600, 400]);
+    const a: [number, number] = [51.57, 25.27];
+    const b: [number, number] = [76.92, 8.48];
+    const [run] = flatArc(a, b, projection, 1);
+    const it = geoInterpolate(a, b);
+    const worst = Math.max(...run.map(([x, y], i) => {
+      const [tx, ty] = projection(it(i / (run.length - 1))) as [number, number];
+      return Math.hypot(x - tx, y - ty);
+    }));
+    expect(worst).toBeLessThanOrEqual(MAX_BOW_PX + 1e-6);
+  });
+});

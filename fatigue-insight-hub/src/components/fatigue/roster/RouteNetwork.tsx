@@ -20,6 +20,9 @@ function helpText(view: RouteView, expanded: boolean): string {
 }
 /** Room around a selected route: the details card sits bottom-left from the sm breakpoint. */
 const CARD_PAD = { top: 64, right: 84, bottom: 210, left: 56 };
+/** Full-screen on wide screens with the route drawer open: keep routes clear of the 20rem drawer. */
+const DRAWER_PAD = { ...CARD_PAD, left: 20 * 16 + 40 };
+const isLarge = () => typeof window !== 'undefined' && (window.matchMedia?.('(min-width: 1024px)').matches ?? true);
 const COMPACT_PAD = { top: 64, right: 84, bottom: 56, left: 56 };
 const isWide = () => typeof window !== 'undefined' && (window.matchMedia?.('(min-width: 640px)').matches ?? true);
 
@@ -153,7 +156,7 @@ export function RouteNetwork({ duties, homeBase }: { duties: DutyAnalysis[]; hom
       routes={model.routes}
       fitTo={model.fitTo}
       focus={focus}
-      focusPad={inDialog || isWide() ? CARD_PAD : COMPACT_PAD}
+      focusPad={inDialog && drawerOpen && isLarge() ? DRAWER_PAD : inDialog || isWide() ? CARD_PAD : COMPACT_PAD}
       selectedKey={selected}
       hoveredKey={hovered}
       onSelect={selectFromMap}
@@ -173,7 +176,8 @@ export function RouteNetwork({ duties, homeBase }: { duties: DutyAnalysis[]; hom
       )}
       {selectedPair && (
         <SelectionCard pair={selectedPair} distanceNm={distanceNm} names={names} onClear={() => setSelected(null)}
-          className={cn('absolute bottom-3 left-3 z-10 w-[min(20rem,calc(100%-5rem))]', !inDialog && 'hidden sm:block')} />
+          className={cn('absolute bottom-3 left-3 z-10 w-[min(20rem,calc(100%-5rem))]', !inDialog && 'hidden sm:block',
+            inDialog && drawerOpen && 'lg:left-[calc(20rem+1.5rem)]')} />
       )}
     </Globe>
   );
@@ -255,7 +259,8 @@ export function RouteNetwork({ duties, homeBase }: { duties: DutyAnalysis[]; hom
                   <ChevronDown className={cn('h-4 w-4 transition-transform', drawerOpen && 'rotate-180')} aria-hidden="true" />
                 </button>
                 {drawerOpen && (
-                  <RouteTable ref={drawerRef} pairs={pairs} selected={selected} hovered={hovered} onSelect={setSelected} onHover={setHovered}
+                  <RouteTable ref={drawerRef} pairs={pairs} selected={selected} hovered={hovered}
+                    onSelect={(key) => { setSelected(key); if (key && !isLarge()) setDrawerOpen(false); }} onHover={setHovered}
                     className="min-h-0 overflow-y-auto border-t border-border/70 px-3 pb-2" />
                 )}
               </div>

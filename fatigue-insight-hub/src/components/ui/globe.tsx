@@ -278,9 +278,13 @@ export function Globe(props: GlobeProps) {
     }
 
     // Routes: lifted arcs on the globe, gently bowed great circles on the flat map.
-    // Near the view centre a radial lift is foreshortened to nothing, so the app
-    // map always adds some screen-space bow; the hero keeps the pure 3D lift.
-    const bow = p.flat ? 1 : p.appearance === 'daylight' ? 0.3 : 0.5 + 0.5 * smoothstep(1.5, 4, v.globe.k);
+    // The bow and the 3D lift fade out as the pilot zooms into a region, so the
+    // drawn line converges on the true great-circle track (pilots know their
+    // tracks); overviews keep the depth. The hero keeps its pure 3D lift.
+    const zoomLevel = p.flat ? (v.base.s0 * v.flat!.k) / Math.min(s.w / (2 * Math.PI), s.h / Math.PI) : v.globe.k;
+    const regional = smoothstep(2, 6, zoomLevel);
+    const bow = p.appearance === 'daylight' ? 0.3 : (p.flat ? 1 : 0.5) * (1 - regional);
+    const liftScale = p.appearance === 'daylight' ? 1 : 1 - 0.85 * regional;
     const linePoints: Array<[number, number]> = [];
     for (const r of p.routes) {
       const parts = e.routes.get(r.key);
@@ -293,7 +297,7 @@ export function Globe(props: GlobeProps) {
         front = runsToPath(runs);
         linePoints.push(...densify(runs));
       } else {
-        const runs = globeArc(r.from, r.to, v.globe, s, r0, bow);
+        const runs = globeArc(r.from, r.to, v.globe, s, r0, bow, liftScale);
         front = runsToPath(runs.front);
         limb = runsToPath(runs.limb);
         back = runsToPath(runs.back);

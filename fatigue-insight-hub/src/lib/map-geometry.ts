@@ -252,11 +252,14 @@ export const runsToPath = (runs: Run[]) =>
  * centre a radial lift is foreshortened to nothing, so zoomed-in views blend in
  * a screen-space bow (`bow` = 0…1).
  */
-export function globeArc(a: LngLat, b: LngLat, view: GlobeView, size: Size, r0: number, bow = 0): ArcRuns {
+/** Screen-space bow never exceeds this, so regional views stay close to the true track. */
+export const MAX_BOW_PX = 14;
+
+export function globeArc(a: LngLat, b: LngLat, view: GlobeView, size: Size, r0: number, bow = 0, liftScale = 1): ArcRuns {
   const out: ArcRuns = { front: [], limb: [], back: [] };
   const d = geoDistance(a, b);
   if (!(d > 1e-6)) return out;
-  const h = arcHeight(d);
+  const h = arcHeight(d) * liftScale;
   const n = clamp(Math.ceil((d * DEG) / 2), 12, 64);
   const it = geoInterpolate(a, b);
   const rot = geoRotation(view.rotate);
@@ -278,7 +281,7 @@ export function globeArc(a: LngLat, b: LngLat, view: GlobeView, size: Size, r0: 
   const chord = Math.hypot(end.sx - start.sx, end.sy - start.sy);
   const normal = upNormal(end.sx - start.sx, end.sy - start.sy);
   // Bow only chords whose ends are both in view; arcs to the far side rise over the limb in 3D.
-  const bowPx = start.kind === 0 && end.kind === 0 ? bow * 0.18 * chord : 0;
+  const bowPx = start.kind === 0 && end.kind === 0 ? Math.min(MAX_BOW_PX, bow * 0.18 * chord) : 0;
   const point = (t: number, q = sample(t)): [number, number] => {
     const o = bowPx * Math.sin(Math.PI * t);
     return [q.sx + normal.x * o, q.sy + normal.y * o];
@@ -414,7 +417,7 @@ export function flatArc(a: LngLat, b: LngLat, projection: GeoProjection, bow = 1
   const [sx, sy] = pts[0];
   const [ex, ey] = pts[pts.length - 1];
   const normal = upNormal(ex - sx, ey - sy);
-  const bowPx = bow * 0.18 * Math.hypot(ex - sx, ey - sy);
+  const bowPx = Math.min(MAX_BOW_PX, bow * 0.18 * Math.hypot(ex - sx, ey - sy));
   return [pts.map(([x, y], i) => {
     const o = bowPx * Math.sin((Math.PI * i) / n);
     return [x + normal.x * o, y + normal.y * o] as [number, number];

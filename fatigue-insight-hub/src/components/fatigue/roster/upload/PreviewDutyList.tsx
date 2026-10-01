@@ -40,14 +40,14 @@ export function PreviewDutyList({ preview }: { preview: RosterPreview }) {
           ))}
         </div>
         {/* Focusable so the scrolling list can be read with the keyboard. */}
-        <ul tabIndex={0} className="max-h-72 divide-y divide-border overflow-auto rounded-sm text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Duties, times in ${utc ? 'UTC' : homeLabel}`}>
+        <ul tabIndex={0} className="divide-y divide-border rounded-sm text-sm sm:max-h-72 sm:overflow-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Duties, times in ${utc ? 'UTC' : homeLabel}`}>
           {preview.duties.map(duty => {
             const t = dutyTimes(duty, zone);
             return (
-              <li key={duty.id} className="grid grid-cols-[5.25rem_minmax(0,1fr)_auto] items-baseline gap-x-3 py-2">
+              <li key={duty.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-0.5 py-2 sm:grid-cols-[5.25rem_minmax(0,1fr)_auto]">
                 <span className="text-muted-foreground">{t.day}</span>
-                <span className="min-w-0 break-words">{duty.route}</span>
-                <span className="whitespace-nowrap font-mono text-xs tabular-nums">
+                <span className="col-span-2 row-start-2 min-w-0 sm:col-span-1 sm:row-start-auto">{duty.route}</span>
+                <span className="whitespace-nowrap text-right font-mono text-xs tabular-nums sm:text-left">
                   {t.report}–{t.release}
                   {t.dayOffset && <sup className="ml-0.5 text-[10px] text-muted-foreground">{t.dayOffset}</sup>}
                   {duty.release_inferred && <span className="text-muted-foreground" title="Release inferred">*</span>}
