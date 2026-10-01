@@ -17,7 +17,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getRecoveryClasses, getStrategyIcon, decimalToHHmm } from '@/lib/fatigue-utils';
+import { decimalToHHmm } from '@/lib/fatigue-utils';
 import type { TimelineSleepBar } from '@/lib/timeline-types';
 import type { SleepEdit } from '@/hooks/useSleepEdits';
 
@@ -53,7 +53,6 @@ export function EditableSleepBar({
   onDeactivate,
   getRowEl,
 }: EditableSleepBarProps) {
-  const classes = getRecoveryClasses(bar.recoveryScore);
   const hasEdit = pendingEdit != null;
   const barRef = useRef<HTMLDivElement>(null);
 
@@ -255,7 +254,7 @@ export function EditableSleepBar({
       {/* ── Live time tooltip during drag ── */}
       {dragState && (
         <div
-          className="absolute -top-6 bg-warning text-warning-foreground text-[10px] font-mono font-medium px-1.5 py-0.5 rounded shadow-md whitespace-nowrap z-30 pointer-events-none"
+          className="absolute -top-6 bg-warning text-warning-foreground text-[11px] font-mono font-medium px-1.5 py-0.5 rounded shadow-md whitespace-nowrap z-30 pointer-events-none"
           style={{
             left: dragState.edge === 'left' ? '0' : 'auto',
             right: dragState.edge === 'right' ? '0' : 'auto',
@@ -269,10 +268,7 @@ export function EditableSleepBar({
       {/* ── Bar content (recovery info) ── */}
       <div className="flex items-center justify-end w-full px-1">
         {liveWidthPercent > 6 && (
-          <div className="flex items-center gap-1 text-[8px] font-medium text-warning">
-            <span className="font-mono bg-warning/15 px-0.5 rounded text-[7px]">{getStrategyIcon(bar.sleepStrategy)}</span>
-            <span>{Math.round(bar.recoveryScore)}%</span>
-          </div>
+          <span className="font-mono text-[11px] font-medium text-foreground/80 tabular">{((liveWidthPercent / 100) * 24).toFixed(1)}h</span>
         )}
         {liveWidthPercent > 3 && (
           <Pencil className="h-2.5 w-2.5 text-warning ml-0.5" />
@@ -283,12 +279,12 @@ export function EditableSleepBar({
       {!dragState && (
         <>
           {canDragLeft && liveWidthPercent > 8 && (
-            <span className="absolute left-1 top-0.5 text-[7px] font-mono text-warning/70 pointer-events-none">
+            <span className="absolute left-1 top-0.5 text-[11px] font-mono text-warning/70 pointer-events-none">
               {decimalToHHmm(displayStart)}
             </span>
           )}
           {canDragRight && liveWidthPercent > 8 && (
-            <span className="absolute right-1 top-0.5 text-[7px] font-mono text-warning/70 pointer-events-none">
+            <span className="absolute right-1 top-0.5 text-[11px] font-mono text-warning/70 pointer-events-none">
               {decimalToHHmm(displayEnd)}
             </span>
           )}

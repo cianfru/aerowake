@@ -70,6 +70,12 @@ export interface DutySegment {
   // Line training annotations (X, U, UL, L, E, ZFT)
   line_training_codes?: string[];
   aircraft_type?: string | null;
+  /** Highest model KSS between departure and arrival (duty timeline). Absent on older analyses. */
+  kss_peak?: number | null;
+  /** Model KSS at arrival. Absent on older analyses. */
+  kss_at_arrival?: number | null;
+  /** Band of kss_peak ('low' … 'extreme'). Absent on older analyses. */
+  risk_level?: string | null;
 }
 
 // Sleep block from strategic sleep estimator
@@ -195,6 +201,10 @@ export interface Duty {
 
   // KSS-anchored alertness (engine aerowake-4.0-kss)
   max_kss?: number | null;
+  /** When the duty peak (max_kss) occurs, ISO UTC. Absent on older analyses. */
+  peak_time_utc?: string | null;
+  /** Peak KSS from report to the last on-blocks (flight duty period). */
+  kss_peak_fdp?: number | null;
   landing_kss?: number | null;
   max_kss_90?: number | null;
   max_p_severe_sleepiness?: number | null;
@@ -424,6 +434,13 @@ export interface AnalysisResult {
   standby_periods?: StandbyPeriodResponse[] | null;
   /** Predicted KSS through the month (30-min steps); kss is null while asleep. */
   alertness_timeline?: Array<{ t: string; kss: number | null; asleep: boolean; on_duty: boolean }> | null;
+  /** Assumptions the analysis ran with. Absent on older analyses. */
+  assumptions?: {
+    /** Pre-duty nap habit: 'usually' | 'sometimes' | 'rarely'. */
+    nap_habit?: string | null;
+    /** Which window the headline risk uses, e.g. 'duty' or 'fdp'. */
+    headline_risk_window?: string | null;
+  } | null;
 
   // Fatigue continuity (multi-roster chaining)
   continuity_from_month?: string | null;

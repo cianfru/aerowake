@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import {
   ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
-import { kssLabel, riskCssColor } from '@/lib/risk-scale';
+import { KSS_BAND_BOUNDARIES, classifyKss, kssLabel, riskCssColor, riskInkColor } from '@/lib/risk-scale';
 import { localInputToUtcIso } from '@/lib/fatigue-report-api';
 import type { AlertnessSample, DutyAnalysis } from '@/types/fatigue';
 import { dutyRiskLevel, dutyRoute } from './roster-utils';
@@ -25,10 +25,10 @@ function fmt(t: number, tz: string, opts: Intl.DateTimeFormatOptions) {
 /**
  * Predicted sleepiness (KSS) through the whole month, including days off.
  * Every point is backend model output with estimated sleep; the line breaks
- * during sleep. Duties are tinted by risk level, sleep is shaded.
+ * during sleep. Sleep is shaded; duties sit in a strip under the curve.
  */
 export function MonthlyAlertnessChart({ samples, duties, month, homeTz }: Props) {
-  const { data, sleeps, dutyAreas, ticks, domain } = useMemo(() => {
+  const { data, sleeps, dutyAreas, ticks, domain, weekends, dataEnd } = useMemo(() => {
     const data = samples.map((s) => ({ t: s.t, kss: s.asleep ? null : s.kss, onDuty: s.onDuty, asleep: s.asleep }));
     // Contiguous asleep runs -> shaded areas
     const sleeps: Array<[number, number]> = [];
@@ -45,25 +45,38 @@ export function MonthlyAlertnessChart({ samples, duties, month, homeTz }: Props)
       .map((d) => ({
         x1: Date.parse(d.reportTimeUtc ?? ''),
         x2: Date.parse(d.releaseTimeUtc ?? ''),
-        color: riskCssColor(dutyRiskLevel(d)),
+        level: dutyRiskLevel(d),
         label: dutyRoute(d),
       }))
       .filter((a) => Number.isFinite(a.x1) && Number.isFinite(a.x2));
-    // Local midnights of the month as ticks
+    // Local midnights bound the month; ticks sit at local noon so a label names the day it is under.
     const y = month.getFullYear();
     const m = month.getMonth();
     const days = new Date(y, m + 1, 0).getDate();
+    const localIso = (d: Date, hhmm: string) => localInputToUtcIso(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${hhmm}`,
+      homeTz,
+    );
+    const midnights: number[] = [];
     const ticks: number[] = [];
+    const weekends: Array<[number, number]> = [];
     for (let d = 1; d <= days + 1; d++) {
       const date = new Date(y, m, d);
-      const iso = localInputToUtcIso(
-        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}T00:00`,
-        homeTz,
-      );
-      if (iso) ticks.push(Date.parse(iso));
+      const mid = localIso(date, '00:00');
+      if (mid) midnights.push(Date.parse(mid));
+      if (d <= days) {
+        const noon = localIso(date, '12:00');
+        if (noon) ticks.push(Date.parse(noon));
+      }
     }
-    const domain: [number, number] = [ticks[0] ?? samples[0]?.t ?? 0, ticks[ticks.length - 1] ?? samples[samples.length - 1]?.t ?? 1];
-    return { data, sleeps, dutyAreas, ticks, domain };
+    for (let d = 1; d <= days; d++) {
+      const dow = new Date(y, m, d).getDay();
+      if ((dow === 0 || dow === 6) && midnights[d]) weekends.push([midnights[d - 1], midnights[d]]);
+    }
+    const domain: [number, number] = [midnights[0] ?? samples[0]?.t ?? 0, midnights[midnights.length - 1] ?? samples[samples.length - 1]?.t ?? 1];
+    const lastSample = samples.length ? samples[samples.length - 1].t : null;
+    const dataEnd = lastSample != null && lastSample < domain[1] - 36 * 3600000 ? lastSample : null;
+    return { data, sleeps, dutyAreas, ticks, domain, weekends, dataEnd };
   }, [samples, duties, month, homeTz]);
 
   if (!samples.length) {
@@ -78,32 +91,41 @@ export function MonthlyAlertnessChart({ samples, duties, month, homeTz }: Props)
         <span className="text-[13px] font-semibold">Sleepiness through the month</span>
         <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5"><span className="h-[2px] w-4 bg-primary" aria-hidden="true" />Predicted KSS (awake)</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-3 bg-muted-foreground/25" aria-hidden="true" />Sleep (estimated)</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-3 bg-high/40" aria-hidden="true" />Duty, tinted by risk</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-3 rounded-[2px] bg-primary/15" aria-hidden="true" />Estimated sleep</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-4 rounded-[1px]" style={{ background: riskCssColor('high') }} aria-hidden="true" />Duty, in its peak band</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t border-dotted border-muted-foreground" aria-hidden="true" />Band limits 5.5 · 6.5 · 7.5 · 8.5</span>
         </span>
       </figcaption>
-      <div className="-mx-1 overflow-x-auto px-1">
-        <div className="h-64 min-w-[640px]">
+      <div className="h-64 sm:h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={data} margin={{ top: 8, right: 72, bottom: 0, left: -24 }}>
-              <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.6} />
+            <ComposedChart data={data} margin={{ top: 8, right: 30, bottom: 0, left: -22 }}>
+              <CartesianGrid vertical={false} horizontal={false} />
+              {weekends.map(([a, b], i) => (
+                <ReferenceArea key={`w${i}`} x1={a} x2={b} y1={0.3} y2={9} fill="hsl(var(--foreground))" fillOpacity={0.03} ifOverflow="hidden" />
+              ))}
               <XAxis
                 dataKey="t" type="number" scale="time" domain={domain} ticks={ticks}
                 tickFormatter={(t: number) => fmt(t, homeTz, { day: 'numeric' })}
-                tickLine={false} axisLine={{ stroke: 'hsl(var(--border))' }} tick={axisTick} interval="preserveStartEnd" minTickGap={6}
+                tickLine={false} axisLine={{ stroke: 'hsl(var(--border))' }} tick={axisTick} interval="preserveStartEnd" minTickGap={4}
               />
-              <YAxis domain={[1, 9]} ticks={[1, 3, 5, 7, 9]} tickLine={false} axisLine={false} tick={axisTick} />
+              <YAxis domain={[0.3, 9]} ticks={[1, 3, 5, 7, 9]} tickLine={false} axisLine={false} tick={axisTick}
+                label={{ value: 'KSS', position: 'insideTopLeft', offset: 0, dx: 26, dy: -6, fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
               {sleeps.map(([a, b], i) => (
-                <ReferenceArea key={`s${i}`} x1={a} x2={b} fill="hsl(var(--muted-foreground))" fillOpacity={0.14} ifOverflow="hidden" />
+                <ReferenceArea key={`s${i}`} x1={a} x2={b} y1={1} y2={9} fill="hsl(var(--primary))" fillOpacity={0.1} ifOverflow="hidden" />
               ))}
+              {KSS_BAND_BOUNDARIES.map((k) => (
+                <ReferenceLine key={k} y={k} stroke={riskCssColor(classifyKss(k))} strokeDasharray="2 4" strokeOpacity={0.7}
+                  label={{ value: `${k}`, position: 'right', fontSize: 11, fill: riskInkColor(classifyKss(k)) }} />
+              ))}
+              {/* Duties: a strip under the curve, in the duty's peak band, so sleep shading stays readable. */}
               {dutyAreas.map((d, i) => (
-                <ReferenceArea key={`d${i}`} x1={d.x1} x2={d.x2} fill={d.color} fillOpacity={0.35} ifOverflow="hidden" />
+                <ReferenceArea key={`d${i}`} x1={d.x1} x2={d.x2} y1={0.35} y2={0.75} fill={riskCssColor(d.level)} fillOpacity={1} ifOverflow="hidden" />
               ))}
-              <ReferenceLine y={6.5} stroke="hsl(var(--high))" strokeDasharray="3 3" strokeOpacity={0.7}
-                label={{ value: 'High 6.5', position: 'right', fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-              <ReferenceLine y={7.5} stroke="hsl(var(--critical))" strokeDasharray="3 3" strokeOpacity={0.7}
-                label={{ value: 'Critical 7.5', position: 'right', fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-              <Line dataKey="kss" stroke="hsl(var(--primary))" strokeWidth={1.75} dot={false}
+              {dataEnd != null && (
+                <ReferenceLine x={dataEnd} stroke="hsl(var(--muted-foreground))" strokeDasharray="1 3"
+                  label={{ value: `No roster data after ${fmt(dataEnd, homeTz, { day: 'numeric', month: 'short' })}`, position: 'insideTopLeft', fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+              )}
+              <Line dataKey="kss" stroke="hsl(var(--primary))" strokeWidth={1.5} dot={false}
                 connectNulls={false} isAnimationActive={false} />
               <Tooltip
                 cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeOpacity: 0.4 }}
@@ -127,11 +149,10 @@ export function MonthlyAlertnessChart({ samples, duties, month, homeTz }: Props)
               />
             </ComposedChart>
           </ResponsiveContainer>
-        </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        Home-base time ({homeTz}). Sleep outside duties is estimated from the roster; report your actual sleep in
-        “Report fatigue” for a personal assessment.
+        Home-base time ({homeTz}); weekends shaded. Sleep is estimated from the roster; you can record your actual
+        sleep when you report fatigue.
       </p>
     </figure>
   );

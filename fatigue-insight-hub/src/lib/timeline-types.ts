@@ -9,7 +9,8 @@
  * with a fundamentally different architecture and does NOT use these types.
  */
 
-import type { DutyAnalysis, FlightPhase, SleepQualityFactors, SleepReference, StandbyPeriod } from '@/types/fatigue';
+import type { DutyAnalysis, SleepQualityFactors, SleepReference, StandbyPeriod } from '@/types/fatigue';
+import type { RiskLevel } from '@/lib/risk-scale';
 
 // ---------------------------------------------------------------------------
 // Flight segment within a duty bar
@@ -24,15 +25,28 @@ export interface TimelineSegment {
   endHour: number;
   /** Percentage of the parent duty bar (used in elapsed view) */
   widthPercent?: number;
-  performance: number;
+  /**
+   * Band that colours this part of the bar: the sector's model band when the
+   * backend supplies one (segments[].kss_peak), otherwise the duty peak band.
+   */
+  level: RiskLevel;
+  /** Sector peak KSS from the model; null when the backend did not supply one. */
+  kss: number | null;
   activityCode?: string | null;
   isDeadhead?: boolean;
-  /** Flight phase breakdown (visible when zoomed in ≥ 2x) */
-  phases?: {
-    phase: FlightPhase;
-    performance: number;
-    widthPercent: number;
-  }[];
+}
+
+// ---------------------------------------------------------------------------
+// Duty peak marker (model peak time, from peak_time_utc)
+// ---------------------------------------------------------------------------
+
+export interface TimelinePeakMarker {
+  rowIndex: number;
+  /** Position within the row (0-24). */
+  hour: number;
+  kss: number;
+  level: RiskLevel;
+  duty: DutyAnalysis;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,6 +76,8 @@ export interface TimelineSleepBar {
   effectiveSleep: number;
   sleepEfficiency: number;
   sleepStrategy: string;
+  /** 'main' or 'nap' when the backend labels the block. */
+  sleepType?: string;
   isPreDuty: boolean;
   relatedDuty: DutyAnalysis;
   isOvernightStart?: boolean;
@@ -160,6 +176,10 @@ export interface RowLabel {
   date?: Date;
   hasDuty: boolean;
   risk?: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL' | 'EXTREME' | 'UNKNOWN';
+  /** Highest duty peak KSS starting on this day (model output). */
+  peakKss?: number | null;
+  /** Band of peakKss. */
+  level?: RiskLevel;
   warnings: string[];
   /** Circadian shift annotation (HPT only), e.g. "→E +2.5h" */
   circadianAnnotation?: string;
@@ -187,4 +207,6 @@ export interface TimelineData {
   xAxisLabel: string;
   /** Standby periods (home-base view only; optional). */
   standbyBars?: TimelineStandbyBar[];
+  /** Duty peak markers, when the backend reports when the peak occurs. */
+  peakMarkers?: TimelinePeakMarker[];
 }

@@ -57,6 +57,25 @@ export default {
           DEFAULT: "hsl(var(--wocl))",
           foreground: "hsl(var(--wocl-foreground))",
         },
+        // One risk palette for every view: fill for marks, ink for text, on for text on a fill.
+        risk: {
+          low: { DEFAULT: "hsl(var(--risk-low))", ink: "hsl(var(--risk-low-ink))", on: "hsl(var(--risk-low-on))" },
+          moderate: { DEFAULT: "hsl(var(--risk-moderate))", ink: "hsl(var(--risk-moderate-ink))", on: "hsl(var(--risk-moderate-on))" },
+          high: { DEFAULT: "hsl(var(--risk-high))", ink: "hsl(var(--risk-high-ink))", on: "hsl(var(--risk-high-on))" },
+          critical: { DEFAULT: "hsl(var(--risk-critical))", ink: "hsl(var(--risk-critical-ink))", on: "hsl(var(--risk-critical-on))" },
+          extreme: { DEFAULT: "hsl(var(--risk-extreme))", ink: "hsl(var(--risk-extreme-ink))", on: "hsl(var(--risk-extreme-on))" },
+        },
+        brand: {
+          ink: "hsl(var(--brand-ink))",
+          deep: "hsl(var(--brand-deep))",
+        },
+        hero: {
+          from: "hsl(var(--hero-from))",
+          to: "hsl(var(--hero-to))",
+          line: "hsl(var(--hero-line))",
+          on: "hsl(var(--on-hero))",
+          muted: "hsl(var(--on-hero-muted))",
+        },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
@@ -90,6 +109,16 @@ export default {
           4: "hsl(var(--chart-4))",
           5: "hsl(var(--chart-5))",
         },
+      },
+      // Workspace type scale: nothing below 11px except chart axis ticks (>= 10px).
+      fontSize: {
+        caption: ["11px", { lineHeight: "16px" }],
+        label: ["12px", { lineHeight: "16px" }],
+        "body-sm": ["13px", { lineHeight: "20px" }],
+        body: ["15px", { lineHeight: "24px" }],
+        title: ["20px", { lineHeight: "28px", letterSpacing: "-0.015em" }],
+        display: ["28px", { lineHeight: "34px", letterSpacing: "-0.02em" }],
+        figure: ["40px", { lineHeight: "40px", letterSpacing: "-0.02em" }],
       },
       borderRadius: {
         lg: "var(--radius)",

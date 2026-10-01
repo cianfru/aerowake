@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useEffect, type ReactNode } from 'react';
-import { PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
+import { DEFAULT_NAP_HABIT, PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { loadPersistedSettings, savePersistedSettings } from '@/hooks/usePersistedSettings';
 import { applyTab, type HubId, type SubTab } from '@/lib/navigation';
 
@@ -25,6 +25,7 @@ export interface AnalysisState {
 const DEFAULT_SETTINGS: PilotSettings = {
   pilotId: 'P12345',
   homeBase: '', // never assume a base — the pilot confirms it before analysis
+  napHabit: DEFAULT_NAP_HABIT,
   analysisType: 'single',
   selectedMonth: new Date(2026, 1, 1),
   theme: 'light',

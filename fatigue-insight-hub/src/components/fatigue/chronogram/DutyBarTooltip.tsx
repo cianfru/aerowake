@@ -1,79 +1,92 @@
 /**
- * DutyBarTooltip — Renders a duty bar button with performance-colored flight
- * segments and a rich tooltip showing duty details, EASA FDP metrics,
- * performance decomposition, KSS/FHA badges, and sleep recovery info.
+ * DutyBarTooltip — one duty bar in the roster calendar plus a short tooltip.
  *
- * Extracted from HomeBaseTimeline.tsx (lines 1639-1991).
- * Used by TimelineRenderer across all 3 grid-based chronogram views
- * (homebase, utc, elapsed).
+ * Bar colour is model output only: each sector in its own band when the
+ * backend reports segments[].kss_peak, otherwise the whole duty in its peak
+ * band. Check-in, turnaround and post-flight time are neutral duty time.
  */
 
-import { AlertTriangle, Battery, Mountain } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { AlertTriangle } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import {
-  getPerformanceColor,
-  getRecoveryScore,
-  getRecoveryClasses,
-  isTrainingDuty,
+  decimalToHHmm,
   getTrainingDutyColor,
   getTrainingDutyLabel,
-  formatAircraftType,
+  isTrainingDuty,
+  isoToZulu,
 } from '@/lib/fatigue-utils';
 import {
-  decomposePerformance,
-  calculateFHA,
-  getFHASeverity,
-  getKSSLabel,
-} from '@/lib/fatigue-calculations';
-import { classifyPerformance, indexToKss, normalizeRiskLevel, resolveKss, riskColorClass } from '@/lib/risk-scale';
-import type { TimelineDutyBar } from '@/lib/timeline-types';
+  RISK_LEVEL_LABELS,
+  classifyKss,
+  kssLabel,
+  resolveKss,
+  riskClasses,
+  riskCssColor,
+  riskOnColor,
+} from '@/lib/risk-scale';
+import type { TimelineDutyBar, TimelinePeakMarker, TimelineSegment } from '@/lib/timeline-types';
 import type { DutyAnalysis } from '@/types/fatigue';
 import { format } from 'date-fns';
-
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
 
 interface DutyBarTooltipProps {
   bar: TimelineDutyBar;
   widthPercent: number;
   leftPercent: number;
-  showFlightPhases: boolean;
   selectedDuty: DutyAnalysis | null;
   onDutySelect: (duty: DutyAnalysis) => void;
   variant: 'homebase' | 'utc' | 'elapsed';
+  /** The duty's peak marker (any row), for the tooltip's "at hh:mm". */
+  peak?: TimelinePeakMarker;
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+/** "DOH → NJF → DOH" from the bar's full duty. */
+function route(duty: DutyAnalysis): string {
+  const segs = duty.flightSegments.filter((s) => s.activityCode !== 'IR');
+  if (!segs.length) return duty.trainingCode || getTrainingDutyLabel(duty.dutyType || '');
+  const stops = [segs[0].departure];
+  for (const s of segs) {
+    if (stops[stops.length - 1] !== s.departure) stops.push(s.departure);
+    stops.push(s.arrival);
+  }
+  return stops.join(' → ');
+}
 
-export function DutyBarTooltip({
-  bar,
-  widthPercent,
-  leftPercent,
-  showFlightPhases,
-  selectedDuty,
-  onDutySelect,
-  variant,
-}: DutyBarTooltipProps) {
-  const usedDiscretion = bar.duty.usedDiscretion;
-  const maxFdp = bar.duty.maxFdpHours;
-  const actualFdp = bar.duty.actualFdpHours || bar.duty.dutyHours;
+function segmentStyle(segment: TimelineSegment, duty: DutyAnalysis): React.CSSProperties {
+  switch (segment.type) {
+    case 'flight':
+      return { backgroundColor: riskCssColor(segment.level) };
+    case 'training':
+      return {
+        backgroundColor: getTrainingDutyColor(duty.dutyType || 'simulator'),
+        borderLeft: `3px solid ${riskCssColor(segment.level)}`,
+      };
+    case 'ground':
+      // Turnarounds and positioning: duty time, not a sector with its own value.
+      return segment.isDeadhead
+        ? { backgroundColor: 'hsl(var(--muted-foreground) / 0.3)' }
+        : { backgroundColor: 'hsl(var(--muted-foreground) / 0.18)' };
+    default:
+      return { backgroundColor: 'hsl(var(--muted-foreground) / 0.3)' };
+  }
+}
 
-  // Determine border radius based on overnight status for visual continuity
-  const borderRadius = bar.isOvernightStart
-    ? '2px 0 0 2px'
-    : bar.isOvernightContinuation
-      ? '0 2px 2px 0'
-      : '2px';
+export function DutyBarTooltip({ bar, widthPercent, leftPercent, selectedDuty, onDutySelect, variant, peak }: DutyBarTooltipProps) {
+  const { duty } = bar;
+  const usedDiscretion = duty.usedDiscretion;
+  const peakKss = resolveKss(duty.maxKss, duty.minPerformance, duty.modelVersion);
+  const level = classifyKss(peakKss);
+  const training = isTrainingDuty(duty);
+  const sectors = duty.flightSegments.filter((s) => s.activityCode !== 'IR' && !s.isDeadhead);
+  const hasSectorValues = sectors.some((s) => s.kssPeak != null);
+  const times = variant === 'utc'
+    ? [isoToZulu(duty.reportTimeUtc), isoToZulu(duty.releaseTimeUtc)].filter(Boolean).join('–')
+    : duty.reportTimeLocal && duty.releaseTimeLocal ? `${duty.reportTimeLocal}–${duty.releaseTimeLocal}` : '';
+  const fdp = duty.actualFdpHours ?? duty.dutyHours;
+  const isSelected = selectedDuty?.date.getTime() === duty.date.getTime();
+
+  const borderRadius = bar.isOvernightStart ? '3px 0 0 3px' : bar.isOvernightContinuation ? '0 3px 3px 0' : '3px';
+  const label = `Open duty on ${format(duty.date, 'EEE d MMM')}: ${duty.flightSegments.map((s) => s.flightNumber).join(', ') || duty.trainingCode || 'Duty'}${bar.isOvernightContinuation ? ' (continued)' : ''}`;
 
   return (
     <TooltipProvider delayDuration={100}>
@@ -81,454 +94,102 @@ export function DutyBarTooltip({
         <TooltipTrigger asChild>
           <button
             type="button"
-            aria-label={`Open duty on ${format(bar.duty.date, 'EEE d MMM')}: ${bar.duty.flightSegments.map(s => s.flightNumber).join(', ') || bar.duty.trainingCode || 'Duty'}${bar.isOvernightContinuation ? ' (continued)' : ''}`}
-            onClick={() => onDutySelect(bar.duty)}
+            aria-label={label}
+            onClick={() => onDutySelect(duty)}
             className={cn(
-              "calendar-duty absolute z-10 transition-shadow hover:ring-2 cursor-pointer overflow-hidden flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              selectedDuty?.date.getTime() === bar.duty.date.getTime() && "ring-2 ring-foreground",
-              usedDiscretion ? "ring-2 ring-critical hover:ring-critical/80" : "hover:ring-foreground"
+              'calendar-duty absolute z-10 flex cursor-pointer overflow-hidden transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              isSelected && 'ring-2 ring-foreground',
+              usedDiscretion ? 'ring-2 ring-risk-critical' : 'hover:ring-2 hover:ring-foreground/70',
             )}
-            style={{
-              top: 0,
-              height: '100%',
-              left: `${leftPercent}%`,
-              width: `${Math.max(widthPercent, 2)}%`,
-              borderRadius,
-            }}
+            style={{ top: 5, bottom: 5, left: `${leftPercent}%`, width: `${Math.max(widthPercent, 1.5)}%`, borderRadius }}
           >
-            {/* Render individual flight segments */}
-            {bar.segments.map((segment, segIndex) => {
-              // For the elapsed variant, prefer the pre-calculated widthPercent
-              // on each segment. Fall back to hour-based calculation.
-              const segmentWidth =
-                variant === 'elapsed' && segment.widthPercent != null
-                  ? segment.widthPercent
-                  : ((segment.endHour - segment.startHour) / (bar.endHour - bar.startHour)) * 100;
-
-              // ----- Flight phases (zoomed view) -----
-              if (showFlightPhases && segment.type === 'flight' && segment.phases) {
-                return (
-                  <div
-                    key={segIndex}
-                    className="h-full relative flex"
-                    style={{ width: `${segmentWidth}%` }}
-                  >
-                    {/* Segment separator line */}
-                    {segIndex > 0 && (
-                      <div className="absolute left-0 top-0 bottom-0 w-px bg-background/70 z-10" />
-                    )}
-                    {/* Render each flight phase */}
-                    {segment.phases.map((phase, phaseIndex) => (
-                      <div
-                        key={phaseIndex}
-                        className="h-full flex items-center justify-center relative"
-                        style={{
-                          width: `${phase.widthPercent}%`,
-                          backgroundColor: getPerformanceColor(phase.performance),
-                        }}
-                        title={`${phase.phase}: KSS ${indexToKss(phase.performance).toFixed(1)}`}
-                      >
-                        {/* Phase separator */}
-                        {phaseIndex > 0 && (
-                          <div className="absolute left-0 top-0 bottom-0 w-px bg-background/40" />
-                        )}
-                        {/* Phase label — only show for cruise when wide enough */}
-                        {phase.phase === 'cruise' && segmentWidth > 15 && (
-                          <span className="text-[10px] font-semibold truncate" style={{ color: classifyPerformance(phase.performance) === 'unknown' ? '#f8fbfd' : '#081019' }}>
-                            {indexToKss(phase.performance).toFixed(1)}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                );
-              }
-
-              // ----- Training segment -----
-              if (segment.type === 'training') {
-                const bgColor = getTrainingDutyColor(bar.duty.dutyType || 'simulator');
-                const perfColor = getPerformanceColor(segment.performance);
-                const isSim = bar.duty.dutyType === 'simulator';
-                return (
-                  <div
-                    key={segIndex}
-                    className="h-full relative flex items-center justify-center"
-                    style={{
-                      width: `${segmentWidth}%`,
-                      backgroundColor: bgColor,
-                      borderLeft: `3px solid ${perfColor}`,
-                      ...(isSim && {
-                        backgroundImage:
-                          'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.08) 3px, rgba(255,255,255,0.08) 6px)',
-                      }),
-                    }}
-                  >
-                    {segmentWidth > 6 && (
-                      <span className="text-[10px] font-semibold text-white truncate px-1">
-                        {bar.duty.trainingCode || getTrainingDutyLabel(bar.duty.dutyType || '')}
-                      </span>
-                    )}
-                  </div>
-                );
-              }
-
-              // ----- Standard rendering (non-zoomed or non-flight segments) -----
+            {bar.segments.map((segment, i) => {
+              const width = variant === 'elapsed' && segment.widthPercent != null
+                ? segment.widthPercent
+                : ((segment.endHour - segment.startHour) / (bar.endHour - bar.startHour)) * 100;
+              const isFlight = segment.type === 'flight';
               return (
                 <div
-                  key={segIndex}
+                  key={i}
                   className={cn(
-                    "h-full relative flex items-center justify-center",
-                    segment.type === 'checkin' && "opacity-70",
-                    segment.type === 'ground' && "opacity-50",
-                    segment.type === 'postflight' && "opacity-30"
+                    'calendar-seg relative flex h-full items-center justify-center',
+                    isFlight && segment.level === 'extreme' && 'risk-extreme-hatch',
                   )}
-                  style={{
-                    width: `${segmentWidth}%`,
-                    backgroundColor:
-                      segment.type === 'ground' || segment.type === 'postflight'
-                        ? 'hsl(var(--muted))'
-                        : getPerformanceColor(segment.performance),
-                    ...(segment.type === 'postflight' && {
-                      backgroundImage:
-                        'repeating-linear-gradient(90deg, transparent, transparent 2px, hsl(var(--muted-foreground) / 0.15) 2px, hsl(var(--muted-foreground) / 0.15) 4px)',
-                    }),
-                  }}
+                  style={{ width: `${width}%`, ...segmentStyle(segment, duty) }}
                 >
-                  {/* Segment separator line */}
-                  {segIndex > 0 && (
-                    <div className="absolute left-0 top-0 bottom-0 w-px bg-background/70" />
-                  )}
-                  {/* Flight number label for flights */}
-                  {segment.type === 'flight' && segment.flightNumber && segmentWidth > 8 && (
-                    <span className="text-[10px] font-semibold truncate px-1" style={{ color: classifyPerformance(segment.performance) === 'unknown' ? '#f8fbfd' : '#081019' }}>
+                  {i > 0 && <span aria-hidden="true" className="absolute inset-y-0 left-0 w-px bg-card/80" />}
+                  {isFlight && segment.flightNumber && (
+                    <span className="calendar-seg-label truncate px-1 font-mono text-[11px] font-semibold leading-none" style={{ color: riskOnColor(segment.level) }}>
                       {segment.flightNumber}
                     </span>
                   )}
-                  {/* Check-in indicator */}
-                  {segment.type === 'checkin' && segmentWidth > 5 && (
-                    <span className="text-[10px]" style={{ color: classifyPerformance(segment.performance) === 'unknown' ? '#f8fbfd' : '#081019' }}>{'\u2713'}</span>
+                  {segment.type === 'training' && (
+                    <span className="calendar-seg-label truncate px-1 text-[11px] font-semibold leading-none"
+                      style={{ color: duty.dutyType === 'ground_training' ? 'hsl(var(--ground-training-foreground))' : 'hsl(var(--simulator-foreground))' }}>
+                      {duty.trainingCode || getTrainingDutyLabel(duty.dutyType || '')}
+                    </span>
                   )}
                 </div>
               );
             })}
-
-            {/* Discretion warning indicator */}
             {usedDiscretion && (
-              <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-critical flex items-center justify-center">
-                <AlertTriangle className="h-2 w-2 text-critical-foreground" />
-              </div>
+              <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-risk-critical">
+                <AlertTriangle className="h-2 w-2 text-risk-critical-on" aria-hidden="true" />
+              </span>
             )}
           </button>
         </TooltipTrigger>
 
-        {/* ----------------------------------------------------------------- */}
-        {/* Tooltip content                                                    */}
-        {/* ----------------------------------------------------------------- */}
-        <TooltipContent side="top" align="start" className="max-w-xs p-3 z-[100]">
-          <div className="space-y-2 text-xs">
-            {/* Header: date + discretion badge */}
-            <div
-              className={cn(
-                "font-semibold text-sm border-b pb-1 flex items-center justify-between",
-                usedDiscretion ? "border-critical" : "border-border"
-              )}
-            >
-              <span>
-                {format(bar.duty.date, 'EEEE, MMM d')}{' '}
-                {bar.isOvernightContinuation && '(continued)'}
-              </span>
-              {usedDiscretion && (
-                <Badge variant="destructive" className="text-[10px] px-1 py-0">
-                  DISCRETION
-                </Badge>
-              )}
-            </div>
-
-            {isTrainingDuty(bar.duty) ? (
-              <>
-                {/* Training duty type + code */}
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant="outline"
-                    className="text-[10px]"
-                    style={{ borderColor: getTrainingDutyColor(bar.duty.dutyType!) }}
-                  >
-                    {getTrainingDutyLabel(bar.duty.dutyType!)}
-                  </Badge>
-                  <span className="font-mono text-xs font-semibold">
-                    {bar.duty.trainingCode}
-                  </span>
-                </div>
-                {/* Time window */}
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                  <span className="text-muted-foreground">Report:</span>
-                  <span>{bar.duty.reportTimeLocal}</span>
-                  <span className="text-muted-foreground">Release:</span>
-                  <span>{bar.duty.releaseTimeLocal}</span>
-                  <span className="text-muted-foreground">Duration:</span>
-                  <span>{bar.duty.dutyHours.toFixed(1)}h</span>
-                </div>
-                {bar.duty.trainingAnnotations && bar.duty.trainingAnnotations.length > 0 && (
-                  <div className="text-[10px] text-muted-foreground">
-                    Annotations: {bar.duty.trainingAnnotations.join(', ')}
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                {/* Flight duty: flights list + aircraft type */}
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                  <span className="text-muted-foreground">Flights:</span>
-                  <span>
-                    {bar.duty.flightSegments.map((s) => s.flightNumber).join(', ')}
-                  </span>
-                  {bar.duty.aircraftType && (
-                    <>
-                      <span className="text-muted-foreground">Aircraft:</span>
-                      <span className="font-medium">{formatAircraftType(bar.duty.aircraftType)}</span>
-                    </>
-                  )}
-                </div>
-
-                {/* EASA ORO.FTL Section */}
-                {(maxFdp || bar.duty.extendedFdpHours) && (
-                  <div className="border-t border-border pt-2 mt-2">
-                    <span className="text-muted-foreground font-medium">EASA ORO.FTL:</span>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
-                      {maxFdp && (
-                        <>
-                          <span className="text-muted-foreground">Max FDP:</span>
-                          <span>{maxFdp.toFixed(1)}h</span>
-                        </>
-                      )}
-                      {bar.duty.extendedFdpHours && (
-                        <>
-                          <span className="text-muted-foreground">Extended FDP:</span>
-                          <span className="text-warning">
-                            {bar.duty.extendedFdpHours.toFixed(1)}h
-                          </span>
-                        </>
-                      )}
-                      <span className="text-muted-foreground">Actual FDP:</span>
-                      <span
-                        className={cn(
-                          maxFdp && actualFdp > maxFdp && "text-critical font-medium",
-                          maxFdp && actualFdp <= maxFdp && "text-success"
-                        )}
-                      >
-                        {actualFdp.toFixed(1)}h
-                      </span>
-                      {bar.duty.fdpExceedance && bar.duty.fdpExceedance > 0 && (
-                        <>
-                          <span className="text-muted-foreground">Exceedance:</span>
-                          <span className="text-critical font-medium">
-                            +{bar.duty.fdpExceedance.toFixed(1)}h
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Flight Segments */}
-                <div className="border-t border-border pt-2 mt-2">
-                  <span className="text-muted-foreground font-medium">Flight Segments:</span>
-                  <div className="flex flex-col gap-1 mt-1">
-                    {bar.segments
-                      .filter((s) => s.type === 'flight')
-                      .map((segment, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center justify-between text-[10px] p-1 rounded"
-                          style={{
-                            backgroundColor: `${getPerformanceColor(segment.performance)}20`,
-                          }}
-                        >
-                          <span className="font-medium">{segment.flightNumber}</span>
-                          <span className="text-muted-foreground">
-                            {segment.departure} {'\u2192'} {segment.arrival}
-                          </span>
-                          <span
-                            style={{ color: getPerformanceColor(segment.performance) }}
-                            className="font-medium"
-                          >
-                            KSS {indexToKss(segment.performance).toFixed(1)}
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Common metrics */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border pt-2">
-              <span className="text-muted-foreground">Peak KSS:</span>
-              <span style={{ color: getPerformanceColor(bar.duty.minPerformance, bar.duty.riskThresholds) }}>
-                {(resolveKss(bar.duty.maxKss, bar.duty.minPerformance) ?? 0).toFixed(1)}
-                <span className="text-muted-foreground ml-1">(index {Math.round(bar.duty.minPerformance)})</span>
-              </span>
-              <span className="text-muted-foreground">WOCL Exposure:</span>
-              <span className={bar.duty.woclExposure > 0 ? 'text-warning' : ''}>
-                {bar.duty.woclExposure.toFixed(1)}h
-              </span>
-              <span className="text-muted-foreground">Prior Sleep:</span>
-              <span className={bar.duty.priorSleep < 8 ? 'text-warning' : ''}>
-                {bar.duty.priorSleep.toFixed(1)}h
-              </span>
-              <span className="text-muted-foreground">Sleep Debt:</span>
-              <span className={bar.duty.sleepDebt > 4 ? 'text-high' : ''}>
-                {bar.duty.sleepDebt.toFixed(1)}h
-              </span>
-              <span className="text-muted-foreground">Risk Level:</span>
-              <span
-                className={riskColorClass(normalizeRiskLevel(bar.duty.overallRisk))}
-              >
-                {bar.duty.overallRisk}
-              </span>
-            </div>
-
-            {/* Performance "Why?" breakdown + KSS/FHA badges */}
-            {(() => {
-              const tp = bar.duty.timelinePoints?.filter((pt) => !pt.is_in_rest);
-              if (!tp || tp.length === 0) return null;
-              const worst = tp.reduce(
-                (min, pt) =>
-                  (pt.performance ?? 100) < (min.performance ?? 100) ? pt : min,
-                tp[0]
-              );
-              if (worst.performance == null) return null;
-              const decomp = decomposePerformance({
-                performance: worst.performance,
-                sleep_pressure: worst.sleep_pressure,
-                circadian: worst.circadian,
-                hours_on_duty: worst.hours_on_duty,
-                kss: worst.kss,
-              });
-              const kss = decomp.kss;
-              const kssLabel = getKSSLabel(kss);
-              const validPts = tp.filter((pt) => pt.performance != null);
-              const fha = calculateFHA(
-                validPts.map((pt) => ({ performance: pt.performance ?? 0, kss: pt.kss })),
-                bar.duty.riskThresholds,
-              );
-              const fhaSev = getFHASeverity(fha);
-              return (
-                <div className="border-t border-border pt-2 mt-1 space-y-1.5">
-                  <span className="text-muted-foreground font-medium">
-                    Why KSS {kss.toFixed(1)}?
-                  </span>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-                    <span className="text-muted-foreground">Sleep Pressure (S):</span>
-                    <span className={decomp.sKss > 3 ? 'text-critical' : decomp.sKss > 2 ? 'text-warning' : ''}>
-                      +{decomp.sKss.toFixed(1)} KSS
-                    </span>
-                    <span className="text-muted-foreground">Circadian (C):</span>
-                    <span className={decomp.cKss > 1.5 ? 'text-critical' : decomp.cKss > 1 ? 'text-warning' : ''}>
-                      +{decomp.cKss.toFixed(1)} KSS
-                    </span>
-                    {worst.hours_awake != null && (
-                      <>
-                        <span className="text-muted-foreground">Hours awake:</span>
-                        <span>{worst.hours_awake.toFixed(1)}h</span>
-                      </>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap mt-1">
-                    <Badge variant={kssLabel.variant} className="text-[10px]">
-                      KSS {kss.toFixed(1)}
-                    </Badge>
-                    {fha > 0 && (
-                      <Badge variant={fhaSev.variant} className="text-[10px]">
-                        FHA {fha.toFixed(1)} KSS-h
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Cabin Environment — only for flight duties with known cabin alt */}
-            {bar.duty.cabinAltitudeFt && bar.duty.cabinAltitudeFt > 5000 && !isTrainingDuty(bar.duty) && (
-              <div className="border-t border-border pt-2 mt-2 space-y-1">
-                <div className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
-                  <Mountain className="h-3 w-3" /> Cabin Environment
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
-                  {bar.duty.aircraftType && (
-                    <>
-                      <span className="text-muted-foreground">Aircraft</span>
-                      <span className="text-foreground font-medium">{formatAircraftType(bar.duty.aircraftType)}</span>
-                    </>
-                  )}
-                  <span className="text-muted-foreground">Cabin Alt.</span>
-                  <span className="text-foreground font-medium">{bar.duty.cabinAltitudeFt.toLocaleString()} ft</span>
-                </div>
+        <TooltipContent side="top" align="start" className="z-[100] w-72 max-w-[calc(100vw-2rem)] p-3">
+          <div className="space-y-2.5 text-xs">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">{format(duty.date, 'EEE d MMM')}{bar.isOvernightContinuation ? ' (continued)' : ''}</p>
+                <p className="text-muted-foreground">{route(duty)}</p>
               </div>
-            )}
-
-            {/* Published-model sleepiness probability, not a PVT performance estimate. */}
-            {(() => {
-              const wp = bar.duty.timelinePoints?.[0];
-              if (!wp) return null;
-              const micro = wp.microsleep_probability;
-              if (micro == null) return null;
-              return (
-                <div className="border-t border-border pt-2 mt-2 space-y-1">
-                  <span className="text-[10px] font-medium text-muted-foreground">
-                    Alertness Indicators
-                  </span>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
-                    {micro != null && micro > 0.01 && (
-                      <>
-                        <span className="text-muted-foreground">P(KSS 9)</span>
-                        <span className={cn(
-                          'font-medium',
-                          micro < 0.02 ? 'text-success' : micro < 0.05 ? 'text-warning' : 'text-critical',
-                        )}>
-                          {(micro * 100).toFixed(1)}%
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Sleep Recovery Section */}
-            {bar.duty.sleepEstimate && (
-              <div className="border-t border-border pt-2 mt-2">
-                <span className="text-muted-foreground font-medium flex items-center gap-1">
-                  <Battery className="h-3 w-3" />
-                  Sleep Recovery
+              {peakKss != null && (
+                <span className={cn('inline-flex shrink-0 items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em]', riskClasses(level).text)}>
+                  <span aria-hidden="true" className={cn('h-[7px] w-[7px] rounded-[1px]', riskClasses(level).fill)} />
+                  {RISK_LEVEL_LABELS[level]}
                 </span>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
-                  <span className="text-muted-foreground">Recovery Score:</span>
-                  {(() => {
-                    const score = getRecoveryScore(bar.duty.sleepEstimate!);
-                    const classes = getRecoveryClasses(score);
-                    return (
-                      <span className={cn('font-medium', classes.text)}>
-                        {Math.round(score)}%
-                      </span>
-                    );
-                  })()}
-                  <span className="text-muted-foreground">Effective Sleep:</span>
-                  <span>{bar.duty.sleepEstimate.effectiveSleepHours.toFixed(1)}h</span>
-                  <span className="text-muted-foreground">Efficiency:</span>
-                  <span>
-                    {Math.round(bar.duty.sleepEstimate.sleepEfficiency * 100)}%
-                  </span>
-                  <span className="text-muted-foreground">Strategy:</span>
-                  <span className="capitalize">{bar.duty.sleepEstimate.sleepStrategy}</span>
-                  {bar.duty.sleepEstimate.warnings.length > 0 && (
-                    <span className="text-muted-foreground col-span-2 text-warning text-[10px] mt-1">
-                      <AlertTriangle className="h-3 w-3 inline-block mr-0.5" /> {bar.duty.sleepEstimate.warnings[0]}
-                    </span>
-                  )}
-                </div>
-              </div>
+              )}
+            </div>
+
+            {peakKss != null && (
+              <p>
+                <span className={cn('font-mono text-base font-semibold tabular', riskClasses(level).text)}>{peakKss.toFixed(1)}</span>
+                <span className="ml-1.5 text-muted-foreground">peak KSS{peak ? ` at ${decimalToHHmm(peak.hour)}` : ''} · {kssLabel(peakKss)}</span>
+              </p>
             )}
+
+            {!training && sectors.length > 0 && (
+              <ul className="space-y-1 border-t border-border pt-2" aria-label="Sectors">
+                {sectors.map((s, i) => (
+                  <li key={i} className="flex items-center justify-between gap-3">
+                    <span><span className="font-mono font-medium">{s.flightNumber}</span> <span className="text-muted-foreground">{s.departure} → {s.arrival}</span></span>
+                    {s.kssPeak != null && (
+                      <span className={cn('font-mono tabular', riskClasses(classifyKss(s.kssPeak)).text)}>KSS {s.kssPeak.toFixed(1)}</span>
+                    )}
+                  </li>
+                ))}
+                {!hasSectorValues && sectors.length > 1 && (
+                  <li className="text-muted-foreground">Sectors share the duty peak colour.</li>
+                )}
+              </ul>
+            )}
+            {training && (
+              <p className="border-t border-border pt-2"><span className="font-medium">{getTrainingDutyLabel(duty.dutyType || '')}</span>{duty.trainingCode ? ` · ${duty.trainingCode}` : ''}</p>
+            )}
+
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 border-t border-border pt-2">
+              {times && <><dt className="text-muted-foreground">{variant === 'utc' ? 'Duty (UTC)' : 'Duty (home base)'}</dt><dd className="font-mono tabular">{times}</dd></>}
+              {!training && duty.maxFdpHours ? <><dt className="text-muted-foreground">FDP</dt><dd className="font-mono tabular">{fdp.toFixed(1)}h of {duty.maxFdpHours.toFixed(1)}h max</dd></> : null}
+              <dt className="text-muted-foreground">Sleep before (est.)</dt><dd className="font-mono tabular">{duty.priorSleep.toFixed(1)}h</dd>
+              {duty.sleepDeficit7d && <><dt className="text-muted-foreground">7-day sleep shortfall</dt><dd className="font-mono tabular">{duty.sleepDeficit7d.deficitHours.toFixed(1)}h</dd></>}
+              {duty.woclExposure > 0 && <><dt className="text-muted-foreground">Body-clock low (WOCL)</dt><dd className="font-mono tabular">{duty.woclExposure.toFixed(1)}h</dd></>}
+            </dl>
+            {usedDiscretion && <p className="font-medium text-risk-critical-ink">Commander&apos;s discretion used</p>}
+            <p className="text-muted-foreground">Select for the full duty details.</p>
           </div>
         </TooltipContent>
       </Tooltip>

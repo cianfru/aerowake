@@ -96,12 +96,12 @@ describe('RosterPage', () => {
   it('preserves model warnings when a pilot raises their personal watch level and carries it to a concern', async () => {
     render(<AnalysisProvider><Loaded results={results} /></AnalysisProvider>);
     await screen.findByText('September 2026');
-    fireEvent.change(screen.getByLabelText('My watch level (KSS)'), { target: { value: '9' } });
-    expect(screen.getByText('No crossing in assessed duties')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('My watch level (KSS)'), { target: { value: '8.5' } });
+    expect(screen.getByText('None this month')).toBeInTheDocument();
     expect(within(screen.getByTestId('duties-to-watch')).getAllByTestId('duty-watch-card')).toHaveLength(2);
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Sleep & recovery' }), { button: 0, ctrlKey: false });
     fireEvent.click(screen.getAllByRole('button', { name: /^Raise roster concern for/ })[0]);
-    expect(prefillSpy).toEqual({ dutyId: 'D1', purpose: 'roster_concern', watchReference: 9 });
+    expect(prefillSpy).toEqual({ dutyId: 'D1', purpose: 'roster_concern', watchReference: 8.5 });
     expect(tabSpy).toBe('fatigue-report');
   });
 });

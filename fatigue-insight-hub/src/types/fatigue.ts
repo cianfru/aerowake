@@ -1,4 +1,4 @@
-import type { RiskLevelUpper, SleepDeficitBand } from '@/lib/risk-scale';
+import type { RiskLevel, RiskLevelUpper, SleepDeficitBand } from '@/lib/risk-scale';
 
 export type { RiskLevelUpper } from '@/lib/risk-scale';
 
@@ -11,9 +11,15 @@ export interface SleepDeficit7d {
   band: SleepDeficitBand;
 }
 
+/** How often the pilot naps before late duties (an analysis assumption). */
+export type NapHabit = 'usually' | 'sometimes' | 'rarely';
+export const DEFAULT_NAP_HABIT: NapHabit = 'sometimes';
+
 export interface PilotSettings {
   pilotId: string;
   homeBase: string;
+  /** Pre-duty nap assumption sent with the next analysis. */
+  napHabit: NapHabit;
   analysisType: 'single' | 'range';
   selectedMonth: Date;
   startDate?: Date;
@@ -54,8 +60,21 @@ export interface FlightSegment {
   arrivalTime: string;        // HH:mm in home base local time
   departureTimeUtc?: string;  // HH:mmZ (Zulu time, formatted)
   arrivalTimeUtc?: string;    // HH:mmZ (Zulu time, formatted)
+  /** Aware ISO instants of departure / arrival (backend departure_time / arrival_time). */
+  departureIso?: string;
+  arrivalIso?: string;
   blockHours: number;
-  performance: number;
+  /**
+   * Index (110 − 10·KSS) at arrival, only when the backend supplies the sector's
+   * KSS at arrival. Never interpolated in the frontend.
+   */
+  performance?: number;
+  /** Highest model KSS between departure and arrival (backend `kss_peak`); null when not supplied. */
+  kssPeak?: number | null;
+  /** Model KSS at arrival (backend `kss_at_arrival`); null when not supplied. */
+  kssAtArrival?: number | null;
+  /** Band of kssPeak (backend `risk_level`, else classified from kssPeak); null when not supplied. */
+  riskLevel?: RiskLevel | null;
   // New airport-local time fields
   departureTimeAirportLocal?: string;  // HH:mm in actual airport timezone
   arrivalTimeAirportLocal?: string;    // HH:mm in actual airport timezone
@@ -118,6 +137,10 @@ export interface DutyAnalysis {
   // KSS-anchored alertness (backend engine aerowake-4.0-kss). Optional —
   // older analyses omit them; derive via indexToKss() from risk-scale.ts.
   maxKss?: number;           // worst predicted KSS on deck (group-average pilot)
+  /** When the duty peak occurs (ISO UTC): backend peak_time_utc, else the matching worst point. */
+  peakTimeUtc?: string;
+  /** Peak KSS from report to the last on-blocks (backend kss_peak_fdp). */
+  kssPeakFdp?: number;
   landingKss?: number;       // predicted KSS at final landing
   maxKss90?: number;         // worst predicted KSS for the 90th-percentile pilot
   maxPSevere?: number;       // max P(KSS ≥ 7), 0–1
@@ -192,6 +215,7 @@ export interface DutyAnalysis {
     sleepBlocks?: Array<{
       sleepStartUtc?: string;
       sleepEndUtc?: string;
+      /** 'main' or 'nap' (pre-duty naps are modelled blocks too). */
       sleepType?: string;
       durationHours?: number;
       effectiveHours?: number;
@@ -414,6 +438,12 @@ export interface AnalysisResults {
   pilotBase?: string;
   pilotAircraft?: string;
   homeBaseTimezone?: string; // IANA timezone e.g. "Asia/Qatar"
+  /** Assumptions the backend ran with (absent on older analyses). */
+  assumptions?: {
+    napHabit?: NapHabit;
+    /** Window of the headline risk, e.g. 'duty' or 'fdp'. */
+    headlineRiskWindow?: string;
+  };
   // Rest day sleep data
   restDaysSleep?: RestDaySleep[];
   // Circadian adaptation curve across the roster

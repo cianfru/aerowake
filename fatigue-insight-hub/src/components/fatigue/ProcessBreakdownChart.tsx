@@ -1,5 +1,5 @@
 import type { TooltipProps } from 'recharts';
-import { useState, useMemo, useCallback } from 'react';
+import { useMemo } from 'react';
 import {
   ComposedChart,
   Area,
@@ -11,340 +11,166 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Layers, Eye, EyeOff } from 'lucide-react';
 import { InfoTooltip, FATIGUE_INFO } from '@/components/ui/InfoTooltip';
 import { DutyAnalysis } from '@/types/fatigue';
 import { DutyDetailTimeline } from '@/hooks/useContinuousTimelineData';
-import { format } from 'date-fns';
 import { decomposePerformance } from '@/lib/fatigue-calculations';
-import { kssLabel, riskReferenceLines } from '@/lib/risk-scale';
+import { KSS_BAND_BOUNDARIES, classifyKss, kssLabel, riskInkColor } from '@/lib/risk-scale';
+import { formatHomeTime } from '@/lib/home-time';
 
 interface ProcessBreakdownChartProps {
-  /** High-resolution duty timeline data (from GET /api/duty/{id}/{dutyId}). */
+  /** High-resolution duty timeline (GET /api/duty/{id}/{dutyId}). */
   timeline: DutyDetailTimeline;
-  /** The duty this timeline belongs to (for context). */
   duty: DutyAnalysis;
-  /** Optional: compact height. */
+  /** Home-base IANA zone: every time on the axis is home-base 24-hour. */
+  homeTz: string;
+  /** Short zone label, e.g. "DOH · UTC+3". */
+  zoneLabel?: string;
   height?: number;
 }
 
 interface ChartDataPoint {
-  timestampMs: number;
-  label: string;
+  t: number;
   hoursOnDuty: number;
-  /** 20–100 index (= 110 − 10·KSS). */
-  performance: number;
-  /** Predicted KSS (null while in bunk rest). */
   kss: number | null;
-  /** Predicted KSS, 90th-percentile pilot. */
   kss90: number | null;
-  /** Rested-at-circadian-peak reference KSS (stack base). */
   baseline: number | null;
-  /** KSS points added by sleep pressure (Process S). */
   sleepPressure: number | null;
-  /** KSS points added by circadian phase (Process C). */
   circadian: number | null;
-  /** Remainder: ultradian process U. */
   ultradian: number | null;
   hoursAwake: number | null;
   pSevere: number | null;
   flightPhase: string | null;
-  isCritical: boolean;
 }
 
-const COLORS = {
-  sleepPressure: 'hsl(0, 80%, 60%)',       // Red — Process S
-  circadian: 'hsl(220, 80%, 60%)',          // Blue — Process C
-  ultradian: 'hsl(220, 10%, 50%)',          // Gray — Process U
-  kss: 'hsl(195, 100%, 50%)',               // Cyan — KSS line
-  kss90: 'hsl(280, 60%, 65%)',              // Violet — 90th-percentile KSS
-};
-
-const SERIES_META = {
-  sleepPressure: { label: 'Sleep Pressure (S)', color: COLORS.sleepPressure, bg: 'hsla(0,80%,60%,0.05)', border: 'hsla(0,80%,60%,0.4)' },
-  circadian: { label: 'Circadian (C)', color: COLORS.circadian, bg: 'hsla(220,80%,60%,0.05)', border: 'hsla(220,80%,60%,0.4)' },
-  kss: { label: 'Predicted KSS', color: COLORS.kss, bg: 'hsla(195,100%,50%,0.05)', border: 'hsla(195,100%,50%,0.4)' },
-  kss90: { label: 'KSS 90th pct', color: COLORS.kss90, bg: 'hsla(280,60%,65%,0.05)', border: 'hsla(280,60%,65%,0.4)' },
-} as const;
+/* Process colours are categorical (not risk): teal for sleep pressure, lilac for the body clock. */
+const S_COLOUR = 'hsl(var(--primary))';
+const C_COLOUR = 'hsl(var(--wocl))';
 
 /**
- * Three-Process Breakdown Chart — predicted KSS over the duty and how much of
- * it comes from sleep pressure (S) and circadian phase (C), per the Three
- * Process Model KSS = 9.68 − 0.46·(S + C + U) (Ingre et al. 2014).
- *
- * The stack starts at the rested / circadian-peak reference (≈ KSS 2) and the
- * S and C contributions are exact in KSS units; the small remainder is the
- * ultradian term. Sleep inertia and time-on-task are not in the model.
+ * Predicted KSS through the duty, with how much sleep pressure (S) and the
+ * body clock (C) add above a rested pilot at the circadian peak. Exact in KSS
+ * units for the Three Process Model KSS = 9.68 − 0.46·(S + C + U)
+ * (Ingre et al. 2014).
  */
-export function ProcessBreakdownChart({
-  timeline,
-  duty,
-  height = 280,
-}: ProcessBreakdownChartProps) {
-  const [visibleSeries, setVisibleSeries] = useState({
-    sleepPressure: true,
-    circadian: true,
-    kss: true,
-    kss90: true,
-  });
-
+export function ProcessBreakdownChart({ timeline, duty, homeTz, zoneLabel, height = 260 }: ProcessBreakdownChartProps) {
   const chartData = useMemo<ChartDataPoint[]>(() => {
     if (!timeline?.timeline?.length) return [];
-
-    return timeline.timeline.map(pt => {
-      const onDeck = !pt.is_in_rest;
-      const d = decomposePerformance({
-        performance: pt.performance,
-        sleep_pressure: pt.sleep_pressure,
-        circadian: pt.circadian,
-        hours_on_duty: pt.hours_on_duty,
-        kss: pt.kss,
-      });
-      return {
-        timestampMs: new Date(pt.timestamp_local || pt.timestamp).getTime(),
-        label: format(new Date(pt.timestamp_local || pt.timestamp), 'HH:mm'),
-        hoursOnDuty: pt.hours_on_duty,
-        performance: pt.performance,
-        kss: onDeck ? d.kss : null,
-        kss90: onDeck ? pt.kss_90 ?? null : null,
-        baseline: onDeck ? d.referenceKss : null,
-        sleepPressure: onDeck ? d.sKss : null,
-        circadian: onDeck ? d.cKss : null,
-        ultradian: onDeck ? Math.max(0, d.otherKss) : null,
-        hoursAwake: pt.hours_awake ?? null,
-        pSevere: pt.p_severe_sleepiness ?? null,
-        flightPhase: pt.flight_phase,
-        isCritical: pt.is_critical,
-      };
-    });
+    return timeline.timeline
+      .map((pt) => {
+        const onDeck = !pt.is_in_rest;
+        const d = decomposePerformance({
+          performance: pt.performance,
+          sleep_pressure: pt.sleep_pressure,
+          circadian: pt.circadian,
+          hours_on_duty: pt.hours_on_duty,
+          kss: pt.kss,
+        });
+        return {
+          t: Date.parse(pt.timestamp || pt.timestamp_local),
+          hoursOnDuty: pt.hours_on_duty,
+          kss: onDeck ? d.kss : null,
+          kss90: onDeck ? pt.kss_90 ?? null : null,
+          baseline: onDeck ? d.referenceKss : null,
+          sleepPressure: onDeck ? d.sKss : null,
+          circadian: onDeck ? d.cKss : null,
+          ultradian: onDeck ? Math.max(0, d.otherKss) : null,
+          hoursAwake: pt.hours_awake ?? null,
+          pSevere: pt.p_severe_sleepiness ?? null,
+          flightPhase: pt.flight_phase,
+        };
+      })
+      .filter((p) => Number.isFinite(p.t));
   }, [timeline]);
 
-  const toggleSeries = useCallback((key: keyof typeof visibleSeries) => {
-    setVisibleSeries(prev => ({ ...prev, [key]: !prev[key] }));
-  }, []);
+  if (chartData.length === 0) return null;
 
-  if (chartData.length === 0) {
-    return null;
-  }
-
-  const tickInterval = Math.max(1, Math.floor(chartData.length / 10));
-  const hasKss90 = chartData.some(d => d.kss90 != null);
-  const bandLines = riskReferenceLines(duty.riskThresholds);
+  const fmt = (ms: number) => formatHomeTime(new Date(ms).toISOString(), homeTz);
+  const hasKss90 = chartData.some((d) => d.kss90 != null);
+  const axisTick = { fontSize: 10, fill: 'hsl(var(--muted-foreground))', fontFamily: 'JetBrains Mono, monospace' };
 
   return (
-    <Card variant="glass">
-      <CardHeader className="pb-2 md:pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-sm md:text-base">
-            <Layers className="h-3.5 w-3.5 md:h-4 md:w-4 text-primary" />
-            Three-Process Breakdown
-            <InfoTooltip entry={FATIGUE_INFO.performance} />
-          </CardTitle>
-          <Badge variant="outline" className="text-[10px] font-mono">
-            {chartData[0].label} &ndash; {chartData[chartData.length - 1].label}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {/* Series toggles */}
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {(Object.entries(SERIES_META) as [keyof typeof SERIES_META, typeof SERIES_META[keyof typeof SERIES_META]][])
-            .filter(([key]) => key !== 'kss90' || hasKss90)
-            .map(([key, meta]) => {
-              const visible = visibleSeries[key];
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => toggleSeries(key)}
-                  aria-pressed={visible}
-                  className="inline-flex items-center gap-1 rounded-[4px] px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.06em] border transition-colors"
-                  style={{
-                    borderColor: visible ? meta.border : 'hsl(var(--border))',
-                    backgroundColor: visible ? meta.bg : 'transparent',
-                    color: visible ? meta.color : 'hsl(var(--muted-foreground))',
-                  }}
-                >
-                  {visible ? <Eye className="h-2.5 w-2.5" /> : <EyeOff className="h-2.5 w-2.5" />}
-                  {meta.label}
-                </button>
-              );
-            })}
-        </div>
+    <section className="rounded-2xl border border-border bg-card p-4 md:p-5" style={{ boxShadow: 'var(--shadow-card)' }} aria-labelledby="duty-kss-chart-heading">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 id="duty-kss-chart-heading" className="flex items-center gap-1.5 text-[15px] font-semibold">
+          Predicted KSS through the duty
+          <InfoTooltip entry={FATIGUE_INFO.performance} size="sm" />
+        </h3>
+        <p className="font-mono text-xs text-muted-foreground tabular">
+          {fmt(chartData[0].t)}–{fmt(chartData[chartData.length - 1].t)}{zoneLabel ? ` ${zoneLabel}` : ''}
+        </p>
+      </div>
+      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Chart key">
+        <li className="flex items-center gap-1.5"><span aria-hidden="true" className="h-[2px] w-4 bg-foreground" />Predicted KSS</li>
+        {hasKss90 && <li className="flex items-center gap-1.5"><span aria-hidden="true" className="w-4 border-t-2 border-dashed border-muted-foreground" />90th-percentile pilot</li>}
+        <li className="flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-3 rounded-[2px]" style={{ background: S_COLOUR, opacity: 0.35 }} />Added by time awake (S)</li>
+        <li className="flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-3 rounded-[2px]" style={{ background: C_COLOUR, opacity: 0.45 }} />Added by body clock (C)</li>
+      </ul>
 
-        <div style={{ width: '100%', height }}>
-          <ResponsiveContainer>
-            <ComposedChart data={chartData} margin={{ top: 5, right: 40, left: -10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
-              <XAxis
-                dataKey="timestampMs"
-                type="number"
-                domain={['dataMin', 'dataMax']}
-                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                tickFormatter={(ms: number) => format(new Date(ms), 'HH:mm')}
-                interval={tickInterval}
-                stroke="hsl(var(--border))"
-                label={{
-                  value: 'Local Time',
-                  position: 'insideBottom',
-                  offset: -2,
-                  fontSize: 10,
-                  fill: 'hsl(var(--muted-foreground))',
-                }}
-              />
-              <YAxis
-                domain={[1, 9]}
-                ticks={[1, 3, 5, 7, 9]}
-                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                tickFormatter={(v: number) => `KSS ${v}`}
-                stroke="hsl(var(--border))"
-              />
-              <Tooltip content={<CustomTooltip />} />
+      <div className="mt-3" style={{ width: '100%', height }}>
+        <ResponsiveContainer>
+          <ComposedChart data={chartData} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
+            <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.6} />
+            <XAxis
+              dataKey="t"
+              type="number"
+              scale="time"
+              domain={['dataMin', 'dataMax']}
+              tick={axisTick}
+              tickFormatter={fmt}
+              tickCount={6}
+              tickLine={false}
+              axisLine={{ stroke: 'hsl(var(--border))' }}
+            />
+            <YAxis domain={[1, 9]} ticks={[1, 3, 5, 7, 9]} tick={axisTick} tickLine={false} axisLine={false} />
+            <Tooltip content={<ChartTooltip fmt={fmt} />} />
 
-              {/* Stack: rested reference, then S and C contributions, then U */}
-              <Area
-                type="monotone"
-                dataKey="baseline"
-                name="Rested reference"
-                stackId="kss"
-                fill="hsla(142, 70%, 45%, 0.08)"
-                stroke="none"
-                isAnimationActive={false}
-                connectNulls={false}
-              />
-              {visibleSeries.sleepPressure && (
-                <Area
-                  type="monotone"
-                  dataKey="sleepPressure"
-                  name="Sleep Pressure (S)"
-                  stackId="kss"
-                  fill={COLORS.sleepPressure}
-                  fillOpacity={0.3}
-                  stroke={COLORS.sleepPressure}
-                  strokeWidth={1}
-                  isAnimationActive={false}
-                  connectNulls={false}
-                />
-              )}
-              {visibleSeries.circadian && (
-                <Area
-                  type="monotone"
-                  dataKey="circadian"
-                  name="Circadian (C)"
-                  stackId="kss"
-                  fill={COLORS.circadian}
-                  fillOpacity={0.3}
-                  stroke={COLORS.circadian}
-                  strokeWidth={1}
-                  isAnimationActive={false}
-                  connectNulls={false}
-                />
-              )}
-              <Area
-                type="monotone"
-                dataKey="ultradian"
-                name="Ultradian (U)"
-                stackId="kss"
-                fill={COLORS.ultradian}
-                fillOpacity={0.15}
-                stroke="none"
-                isAnimationActive={false}
-                connectNulls={false}
-              />
+            <Area type="monotone" dataKey="baseline" stackId="kss" fill="hsl(var(--muted-foreground))" fillOpacity={0.06} stroke="none" isAnimationActive={false} connectNulls={false} />
+            <Area type="monotone" dataKey="sleepPressure" stackId="kss" fill={S_COLOUR} fillOpacity={0.22} stroke="none" isAnimationActive={false} connectNulls={false} />
+            <Area type="monotone" dataKey="circadian" stackId="kss" fill={C_COLOUR} fillOpacity={0.32} stroke="none" isAnimationActive={false} connectNulls={false} />
+            <Area type="monotone" dataKey="ultradian" stackId="kss" fill="hsl(var(--muted-foreground))" fillOpacity={0.1} stroke="none" isAnimationActive={false} connectNulls={false} />
 
-              {visibleSeries.kss && (
-                <Line
-                  type="monotone"
-                  dataKey="kss"
-                  name="Predicted KSS"
-                  stroke={COLORS.kss}
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                  connectNulls={false}
-                />
-              )}
-              {hasKss90 && visibleSeries.kss90 && (
-                <Line
-                  type="monotone"
-                  dataKey="kss90"
-                  name="KSS 90th pct"
-                  stroke={COLORS.kss90}
-                  strokeWidth={1.5}
-                  strokeDasharray="4 3"
-                  dot={false}
-                  isAnimationActive={false}
-                  connectNulls={false}
-                />
-              )}
+            {KSS_BAND_BOUNDARIES.map((k) => (
+              <ReferenceLine key={k} y={k} stroke={riskInkColor(classifyKss(k))} strokeOpacity={0.5} strokeDasharray="2 4"
+                label={{ value: `${k}`, position: 'insideRight', fontSize: 11, fill: riskInkColor(classifyKss(k)) }} />
+            ))}
 
-              {/* Risk band boundaries */}
-              {bandLines.map((line) => (
-                <ReferenceLine
-                  key={line.value}
-                  y={line.kss}
-                  stroke={line.color}
-                  strokeDasharray="4 4"
-                  strokeOpacity={0.6}
-                  label={{ value: line.label, position: 'right', fontSize: 9, fill: line.color }}
-                />
-              ))}
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
+            {hasKss90 && (
+              <Line type="monotone" dataKey="kss90" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="4 3" dot={false} isAnimationActive={false} connectNulls={false} />
+            )}
+            <Line type="monotone" dataKey="kss" stroke="hsl(var(--foreground))" strokeWidth={2} dot={false} isAnimationActive={false} connectNulls={false} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">Group-average prediction; typical error about ±1.4 KSS. {duty.dutyType === 'flight' || !duty.dutyType ? 'Crew rest periods are left blank.' : ''}</p>
+    </section>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Custom tooltip
-// ---------------------------------------------------------------------------
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload }: TooltipProps<number, string>) {
+function ChartTooltip({ active, payload, fmt }: TooltipProps<number, string> & { fmt: (ms: number) => string }) {
   if (!active || !payload || !payload.length) return null;
   const d: ChartDataPoint = payload[0]?.payload;
   if (!d) return null;
-
   return (
-    <div className="rounded-lg border border-border bg-background/95 backdrop-blur-sm p-3 shadow-lg text-sm max-w-xs">
-      <p className="font-medium text-foreground font-mono">{d.label}</p>
-      <p className="text-[10px] text-muted-foreground mb-2">
+    <div className="max-w-xs rounded-lg border border-border bg-popover p-3 text-xs shadow-lg">
+      <p className="font-mono font-medium text-foreground">{fmt(d.t)}</p>
+      <p className="mb-2 text-muted-foreground">
         {d.hoursOnDuty.toFixed(1)}h on duty
-        {d.hoursAwake != null && ` \u00b7 ${d.hoursAwake.toFixed(1)}h awake`}
-        {d.flightPhase && ` \u00b7 ${d.flightPhase.replace(/_/g, ' ')}`}
-        {d.isCritical && ' \u26a0\ufe0f'}
+        {d.hoursAwake != null && ` · ${d.hoursAwake.toFixed(1)}h awake`}
+        {d.flightPhase && ` · ${d.flightPhase.replace(/_/g, ' ')}`}
       </p>
       {d.kss == null ? (
-        <p className="text-xs text-muted-foreground">In crew rest</p>
+        <p className="text-muted-foreground">In crew rest</p>
       ) : (
-        <div className="space-y-1">
-          <TooltipRow label="Predicted KSS" value={`${d.kss.toFixed(1)} \u00b7 ${kssLabel(d.kss)}`} color={COLORS.kss} />
-          {d.kss90 != null && <TooltipRow label="KSS 90th pct" value={d.kss90.toFixed(1)} color={COLORS.kss90} />}
-          {d.pSevere != null && (
-            <TooltipRow label="P(KSS ≥ 7)" value={`${(d.pSevere * 100).toFixed(0)}%`} color={COLORS.kss90} />
-          )}
-          <div className="border-t border-border/50 my-1" />
-          <TooltipRow label="Sleep Pressure" value={`+${(d.sleepPressure ?? 0).toFixed(1)} KSS`} color={COLORS.sleepPressure} />
-          <TooltipRow label="Circadian" value={`+${(d.circadian ?? 0).toFixed(1)} KSS`} color={COLORS.circadian} />
-          <p className="text-[10px] text-muted-foreground font-mono pt-1">index {d.performance.toFixed(0)}</p>
-        </div>
+        <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1">
+          <dt className="text-muted-foreground">Predicted KSS</dt><dd className="font-mono tabular">{d.kss.toFixed(1)}</dd>
+          <dd className="col-span-2 text-muted-foreground">{kssLabel(d.kss)}</dd>
+          {d.kss90 != null && <><dt className="text-muted-foreground">90th-percentile pilot</dt><dd className="font-mono tabular">{d.kss90.toFixed(1)}</dd></>}
+          {d.pSevere != null && <><dt className="text-muted-foreground">Chance of KSS 7 or more</dt><dd className="font-mono tabular">{(d.pSevere * 100).toFixed(0)}%</dd></>}
+          <dt className="text-muted-foreground">Time awake adds</dt><dd className="font-mono tabular">+{(d.sleepPressure ?? 0).toFixed(1)}</dd>
+          <dt className="text-muted-foreground">Body clock adds</dt><dd className="font-mono tabular">+{(d.circadian ?? 0).toFixed(1)}</dd>
+        </dl>
       )}
-    </div>
-  );
-}
-
-function TooltipRow({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <span className="flex items-center gap-1.5 text-muted-foreground">
-        <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-        {label}
-      </span>
-      <span className="font-mono font-medium">{value}</span>
     </div>
   );
 }

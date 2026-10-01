@@ -1,6 +1,3 @@
-import { Timer, AlertTriangle } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { InfoTooltip, FATIGUE_INFO } from '@/components/ui/InfoTooltip';
 import { cn } from '@/lib/utils';
 
@@ -11,122 +8,38 @@ interface FDPUtilizationBarProps {
   usedDiscretion?: boolean;
 }
 
-export function FDPUtilizationBar({
-  actualFdpHours,
-  maxFdpHours,
-  extendedFdpHours,
-  usedDiscretion,
-}: FDPUtilizationBarProps) {
-  // The bar spans from 0 to the upper bound (extended or max + 2h buffer for exceedance)
-  const effectiveExtended = extendedFdpHours ?? maxFdpHours;
-  const upperBound = Math.max(effectiveExtended + 1, actualFdpHours + 0.5);
-  const utilization = maxFdpHours > 0 ? (actualFdpHours / maxFdpHours) * 100 : 0;
-
-  // Positions as percentages
-  const actualPos = Math.min((actualFdpHours / upperBound) * 100, 100);
-  const basePos = (maxFdpHours / upperBound) * 100;
-  const extendedPos = extendedFdpHours ? (extendedFdpHours / upperBound) * 100 : basePos;
-
-  // Color based on utilization
-  const getColor = () => {
-    if (actualFdpHours > effectiveExtended) return { bar: 'bg-critical', text: 'text-critical', label: 'EXCEEDANCE' };
-    if (actualFdpHours > maxFdpHours) return { bar: 'bg-warning', text: 'text-warning', label: 'DISCRETION' };
-    if (utilization > 85) return { bar: 'bg-warning', text: 'text-warning', label: 'HIGH' };
-    return { bar: 'bg-success', text: 'text-success', label: 'NORMAL' };
-  };
-
-  const color = getColor();
+/**
+ * Flight duty period against the calculated ORO.FTL.205 maximum. Neutral
+ * unless the duty is close to (>= 90%) or beyond the limit, the same rule as
+ * the roster FTL gauges.
+ */
+export function FDPUtilizationBar({ actualFdpHours, maxFdpHours, extendedFdpHours, usedDiscretion }: FDPUtilizationBarProps) {
+  const extended = extendedFdpHours && extendedFdpHours > maxFdpHours ? extendedFdpHours : undefined;
+  const upper = Math.max((extended ?? maxFdpHours) * 1.08, actualFdpHours * 1.05);
+  const ratio = maxFdpHours > 0 ? actualFdpHours / maxFdpHours : 0;
+  const tone = actualFdpHours > (extended ?? maxFdpHours) ? 'bg-risk-critical' : ratio > 1 || ratio >= 0.9 ? 'bg-risk-moderate' : 'bg-foreground/50';
+  const pct = (h: number) => `${Math.min(100, (h / upper) * 100)}%`;
 
   return (
-    <Card variant="glass">
-      <CardContent className="py-3 px-4 space-y-2.5">
-        {/* Header row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Timer className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-xs font-medium">FDP Utilization</span>
-            {FATIGUE_INFO.fdpUtilization && <InfoTooltip entry={FATIGUE_INFO.fdpUtilization} size="sm" />}
-          </div>
-          <div className="flex items-center gap-2">
-            <span className={cn('font-mono text-sm font-semibold tabular-nums', color.text)}>
-              {actualFdpHours.toFixed(1)}h / {maxFdpHours.toFixed(1)}h
-            </span>
-            <Badge variant={color.label === 'NORMAL' ? 'success' : color.label === 'HIGH' ? 'warning' : color.label === 'DISCRETION' ? 'warning' : 'critical'} className="text-[10px]">
-              {Math.round(utilization)}%
-            </Badge>
-          </div>
-        </div>
-
-        {/* Progress bar */}
-        <div className="relative h-3 rounded-[2px] overflow-hidden bg-secondary/50">
-          {/* Green zone: 0 → base limit */}
-          <div
-            className="absolute inset-y-0 left-0 bg-success/20"
-            style={{ width: `${basePos}%` }}
-          />
-
-          {/* Amber zone: base limit → extended limit (commander discretion) */}
-          {extendedFdpHours && extendedFdpHours > maxFdpHours && (
-            <div
-              className="absolute inset-y-0 bg-warning/20"
-              style={{ left: `${basePos}%`, width: `${extendedPos - basePos}%` }}
-            />
-          )}
-
-          {/* Red zone: beyond extended */}
-          {actualFdpHours > effectiveExtended && (
-            <div
-              className="absolute inset-y-0 bg-critical/20"
-              style={{ left: `${extendedPos}%`, right: 0 }}
-            />
-          )}
-
-          {/* Filled bar (actual FDP) */}
-          <div
-            className={cn('absolute inset-y-0 left-0 rounded-[2px] transition-all', color.bar)}
-            style={{ width: `${actualPos}%`, opacity: 0.7 }}
-          />
-
-          {/* Base limit marker */}
-          <div
-            className="absolute inset-y-0 w-px bg-success"
-            style={{ left: `${basePos}%` }}
-          />
-
-          {/* Extended limit marker */}
-          {extendedFdpHours && extendedFdpHours > maxFdpHours && (
-            <div
-              className="absolute inset-y-0 w-px bg-warning"
-              style={{ left: `${extendedPos}%` }}
-            />
-          )}
-        </div>
-
-        {/* Labels row */}
-        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-          <span>0h</span>
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-success" />
-              Base: {maxFdpHours.toFixed(1)}h
-            </span>
-            {extendedFdpHours && extendedFdpHours > maxFdpHours && (
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning" />
-                Extended: {extendedFdpHours.toFixed(1)}h
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Discretion warning */}
-        {usedDiscretion && (
-          <div className="flex items-center gap-1.5 text-[10px] text-warning">
-            <AlertTriangle className="h-3 w-3" />
-            <span>Commander discretion applied (ORO.FTL.205(f))</span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <section className="rounded-2xl border border-border bg-card p-5" style={{ boxShadow: 'var(--shadow-card)' }} aria-labelledby="fdp-heading">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 id="fdp-heading" className="flex items-center gap-1.5 text-[15px] font-semibold">
+          Flight duty period
+          {FATIGUE_INFO.fdpUtilization && <InfoTooltip entry={FATIGUE_INFO.fdpUtilization} size="sm" />}
+        </h3>
+        <p className="font-mono text-sm tabular">
+          {actualFdpHours.toFixed(1)}h <span className="text-muted-foreground">of {maxFdpHours.toFixed(1)}h max · {Math.round(ratio * 100)}%</span>
+        </p>
+      </div>
+      <div className="relative mt-3 h-2 rounded-full bg-muted" role="img" aria-label={`FDP ${actualFdpHours.toFixed(1)} of ${maxFdpHours.toFixed(1)} hours`}>
+        <div className={cn('absolute inset-y-0 left-0 rounded-full', tone)} style={{ width: pct(actualFdpHours) }} />
+        <span aria-hidden="true" className="absolute -bottom-1 -top-1 w-[2px] bg-foreground" style={{ left: pct(maxFdpHours) }} />
+        {extended && <span aria-hidden="true" className="absolute -bottom-1 -top-1 w-px border-l border-dashed border-foreground/60" style={{ left: pct(extended) }} />}
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Line: calculated maximum (ORO.FTL.205){extended ? `; dashed: ${extended.toFixed(1)}h with commander's discretion` : ''}.
+      </p>
+      {usedDiscretion && <p className="mt-1 text-xs font-medium text-risk-critical-ink">Commander&apos;s discretion applied (ORO.FTL.205(f)).</p>}
+    </section>
   );
 }

@@ -167,7 +167,7 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
                   ) : (
                     <p className="text-sm font-semibold text-muted-foreground">Pilot</p>
                   )}
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     {[
                       pilotId && pilotId !== 'P12345' ? `ID: ${pilotId}` : null,
                       pilotBase,
@@ -209,7 +209,7 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
                 <span className="text-xs font-semibold">Model &amp; profile</span>
               </div>
 
-              <p className="text-[10px] text-muted-foreground leading-relaxed">
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
                 One alertness model (Three Process Model, KSS — Ingre et al. 2014) with EASA ORO.FTL checks. No presets to tune.
               </p>
 

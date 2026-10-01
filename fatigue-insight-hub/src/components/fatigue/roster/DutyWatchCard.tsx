@@ -1,6 +1,6 @@
 import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { kssLabel, riskClasses } from '@/lib/risk-scale';
+import { riskClasses } from '@/lib/risk-scale';
 import type { DutyAnalysis } from '@/types/fatigue';
 import { dutyDateLabel, dutyPeakKss, dutyRiskLevel, dutyRoute, dutyTimes } from './roster-utils';
 import { RiskLabel, SeverityRule, TextAction } from './primitives';
@@ -9,20 +9,23 @@ interface DutyWatchCardProps {
   duty: DutyAnalysis;
   onDetails: (duty: DutyAnalysis) => void;
   onReportFatigue: (duty: DutyAnalysis) => void;
+  /** Reasons already stated once for the card's band group. */
+  sharedReasons?: ReadonlySet<string>;
 }
 
 /**
  * One flagged duty as an editorial row: severity rule · date/route/times ·
- * reasons · predicted peak KSS as the headline figure · two text actions.
+ * what sets it apart · predicted peak KSS as the headline figure · two text
+ * actions. The band's verbal anchor and shared reasons live in the group header.
  */
-export function DutyWatchCard({ duty, onDetails, onReportFatigue }: DutyWatchCardProps) {
+export function DutyWatchCard({ duty, onDetails, onReportFatigue, sharedReasons }: DutyWatchCardProps) {
   const level = dutyRiskLevel(duty);
   const rc = riskClasses(level);
   const kss = dutyPeakKss(duty);
   const times = dutyTimes(duty);
   const route = dutyRoute(duty);
   const date = dutyDateLabel(duty);
-  const reasons = (duty.riskReasons ?? []).slice(0, 3);
+  const reasons = (duty.riskReasons ?? []).filter((r) => !sharedReasons?.has(r)).slice(0, 3);
 
   return (
     <article className="duty-watch-surface group flex gap-4" data-testid="duty-watch-card">
@@ -40,14 +43,11 @@ export function DutyWatchCard({ duty, onDetails, onReportFatigue }: DutyWatchCar
 
         {kss != null && (
           <div className="flex items-center gap-4 md:col-start-2 md:row-span-2 md:row-start-1 md:flex-col md:items-end md:gap-1.5 md:text-right">
-            <p className={cn('text-4xl font-semibold tracking-tight leading-none tabular', rc.text)}>
+            <p className={cn('text-[32px] font-semibold tracking-tight leading-none tabular', rc.text)}>
               {kss.toFixed(1)}
               <span className="ml-1 font-sans text-xs font-normal text-muted-foreground">KSS</span>
             </p>
-            <div className="space-y-1 md:text-right">
-              <RiskLabel level={level} />
-              <p className="max-w-[14rem] text-xs text-muted-foreground">{kssLabel(kss)}</p>
-            </div>
+            <RiskLabel level={level} />
           </div>
         )}
 

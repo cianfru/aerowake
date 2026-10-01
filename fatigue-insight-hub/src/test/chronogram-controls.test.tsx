@@ -22,13 +22,13 @@ const data: TimelineData = {
 describe('calendar controls', () => {
   it('opens the linked duty from the formerly inert FDP marker', () => {
     const select = vi.fn();
-    render(<TimelineGrid data={data} rowHeight={32} showFlightPhases={false} selectedDuty={null} onDutySelect={select} />);
+    render(<TimelineGrid data={data} rowHeight={32} selectedDuty={null} onDutySelect={select} />);
     fireEvent.click(screen.getByRole('button', { name: /FDP limit for Wed 2 Sep: 12 hours/ }));
     expect(select).toHaveBeenCalledWith(duty);
   });
 
   it('explains standby without inventing a sleepiness score', () => {
-    render(<TimelineGrid data={data} rowHeight={32} showFlightPhases={false} selectedDuty={null} onDutySelect={vi.fn()} />);
+    render(<TimelineGrid data={data} rowHeight={32} selectedDuty={null} onDutySelect={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Home standby 03:00 to 11:00' }));
     expect(screen.getByText('2026-09-02 · 03:00–11:00 home-base time')).toBeVisible();
     expect(screen.getByText(/It has no predicted duty KSS score/)).toBeVisible();

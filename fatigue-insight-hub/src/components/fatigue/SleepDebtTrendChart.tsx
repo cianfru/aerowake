@@ -1,230 +1,101 @@
-import type { TooltipProps } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DutyAnalysis } from '@/types/fatigue';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { format, eachDayOfInterval, startOfMonth, endOfMonth, isSameDay } from 'date-fns';
-import { Battery, TrendingUp, TrendingDown, Plane, BedDouble } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { useMemo } from 'react';
+import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { endOfMonth, format, startOfMonth } from 'date-fns';
+import type { DutyAnalysis } from '@/types/fatigue';
+import { SLEEP_DEFICIT_BOUNDS, SLEEP_DEFICIT_LABELS, sleepDeficitColor, type SleepDeficitBand } from '@/lib/risk-scale';
 
-interface SleepDebtTrendChartProps {
+interface SleepShortfallChartProps {
   duties: DutyAnalysis[];
   month: Date;
 }
 
-export function SleepDebtTrendChart({ duties, month }: SleepDebtTrendChartProps) {
-  const monthStart = startOfMonth(month);
-  const monthEnd = endOfMonth(month);
-  const allDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+interface Point {
+  t: number;
+  hours: number;
+  sleep: number;
+  need: number;
+  band: SleepDeficitBand;
+  label: string;
+}
 
-  // Backend returns cumulative sleep debt per duty (running total).
-  // On rest days between duties we interpolate using the same exponential
-  // decay the backend uses: debt * exp(-0.35 * days).  (Banks & Dinges 2007)
-  const DECAY_RATE = 0.35;
-  let lastDutyDebt = 0;
-  let daysSinceLastDuty = 0;
+/** One point per duty: the backend 7-day ledger at report time. Nothing is extrapolated. */
+export function shortfallPoints(duties: DutyAnalysis[]): Point[] {
+  return duties
+    .filter((d) => d.sleepDeficit7d && Number.isFinite(d.sleepDeficit7d.deficitHours))
+    .map((d) => {
+      const t = Date.parse(d.reportTimeUtc ?? '') || d.date.getTime();
+      const s = d.sleepDeficit7d!;
+      return { t, hours: s.deficitHours, sleep: s.sleepHours, need: s.needHours, band: s.band, label: format(d.date, 'EEE d MMM') };
+    })
+    .sort((a, b) => a.t - b.t);
+}
 
-  const chartData = allDays.map((day) => {
-    const duty = duties.find(d => isSameDay(d.date, day));
-    let currentDebt: number;
-    let dailyChange = 0;
+const BOUND_LINES: Array<[number, SleepDeficitBand]> = [
+  [SLEEP_DEFICIT_BOUNDS.mild, 'mild'],
+  [SLEEP_DEFICIT_BOUNDS.moderate, 'moderate'],
+  [SLEEP_DEFICIT_BOUNDS.severe, 'severe'],
+];
 
-    if (duty) {
-      // Use the backend's cumulative value directly (no re-accumulation)
-      currentDebt = duty.sleepDebt;
-      // Estimate the net debt added by this duty:
-      // pre-duty debt is the decayed value from the previous duty
-      const preDutyDebt = lastDutyDebt * Math.exp(-DECAY_RATE * (daysSinceLastDuty + 1));
-      dailyChange = Math.max(0, duty.sleepDebt - preDutyDebt);
-      lastDutyDebt = duty.sleepDebt;
-      daysSinceLastDuty = 0;
-    } else {
-      // Exponential decay on rest days (matches backend model)
-      daysSinceLastDuty++;
-      currentDebt = lastDutyDebt * Math.exp(-DECAY_RATE * daysSinceLastDuty);
-    }
+/**
+ * The 7-day sleep shortfall at each duty: estimated sleep in the previous 7
+ * days against 8h a day, exactly as the backend ledger reports it, with the
+ * ledger's own bands (mild 5h, moderate 10h, severe 15h).
+ */
+export function SleepShortfallChart({ duties, month }: SleepShortfallChartProps) {
+  const data = useMemo(() => shortfallPoints(duties), [duties]);
+  if (!data.length) {
+    return <p className="text-sm text-muted-foreground">No 7-day sleep shortfall is available for this analysis.</p>;
+  }
 
-    const riskLevel = currentDebt > 10 ? 'critical' :
-                      currentDebt > 6 ? 'high' :
-                      currentDebt > 3 ? 'moderate' : 'low';
-
-    return {
-      date: format(day, 'dd'),
-      fullDate: format(day, 'MMM dd'),
-      sleepDebt: Math.round(currentDebt * 10) / 10,
-      dailyDebt: Math.round(dailyChange * 10) / 10,
-      isDuty: !!duty,
-      riskLevel,
-    };
-  });
-
-  const maxDebt = Math.max(...chartData.map(d => d.sleepDebt), 10);
-  const currentDebt = chartData[chartData.length - 1]?.sleepDebt || 0;
-  const peakDebt = Math.max(...chartData.map(d => d.sleepDebt));
-  const trend = chartData.length > 7 
-    ? chartData[chartData.length - 1].sleepDebt - chartData[chartData.length - 7].sleepDebt
-    : 0;
-
-  const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      
-      return (
-        <div className="rounded-lg border border-border bg-card p-3 shadow-lg">
-          <p className="text-sm font-medium text-foreground">{data.fullDate}</p>
-          <p className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
-            {data.isDuty
-              ? <><Plane className="h-3 w-3" /> Flight Duty</>
-              : <><BedDouble className="h-3 w-3" /> Rest Day (Recovery)</>}
-          </p>
-          <div className="space-y-1">
-            <p className="text-xs">
-              <span className="text-muted-foreground">Cumulative Debt: </span>
-              <span className={`font-medium ${
-                data.sleepDebt > 6 ? 'text-critical' : 
-                data.sleepDebt > 3 ? 'text-warning' : 'text-success'
-              }`}>
-                {data.sleepDebt.toFixed(1)}h
-              </span>
-            </p>
-            {data.isDuty && data.dailyDebt > 0 && (
-              <p className="text-xs">
-                <span className="text-muted-foreground">Added Today: </span>
-                <span className="text-critical">+{data.dailyDebt.toFixed(1)}h</span>
-              </p>
-            )}
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
+  const peak = data.reduce((m, p) => (p.hours > m.hours ? p : m), data[0]);
+  const yMax = Math.max(6, Math.ceil(peak.hours + 1));
+  const domain: [number, number] = [startOfMonth(month).getTime(), endOfMonth(month).getTime()];
+  const axisTick = { fontSize: 10, fill: 'hsl(var(--muted-foreground))', fontFamily: 'JetBrains Mono, monospace' };
 
   return (
-    <Card variant="glass">
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <Battery className="h-5 w-5 text-primary" />
-            Sleep Debt Trend
-          </span>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 text-xs">
-              {trend > 0 ? (
-                <>
-                  <TrendingUp className="h-3 w-3 text-critical" />
-                  <span className="text-critical">+{trend.toFixed(1)}h</span>
-                </>
-              ) : trend < 0 ? (
-                <>
-                  <TrendingDown className="h-3 w-3 text-success" />
-                  <span className="text-success">{trend.toFixed(1)}h</span>
-                </>
-              ) : (
-                <span className="text-muted-foreground">Stable</span>
-              )}
-              <span className="text-muted-foreground">7d</span>
-            </div>
-            <Badge variant={currentDebt > 6 ? 'critical' : currentDebt > 3 ? 'warning' : 'success'}>
-              {currentDebt.toFixed(1)}h debt
-            </Badge>
-          </div>
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Cumulative sleep debt builds with each duty and recovers during rest periods
-        </p>
-      </CardHeader>
-      <CardContent>
-        <div className="h-48">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorDebt" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(var(--critical))" stopOpacity={0.4} />
-                  <stop offset="50%" stopColor="hsl(var(--warning))" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="hsl(var(--success))" stopOpacity={0.1} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
-              <XAxis
-                dataKey="date"
-                stroke="hsl(var(--muted-foreground))"
-                fontSize={10}
-                tickLine={false}
-                axisLine={false}
-                interval={2}
-              />
-              <YAxis
-                domain={[0, maxDebt]}
-                stroke="hsl(var(--muted-foreground))"
-                fontSize={11}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(value) => `${value}h`}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <ReferenceLine
-                y={6}
-                stroke="hsl(var(--warning))"
-                strokeDasharray="5 5"
-                strokeWidth={1.5}
-                label={{ value: 'High Risk', position: 'right', fontSize: 9, fill: 'hsl(var(--warning))' }}
-              />
-              <ReferenceLine
-                y={10}
-                stroke="hsl(var(--critical))"
-                strokeDasharray="5 5"
-                strokeWidth={1.5}
-                label={{ value: 'Critical', position: 'right', fontSize: 9, fill: 'hsl(var(--critical))' }}
-              />
-              <Area
-                type="monotone"
-                dataKey="sleepDebt"
-                stroke="hsl(var(--warning))"
-                fillOpacity={1}
-                fill="url(#colorDebt)"
-                strokeWidth={2}
-                dot={(props) => {
-                  const { cx, cy, payload } = props;
-                  if (payload.isDuty) {
-                    const color = payload.sleepDebt > 6 ? 'hsl(var(--critical))' : 
-                                  payload.sleepDebt > 3 ? 'hsl(var(--warning))' : 
-                                  'hsl(var(--success))';
-                    return (
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={3}
-                        fill={color}
-                        stroke="hsl(var(--background))"
-                        strokeWidth={1}
-                      />
-                    );
-                  }
-                  return <circle cx={cx} cy={cy} r={0} />;
-                }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-4 text-center text-xs">
-          <div className="rounded-lg bg-secondary/30 p-2">
-            <p className="text-muted-foreground">Peak Debt</p>
-            <p className={`font-bold ${peakDebt > 6 ? 'text-critical' : 'text-warning'}`}>
-              {peakDebt.toFixed(1)}h
-            </p>
-          </div>
-          <div className="rounded-lg bg-secondary/30 p-2">
-            <p className="text-muted-foreground">Current</p>
-            <p className={`font-bold ${currentDebt > 6 ? 'text-critical' : 'text-success'}`}>
-              {currentDebt.toFixed(1)}h
-            </p>
-          </div>
-          <div className="rounded-lg bg-secondary/30 p-2">
-            <p className="text-muted-foreground">Recovery Rate</p>
-            <p className="font-bold text-success">~{Math.round((1 - Math.exp(-DECAY_RATE)) * 100)}%/day</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <figure className="space-y-3" aria-labelledby="shortfall-caption">
+      <figcaption id="shortfall-caption" className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-[13px] font-semibold">7-day sleep shortfall at each duty</span>
+        <span className="text-xs text-muted-foreground">
+          Highest <span className="font-mono text-foreground tabular">{peak.hours.toFixed(1)}h</span> · {peak.label} · {SLEEP_DEFICIT_LABELS[peak.band]}
+        </span>
+      </figcaption>
+      <div className="h-56">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -20 }}>
+            <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.6} />
+            <XAxis dataKey="t" type="number" scale="time" domain={domain} tick={axisTick} tickLine={false}
+              axisLine={{ stroke: 'hsl(var(--border))' }} tickFormatter={(t: number) => format(t, 'd')} minTickGap={12} />
+            <YAxis domain={[0, yMax]} allowDecimals={false} tick={axisTick} tickLine={false} axisLine={false} unit="h" />
+            {BOUND_LINES.filter(([h]) => h <= yMax).map(([h, band]) => (
+              <ReferenceLine key={band} y={h} stroke={sleepDeficitColor(band)} strokeDasharray="2 4" strokeOpacity={0.8}
+                label={{ value: `${SLEEP_DEFICIT_LABELS[band]} ${h}h`, position: 'insideTopLeft', fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+            ))}
+            <Line type="stepAfter" dataKey="hours" stroke="hsl(var(--foreground) / 0.6)" strokeWidth={1.75} isAnimationActive={false}
+              dot={(props: { cx?: number; cy?: number; index?: number; payload?: Point }) => (
+                <circle key={props.index} cx={props.cx} cy={props.cy} r={3.5} fill={sleepDeficitColor(props.payload?.band)} stroke="hsl(var(--card))" strokeWidth={1.5} />
+              )} />
+            <Tooltip
+              cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeOpacity: 0.4 }}
+              content={({ active, payload }) => {
+                const p = active ? (payload?.[0]?.payload as Point | undefined) : undefined;
+                if (!p) return null;
+                return (
+                  <div className="rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-sm">
+                    <p className="font-medium">{p.label}</p>
+                    <p><span className="font-mono tabular">{p.hours.toFixed(1)}h</span> shortfall · {SLEEP_DEFICIT_LABELS[p.band]}</p>
+                    <p className="text-muted-foreground">{p.sleep.toFixed(1)}h estimated sleep of {p.need.toFixed(0)}h in 7 days</p>
+                  </div>
+                );
+              }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="text-xs text-muted-foreground">Estimated sleep over the previous 7 days against 8h a day, at each report. Sleep is estimated from the roster.</p>
+    </figure>
   );
 }
+
+/** Former name, kept for existing imports. */
+export const SleepDebtTrendChart = SleepShortfallChart;
