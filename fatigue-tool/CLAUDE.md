@@ -185,7 +185,8 @@ the same configuration.
 - Qatar CrewLink simulator codes: OPTR, FFS, FS1, AFTD, AW8, PSIM, type-prefixed checks
   (`\d\dLP`, `\d\dRC`, e.g. 32RC, 35LP, 77LP) and SIMI/SIMI2 (bare `SIM` is an annotation,
   not a duty). Ground: EBTGR, TMTG, INAS, 6ESEC, 6EVS, EVNT, GTCT, GRND, AOFC. ISYU = home
-  standby; CTC (contactable) is not a duty. Any other code in a base column (RPT, code, base,
+  standby; CTC (contactable) is not a duty. PA (pre-assigned: instructor duties rostered
+  before the general roster), REQ and PIC are roster-status markers, dropped from notes. Any other code in a base column (RPT, code, base,
   start, end) is read as ground duty and listed in the import review (`unrecognised_activity`).
 - Crew not on roster: a 2-pilot duty above the basic FDP maximum with a sector ≥ 7 h block
   returns `augmentation_suggested` and the FDP finding asks the pilot to set the crew

@@ -4,6 +4,13 @@ import { formatAircraftType, getTrainingDutyLabel, isTrainingDuty } from '@/lib/
 import { RISK_LEVEL_LABELS, classifyKss, riskClasses } from '@/lib/risk-scale';
 import { cn } from '@/lib/utils';
 
+/** CrewLink legend for training annotations; unknown codes are shown as printed. */
+const TRAINING_NOTES: Record<string, string> = {
+  EQ: 'TRT instructor required', LQ: 'TRE/SFE tutor required', aw: 'AWOPS', lpc: 'sim check',
+  op: 'EBT recurrent day 2', rc: 'recency sim', rh: 'right-hand seat sim',
+};
+const trainingNoteLabel = (code: string) => TRAINING_NOTES[code] ?? code;
+
 /**
  * The duty's sectors in home-base time. A sector shows its own predicted KSS
  * only when the model reports it (segments[].kss_peak / kss_at_arrival);
@@ -15,7 +22,7 @@ export function DutySectors({ duty, homeLabel }: { duty: DutyAnalysis; homeLabel
       <section className="rounded-2xl border border-border bg-card p-5" style={{ boxShadow: 'var(--shadow-card)' }} aria-labelledby="sectors-heading">
         <h3 id="sectors-heading" className="text-[15px] font-semibold">{getTrainingDutyLabel(duty.dutyType || '')}</h3>
         <p className="mt-2 font-mono text-sm tabular">{duty.trainingCode ? `${duty.trainingCode} · ` : ''}{duty.reportTimeLocal}–{duty.releaseTimeLocal}</p>
-        {duty.trainingAnnotations?.length ? <p className="mt-1 text-xs text-muted-foreground">Notes: {duty.trainingAnnotations.join(', ')}</p> : null}
+        {duty.trainingAnnotations?.length ? <p className="mt-1 text-xs text-muted-foreground">Notes: {duty.trainingAnnotations.map(trainingNoteLabel).join(', ')}</p> : null}
       </section>
     );
   }

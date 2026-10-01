@@ -49,6 +49,10 @@ _ALL_TRAINING_CODES = _SIMULATOR_CODES | _GROUND_TRAINING_CODES
 _HOME_STANDBY_CODES = ('PSBY', 'HSBY', 'SBY', 'ISYU')
 _AIRPORT_STANDBY_CODES = ('ASBY', 'APSBY')
 
+# Roster-status markers, not a property of the duty: PA = pre-assigned (instructors,
+# rostered before the general roster), REQ = requested duty, PIC = pilot in command.
+_ROSTER_STATUS_MARKERS = {'PA', 'REQ', 'PIC'}
+
 # Base activities that are not duties: CTC = contactable (reachable by phone).
 _NOT_DUTY_CODES = {'CTC'}
 
@@ -852,22 +856,28 @@ class CrewLinkRosterParser:
         # Release time = end of activity + 30 min commute/debrief buffer
         release_time_utc = end_time_utc + timedelta(minutes=30)
 
-        # 4. Extract trailing annotations (lowercase and uppercase codes after times)
-        # e.g. "PA,ea" → ["PA", "ea"], "PA,FS" → ["PA", "FS"],
-        # "PA,aw,lpc,rh" → ["PA", "aw", "lpc", "rh"]
+        # 4. Extract trailing annotations (codes after the session times), e.g.
+        # "PA,aw,lpc,rh" → ["aw", "lpc", "rh"]. Roster-status markers are dropped:
+        # PA = pre-assigned (instructor duties rostered before the general roster),
+        # REQ = requested, PIC. A marker glued to a code ("rhPA") comes from the
+        # neighbouring column: the prefix belongs there and is dropped too.
         annotations = []
+        skip = {self.home_base_code, training_code} | _ROSTER_STATUS_MARKERS
         past_times = 0
         for line in lines:
             if re.search(r'\d{2}:\d{2}', line):
                 past_times += 1
                 continue
-            if past_times >= 2:
-                # Everything after the second time is annotations
-                # Split by comma and clean
-                for part in line.strip().split(','):
-                    part = part.strip()
-                    if part and part.upper() not in {self.home_base_code, training_code}:
-                        annotations.append(part)
+            if past_times < 2:
+                continue
+            for part in line.strip().split(','):
+                part = part.strip()
+                if not part or part.upper() in skip or part.upper() in _ALL_TRAINING_CODES:
+                    continue
+                if re.fullmatch(r'[a-z]{1,4}(PA|REQ)', part):
+                    continue
+                if part not in annotations:
+                    annotations.append(part)
 
         # 5. Determine duty type
         if _is_simulator_code(training_code):

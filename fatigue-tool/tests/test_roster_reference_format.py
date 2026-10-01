@@ -69,3 +69,14 @@ def test_bled_report_digits_and_unknown_base_code():
     assert duty.duty_type == DutyType.GROUND_TRAINING and parser.unrecognised_codes == ['ZQX9']
     roster = Roster('reference', 'synthetic', '2026-10', [duty], 'Asia/Qatar', pilot_base='DOH')
     assert any('ZQX9' in w for w in review(roster, parser, '.pdf')['warnings'])
+
+
+def test_roster_status_markers_are_not_training_notes():
+    """PA (pre-assigned: instructor duties rostered before the general roster), REQ and
+    PIC describe how the duty was rostered, not the session."""
+    parser = CrewLinkRosterParser(timezone_format='local', home_base='DOH', home_timezone='Asia/Qatar')
+    day = datetime(2026, 10, 17)
+    duty = parser._parse_column_to_duty(day, ['RPT:07:00\nOPTR\nDOH\n08:30\n12:30\nrhPA,op'])
+    assert duty.training_annotations == ['op']
+    duty = parser._parse_column_to_duty(day, ['RPT:07:00\n35LP\nDOH\n08:30\n12:30\nPA,aw,lpc,REQ'])
+    assert duty.training_annotations == ['aw', 'lpc']
