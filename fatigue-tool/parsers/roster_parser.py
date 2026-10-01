@@ -52,7 +52,8 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
     Crew A / Crew B (Qatar FTL 7.18.4.1, 7.18.9.3): a pilot belongs to ONE crew for the
     whole pairing. Crew A operates the outbound sector from base and is the relief crew on
     the return; Crew B is the relief crew outbound and operates the return (Figures 7-3 to
-    7-8). An `IR` sector marks the sector on which the pilot is the relief crew, so:
+    7-8). `IR` (In-flight Rest) marks the sector on which the pilot is the augmenting crew
+    taking in-flight rest (the relief crew), so:
       • IR on the sector departing base  → Crew B for the outbound AND the return.
       • IR on the sector arriving at base → Crew A for the outbound AND the return.
     Both crews rest in flight on both sectors; the crew set selects which approved rest

@@ -50,8 +50,9 @@ rotation (no rest in the first/last 90 min).
 
 ## Augmented crew (3 or 4 pilots) — how it works
 
-- **Detection.** The CrewLink PDF marks the sector on which the pilot is the relief crew
-  with `IR`. Qatar FTL 7.18.9.3: Crew A operates the outbound from base, Crew B the
+- **Detection.** `IR` = **In-flight Rest** (CrewLink activity code on a sector, confirmed by
+  the owner): on that sector the pilot is the augmenting crew taking in-flight rest rather
+  than the crew operating the departure. Qatar FTL 7.18.9.3: Crew A operates the outbound from base, Crew B the
   return, and a pilot is in one crew for the whole pairing. So IR on the sector departing
   base → Crew B on both legs; IR on the sector arriving at base → Crew A on both legs
   (`parsers/roster_parser.py::auto_detect_crew_augmentation`). Both crews rest in flight on
