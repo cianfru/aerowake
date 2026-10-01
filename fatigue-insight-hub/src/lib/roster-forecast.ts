@@ -20,6 +20,8 @@ export function watchReference(value: number): number {
   return Number.isFinite(value) && value >= 1 && value <= 9 ? value : DEFAULT_WATCH_KSS;
 }
 
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
 function instant(value?: string): number | null {
   if (!value || !/^\d{4}-\d{2}-\d{2}T/.test(value)) return null;
   const time = Date.parse(value);
@@ -46,10 +48,12 @@ export function buildRosterForecast(results: AnalysisResults, reference = DEFAUL
     return {
       duty, peak, reachesWatch: peak != null && roundKss(peak) >= watchReference(reference), gapHours,
       standbyInGap: !!standbyInGap,
+      // Differences of the values as displayed (one decimal), so the stated
+      // change always matches the two numbers the pilot sees.
       peakChange: peak != null && previousPeak != null && start != null && end != null && start >= end
-        ? peak - previousPeak : null,
+        ? round1(roundKss(peak) - roundKss(previousPeak)) : null,
       deficitChange: Number.isFinite(deficit) && Number.isFinite(previousDeficit)
-        ? deficit! - previousDeficit! : null,
+        ? round1(round1(deficit!) - round1(previousDeficit!)) : null,
     };
   });
 }

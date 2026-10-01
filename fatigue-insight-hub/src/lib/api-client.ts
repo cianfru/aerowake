@@ -477,7 +477,7 @@ export async function analyzeRoster(
   pilotId: string,
   homeBase?: string | null,
   dutyCrewOverrides?: Map<string, ULRCrewSet>,
-  options: { override?: boolean } = {},
+  options: { override?: boolean; napHabit?: string | null } = {},
 ): Promise<AnalysisResult> {
 
   const formData = new FormData();
@@ -485,6 +485,7 @@ export async function analyzeRoster(
   formData.append('pilot_id', pilotId);
   if (homeBase) formData.append('home_base', homeBase);
   if (homeBase && options.override) formData.append('home_base_override', 'true');
+  if (options.napHabit) formData.append('nap_habit', options.napHabit);
   // One model only (aerowake-4.0-kss) — the backend ignores presets.
 
   // Per-duty crew set overrides (parser auto-detection provides defaults)

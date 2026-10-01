@@ -8,7 +8,7 @@ import { FDPUtilizationBar } from './FDPUtilizationBar';
 import { CrewRestTimeline } from './CrewRestTimeline';
 import { cn } from '@/lib/utils';
 import { SLEEP_DEFICIT_LABELS, sleepDeficitClass } from '@/lib/risk-scale';
-import { formatHomeTime } from '@/lib/home-time';
+import { formatHomeDate, formatHomeTime } from '@/lib/home-time';
 import { toast } from 'sonner';
 
 const STRATEGY_LABELS: Record<string, string> = {
@@ -57,7 +57,8 @@ interface DutyInfoColumnProps {
 }
 
 function SleepBlocks({ duty, homeTz }: { duty: DutyAnalysis; homeTz?: string }) {
-  const blocks = (duty.sleepEstimate?.sleepBlocks ?? []).filter((b) => b.sleepStartUtc && b.sleepEndUtc);
+  const blocks = (duty.sleepEstimate?.sleepBlocks ?? []).filter((b) => b.sleepStartUtc && b.sleepEndUtc)
+    .sort((a, b) => Date.parse(a.sleepStartUtc!) - Date.parse(b.sleepStartUtc!));
   if (!blocks.length || !homeTz) return null;
   return (
     <ul className="space-y-1" aria-label="Estimated sleep before this duty">
@@ -68,6 +69,7 @@ function SleepBlocks({ duty, homeTz }: { duty: DutyAnalysis; homeTz?: string }) 
             {b.sleepType === 'nap' ? 'Nap' : 'Sleep'}
           </span>
           <span className="font-mono tabular">
+            <span className="mr-1.5 font-sans text-muted-foreground">{formatHomeDate(b.sleepStartUtc, homeTz).split(' ').slice(0, 2).join(' ')}</span>
             {formatHomeTime(b.sleepStartUtc, homeTz)}–{formatHomeTime(b.sleepEndUtc, homeTz)}
             {b.durationHours != null && <span className="ml-2 text-muted-foreground">{b.durationHours.toFixed(1)}h</span>}
           </span>

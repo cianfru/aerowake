@@ -4,12 +4,17 @@ import { analyzeRoster } from '@/lib/api-client';
 import { transformAnalysisResult } from '@/lib/transform-analysis';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { toast } from 'sonner';
+import type { NapHabit } from '@/types/fatigue';
 
 export interface RunAnalysisOptions {
   /** The base confirmed in the review. Omit to let the backend read the roster header. */
   homeBase?: string | null;
   /** Replace the roster-header base with `homeBase` on purpose. */
   override?: boolean;
+  /** Pre-duty nap habit; defaults to the pilot's setting. */
+  napHabit?: NapHabit;
+  /** Scroll to and focus the workspace heading when done (default true). */
+  reveal?: boolean;
 }
 
 interface AnalyzeVariables extends RunAnalysisOptions {
@@ -49,14 +54,16 @@ export function useAnalyzeRoster({ inlineErrors = false }: { inlineErrors?: bool
   currentFile.current = state.actualFileObject;
 
   const mutation = useMutation({
-    mutationFn: async ({ file, homeBase, override }: AnalyzeVariables) => {
+    mutationFn: async ({ file, homeBase, override, napHabit }: AnalyzeVariables) => {
       const base = (homeBase || '').trim().toUpperCase() || null;
-      return analyzeRoster(file, state.settings.pilotId, base, state.dutyCrewOverrides, { override: !!override && !!base });
+      return analyzeRoster(file, state.settings.pilotId, base, state.dutyCrewOverrides,
+        { override: !!override && !!base, napHabit: napHabit ?? state.settings.napHabit });
     },
     onSuccess: (result, variables) => {
       if (variables.file !== currentFile.current) return;
       const transformed = transformAnalysisResult(result, state.settings.selectedMonth);
       setAnalysisResults(transformed);
+      if (variables.reveal === false) return;
       toast.success('Analysis complete!');
       revealAnalysis();
     },
@@ -75,11 +82,12 @@ export function useAnalyzeRoster({ inlineErrors = false }: { inlineErrors?: bool
     // Without an explicit base, reuse the last confirmed one only as a
     // fallback; a roster header still wins on the server.
     const homeBase = options.homeBase ?? (state.settings.homeBase || null);
-    mutation.mutate({ file, homeBase, override: options.override });
+    mutation.mutate({ file, homeBase, override: options.override, napHabit: options.napHabit, reveal: options.reveal });
   };
 
   return {
     runAnalysis,
+    canReanalyse: !!(state.uploadedFile && state.actualFileObject),
     isAnalyzing: mutation.isPending,
     error: mutation.error,
     reset: mutation.reset,

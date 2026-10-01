@@ -38,7 +38,7 @@ describe('useAnalyzeRoster', () => {
     act(() => result.current.analysis.uploadFile({ name: 'october.pdf', size: 9, type: 'PDF' }, roster));
     act(() => result.current.analyze.runAnalysis({ homeBase: 'lgw', override: true }));
     await waitFor(() => expect(result.current.analysis.state.analysisResults).not.toBeNull());
-    expect(analyzeRoster).toHaveBeenCalledWith(roster, 'P12345', 'LGW', expect.any(Map), { override: true });
+    expect(analyzeRoster).toHaveBeenCalledWith(roster, 'P12345', 'LGW', expect.any(Map), expect.objectContaining({ override: true, napHabit: 'sometimes' }));
     expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'auto' });
     expect(document.activeElement).toBe(heading);
     expect(heading.getAttribute('tabindex')).toBe('-1');

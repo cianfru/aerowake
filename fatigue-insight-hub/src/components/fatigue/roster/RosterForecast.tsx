@@ -23,10 +23,13 @@ export const NAP_HABIT_LABELS: Record<NapHabit, string> = {
 export function assumptionsLine(results: Pick<AnalysisResults, 'assumptions'>): string {
   const naps = results.assumptions?.napHabit;
   const window = results.assumptions?.headlineRiskWindow;
-  const rating = window === 'fdp'
-    ? 'rates each duty by its peak from report to the last on-blocks'
-    : 'rates each duty by its peak on duty';
-  return `Assumes the estimated sleep shown in the calendar${naps ? `, a pre-duty nap ${naps === 'usually' ? 'usually' : naps === 'rarely' ? 'rarely' : 'sometimes'} taken before late duties` : ''}, and ${rating}.`;
+  const rating = window === 'duty'
+    ? 'rates each duty by its peak from report to release'
+    : 'rates each duty by its peak from report to the last on-blocks';
+  const nap = naps === 'usually' ? 'a full pre-duty nap before late and night duties'
+    : naps === 'rarely' ? 'no pre-duty nap'
+    : 'the average pre-duty nap (about half of crews nap before evening departures)';
+  return `Assumes the estimated sleep shown in the calendar, ${nap}, and ${rating}.`;
 }
 
 interface ForecastProps {
@@ -38,6 +41,9 @@ interface ForecastProps {
   /** Pre-duty nap assumption for the next analysis. */
   napHabit: NapHabit;
   onNapHabitChange: (habit: NapHabit) => void;
+  /** The roster file is still loaded, so a change re-runs the analysis now. */
+  canReanalyse?: boolean;
+  isUpdating?: boolean;
 }
 
 function NapHabitControl({ value, onChange, pendingNote }: { value: NapHabit; onChange: (v: NapHabit) => void; pendingNote?: string }) {
@@ -67,7 +73,7 @@ function NapHabitControl({ value, onChange, pendingNote }: { value: NapHabit; on
   );
 }
 
-export function RosterForecast({ results, reference, onReferenceChange, onDetails, napHabit, onNapHabitChange }: ForecastProps) {
+export function RosterForecast({ results, reference, onReferenceChange, onDetails, napHabit, onNapHabitChange, canReanalyse = false, isUpdating = false }: ForecastProps) {
   const rows = useMemo(() => buildRosterForecast(results, reference), [results, reference]);
   const watchHintId = useId();
   const first = rows.find(row => row.reachesWatch);
@@ -75,7 +81,9 @@ export function RosterForecast({ results, reference, onReferenceChange, onDetail
   const highest = assessed.reduce<typeof first>((best, row) => !best || row.peak! > best.peak! ? row : best, undefined);
   const highestLevel = highest?.peak != null ? classifyKss(highest.peak) : null;
   const napsUsed = results.assumptions?.napHabit;
-  const pendingNote = napsUsed !== napHabit ? 'Applies from your next analysis.' : undefined;
+  const pendingNote = isUpdating ? 'Updating the analysis…'
+    : napsUsed && napsUsed !== napHabit && !canReanalyse ? 'Applies the next time you analyse this roster.'
+    : undefined;
 
   return <section id="fatigue-outlook" aria-labelledby="forecast-heading" className="instrument-surface scroll-mt-24 space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-5">

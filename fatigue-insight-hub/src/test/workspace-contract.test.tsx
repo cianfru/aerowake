@@ -39,7 +39,7 @@ describe('additive per-sector API contract', () => {
     expect(d1.peakTimeUtc).toBe('2026-09-02T10:30:00Z');
     expect(d1.kssPeakFdp).toBe(3.0);
     expect(results.assumptions).toEqual({ napHabit: 'rarely', headlineRiskWindow: 'fdp' });
-    expect(assumptionsLine(results)).toContain('rarely');
+    expect(assumptionsLine(results)).toContain('no pre-duty nap');
     expect(assumptionsLine(results)).toContain('last on-blocks');
   });
 
@@ -54,7 +54,9 @@ describe('additive per-sector API contract', () => {
       }
     }
     expect(results.assumptions).toBeUndefined();
-    expect(assumptionsLine(results)).not.toContain('nap');
+    // Older responses carry no assumptions: the line states the model default.
+    expect(assumptionsLine(results)).toContain('average pre-duty nap');
+    expect(assumptionsLine(results)).toContain('last on-blocks');
   });
 
   it('colours calendar sectors by the model sector band, else by the duty peak band', () => {
