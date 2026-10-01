@@ -1,0 +1,2594 @@
+{
+ "report_id": "932b427a-7c99-4531-901f-cc1d8655b84a",
+ "report_version": "aerowake-fatigue-report-1.3",
+ "engine_version": "aerowake-4.0-kss",
+ "generated_at": "2026-09-30T18:56:33.627726+00:00",
+ "home_timezone": "Europe/London",
+ "home_base": "LGW",
+ "pilot": {
+  "name": "Test Pilot",
+  "staff_number": "00000",
+  "rank": "FO",
+  "fleet": "A320"
+ },
+ "event": {
+  "type": "fatigue_call_before_duty",
+  "time_utc": "2026-09-08T03:30:00+00:00",
+  "time_local": "Tue 08 Sep 04:30",
+  "time_z": "08 Sep 03:30Z",
+  "time_local_long": "Tue 08 Sep 2026 04:30",
+  "utc_offset": "UTC+1",
+  "affected_duty_id": "D8",
+  "affected_duty_label": "Tue 08 Sep 05:30 EZY801/802/803 LGW \u2192 EDI \u2192 LGW \u2192 EDI"
+ },
+ "period": {
+  "start_utc": "2026-09-04T23:00:00+00:00",
+  "end_utc": "2026-09-08T11:00:00+00:00",
+  "start_local": "Sat 05 Sep 00:00",
+  "end_local": "Tue 08 Sep 12:00",
+  "start_local_long": "Sat 05 Sep 2026 00:00",
+  "end_local_long": "Tue 08 Sep 2026 12:00"
+ },
+ "sleep_summary": {
+  "anchor_utc": "2026-09-08T03:30:00+00:00",
+  "anchor_local": "Tue 08 Sep 04:30",
+  "sleep_24h": 5.0,
+  "sleep_48h": 11.25,
+  "sleep_72h": 16.75,
+  "reported_72h": 16.75,
+  "estimated_72h": 0.0,
+  "last_wake_utc": "2026-09-08T03:15:00+00:00",
+  "last_wake_local": "Tue 08 Sep 04:15",
+  "last_wake_z": "08 Sep 03:15Z",
+  "hours_awake_at_event": 0.25,
+  "basis": "reported",
+  "diary_complete": true
+ },
+ "operational": {
+  "crew_position": "first_officer",
+  "crew_position_label": "First officer",
+  "pilot_role": null,
+  "pilot_role_label": null,
+  "phase_of_flight": null,
+  "phase_of_flight_label": null,
+  "mitigations": [
+   {
+    "code": "caffeine",
+    "label": "Caffeine"
+   },
+   {
+    "code": "informed_operator",
+    "label": "Informed crew control / duty manager"
+   }
+  ],
+  "effect_on_operation": "duty_not_operated",
+  "effect_on_operation_label": "Duty not operated",
+  "suggested_action": "Review late-to-early transitions on this pairing."
+ },
+ "data_quality": {
+  "confidence": "high",
+  "reported_sleeps": 3,
+  "estimated_sleeps": 0,
+  "duties": 3,
+  "nights_without_sleep": [],
+  "notes": [
+   "Data coverage describes the supplied records, not the scientific accuracy of the prediction.",
+   "Report predictions are recalculated from this selected sleep history and may differ from the original full-roster forecast."
+  ],
+  "model_available": true,
+  "diary_complete": true,
+  "prediction_basis": "reported_sleep",
+  "event_covered": true,
+  "scientific_validation": "not_independently_validated"
+ },
+ "summary": {
+  "overall_level": "moderate",
+  "highest_severity": "critical",
+  "objective_support": true,
+  "headline": "The recorded sleep and duty history includes factors consistent with the reported fatigue.",
+  "counts": {
+   "info": 1,
+   "caution": 3,
+   "warning": 4,
+   "critical": 2
+  }
+ },
+ "assessment": {
+  "start_utc": "2026-09-08T04:30:00+00:00",
+  "end_utc": "2026-09-08T13:00:00+00:00",
+  "kss_at_start": 6.38,
+  "kss_max": 6.38,
+  "kss_max_90": 7.45,
+  "kss_max_time_utc": "2026-09-08T04:30:00+00:00",
+  "kss_max_time_local": "Tue 08 Sep 05:30",
+  "kss_at_landing": 5.77,
+  "p_severe_max": 0.499,
+  "hours_awake_at_start": 1.25,
+  "hours_awake_at_end": 9.75,
+  "risk_level": "moderate",
+  "kss_label": "Some signs of sleepiness"
+ },
+ "prior_sleep_wake": {
+  "sleep_24h": 4.0,
+  "sleep_48h": 11.0,
+  "hours_awake_at_start": 1.25,
+  "hours_awake_at_end": 9.75,
+  "checks": [
+   {
+    "rule": "sleep_24h",
+    "label": "Sleep in prior 24 h \u2265 5 h",
+    "value": 4.0,
+    "limit": 5.0,
+    "passed": false
+   },
+   {
+    "rule": "sleep_48h",
+    "label": "Sleep in prior 48 h \u2265 12 h",
+    "value": 11.0,
+    "limit": 12.0,
+    "passed": false
+   },
+   {
+    "rule": "wake_vs_sleep",
+    "label": "Hours awake at end of duty \u2264 sleep in prior 48 h",
+    "value": 9.75,
+    "limit": 11.0,
+    "passed": true
+   }
+  ],
+  "passed": false,
+  "source": "Dawson & McCulloch (2005) Sleep Med Rev 9:365-380"
+ },
+ "cumulative_deficit": {
+  "days": 2.27,
+  "sleep_hours": 16.75,
+  "need_hours": 8.0,
+  "deficit_hours": 1.42,
+  "band": "none"
+ },
+ "easa_summary": {
+  "duty_7d_max": 19.25,
+  "duty_14d_max": 19.25,
+  "duty_28d_max": 19.25,
+  "block_28d_max": 14.25,
+  "limits": {
+   "duty_7d": 60,
+   "duty_14d": 110,
+   "duty_28d": 190,
+   "block_28d": 100
+  },
+  "recovery_rests": 0,
+  "coverage": {
+   "duty_7d": {
+    "status": "incomplete_history",
+    "reason": "Only supplied activities were assessed; boundary history is unknown."
+   },
+   "duty_14d": {
+    "status": "incomplete_history",
+    "reason": "Only supplied activities were assessed; boundary history is unknown."
+   },
+   "duty_28d": {
+    "status": "incomplete_history",
+    "reason": "Only supplied activities were assessed; boundary history is unknown."
+   },
+   "block_28d": {
+    "status": "incomplete_history",
+    "reason": "Only supplied activities were assessed; boundary history is unknown."
+   },
+   "min_rest": {
+    "status": "incomplete_history",
+    "reason": "Only supplied activities were assessed; boundary history is unknown."
+   },
+   "recovery_rest": {
+    "status": "incomplete_history",
+    "reason": "Only supplied activities were assessed; boundary history is unknown."
+   },
+   "fdp_max": {
+    "status": "not_assessed",
+    "assessed": 0,
+    "eligible": 2,
+    "reason": "Crew/acclimatization context is required; operator approval is outside this check."
+   }
+  },
+  "status": "partial"
+ },
+ "self_assessment": {
+  "kss": 8,
+  "kss_label": "Sleepy, some effort to keep awake",
+  "samn_perelli": 6,
+  "samn_perelli_label": "Extremely tired, very difficult to concentrate",
+  "rated_at_utc": "2026-09-08T03:30:00+00:00",
+  "rated_at_local": "Tue 08 Sep 04:30",
+  "rated_at_z": "08 Sep 03:30Z",
+  "model_kss_at_rating": 6.39
+ },
+ "contributing_factors": [
+  {
+   "code": "short_rest",
+   "label": "Short rest period"
+  },
+  {
+   "code": "late_finish",
+   "label": "Late finish"
+  },
+  {
+   "code": "early_start",
+   "label": "Early report"
+  }
+ ],
+ "pilot_narrative": "Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome. Could not fall asleep after the late Rome.",
+ "findings": [
+  {
+   "severity": "critical",
+   "category": "self_report",
+   "title": "Pilot reports significant fatigue",
+   "detail": "Self-rating: KSS 8 (\u201cSleepy, some effort to keep awake\u201d); Samn-Perelli 6 (\u201cExtremely tired, very difficult to concentrate\u201d).",
+   "time_utc": "2026-09-08T03:30:00+00:00",
+   "time_local": "Tue 08 Sep 04:30",
+   "reference": "\u00c5kerstedt & Gillberg (1990); Samn & Perelli (1982)"
+  },
+  {
+   "severity": "critical",
+   "category": "sleep",
+   "title": "Prior sleep/wake check failed on multiple criteria",
+   "detail": "The supplied sleep pattern falls below more than one prior sleep/wake screening reference. Review the sleep assumptions and discuss fatigue controls through the operator\u2019s process. These screening values do not determine individual fitness or a legal duty limit.",
+   "time_utc": "2026-09-08T04:30:00+00:00",
+   "time_local": "Tue 08 Sep 05:30",
+   "reference": "Dawson & McCulloch (2005) Sleep Med Rev 9:365-380"
+  },
+  {
+   "severity": "warning",
+   "category": "sleep",
+   "title": "Less than 5 h sleep in the 24 h before the duty",
+   "detail": "The supplied sleep records contain 4h00 in the 24 h before report (screening reference: 5h00).",
+   "time_utc": "2026-09-08T04:30:00+00:00",
+   "time_local": "Tue 08 Sep 05:30",
+   "reference": "Dawson & McCulloch (2005) Sleep Med Rev 9:365-380"
+  },
+  {
+   "severity": "warning",
+   "category": "sleep",
+   "title": "Less than 12 h sleep in the 48 h before the duty",
+   "detail": "The supplied sleep records contain 11h00 in the 48 h before report (screening reference: 12h00).",
+   "time_utc": "2026-09-08T04:30:00+00:00",
+   "time_local": "Tue 08 Sep 05:30",
+   "reference": "Dawson & McCulloch (2005) Sleep Med Rev 9:365-380"
+  },
+  {
+   "severity": "warning",
+   "category": "roster",
+   "title": "Rest shorter than the regulatory minimum",
+   "detail": "4h45 between release at Tue 08 Sep 00:45 and report at Tue 08 Sep 05:30; the minimum at home base is 12h00 (at least the preceding duty, and no less than 12 h). Check whether a reduced-rest scheme applied.",
+   "time_utc": "2026-09-08T04:30:00+00:00",
+   "time_local": "Tue 08 Sep 05:30",
+   "reference": "Regulation (EU) 965/2012 ORO.FTL.235"
+  },
+  {
+   "severity": "warning",
+   "category": "roster",
+   "title": "Late finish followed by early start",
+   "detail": "Release at Tue 08 Sep 00:45 then report at Tue 08 Sep 05:30: the rest spans the night but leaves little time for a full sleep.",
+   "time_utc": "2026-09-08T04:30:00+00:00",
+   "time_local": "Tue 08 Sep 05:30",
+   "reference": "Regulation (EU) 965/2012 ORO.FTL.105(8)"
+  },
+  {
+   "severity": "caution",
+   "category": "sleep",
+   "title": "Short main sleep",
+   "detail": "Main sleep of 2h30 (Tue 08 Sep 01:45 \u2013 Tue 08 Sep 04:15), reported.",
+   "time_utc": "2026-09-08T00:45:00+00:00",
+   "time_local": "Tue 08 Sep 01:45",
+   "reference": null
+  },
+  {
+   "severity": "caution",
+   "category": "sleep",
+   "title": "Poor sleep quality reported",
+   "detail": "Pilot rated sleep starting Tue 08 Sep 01:45 as 2/5.",
+   "time_utc": "2026-09-08T00:45:00+00:00",
+   "time_local": "Tue 08 Sep 01:45",
+   "reference": null
+  },
+  {
+   "severity": "caution",
+   "category": "circadian",
+   "title": "Early report",
+   "detail": "Report at Tue 08 Sep 05:30 requires waking in the early morning, which typically truncates the preceding sleep.",
+   "time_utc": "2026-09-08T04:30:00+00:00",
+   "time_local": "Tue 08 Sep 05:30",
+   "reference": "Roach et al. (2012) Accid Anal Prev 45S:22-26"
+  },
+  {
+   "severity": "info",
+   "category": "prediction",
+   "title": "Predicted sleepiness in the moderate band",
+   "detail": "With the supplied sleep pattern (reported sleep), predicted sleepiness peaks at KSS 6.4 (\u201cSome signs of sleepiness\u201d) at Tue 08 Sep 05:30; 90th-percentile pilot 7.5. About 50% of pilots in this situation would rate KSS 7 or higher. Bands: moderate from 5.5, high from 6.5, critical from 7.5, extreme from 8.5.",
+   "time_utc": "2026-09-08T04:30:00+00:00",
+   "time_local": "Tue 08 Sep 05:30",
+   "reference": "Ingre et al. (2014) PLoS ONE e108679"
+  }
+ ],
+ "duties": [
+  {
+   "id": "D6",
+   "label": "Sun 06 Sep 06:00 EZY1 LGW \u2192 BCN \u2192 LGW",
+   "route": "LGW \u2192 BCN \u2192 LGW",
+   "flights": [
+    "EZY1"
+   ],
+   "flights_label": "EZY1",
+   "status": "operated",
+   "duty_type": "flight",
+   "sector_times": [
+    {
+     "flight_number": "EZY1",
+     "departure": "LGW",
+     "arrival": "BCN",
+     "departure_utc": "2026-09-06T06:00:00+00:00",
+     "arrival_utc": "2026-09-06T08:00:00+00:00",
+     "is_deadhead": false
+    },
+    {
+     "flight_number": "EZY1",
+     "departure": "BCN",
+     "arrival": "LGW",
+     "departure_utc": "2026-09-06T08:45:00+00:00",
+     "arrival_utc": "2026-09-06T12:45:00+00:00",
+     "is_deadhead": false
+    }
+   ],
+   "report_utc": "2026-09-06T05:00:00+00:00",
+   "release_utc": "2026-09-06T13:30:00+00:00",
+   "report_local": "Sun 06 Sep 06:00",
+   "release_local": "Sun 06 Sep 14:30",
+   "report_z": "06 Sep 05:00Z",
+   "release_z": "06 Sep 13:30Z",
+   "duty_hours": 8.5,
+   "sectors": 2,
+   "patterns": {
+    "early_start": false,
+    "very_early_start": false,
+    "late_finish": false,
+    "night_duty": false
+   },
+   "is_affected": false,
+   "source": "roster",
+   "predicted_kss_max": 4.99,
+   "risk_level": "low"
+  },
+  {
+   "id": "D7",
+   "label": "Mon 07 Sep 14:00 EZY1 LGW \u2192 FCO \u2192 LGW",
+   "route": "LGW \u2192 FCO \u2192 LGW",
+   "flights": [
+    "EZY1"
+   ],
+   "flights_label": "EZY1",
+   "status": "operated",
+   "duty_type": "flight",
+   "sector_times": [
+    {
+     "flight_number": "EZY1",
+     "departure": "LGW",
+     "arrival": "FCO",
+     "departure_utc": "2026-09-07T14:00:00+00:00",
+     "arrival_utc": "2026-09-07T17:30:00+00:00",
+     "is_deadhead": false
+    },
+    {
+     "flight_number": "EZY1",
+     "departure": "FCO",
+     "arrival": "LGW",
+     "departure_utc": "2026-09-07T18:30:00+00:00",
+     "arrival_utc": "2026-09-07T23:15:00+00:00",
+     "is_deadhead": false
+    }
+   ],
+   "report_utc": "2026-09-07T13:00:00+00:00",
+   "release_utc": "2026-09-07T23:45:00+00:00",
+   "report_local": "Mon 07 Sep 14:00",
+   "release_local": "Tue 08 Sep 00:45",
+   "report_z": "07 Sep 13:00Z",
+   "release_z": "07 Sep 23:45Z",
+   "duty_hours": 10.75,
+   "sectors": 2,
+   "patterns": {
+    "early_start": false,
+    "very_early_start": false,
+    "late_finish": true,
+    "night_duty": false
+   },
+   "is_affected": false,
+   "source": "roster",
+   "predicted_kss_max": 6.81,
+   "risk_level": "high",
+   "rest_before_hours": 23.5,
+   "rest_sleep_hours": 8.5
+  },
+  {
+   "id": "D8",
+   "label": "Tue 08 Sep 05:30 EZY801/802/803 LGW \u2192 EDI \u2192 LGW \u2192 EDI",
+   "route": "LGW \u2192 EDI \u2192 LGW \u2192 EDI",
+   "flights": [
+    "EZY801",
+    "EZY802",
+    "EZY803"
+   ],
+   "flights_label": "EZY801/802/803",
+   "status": "cancelled_fatigue",
+   "duty_type": "flight",
+   "sector_times": [
+    {
+     "flight_number": "EZY801",
+     "departure": "LGW",
+     "arrival": "EDI",
+     "departure_utc": "2026-09-08T05:30:00+00:00",
+     "arrival_utc": "2026-09-08T07:00:00+00:00",
+     "is_deadhead": false
+    },
+    {
+     "flight_number": "EZY802",
+     "departure": "EDI",
+     "arrival": "LGW",
+     "departure_utc": "2026-09-08T07:45:00+00:00",
+     "arrival_utc": "2026-09-08T09:15:00+00:00",
+     "is_deadhead": false
+    },
+    {
+     "flight_number": "EZY803",
+     "departure": "LGW",
+     "arrival": "EDI",
+     "departure_utc": "2026-09-08T10:00:00+00:00",
+     "arrival_utc": "2026-09-08T11:30:00+00:00",
+     "is_deadhead": false
+    }
+   ],
+   "report_utc": "2026-09-08T04:30:00+00:00",
+   "release_utc": "2026-09-08T13:00:00+00:00",
+   "report_local": "Tue 08 Sep 05:30",
+   "release_local": "Tue 08 Sep 14:00",
+   "report_z": "08 Sep 04:30Z",
+   "release_z": "08 Sep 13:00Z",
+   "duty_hours": 8.5,
+   "sectors": 3,
+   "patterns": {
+    "early_start": true,
+    "very_early_start": false,
+    "late_finish": false,
+    "night_duty": false
+   },
+   "is_affected": true,
+   "source": "manual",
+   "predicted_kss_max": 6.38,
+   "risk_level": "moderate",
+   "rest_before_hours": 4.75,
+   "rest_sleep_hours": 2.5
+  }
+ ],
+ "sleeps": [
+  {
+   "start_utc": "2026-09-05T22:00:00+00:00",
+   "end_utc": "2026-09-06T03:45:00+00:00",
+   "start_local": "Sat 05 Sep 23:00",
+   "end_local": "Sun 06 Sep 04:45",
+   "hours": 5.75,
+   "kind": "main",
+   "location": "home",
+   "quality": null,
+   "source": "reported"
+  },
+  {
+   "start_utc": "2026-09-06T21:30:00+00:00",
+   "end_utc": "2026-09-07T06:00:00+00:00",
+   "start_local": "Sun 06 Sep 22:30",
+   "end_local": "Mon 07 Sep 07:00",
+   "hours": 8.5,
+   "kind": "main",
+   "location": "home",
+   "quality": null,
+   "source": "reported"
+  },
+  {
+   "start_utc": "2026-09-08T00:45:00+00:00",
+   "end_utc": "2026-09-08T03:15:00+00:00",
+   "start_local": "Tue 08 Sep 01:45",
+   "end_local": "Tue 08 Sep 04:15",
+   "hours": 2.5,
+   "kind": "main",
+   "location": "home",
+   "quality": 2,
+   "source": "reported"
+  }
+ ],
+ "timeline": [
+  {
+   "time_utc": "2026-09-05T22:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-05T22:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-05T22:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-05T22:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-05T23:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-05T23:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-05T23:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-05T23:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T00:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T00:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T00:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T00:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T01:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T01:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T01:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T01:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T02:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T02:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T02:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T02:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T03:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T03:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T03:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T03:45:00+00:00",
+   "kss": 4.97,
+   "kss_90": 6.04,
+   "p_severe": 0.138,
+   "hours_awake": 0.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T04:00:00+00:00",
+   "kss": 4.98,
+   "kss_90": 6.05,
+   "p_severe": 0.139,
+   "hours_awake": 0.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T04:15:00+00:00",
+   "kss": 4.99,
+   "kss_90": 6.06,
+   "p_severe": 0.141,
+   "hours_awake": 0.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T04:30:00+00:00",
+   "kss": 4.99,
+   "kss_90": 6.06,
+   "p_severe": 0.141,
+   "hours_awake": 0.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T04:45:00+00:00",
+   "kss": 4.99,
+   "kss_90": 6.06,
+   "p_severe": 0.141,
+   "hours_awake": 1.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T05:00:00+00:00",
+   "kss": 4.99,
+   "kss_90": 6.06,
+   "p_severe": 0.14,
+   "hours_awake": 1.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T05:15:00+00:00",
+   "kss": 4.98,
+   "kss_90": 6.05,
+   "p_severe": 0.139,
+   "hours_awake": 1.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T05:30:00+00:00",
+   "kss": 4.97,
+   "kss_90": 6.04,
+   "p_severe": 0.138,
+   "hours_awake": 1.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T05:45:00+00:00",
+   "kss": 4.96,
+   "kss_90": 6.03,
+   "p_severe": 0.136,
+   "hours_awake": 2.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T06:00:00+00:00",
+   "kss": 4.95,
+   "kss_90": 6.02,
+   "p_severe": 0.134,
+   "hours_awake": 2.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T06:15:00+00:00",
+   "kss": 4.93,
+   "kss_90": 6.0,
+   "p_severe": 0.133,
+   "hours_awake": 2.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T06:30:00+00:00",
+   "kss": 4.92,
+   "kss_90": 5.99,
+   "p_severe": 0.131,
+   "hours_awake": 2.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T06:45:00+00:00",
+   "kss": 4.91,
+   "kss_90": 5.98,
+   "p_severe": 0.129,
+   "hours_awake": 3.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T07:00:00+00:00",
+   "kss": 4.89,
+   "kss_90": 5.96,
+   "p_severe": 0.127,
+   "hours_awake": 3.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T07:15:00+00:00",
+   "kss": 4.88,
+   "kss_90": 5.95,
+   "p_severe": 0.125,
+   "hours_awake": 3.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T07:30:00+00:00",
+   "kss": 4.87,
+   "kss_90": 5.94,
+   "p_severe": 0.123,
+   "hours_awake": 3.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T07:45:00+00:00",
+   "kss": 4.86,
+   "kss_90": 5.93,
+   "p_severe": 0.121,
+   "hours_awake": 4.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T08:00:00+00:00",
+   "kss": 4.84,
+   "kss_90": 5.91,
+   "p_severe": 0.119,
+   "hours_awake": 4.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T08:15:00+00:00",
+   "kss": 4.83,
+   "kss_90": 5.9,
+   "p_severe": 0.118,
+   "hours_awake": 4.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T08:30:00+00:00",
+   "kss": 4.82,
+   "kss_90": 5.89,
+   "p_severe": 0.117,
+   "hours_awake": 4.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T08:45:00+00:00",
+   "kss": 4.81,
+   "kss_90": 5.88,
+   "p_severe": 0.115,
+   "hours_awake": 5.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T09:00:00+00:00",
+   "kss": 4.8,
+   "kss_90": 5.87,
+   "p_severe": 0.114,
+   "hours_awake": 5.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T09:15:00+00:00",
+   "kss": 4.79,
+   "kss_90": 5.86,
+   "p_severe": 0.112,
+   "hours_awake": 5.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T09:30:00+00:00",
+   "kss": 4.78,
+   "kss_90": 5.85,
+   "p_severe": 0.111,
+   "hours_awake": 5.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T09:45:00+00:00",
+   "kss": 4.77,
+   "kss_90": 5.84,
+   "p_severe": 0.11,
+   "hours_awake": 6.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T10:00:00+00:00",
+   "kss": 4.76,
+   "kss_90": 5.83,
+   "p_severe": 0.108,
+   "hours_awake": 6.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T10:15:00+00:00",
+   "kss": 4.75,
+   "kss_90": 5.82,
+   "p_severe": 0.107,
+   "hours_awake": 6.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T10:30:00+00:00",
+   "kss": 4.74,
+   "kss_90": 5.81,
+   "p_severe": 0.106,
+   "hours_awake": 6.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T10:45:00+00:00",
+   "kss": 4.73,
+   "kss_90": 5.8,
+   "p_severe": 0.104,
+   "hours_awake": 7.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T11:00:00+00:00",
+   "kss": 4.71,
+   "kss_90": 5.78,
+   "p_severe": 0.102,
+   "hours_awake": 7.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T11:15:00+00:00",
+   "kss": 4.7,
+   "kss_90": 5.77,
+   "p_severe": 0.101,
+   "hours_awake": 7.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T11:30:00+00:00",
+   "kss": 4.68,
+   "kss_90": 5.75,
+   "p_severe": 0.099,
+   "hours_awake": 7.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T11:45:00+00:00",
+   "kss": 4.67,
+   "kss_90": 5.74,
+   "p_severe": 0.097,
+   "hours_awake": 8.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T12:00:00+00:00",
+   "kss": 4.65,
+   "kss_90": 5.72,
+   "p_severe": 0.095,
+   "hours_awake": 8.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T12:15:00+00:00",
+   "kss": 4.63,
+   "kss_90": 5.7,
+   "p_severe": 0.093,
+   "hours_awake": 8.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T12:30:00+00:00",
+   "kss": 4.61,
+   "kss_90": 5.68,
+   "p_severe": 0.091,
+   "hours_awake": 8.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T12:45:00+00:00",
+   "kss": 4.59,
+   "kss_90": 5.66,
+   "p_severe": 0.088,
+   "hours_awake": 9.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T13:00:00+00:00",
+   "kss": 4.56,
+   "kss_90": 5.63,
+   "p_severe": 0.086,
+   "hours_awake": 9.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T13:15:00+00:00",
+   "kss": 4.54,
+   "kss_90": 5.61,
+   "p_severe": 0.084,
+   "hours_awake": 9.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T13:30:00+00:00",
+   "kss": 4.52,
+   "kss_90": 5.59,
+   "p_severe": 0.082,
+   "hours_awake": 9.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T13:45:00+00:00",
+   "kss": 4.5,
+   "kss_90": 5.57,
+   "p_severe": 0.079,
+   "hours_awake": 10.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T14:00:00+00:00",
+   "kss": 4.48,
+   "kss_90": 5.55,
+   "p_severe": 0.077,
+   "hours_awake": 10.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T14:15:00+00:00",
+   "kss": 4.45,
+   "kss_90": 5.52,
+   "p_severe": 0.076,
+   "hours_awake": 10.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T14:30:00+00:00",
+   "kss": 4.44,
+   "kss_90": 5.51,
+   "p_severe": 0.074,
+   "hours_awake": 10.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T14:45:00+00:00",
+   "kss": 4.42,
+   "kss_90": 5.49,
+   "p_severe": 0.072,
+   "hours_awake": 11.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T15:00:00+00:00",
+   "kss": 4.41,
+   "kss_90": 5.48,
+   "p_severe": 0.071,
+   "hours_awake": 11.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T15:15:00+00:00",
+   "kss": 4.39,
+   "kss_90": 5.46,
+   "p_severe": 0.07,
+   "hours_awake": 11.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T15:30:00+00:00",
+   "kss": 4.39,
+   "kss_90": 5.46,
+   "p_severe": 0.07,
+   "hours_awake": 11.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T15:45:00+00:00",
+   "kss": 4.38,
+   "kss_90": 5.45,
+   "p_severe": 0.069,
+   "hours_awake": 12.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T16:00:00+00:00",
+   "kss": 4.39,
+   "kss_90": 5.46,
+   "p_severe": 0.07,
+   "hours_awake": 12.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T16:15:00+00:00",
+   "kss": 4.39,
+   "kss_90": 5.46,
+   "p_severe": 0.07,
+   "hours_awake": 12.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T16:30:00+00:00",
+   "kss": 4.41,
+   "kss_90": 5.48,
+   "p_severe": 0.071,
+   "hours_awake": 12.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T16:45:00+00:00",
+   "kss": 4.42,
+   "kss_90": 5.49,
+   "p_severe": 0.073,
+   "hours_awake": 13.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T17:00:00+00:00",
+   "kss": 4.45,
+   "kss_90": 5.52,
+   "p_severe": 0.075,
+   "hours_awake": 13.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T17:15:00+00:00",
+   "kss": 4.48,
+   "kss_90": 5.55,
+   "p_severe": 0.078,
+   "hours_awake": 13.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T17:30:00+00:00",
+   "kss": 4.52,
+   "kss_90": 5.59,
+   "p_severe": 0.082,
+   "hours_awake": 13.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T17:45:00+00:00",
+   "kss": 4.57,
+   "kss_90": 5.64,
+   "p_severe": 0.086,
+   "hours_awake": 14.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T18:00:00+00:00",
+   "kss": 4.62,
+   "kss_90": 5.69,
+   "p_severe": 0.092,
+   "hours_awake": 14.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T18:15:00+00:00",
+   "kss": 4.68,
+   "kss_90": 5.75,
+   "p_severe": 0.099,
+   "hours_awake": 14.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T18:30:00+00:00",
+   "kss": 4.75,
+   "kss_90": 5.82,
+   "p_severe": 0.107,
+   "hours_awake": 14.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T18:45:00+00:00",
+   "kss": 4.83,
+   "kss_90": 5.9,
+   "p_severe": 0.117,
+   "hours_awake": 15.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T19:00:00+00:00",
+   "kss": 4.91,
+   "kss_90": 5.98,
+   "p_severe": 0.129,
+   "hours_awake": 15.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T19:15:00+00:00",
+   "kss": 5.0,
+   "kss_90": 6.07,
+   "p_severe": 0.142,
+   "hours_awake": 15.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T19:30:00+00:00",
+   "kss": 5.1,
+   "kss_90": 6.17,
+   "p_severe": 0.158,
+   "hours_awake": 15.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T19:45:00+00:00",
+   "kss": 5.2,
+   "kss_90": 6.27,
+   "p_severe": 0.177,
+   "hours_awake": 16.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T20:00:00+00:00",
+   "kss": 5.31,
+   "kss_90": 6.38,
+   "p_severe": 0.198,
+   "hours_awake": 16.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T20:15:00+00:00",
+   "kss": 5.42,
+   "kss_90": 6.49,
+   "p_severe": 0.223,
+   "hours_awake": 16.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T20:30:00+00:00",
+   "kss": 5.54,
+   "kss_90": 6.61,
+   "p_severe": 0.251,
+   "hours_awake": 16.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T20:45:00+00:00",
+   "kss": 5.66,
+   "kss_90": 6.73,
+   "p_severe": 0.282,
+   "hours_awake": 17.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T21:00:00+00:00",
+   "kss": 5.78,
+   "kss_90": 6.85,
+   "p_severe": 0.315,
+   "hours_awake": 17.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T21:15:00+00:00",
+   "kss": 5.91,
+   "kss_90": 6.98,
+   "p_severe": 0.352,
+   "hours_awake": 17.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-06T21:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T21:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T22:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T22:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T22:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T22:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T23:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T23:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T23:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-06T23:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T00:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T00:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T00:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T00:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T01:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T01:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T01:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T01:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T02:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T02:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T02:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T02:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T03:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T03:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T03:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T03:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T04:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T04:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T04:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T04:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T05:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T05:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T05:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T05:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-07T06:00:00+00:00",
+   "kss": 4.33,
+   "kss_90": 5.4,
+   "p_severe": 0.065,
+   "hours_awake": 0.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T06:15:00+00:00",
+   "kss": 4.32,
+   "kss_90": 5.39,
+   "p_severe": 0.064,
+   "hours_awake": 0.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T06:30:00+00:00",
+   "kss": 4.31,
+   "kss_90": 5.38,
+   "p_severe": 0.064,
+   "hours_awake": 0.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T06:45:00+00:00",
+   "kss": 4.3,
+   "kss_90": 5.37,
+   "p_severe": 0.063,
+   "hours_awake": 0.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T07:00:00+00:00",
+   "kss": 4.3,
+   "kss_90": 5.37,
+   "p_severe": 0.062,
+   "hours_awake": 1.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T07:15:00+00:00",
+   "kss": 4.29,
+   "kss_90": 5.36,
+   "p_severe": 0.062,
+   "hours_awake": 1.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T07:30:00+00:00",
+   "kss": 4.28,
+   "kss_90": 5.35,
+   "p_severe": 0.061,
+   "hours_awake": 1.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T07:45:00+00:00",
+   "kss": 4.27,
+   "kss_90": 5.34,
+   "p_severe": 0.061,
+   "hours_awake": 1.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T08:00:00+00:00",
+   "kss": 4.27,
+   "kss_90": 5.34,
+   "p_severe": 0.06,
+   "hours_awake": 2.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T08:15:00+00:00",
+   "kss": 4.26,
+   "kss_90": 5.33,
+   "p_severe": 0.06,
+   "hours_awake": 2.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T08:30:00+00:00",
+   "kss": 4.26,
+   "kss_90": 5.33,
+   "p_severe": 0.059,
+   "hours_awake": 2.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T08:45:00+00:00",
+   "kss": 4.25,
+   "kss_90": 5.32,
+   "p_severe": 0.059,
+   "hours_awake": 2.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T09:00:00+00:00",
+   "kss": 4.25,
+   "kss_90": 5.32,
+   "p_severe": 0.059,
+   "hours_awake": 3.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T09:15:00+00:00",
+   "kss": 4.24,
+   "kss_90": 5.31,
+   "p_severe": 0.058,
+   "hours_awake": 3.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T09:30:00+00:00",
+   "kss": 4.24,
+   "kss_90": 5.31,
+   "p_severe": 0.058,
+   "hours_awake": 3.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T09:45:00+00:00",
+   "kss": 4.23,
+   "kss_90": 5.3,
+   "p_severe": 0.058,
+   "hours_awake": 3.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T10:00:00+00:00",
+   "kss": 4.23,
+   "kss_90": 5.3,
+   "p_severe": 0.057,
+   "hours_awake": 4.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T10:15:00+00:00",
+   "kss": 4.22,
+   "kss_90": 5.29,
+   "p_severe": 0.057,
+   "hours_awake": 4.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T10:30:00+00:00",
+   "kss": 4.22,
+   "kss_90": 5.29,
+   "p_severe": 0.056,
+   "hours_awake": 4.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T10:45:00+00:00",
+   "kss": 4.21,
+   "kss_90": 5.28,
+   "p_severe": 0.056,
+   "hours_awake": 4.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T11:00:00+00:00",
+   "kss": 4.2,
+   "kss_90": 5.27,
+   "p_severe": 0.055,
+   "hours_awake": 5.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T11:15:00+00:00",
+   "kss": 4.19,
+   "kss_90": 5.26,
+   "p_severe": 0.055,
+   "hours_awake": 5.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T11:30:00+00:00",
+   "kss": 4.18,
+   "kss_90": 5.25,
+   "p_severe": 0.054,
+   "hours_awake": 5.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T11:45:00+00:00",
+   "kss": 4.17,
+   "kss_90": 5.24,
+   "p_severe": 0.053,
+   "hours_awake": 5.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T12:00:00+00:00",
+   "kss": 4.16,
+   "kss_90": 5.23,
+   "p_severe": 0.052,
+   "hours_awake": 6.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T12:15:00+00:00",
+   "kss": 4.14,
+   "kss_90": 5.21,
+   "p_severe": 0.052,
+   "hours_awake": 6.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T12:30:00+00:00",
+   "kss": 4.13,
+   "kss_90": 5.2,
+   "p_severe": 0.051,
+   "hours_awake": 6.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T12:45:00+00:00",
+   "kss": 4.11,
+   "kss_90": 5.18,
+   "p_severe": 0.05,
+   "hours_awake": 6.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T13:00:00+00:00",
+   "kss": 4.09,
+   "kss_90": 5.16,
+   "p_severe": 0.048,
+   "hours_awake": 7.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T13:15:00+00:00",
+   "kss": 4.07,
+   "kss_90": 5.14,
+   "p_severe": 0.047,
+   "hours_awake": 7.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T13:30:00+00:00",
+   "kss": 4.06,
+   "kss_90": 5.13,
+   "p_severe": 0.046,
+   "hours_awake": 7.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T13:45:00+00:00",
+   "kss": 4.04,
+   "kss_90": 5.11,
+   "p_severe": 0.045,
+   "hours_awake": 7.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T14:00:00+00:00",
+   "kss": 4.02,
+   "kss_90": 5.09,
+   "p_severe": 0.044,
+   "hours_awake": 8.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T14:15:00+00:00",
+   "kss": 4.0,
+   "kss_90": 5.07,
+   "p_severe": 0.044,
+   "hours_awake": 8.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T14:30:00+00:00",
+   "kss": 3.99,
+   "kss_90": 5.06,
+   "p_severe": 0.043,
+   "hours_awake": 8.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T14:45:00+00:00",
+   "kss": 3.98,
+   "kss_90": 5.05,
+   "p_severe": 0.042,
+   "hours_awake": 8.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T15:00:00+00:00",
+   "kss": 3.97,
+   "kss_90": 5.04,
+   "p_severe": 0.042,
+   "hours_awake": 9.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T15:15:00+00:00",
+   "kss": 3.96,
+   "kss_90": 5.03,
+   "p_severe": 0.041,
+   "hours_awake": 9.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T15:30:00+00:00",
+   "kss": 3.96,
+   "kss_90": 5.03,
+   "p_severe": 0.041,
+   "hours_awake": 9.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T15:45:00+00:00",
+   "kss": 3.96,
+   "kss_90": 5.03,
+   "p_severe": 0.041,
+   "hours_awake": 9.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T16:00:00+00:00",
+   "kss": 3.96,
+   "kss_90": 5.03,
+   "p_severe": 0.041,
+   "hours_awake": 10.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T16:15:00+00:00",
+   "kss": 3.97,
+   "kss_90": 5.04,
+   "p_severe": 0.042,
+   "hours_awake": 10.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T16:30:00+00:00",
+   "kss": 3.99,
+   "kss_90": 5.06,
+   "p_severe": 0.043,
+   "hours_awake": 10.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T16:45:00+00:00",
+   "kss": 4.01,
+   "kss_90": 5.08,
+   "p_severe": 0.044,
+   "hours_awake": 10.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T17:00:00+00:00",
+   "kss": 4.04,
+   "kss_90": 5.11,
+   "p_severe": 0.045,
+   "hours_awake": 11.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T17:15:00+00:00",
+   "kss": 4.07,
+   "kss_90": 5.14,
+   "p_severe": 0.047,
+   "hours_awake": 11.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T17:30:00+00:00",
+   "kss": 4.11,
+   "kss_90": 5.18,
+   "p_severe": 0.05,
+   "hours_awake": 11.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T17:45:00+00:00",
+   "kss": 4.16,
+   "kss_90": 5.23,
+   "p_severe": 0.053,
+   "hours_awake": 11.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T18:00:00+00:00",
+   "kss": 4.22,
+   "kss_90": 5.29,
+   "p_severe": 0.057,
+   "hours_awake": 12.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T18:15:00+00:00",
+   "kss": 4.28,
+   "kss_90": 5.35,
+   "p_severe": 0.061,
+   "hours_awake": 12.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T18:30:00+00:00",
+   "kss": 4.35,
+   "kss_90": 5.42,
+   "p_severe": 0.067,
+   "hours_awake": 12.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T18:45:00+00:00",
+   "kss": 4.43,
+   "kss_90": 5.5,
+   "p_severe": 0.074,
+   "hours_awake": 12.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T19:00:00+00:00",
+   "kss": 4.52,
+   "kss_90": 5.59,
+   "p_severe": 0.082,
+   "hours_awake": 13.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T19:15:00+00:00",
+   "kss": 4.62,
+   "kss_90": 5.69,
+   "p_severe": 0.092,
+   "hours_awake": 13.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T19:30:00+00:00",
+   "kss": 4.72,
+   "kss_90": 5.79,
+   "p_severe": 0.103,
+   "hours_awake": 13.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T19:45:00+00:00",
+   "kss": 4.82,
+   "kss_90": 5.89,
+   "p_severe": 0.117,
+   "hours_awake": 13.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T20:00:00+00:00",
+   "kss": 4.94,
+   "kss_90": 6.01,
+   "p_severe": 0.133,
+   "hours_awake": 14.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T20:15:00+00:00",
+   "kss": 5.06,
+   "kss_90": 6.13,
+   "p_severe": 0.152,
+   "hours_awake": 14.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T20:30:00+00:00",
+   "kss": 5.18,
+   "kss_90": 6.25,
+   "p_severe": 0.173,
+   "hours_awake": 14.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T20:45:00+00:00",
+   "kss": 5.3,
+   "kss_90": 6.37,
+   "p_severe": 0.198,
+   "hours_awake": 14.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T21:00:00+00:00",
+   "kss": 5.43,
+   "kss_90": 6.5,
+   "p_severe": 0.227,
+   "hours_awake": 15.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T21:15:00+00:00",
+   "kss": 5.56,
+   "kss_90": 6.63,
+   "p_severe": 0.258,
+   "hours_awake": 15.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T21:30:00+00:00",
+   "kss": 5.7,
+   "kss_90": 6.77,
+   "p_severe": 0.292,
+   "hours_awake": 15.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T21:45:00+00:00",
+   "kss": 5.83,
+   "kss_90": 6.9,
+   "p_severe": 0.328,
+   "hours_awake": 15.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T22:00:00+00:00",
+   "kss": 5.97,
+   "kss_90": 7.04,
+   "p_severe": 0.369,
+   "hours_awake": 16.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T22:15:00+00:00",
+   "kss": 6.1,
+   "kss_90": 7.17,
+   "p_severe": 0.409,
+   "hours_awake": 16.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T22:30:00+00:00",
+   "kss": 6.22,
+   "kss_90": 7.29,
+   "p_severe": 0.45,
+   "hours_awake": 16.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T22:45:00+00:00",
+   "kss": 6.35,
+   "kss_90": 7.42,
+   "p_severe": 0.491,
+   "hours_awake": 16.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T23:00:00+00:00",
+   "kss": 6.48,
+   "kss_90": 7.55,
+   "p_severe": 0.532,
+   "hours_awake": 17.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T23:15:00+00:00",
+   "kss": 6.59,
+   "kss_90": 7.66,
+   "p_severe": 0.569,
+   "hours_awake": 17.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T23:30:00+00:00",
+   "kss": 6.7,
+   "kss_90": 7.77,
+   "p_severe": 0.605,
+   "hours_awake": 17.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-07T23:45:00+00:00",
+   "kss": 6.81,
+   "kss_90": 7.88,
+   "p_severe": 0.637,
+   "hours_awake": 17.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T00:00:00+00:00",
+   "kss": 6.91,
+   "kss_90": 7.98,
+   "p_severe": 0.668,
+   "hours_awake": 18.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T00:15:00+00:00",
+   "kss": 7.01,
+   "kss_90": 8.08,
+   "p_severe": 0.694,
+   "hours_awake": 18.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T00:30:00+00:00",
+   "kss": 7.09,
+   "kss_90": 8.16,
+   "p_severe": 0.718,
+   "hours_awake": 18.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T00:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-08T01:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-08T01:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-08T01:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-08T01:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-08T02:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-08T02:15:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-08T02:30:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-08T02:45:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-08T03:00:00+00:00",
+   "kss": null,
+   "kss_90": null,
+   "p_severe": null,
+   "hours_awake": 0.0,
+   "asleep": true
+  },
+  {
+   "time_utc": "2026-09-08T03:15:00+00:00",
+   "kss": 6.39,
+   "kss_90": 7.46,
+   "p_severe": 0.503,
+   "hours_awake": 0.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T03:30:00+00:00",
+   "kss": 6.39,
+   "kss_90": 7.46,
+   "p_severe": 0.505,
+   "hours_awake": 0.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T03:45:00+00:00",
+   "kss": 6.4,
+   "kss_90": 7.47,
+   "p_severe": 0.506,
+   "hours_awake": 0.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T04:00:00+00:00",
+   "kss": 6.39,
+   "kss_90": 7.46,
+   "p_severe": 0.505,
+   "hours_awake": 0.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T04:15:00+00:00",
+   "kss": 6.39,
+   "kss_90": 7.46,
+   "p_severe": 0.503,
+   "hours_awake": 1.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T04:30:00+00:00",
+   "kss": 6.38,
+   "kss_90": 7.45,
+   "p_severe": 0.499,
+   "hours_awake": 1.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T04:45:00+00:00",
+   "kss": 6.36,
+   "kss_90": 7.43,
+   "p_severe": 0.495,
+   "hours_awake": 1.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T05:00:00+00:00",
+   "kss": 6.34,
+   "kss_90": 7.41,
+   "p_severe": 0.489,
+   "hours_awake": 1.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T05:15:00+00:00",
+   "kss": 6.32,
+   "kss_90": 7.39,
+   "p_severe": 0.483,
+   "hours_awake": 2.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T05:30:00+00:00",
+   "kss": 6.3,
+   "kss_90": 7.37,
+   "p_severe": 0.476,
+   "hours_awake": 2.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T05:45:00+00:00",
+   "kss": 6.28,
+   "kss_90": 7.35,
+   "p_severe": 0.468,
+   "hours_awake": 2.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T06:00:00+00:00",
+   "kss": 6.26,
+   "kss_90": 7.33,
+   "p_severe": 0.46,
+   "hours_awake": 2.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T06:15:00+00:00",
+   "kss": 6.23,
+   "kss_90": 7.3,
+   "p_severe": 0.452,
+   "hours_awake": 3.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T06:30:00+00:00",
+   "kss": 6.21,
+   "kss_90": 7.28,
+   "p_severe": 0.444,
+   "hours_awake": 3.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T06:45:00+00:00",
+   "kss": 6.18,
+   "kss_90": 7.25,
+   "p_severe": 0.436,
+   "hours_awake": 3.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T07:00:00+00:00",
+   "kss": 6.16,
+   "kss_90": 7.23,
+   "p_severe": 0.428,
+   "hours_awake": 3.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T07:15:00+00:00",
+   "kss": 6.13,
+   "kss_90": 7.2,
+   "p_severe": 0.421,
+   "hours_awake": 4.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T07:30:00+00:00",
+   "kss": 6.11,
+   "kss_90": 7.18,
+   "p_severe": 0.413,
+   "hours_awake": 4.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T07:45:00+00:00",
+   "kss": 6.09,
+   "kss_90": 7.16,
+   "p_severe": 0.406,
+   "hours_awake": 4.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T08:00:00+00:00",
+   "kss": 6.06,
+   "kss_90": 7.13,
+   "p_severe": 0.399,
+   "hours_awake": 4.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T08:15:00+00:00",
+   "kss": 6.04,
+   "kss_90": 7.11,
+   "p_severe": 0.392,
+   "hours_awake": 5.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T08:30:00+00:00",
+   "kss": 6.02,
+   "kss_90": 7.09,
+   "p_severe": 0.386,
+   "hours_awake": 5.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T08:45:00+00:00",
+   "kss": 6.0,
+   "kss_90": 7.07,
+   "p_severe": 0.38,
+   "hours_awake": 5.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T09:00:00+00:00",
+   "kss": 5.98,
+   "kss_90": 7.05,
+   "p_severe": 0.374,
+   "hours_awake": 5.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T09:15:00+00:00",
+   "kss": 5.96,
+   "kss_90": 7.03,
+   "p_severe": 0.368,
+   "hours_awake": 6.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T09:30:00+00:00",
+   "kss": 5.94,
+   "kss_90": 7.01,
+   "p_severe": 0.362,
+   "hours_awake": 6.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T09:45:00+00:00",
+   "kss": 5.92,
+   "kss_90": 6.99,
+   "p_severe": 0.356,
+   "hours_awake": 6.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T10:00:00+00:00",
+   "kss": 5.9,
+   "kss_90": 6.97,
+   "p_severe": 0.35,
+   "hours_awake": 6.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T10:15:00+00:00",
+   "kss": 5.88,
+   "kss_90": 6.95,
+   "p_severe": 0.344,
+   "hours_awake": 7.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T10:30:00+00:00",
+   "kss": 5.86,
+   "kss_90": 6.93,
+   "p_severe": 0.338,
+   "hours_awake": 7.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T10:45:00+00:00",
+   "kss": 5.84,
+   "kss_90": 6.91,
+   "p_severe": 0.331,
+   "hours_awake": 7.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T11:00:00+00:00",
+   "kss": 5.82,
+   "kss_90": 6.89,
+   "p_severe": 0.325,
+   "hours_awake": 7.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T11:15:00+00:00",
+   "kss": 5.79,
+   "kss_90": 6.86,
+   "p_severe": 0.318,
+   "hours_awake": 8.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T11:30:00+00:00",
+   "kss": 5.77,
+   "kss_90": 6.84,
+   "p_severe": 0.311,
+   "hours_awake": 8.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T11:45:00+00:00",
+   "kss": 5.74,
+   "kss_90": 6.81,
+   "p_severe": 0.304,
+   "hours_awake": 8.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T12:00:00+00:00",
+   "kss": 5.71,
+   "kss_90": 6.78,
+   "p_severe": 0.296,
+   "hours_awake": 8.75,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T12:15:00+00:00",
+   "kss": 5.69,
+   "kss_90": 6.76,
+   "p_severe": 0.289,
+   "hours_awake": 9.0,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T12:30:00+00:00",
+   "kss": 5.66,
+   "kss_90": 6.73,
+   "p_severe": 0.281,
+   "hours_awake": 9.25,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T12:45:00+00:00",
+   "kss": 5.63,
+   "kss_90": 6.7,
+   "p_severe": 0.273,
+   "hours_awake": 9.5,
+   "asleep": false
+  },
+  {
+   "time_utc": "2026-09-08T13:00:00+00:00",
+   "kss": 5.6,
+   "kss_90": 6.67,
+   "p_severe": 0.265,
+   "hours_awake": 9.75,
+   "asleep": false
+  }
+ ],
+ "provisional_timeline": [],
+ "limitations": [
+  "Predictions describe an average pilot with the sleep and duty times entered; individuals differ (90th-percentile values are shown for reference). The published reference model has residual error of about 1.42 KSS units; AeroWake has not been independently validated.",
+  "The model does not account for sleep disorders, illness, medication, caffeine, workload, stress or commuting beyond what is entered as sleep and duty times.",
+  "This report supports, and does not replace, the pilot\u2019s own judgement of fitness for duty. It is not a medical assessment.",
+  "Regulatory references are to Regulation (EU) 965/2012 (EASA ORO.FTL); operator schemes may differ."
+ ],
+ "watch_reference": {
+  "kss": 6.0,
+  "kind": "personal_review_prompt",
+  "duty_ids": [
+   "D7",
+   "D8"
+  ],
+  "explanation": "Pilot-selected review reference; model bands and legal checks are unchanged."
+ },
+ "scientific_basis": [
+  {
+   "title": "Three Process Model",
+   "citation": "Ingre et al. (2014), PLoS ONE 9:e108679",
+   "url": "https://doi.org/10.1371/journal.pone.0108679",
+   "application": "Sleep timing, time awake and circadian phase inform predicted KSS. The assembled AeroWake forecast requires its own validation."
+  },
+  {
+   "title": "Cumulative sleep restriction",
+   "citation": "Van Dongen et al. (2003), Sleep 26:117\u2013126",
+   "url": "https://doi.org/10.1093/sleep/26.2.117",
+   "application": "Repeated restricted sleep motivates tracking cumulative shortfall separately; the 8-hour ledger is not a measured individual impairment score."
+  }
+ ],
+ "narrative": [
+  {
+   "title": "Event",
+   "text": "The pilot reported being unfit for duty due to fatigue before the duty Tue 08 Sep 05:30 EZY801/802/803 LGW \u2192 EDI \u2192 LGW \u2192 EDI (home-base time, Europe/London). The recorded event or concern time is Tue 08 Sep 04:30 (08 Sep 03:30Z)."
+  },
+  {
+   "title": "Sleep",
+   "text": "3 sleep period(s) totalling 16h45 were provided, including sleep before the reporting period (3 reported by the pilot, 0 estimated from the roster). Before the event there were 5h00 of sleep in 24 h, 11h15 in 48 h and 16h45 in 72 h; last wake Tue 08 Sep 04:15, about 0h15 awake at the event. The supplied pattern contains 4h00 of sleep in the 24 h before duty report at Tue 08 Sep 05:30, and 11h00 in the 48 h before; estimated time awake at that point is 1h15."
+  },
+  {
+   "title": "Duties",
+   "text": "3 duty period(s) in the selected period, 2 operated. Shortest rest between duties: 4h45. Disruptive elements: Mon 07 Sep 14:00 EZY1 LGW \u2192 FCO \u2192 LGW (late finish); Tue 08 Sep 05:30 EZY801/802/803 LGW \u2192 EDI \u2192 LGW \u2192 EDI (early start)."
+  },
+  {
+   "title": "Predicted alertness",
+   "text": "Had the duty been operated, predicted sleepiness is KSS 6.4 at the start and peaks at KSS 6.4 (\u201cSome signs of sleepiness\u201d) at Tue 08 Sep 05:30; KSS 5.8 at the final landing. For a more fatigue-susceptible pilot (90th percentile) the peak would be about KSS 7.5. The pilot would have been awake about 9h45 by the end."
+  },
+  {
+   "title": "Pilot assessment",
+   "text": "At Tue 08 Sep 04:30 the pilot rated themselves KSS 8 (\u201cSleepy, some effort to keep awake\u201d) and Samn-Perelli 6 (\u201cExtremely tired, very difficult to concentrate\u201d). The model predicted KSS 6.4 at that time."
+  },
+  {
+   "title": "Contributing factors (pilot)",
+   "text": "Short rest period, Late finish, Early report."
+  },
+  {
+   "title": "Operational context (pilot)",
+   "text": "Crew position: First officer. Mitigations taken: Caffeine, Informed crew control / duty manager. Effect on the operation: Duty not operated. Suggested action: Review late-to-early transitions on this pairing."
+  },
+  {
+   "title": "Conclusion",
+   "text": "Main issues identified: pilot reports significant fatigue; prior sleep/wake check failed on multiple criteria; less than 5 h sleep in the 24 h before the duty; less than 12 h sleep in the 48 h before the duty; rest shorter than the regulatory minimum; late finish followed by early start. The recorded sleep and duty history includes factors consistent with the reported fatigue."
+  }
+ ]
+}

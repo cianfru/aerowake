@@ -73,11 +73,11 @@ def test_example_identifies_the_problems():
     assert 'Late finish followed by early start' in found
     assert 'Pilot reports significant fatigue' in found
     assert r['summary']['objective_support'] is True
-    assert r['summary']['headline'].startswith('Fatigue declaration is supported')
+    assert r['summary']['headline'].startswith('The recorded sleep and duty history includes factors consistent')
     # Published model: KSS ≈ 6.5 (group mean), ≥ 7 for the 90th-percentile pilot.
     assert r['assessment']['kss_max'] >= 6.0
     assert r['assessment']['kss_max_90'] >= 7.0
-    assert 'Predicted sleepiness approaching the severe range' in found
+    assert 'Predicted sleepiness in the moderate band' in found  # peak 6.4: canonical band
     assert r['data_quality']['confidence'] == 'high'
     assert [p['title'] for p in r['narrative']][0] == 'Event'
     assert r['prior_sleep_wake']['sleep_24h'] == pytest.approx(4.0)  # 05:30–07:00 on the 7th + 2h30

@@ -31,6 +31,7 @@ Evidence used (see core/alertness.py for the model itself):
 
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -40,7 +41,7 @@ import pytz
 
 from core import alertness as aw
 
-REPORT_VERSION = 'aerowake-fatigue-report-1.2'
+REPORT_VERSION = 'aerowake-fatigue-report-1.3'
 
 SEVERITY_ORDER = {'info': 0, 'caution': 1, 'warning': 2, 'critical': 3}
 
@@ -69,6 +70,33 @@ FACTOR_LABELS = {
     'personal': 'Personal / domestic reasons',
     'workload': 'High workload (weather, technical, ATC)',
     'other': 'Other',
+}
+
+# ICAO Doc 9966 / AMC-GM ORO.FTL.120 report items (pilot-entered, echoed verbatim).
+CREW_POSITION_LABELS = {
+    'captain': 'Captain', 'first_officer': 'First officer', 'second_officer': 'Second officer',
+    'other': 'Other crew position',
+}
+PILOT_ROLE_LABELS = {'pilot_flying': 'Pilot flying', 'pilot_monitoring': 'Pilot monitoring'}
+PHASE_LABELS = {
+    'pre_flight': 'Pre-flight', 'taxi': 'Taxi', 'takeoff_climb': 'Take-off and climb', 'cruise': 'Cruise',
+    'descent_approach': 'Descent and approach', 'landing': 'Landing', 'post_flight': 'Post-flight',
+}
+MITIGATION_LABELS = {
+    'strategic_nap': 'Strategic nap before duty',
+    'controlled_rest': 'Controlled rest per operator procedure',
+    'caffeine': 'Caffeine',
+    'informed_crew': 'Informed the other pilot / crew',
+    'informed_operator': 'Informed crew control / duty manager',
+    'removed_from_duty': 'Removed from duty or replaced',
+    'none': 'None taken',
+}
+EFFECT_LABELS = {
+    'none_noticed': 'No effect noticed',
+    'reduced_performance': 'Reduced performance noticed',
+    'error_or_lapse': 'Error or lapse',
+    'microsleep': 'Microsleep or involuntary sleep',
+    'duty_not_operated': 'Duty not operated',
 }
 
 
@@ -140,6 +168,12 @@ class ReportInput:
     unknown_airports: List[str] = field(default_factory=list)
     diary_complete: bool = False
     watch_reference_kss: float = 6.5
+    crew_position: str = ''
+    pilot_role: str = ''
+    phase_of_flight: str = ''
+    mitigations: List[str] = field(default_factory=list)
+    effect_on_operation: str = ''
+    suggested_action: str = ''
 
 
 # Sleep efficiency by location (Signal et al. 2013 PSG: hotel ≈ 0.88,
@@ -167,6 +201,27 @@ def _fmt(dt: Optional[datetime], tz: str) -> Optional[str]:
 
 def _fmt_z(dt: Optional[datetime]) -> Optional[str]:
     return None if dt is None else dt.astimezone(timezone.utc).strftime('%d %b %H:%MZ')
+
+
+def _fmt_long(dt: Optional[datetime], tz: str) -> Optional[str]:
+    """Home-base local time with the year, for headers and operator summaries."""
+    if dt is None:
+        return None
+    return dt.astimezone(pytz.timezone(tz)).strftime('%a %d %b %Y %H:%M')
+
+
+def _utc_offset(dt: datetime, tz: str) -> str:
+    """'UTC+3', 'UTC+5:30', 'UTC-1' for the zone at that instant."""
+    off = dt.astimezone(pytz.timezone(tz)).utcoffset() or timedelta(0)
+    minutes = int(off.total_seconds() // 60)
+    sign = '+' if minutes >= 0 else '-'
+    h, m = divmod(abs(minutes), 60)
+    return f'UTC{sign}{h}' + (f':{m:02d}' if m else '')
+
+
+def _band(kss: Optional[float]) -> str:
+    """Canonical KSS band of the value as displayed (rounded to one decimal)."""
+    return 'unknown' if kss is None else aw.classify_kss(kss)
 
 
 def _local_hour(dt: datetime, tz: str) -> float:
@@ -299,14 +354,103 @@ def _finding(severity, category, title, detail, when=None, reference=None, tz=No
                 reference=reference)
 
 
+DUTY_TYPE_LABELS = {
+    'flight': 'Flight duty', 'standby': 'Standby', 'home_standby': 'Home standby',
+    'airport_standby': 'Airport standby', 'simulator': 'Simulator', 'ground': 'Ground duty',
+    'positioning': 'Positioning', 'other': 'Other duty',
+}
+
+
 def _duty_route(d: DutyIn) -> str:
     if d.sectors:
         return ' → '.join([d.sectors[0].departure] + [s.arrival for s in d.sectors])
-    return d.description or d.duty_type.replace('_', ' ').title()
+    return d.description or DUTY_TYPE_LABELS.get(d.duty_type, d.duty_type.replace('_', ' ').capitalize())
+
+
+def _flight_numbers(d: DutyIn) -> List[str]:
+    out: List[str] = []
+    for s in d.sectors:
+        fn = (s.flight_number or '').strip().upper()
+        if fn and fn not in out:
+            out.append(fn)
+    return out
+
+
+_FLIGHT_RE = re.compile(r'^([A-Z]{2,3}|[A-Z]\d|\d[A-Z])(\d.*)$')
+
+
+def _flights_label(flights: List[str]) -> str:
+    """'QR460/461' when numbers share an airline designator, else 'QR460/EK12'."""
+    if not flights:
+        return ''
+    parts = [_FLIGHT_RE.match(f) for f in flights]
+    if all(parts) and len({p.group(1) for p in parts}) == 1:
+        return parts[0].group(1) + '/'.join(p.group(2) for p in parts)
+    return '/'.join(flights)
 
 
 def _duty_label(d: DutyIn, tz: str) -> str:
-    return f'{_fmt(d.report_utc, tz)} {_duty_route(d)}'
+    flights = _flights_label(_flight_numbers(d))
+    return f"{_fmt(d.report_utc, tz)} {flights + ' ' if flights else ''}{_duty_route(d)}"
+
+
+def _sleep_summary(inp: ReportInput, sleeps: List[SleepIn], tz: str) -> Dict:
+    """Supplied sleep before the event (24/48/72 h), last wake and time awake.
+
+    Model-independent: totals are the union of the supplied sleep periods, split
+    into pilot-reported and roster-estimated time so an operator can see what
+    each figure rests on.
+    """
+    at = inp.event_time_utc
+
+    def total(src: Optional[str], hours: int) -> float:
+        items = [aw.SleepInterval(s.start_utc, s.end_utc) for s in sleeps if src is None or s.source == src]
+        return round(aw.sleep_in_window(items, at - timedelta(hours=hours), at), 2) if items else 0.0
+
+    asleep_at_event = any(s.start_utc <= at < s.end_utc for s in sleeps)
+    last_wake = max((s.end_utc for s in sleeps if s.end_utc <= at), default=None)
+    before = [s for s in sleeps if s.start_utc < at and s.end_utc > at - timedelta(hours=72)]
+    kinds = {s.source for s in before}
+    basis = ('none' if not kinds else 'reported' if kinds == {'reported'}
+             else 'estimated' if kinds == {'estimated'} else 'mixed')
+    return dict(
+        anchor_utc=at.isoformat(), anchor_local=_fmt(at, tz),
+        sleep_24h=total(None, 24), sleep_48h=total(None, 48), sleep_72h=total(None, 72),
+        reported_72h=total('reported', 72), estimated_72h=total('estimated', 72),
+        last_wake_utc=last_wake.isoformat() if last_wake else None,
+        last_wake_local=_fmt(last_wake, tz), last_wake_z=_fmt_z(last_wake),
+        hours_awake_at_event=None if asleep_at_event or last_wake is None
+        else round((at - last_wake).total_seconds() / 3600, 2),
+        basis=basis, diary_complete=inp.diary_complete,
+    )
+
+
+def _operational(inp: ReportInput) -> Dict:
+    """Pilot-entered operational context; codes plus labels, nothing inferred."""
+    return dict(
+        crew_position=inp.crew_position or None,
+        crew_position_label=CREW_POSITION_LABELS.get(inp.crew_position),
+        pilot_role=inp.pilot_role or None,
+        pilot_role_label=PILOT_ROLE_LABELS.get(inp.pilot_role),
+        phase_of_flight=inp.phase_of_flight or None,
+        phase_of_flight_label=PHASE_LABELS.get(inp.phase_of_flight),
+        mitigations=[dict(code=m, label=MITIGATION_LABELS[m]) for m in inp.mitigations if m in MITIGATION_LABELS],
+        effect_on_operation=inp.effect_on_operation or None,
+        effect_on_operation_label=EFFECT_LABELS.get(inp.effect_on_operation),
+        suggested_action=inp.suggested_action,
+    )
+
+
+# Canonical KSS band → finding severity for the predicted peak.
+BAND_SEVERITY = {'moderate': 'info', 'high': 'caution', 'critical': 'warning', 'extreme': 'critical'}
+
+
+def _cap_for_estimates(severity: str, estimated: bool) -> str:
+    """Estimated sleep alone never raises a finding to critical."""
+    return 'warning' if estimated and severity == 'critical' else severity
+
+
+ESTIMATE_PREFIX = 'Based on estimated sleep (not confirmed by the pilot): '
 
 
 def _duty_patterns(d: DutyIn, tz: str) -> Dict[str, bool]:
@@ -342,8 +486,12 @@ def analyse(inp: ReportInput) -> Dict:
     series = _simulate(inp, sleeps, inp.period_start_utc, horizon_end, shift_at)
     event_points = [p for p in series if p["time_utc"] == inp.event_time_utc and p["kss"] is not None]
     model_available = bool(event_points) and inp.diary_complete
+    # Without the diary confirmation, missing entries are unknown, not evidence of
+    # continuous wakefulness: no findings or assessment are derived from the curve.
+    # It is still returned separately as a clearly labelled illustration.
+    provisional = series if (event_points and not inp.diary_complete) else []
     if not inp.diary_complete:
-        series = []  # Missing entries are unknown, not evidence of continuous wakefulness.
+        series = []
     sleep_before = [s for s in sleeps if s.start_utc < eval_start]
     intervals_before = [aw.SleepInterval(s.start_utc, min(s.end_utc, eval_start)) for s in sleep_before]
 
@@ -351,6 +499,9 @@ def analyse(inp: ReportInput) -> Dict:
     reported = [s for s in sleeps if s.source == 'reported']
     estimated = [s for s in sleeps if s.source != 'reported']
     last72 = [s for s in sleeps if s.end_utc > eval_start - timedelta(hours=72) and s.start_utc < eval_start]
+    # Sleep-derived findings resting on unconfirmed estimates are capped below critical.
+    estimated_basis = any(s.source != 'reported' for s in last72)
+    est_prefix = ESTIMATE_PREFIX if estimated_basis else ''
     days = []
     d0 = inp.period_start_utc.astimezone(pytz.timezone(tz)).date()
     d1 = min(inp.period_end_utc, eval_start).astimezone(pytz.timezone(tz)).date()
@@ -384,8 +535,11 @@ def analyse(inp: ReportInput) -> Dict:
         quality_notes.append(f'{len(estimated)} sleep period(s) are roster-based estimates that were not '
                              'confirmed by the pilot; conclusions that depend on them are less certain.')
     if nights_without_sleep:
-        quality_notes.append('No sleep was entered on: ' + ', '.join(nights_without_sleep) +
-                             '. Confirm the diary is complete; otherwise sleep-dependent predictions are withheld.')
+        listed = ', '.join(datetime.fromisoformat(d).strftime('%d %b %Y') for d in nights_without_sleep)
+        quality_notes.append(f'No sleep recorded on {listed} (the pilot confirmed the diary is complete).'
+                             if inp.diary_complete else
+                             f'No sleep was entered on {listed}. Confirm the diary is complete; '
+                             'otherwise sleep-dependent predictions are withheld.')
     if inp.unknown_airports:
         quality_notes.append('Unrecognised airport codes (time zone assumed UTC): ' +
                              ', '.join(sorted(set(inp.unknown_airports))) + '.')
@@ -401,15 +555,16 @@ def analyse(inp: ReportInput) -> Dict:
                 'warning', 'sleep', {'sleep_24h': 'Less than 5 h sleep in the 24 h before the duty',
                                      'sleep_48h': 'Less than 12 h sleep in the 48 h before the duty',
                                      'wake_vs_sleep': 'Time awake by end of duty exceeds sleep in prior 48 h'}[c['rule']],
-                {'sleep_24h': f"The supplied sleep records contain {_hours(c['value'])} in the 24 h before report (screening reference: 5h00).",
-                 'sleep_48h': f"The supplied sleep records contain {_hours(c['value'])} in the 48 h before report (screening reference: 12h00).",
-                 'wake_vs_sleep': f"About {_hours(c['value'])} awake by the end of the duty, more than the "
-                                  f"{_hours(c['limit'])} slept in the prior 48 h."}[c['rule']],
+                est_prefix + {
+                    'sleep_24h': f"The supplied sleep records contain {_hours(c['value'])} in the 24 h before report (screening reference: 5h00).",
+                    'sleep_48h': f"The supplied sleep records contain {_hours(c['value'])} in the 48 h before report (screening reference: 12h00).",
+                    'wake_vs_sleep': f"About {_hours(c['value'])} awake by the end of the duty, more than the "
+                                     f"{_hours(c['limit'])} slept in the prior 48 h."}[c['rule']],
                 eval_start, sw['source'], tz))
         if len(failed) >= 2:
             findings.append(_finding(
-                'critical', 'sleep', 'Prior sleep/wake check failed on multiple criteria',
-                'The supplied sleep pattern falls below more than one prior sleep/wake screening reference. '
+                _cap_for_estimates('critical', estimated_basis), 'sleep', 'Prior sleep/wake check failed on multiple criteria',
+                est_prefix + 'The supplied sleep pattern falls below more than one prior sleep/wake screening reference. '
                 'Review the sleep assumptions and discuss fatigue controls through the operator’s process. '
                 'These screening values do not determine individual fitness or a legal duty limit.', eval_start, sw['source'], tz))
 
@@ -427,8 +582,9 @@ def analyse(inp: ReportInput) -> Dict:
     deficit = aw.cumulative_deficit(intervals_before, eval_start) if sleep_before and inp.diary_complete else None
     if deficit and deficit['band'] in ('moderate', 'severe'):
         findings.append(_finding(
-            'critical' if deficit['band'] == 'severe' else 'warning', 'sleep', 'Cumulative sleep restriction',
-            f"About {_hours(deficit['deficit_hours'])} less sleep than an 8 h/day need over the previous "
+            _cap_for_estimates('critical' if deficit['band'] == 'severe' else 'warning', estimated_basis),
+            'sleep', 'Cumulative sleep restriction',
+            est_prefix + f"About {_hours(deficit['deficit_hours'])} less sleep than an 8 h/day need over the previous "
             f"{deficit['days']:.1f} days. Performance continues to decline under repeated restriction even "
             'when sleepiness ratings level off.', eval_start,
             'Van Dongen et al. (2003) Sleep 26:117-126; Belenky et al. (2003) J Sleep Res 12:1-12', tz))
@@ -453,28 +609,27 @@ def analyse(inp: ReportInput) -> Dict:
                 p_severe_max=worst['p_severe'],
                 hours_awake_at_start=at_start['hours_awake'],
                 hours_awake_at_end=on[-1]['hours_awake'],
-                risk_level=aw.classify_kss(worst['kss']),
-                kss_label=aw.KSS_LABELS[int(aw.round_half_up(worst['kss'], 0))],
+                risk_level=_band(worst['kss']),
+                kss_label=aw.KSS_LABELS[max(1, min(9, int(aw.round_half_up(worst['kss'], 0))))],
             )
-            if worst['kss'] >= 7.0:
+            band = assessment['risk_level']
+            if band in BAND_SEVERITY:
+                severity = _cap_for_estimates(BAND_SEVERITY[band], prediction_basis != 'reported_sleep')
+                capped = severity != BAND_SEVERITY[band]
                 findings.append(_finding(
-                    'critical' if worst['kss'] >= 8.0 else 'warning', 'prediction',
-                    'Predicted severe sleepiness during the duty',
-                    f"With the supplied sleep pattern ({prediction_basis.replace('_', ' ')}), predicted sleepiness reaches KSS {worst['kss']:.1f} "
-                    f"(“{assessment['kss_label']}”) at {_fmt(worst['time_utc'], tz)}; about "
-                    f"{round(worst['p_severe'] * 100)}% of pilots in this situation would rate KSS 7 or higher.",
-                    worst['time_utc'], 'Ingre et al. (2014) PLoS ONE e108679', tz))
-            elif worst['kss'] >= 6.5 or worst['kss_90'] >= 7.0:
-                findings.append(_finding(
-                    'caution', 'prediction', 'Predicted sleepiness approaching the severe range',
-                    f"Predicted KSS peaks at {worst['kss']:.1f} at {_fmt(worst['time_utc'], tz)} "
-                    f"(90th-percentile pilot: {worst['kss_90']:.1f}).",
+                    severity, 'prediction', f'Predicted sleepiness in the {band} band',
+                    f"With the supplied sleep pattern ({prediction_basis.replace('_', ' ')}), predicted sleepiness peaks at "
+                    f"KSS {worst['kss']:.1f} (“{assessment['kss_label']}”) at {_fmt(worst['time_utc'], tz)}; "
+                    f"90th-percentile pilot {worst['kss_90']:.1f}. About {round(worst['p_severe'] * 100)}% of pilots "
+                    'in this situation would rate KSS 7 or higher. Bands: moderate from 5.5, high from 6.5, '
+                    'critical from 7.5, extreme from 8.5.'
+                    + (' Severity is limited to warning because the sleep is not all confirmed by the pilot.' if capped else ''),
                     worst['time_utc'], 'Ingre et al. (2014) PLoS ONE e108679', tz))
             awake_end = on[-1]['hours_awake']
             if awake_end >= 17:
                 findings.append(_finding(
-                    'critical' if awake_end >= 20 else 'warning', 'sleep', 'Extended wakefulness',
-                    f'About {_hours(awake_end)} awake by the end of the period assessed, assuming the supplied '
+                    _cap_for_estimates('critical' if awake_end >= 20 else 'warning', estimated_basis), 'sleep', 'Extended wakefulness',
+                    est_prefix + f'About {_hours(awake_end)} awake by the end of the period assessed, assuming the supplied '
                     'sleep pattern. Prolonged wakefulness is a fatigue driver, especially alongside night work '
                     'and restricted sleep; this is not a measurement of individual performance.',
                     eval_end, 'Ingre et al. (2014) PLoS ONE e108679', tz))
@@ -485,7 +640,11 @@ def analyse(inp: ReportInput) -> Dict:
     disruptive_run = 0
     for d in duties:
         pat = _duty_patterns(d, tz)
-        row = dict(id=d.id, label=_duty_label(d, tz), route=_duty_route(d), status=d.status, duty_type=d.duty_type,
+        row = dict(id=d.id, label=_duty_label(d, tz), route=_duty_route(d), flights=_flight_numbers(d),
+                   flights_label=_flights_label(_flight_numbers(d)), status=d.status, duty_type=d.duty_type,
+                   sector_times=[dict(flight_number=s.flight_number, departure=s.departure, arrival=s.arrival,
+                                      departure_utc=s.departure_utc.isoformat(), arrival_utc=s.arrival_utc.isoformat(),
+                                      is_deadhead=s.is_deadhead) for s in d.sectors],
                    report_utc=d.report_utc.isoformat(), release_utc=d.release_utc.isoformat(),
                    report_local=_fmt(d.report_utc, tz), release_local=_fmt(d.release_utc, tz),
                    report_z=_fmt_z(d.report_utc), release_z=_fmt_z(d.release_utc),
@@ -493,7 +652,7 @@ def analyse(inp: ReportInput) -> Dict:
                    patterns=pat, is_affected=d is affected, source=d.source)
         pts = [p for p in series if d.report_utc <= p['time_utc'] <= d.release_utc and not p['asleep']]
         row['predicted_kss_max'] = max((p['kss'] for p in pts), default=None)
-        row['risk_level'] = aw.classify_kss(row['predicted_kss_max']) if pts else 'unknown'
+        row['risk_level'] = _band(row['predicted_kss_max']) if pts else 'unknown'
         rest_h = None
         if d.status in ('not_operated', 'cancelled_fatigue') and d is not affected:
             duty_rows.append(row)
@@ -586,7 +745,7 @@ def analyse(inp: ReportInput) -> Dict:
             kss=inp.self_kss, kss_label=aw.KSS_LABELS.get(inp.self_kss) if inp.self_kss else None,
             samn_perelli=inp.self_samn_perelli,
             samn_perelli_label=SAMN_PERELLI_LABELS.get(inp.self_samn_perelli) if inp.self_samn_perelli else None,
-            rated_at_utc=rated_at.isoformat(), rated_at_local=_fmt(rated_at, tz),
+            rated_at_utc=rated_at.isoformat(), rated_at_local=_fmt(rated_at, tz), rated_at_z=_fmt_z(rated_at),
             model_kss_at_rating=model_at['kss'] if model_at else None,
         )
         high_kss = inp.self_kss is not None and inp.self_kss >= 7
@@ -627,7 +786,10 @@ def analyse(inp: ReportInput) -> Dict:
                        source=s.source) for s in sleeps]
 
     summary = dict(
-        overall_level='unknown' if not model_available and top == 0 else ['low', 'moderate', 'high', 'critical'][top],
+        # Headline level is the canonical band of the predicted peak KSS (launch contract);
+        # rule findings keep their own severity and never re-label the band.
+        overall_level=assessment['risk_level'] if assessment else 'unknown',
+        highest_severity=[k for k, v in SEVERITY_ORDER.items() if v == top][0] if findings else None,
         objective_support=bool(objective),
         headline=_headline(objective, self_assessment, findings, model_available),
         counts={k: sum(1 for f in findings if f['severity'] == k) for k in SEVERITY_ORDER},
@@ -645,10 +807,16 @@ def analyse(inp: ReportInput) -> Dict:
         pilot=inp.pilot,
         event=dict(type=inp.event_type, time_utc=inp.event_time_utc.isoformat(),
                    time_local=_fmt(inp.event_time_utc, tz), time_z=_fmt_z(inp.event_time_utc),
+                   time_local_long=_fmt_long(inp.event_time_utc, tz),
+                   utc_offset=_utc_offset(inp.event_time_utc, tz),
                    affected_duty_id=affected.id if affected else None,
                    affected_duty_label=_duty_label(affected, tz) if affected else None),
         period=dict(start_utc=inp.period_start_utc.isoformat(), end_utc=inp.period_end_utc.isoformat(),
-                    start_local=_fmt(inp.period_start_utc, tz), end_local=_fmt(inp.period_end_utc, tz)),
+                    start_local=_fmt(inp.period_start_utc, tz), end_local=_fmt(inp.period_end_utc, tz),
+                    start_local_long=_fmt_long(inp.period_start_utc, tz),
+                    end_local_long=_fmt_long(inp.period_end_utc, tz)),
+        sleep_summary=_sleep_summary(inp, sleeps, tz),
+        operational=_operational(inp),
         data_quality=dict(confidence=confidence, reported_sleeps=len(reported), estimated_sleeps=len(estimated),
                           duties=len(duties), nights_without_sleep=nights_without_sleep, notes=quality_notes,
                           model_available=model_available, diary_complete=inp.diary_complete,
@@ -668,6 +836,9 @@ def analyse(inp: ReportInput) -> Dict:
         timeline=[dict(time_utc=p['time_utc'].isoformat(), kss=p['kss'], kss_90=p['kss_90'],
                        p_severe=p['p_severe'], hours_awake=p['hours_awake'], asleep=p['asleep'])
                   for p in series],
+        # Diary not confirmed: an illustration only; gaps in the diary are modelled as awake.
+        provisional_timeline=[dict(time_utc=p['time_utc'].isoformat(), kss=p['kss'], kss_90=p['kss_90'],
+                                   hours_awake=p['hours_awake'], asleep=p['asleep']) for p in provisional],
         limitations=_limitations(model_available),
         watch_reference=dict(kss=inp.watch_reference_kss, kind='personal_review_prompt',
                              duty_ids=[d['id'] for d in duty_rows if d['predicted_kss_max'] is not None and d['predicted_kss_max'] >= inp.watch_reference_kss],
@@ -721,14 +892,17 @@ def _easa_checks(inp: ReportInput, duties: List[DutyIn]) -> Dict:
 def _headline(objective, self_assessment, findings, model_available=True) -> str:
     self_high = any(f['category'] == 'self_report' and f['severity'] in ('warning', 'critical') for f in findings)
     if objective and self_high:
-        return 'Fatigue declaration is supported by the sleep and duty data provided.'
+        return 'The recorded sleep and duty history includes factors consistent with the reported fatigue.'
     if objective:
-        return 'Sleep and duty data show significant fatigue risk factors.'
+        return 'The recorded sleep and duty history includes fatigue risk factors worth reviewing.'
     if not model_available:
-        return ('The pilot reports significant fatigue. Insufficient information to assess modelled fatigue; the pilot’s assessment stands.' if self_high else 'Insufficient information to assess fatigue risk. Add sleep history and confirm coverage; any fatigue declaration remains valid.')
+        return ('The pilot reports significant fatigue. Sleep-dependent predictions were not produced; '
+                'the pilot’s assessment stands.' if self_high else
+                'Sleep-dependent predictions were not produced. Add the sleep history and confirm it is complete '
+                'for a modelled assessment; any fatigue report remains valid.')
     if self_high:
-        return ('The pilot reports significant fatigue. The data provided show no major scheduling or sleep '
-                'risk factor. These data cannot establish the cause or exclude fatigue. The pilot’s assessment stands.')
+        return ('The pilot reports significant fatigue. The records provided show no major scheduling or sleep '
+                'risk factor; they cannot establish the cause or exclude fatigue. The pilot’s assessment stands.')
     if self_assessment:
         return 'No major fatigue risk factors identified in the information provided.'
     return 'No major fatigue risk factors identified in the information provided (no self-rating given).'
@@ -754,7 +928,7 @@ def _narrative(r: Dict, inp: ReportInput) -> List[Dict]:
     paras = []
     ev = r['event']
     kind = {'roster_concern': 'raises a prospective fatigue concern about',
-            'fatigue_call_before_duty': 'declared unfit for duty due to fatigue before',
+            'fatigue_call_before_duty': 'reported being unfit for duty due to fatigue before',
             'fatigue_during_duty': 'reported fatigue during',
             'fatigue_after_duty': 'reported fatigue after'}.get(inp.event_type, 'reported fatigue in relation to')
     if ev['affected_duty_label']:
@@ -772,9 +946,17 @@ def _narrative(r: Dict, inp: ReportInput) -> List[Dict]:
         total = sum(s['hours'] for s in s_rows)
         rep = sum(1 for s in s_rows if s['source'] == 'reported')
         sw = r['prior_sleep_wake']
-        text = (f"{len(s_rows)} sleep period(s) totalling {_hours(total)} were provided, including any "
-                f"pre-period initialization history ({rep} reported by the pilot, "
+        text = (f"{len(s_rows)} sleep period(s) totalling {_hours(total)} were provided, including sleep "
+                f"before the reporting period ({rep} reported by the pilot, "
                 f"{len(s_rows) - rep} estimated from the roster).")
+        ss = r['sleep_summary']
+        text += (f" Before the event there were {_hours(ss['sleep_24h'])} of sleep in 24 h, {_hours(ss['sleep_48h'])} "
+                 f"in 48 h and {_hours(ss['sleep_72h'])} in 72 h")
+        if ss['last_wake_local']:
+            text += f"; last wake {ss['last_wake_local']}"
+        if ss['hours_awake_at_event'] is not None:
+            text += f", about {_hours(ss['hours_awake_at_event'])} awake at the event"
+        text += '.'
         if sw:
             affected = next((d for d in inp.duties if d.id == inp.affected_duty_id), None)
             reference = f"duty report at {_fmt(affected.report_utc, tz)}" if affected else f"the fatigue event at {ev['time_local']}"
@@ -836,6 +1018,20 @@ def _narrative(r: Dict, inp: ReportInput) -> List[Dict]:
     if r['contributing_factors']:
         paras.append(dict(title='Contributing factors (pilot)',
                           text=', '.join(f['label'] for f in r['contributing_factors']) + '.'))
+    op = r['operational']
+    items = []
+    if op['crew_position_label'] or op['pilot_role_label']:
+        items.append('Crew position: ' + ', '.join(x for x in (op['crew_position_label'], op['pilot_role_label']) if x) + '.')
+    if op['phase_of_flight_label']:
+        items.append(f"Phase of flight: {op['phase_of_flight_label']}.")
+    if op['mitigations']:
+        items.append('Mitigations taken: ' + ', '.join(m['label'] for m in op['mitigations']) + '.')
+    if op['effect_on_operation_label']:
+        items.append(f"Effect on the operation: {op['effect_on_operation_label']}.")
+    if op['suggested_action']:
+        items.append(f"Suggested action: {op['suggested_action']}")
+    if items:
+        paras.append(dict(title='Operational context (pilot)', text=' '.join(items)))
 
     key = [f for f in r['findings'] if f['severity'] in ('critical', 'warning')]
     if key:

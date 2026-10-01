@@ -11,7 +11,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 from parsers.roster_parser import AirportDatabase, _IATA_DB
-from reports.engine import FACTOR_LABELS, DutyIn, ReportInput, Sector, SleepIn, analyse
+from reports.engine import (EFFECT_LABELS, FACTOR_LABELS, MITIGATION_LABELS, PHASE_LABELS, DutyIn, ReportInput,
+                            Sector, SleepIn, analyse)
 
 router = APIRouter(prefix='/api/fatigue-report', tags=['Fatigue report'])
 
@@ -104,6 +105,41 @@ class FatigueReportRequest(BaseModel):
     contributing_factors: List[str] = Field(default_factory=list, max_length=len(FACTOR_LABELS))
     narrative: str = Field('', max_length=5000)
     pilot: PilotModel = Field(default_factory=PilotModel)
+    # ICAO Doc 9966 / AMC-GM ORO.FTL.120 operational context (optional, pilot-entered).
+    crew_position: Literal['', 'captain', 'first_officer', 'second_officer', 'other'] = ''
+    pilot_role: Literal['', 'pilot_flying', 'pilot_monitoring'] = ''
+    phase_of_flight: Literal[('',) + tuple(PHASE_LABELS)] = ''  # type: ignore[valid-type]
+    mitigations: List[Literal[tuple(MITIGATION_LABELS)]] = Field(  # type: ignore[valid-type]
+        default_factory=list, max_length=len(MITIGATION_LABELS))
+    effect_on_operation: Literal[('',) + tuple(EFFECT_LABELS)] = ''  # type: ignore[valid-type]
+    suggested_action: str = Field('', max_length=1000)
+
+    @model_validator(mode='after')
+    def _timing(self):
+        """Retrospective claims must describe the past (ORO.FTL.120 reporting is about
+        fatigue that occurred); upcoming duties belong in a roster concern."""
+        now = datetime.now(timezone.utc) + timedelta(minutes=5)
+        retrospective = self.event_type != 'roster_concern'
+        if retrospective and self.event_time_utc > now:
+            raise ValueError('Fatigue you called or experienced must be in the past. '
+                             'For an upcoming duty, raise a roster concern instead.')
+        for d in self.duties:
+            if d.report_utc <= now:
+                continue
+            if d.status == 'operated':
+                raise ValueError(f'Duty {d.id} has not started yet, so it cannot be marked operated.')
+            if d.status == 'cancelled_fatigue' and self.event_type != 'fatigue_call_before_duty':
+                raise ValueError(f'Duty {d.id} has not started yet. Only a fatigue call made before '
+                                 'the duty can mark it not operated because of fatigue.')
+        if self.event_type == 'fatigue_during_duty':
+            affected = next((d for d in self.duties if d.id == self.affected_duty_id), None)
+            if affected is None:
+                raise ValueError('Select the duty during which you became fatigued.')
+            if not affected.report_utc <= self.event_time_utc <= affected.release_utc:
+                raise ValueError('Fatigue during a duty must be timed between that duty’s report and release.')
+        if self.phase_of_flight and self.event_type != 'fatigue_during_duty':
+            raise ValueError('Phase of flight applies only to fatigue during a duty.')
+        return self
 
     @model_validator(mode='after')
     def _consistency(self):
@@ -196,6 +232,9 @@ def to_input(req: FatigueReportRequest) -> ReportInput:
         narrative=req.narrative.strip(), pilot={k: v for k, v in req.pilot.model_dump().items() if v},
         unknown_airports=unknown, diary_complete=req.diary_complete,
         watch_reference_kss=req.watch_reference_kss,
+        crew_position=req.crew_position, pilot_role=req.pilot_role, phase_of_flight=req.phase_of_flight,
+        mitigations=list(dict.fromkeys(req.mitigations)), effect_on_operation=req.effect_on_operation,
+        suggested_action=req.suggested_action.strip(),
     )
 
 
