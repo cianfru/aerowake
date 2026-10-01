@@ -370,13 +370,20 @@ DEFAULT_NAP_HABIT = 'sometimes'
 class PreDutyNapAssumptions:
     """Modelling assumption for a nap before a late or night report.
 
-    Evidence: before evening and night departures about half of crew nap
-    (Signal et al. 2014, Aviat Space Environ Med 85:1199-1208: 54 % napped;
-    typical naps 1–2 h), and total pre-trip sleep including naps averages
-    about 7.8 h (Gander et al. 2014, Aviat Space Environ Med 85:833-840).
-    Those studies report group averages, not a rule for any one pilot, so
-    the values below are modelling assumptions. They are not fitted to data
-    and should be calibrated with pilot debrief data.
+    Evidence: about half of crews nap before an evening departure and half
+    do not. Signal et al. (2014), Aviat Space Environ Med 85:1199-1208
+    (52 pilots, westward ultra-long-range trip): 54 % napped before the
+    outbound flight, without reducing their later in-flight sleep. Signal et
+    al. (2024), Front Environ Health 2:1329203 (ultra-long-range): 50 %
+    napped before outbound and 30 % before inbound flights, noting that
+    evening departures make an afternoon nap easier (also Holmes et al.
+    2012). These are group findings from long-haul crews; individuals differ
+    (some pilots cannot nap at all), so the pilot can state their own habit.
+
+    Default ('sometimes'): the population-average nap, i.e. the full nap
+    weighted by the 54 % prevalence of Signal et al. (2014). The full-nap
+    length (``max_nap_hours``) is a modelling choice, not a published value,
+    and like the ramp it should be calibrated with pilot debrief data.
 
     Shape: the assumed nap length rises linearly with report time on the body
     clock, from 0 h at ``ramp_start_hour`` to the full nap at
@@ -387,8 +394,8 @@ class PreDutyNapAssumptions:
     between the last wake-up (plus ``min_wake_before_nap_hours``) and the
     wake buffer before report.
 
-    Habits: 'usually' = the ramp; 'sometimes' = the ramp capped at
-    ``sometimes_fraction`` of the full nap (about 1 h); 'rarely' = no nap.
+    Habits: 'usually' = the ramp; 'sometimes' (default) = the ramp scaled by
+    ``sometimes_fraction`` (about 1.3 h at most); 'rarely' = no nap.
     """
 
     ramp_start_hour: float = 18.0
@@ -397,7 +404,7 @@ class PreDutyNapAssumptions:
     max_nap_hours: float = 2.5            # one NREM–REM cycle plus margin
     min_wake_before_nap_hours: float = 6.0
     min_nap_hours: float = 1.0 / 3.0      # shorter naps are not modelled
-    sometimes_fraction: float = 0.5
+    sometimes_fraction: float = 0.54      # nap prevalence, Signal et al. (2014)
     habit: str = DEFAULT_NAP_HABIT
 
     def ramp_fraction(self, report_body_hour: float) -> float:
@@ -421,7 +428,8 @@ class PreDutyNapAssumptions:
         full = self.full_nap_hours(available_hours)
         hours = full * self.ramp_fraction(report_body_hour)
         if habit == 'sometimes':
-            hours = min(hours, full * self.sometimes_fraction)
+            # Population average: the nap weighted by how many crews take one.
+            hours *= self.sometimes_fraction
         return hours if hours >= self.min_nap_hours else 0.0
 
 

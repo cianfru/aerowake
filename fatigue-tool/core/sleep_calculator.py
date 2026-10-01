@@ -541,6 +541,27 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
             and night_available >= 1.5
         )
 
+        # A first sleep that would start in the body-clock afternoon (12:00-18:00)
+        # gets the bounded afternoon-nap + evening-sleep pattern whatever the
+        # release time, so risk does not jump between an 11:45 and a 12:00 release.
+        bio_sleep_start_hour = sleep_start.astimezone(bio_tz).hour + sleep_start.astimezone(bio_tz).minute / 60
+        if not (12.0 <= bio_release_hour < 20.0) and 12.0 <= bio_sleep_start_hour < 18.0:
+            # Evening sleep onset at the body-clock evening of the release day.
+            release_bio = previous_duty.release_time_utc.astimezone(bio_tz)
+            evening_start = bio_tz.localize(datetime.combine(release_bio.date(), time(22, 0))).astimezone(sleep_tz)
+            gated_end = self._circadian_gated_wake(
+                sleep_start=evening_start, base_duration=base_duration, bio_tz=bio_tz, sleep_tz=sleep_tz)
+            if gated_end.astimezone(pytz.utc) > latest_wake_utc:
+                gated_end = latest_wake_utc.astimezone(sleep_tz)
+            bounded = self._bounded_afternoon_release_sleep(
+                previous_duty=previous_duty, sleep_start=evening_start, sleep_end=gated_end,
+                latest_wake_utc=latest_wake_utc, report_local=report_local, sleep_tz=sleep_tz,
+                bio_tz=bio_tz, bio_tz_str=bio_tz_str, sleep_location=sleep_location,
+                is_layover=is_layover, duty_duration_hours=duty_duration_hours,
+                prior_wake_estimate=prior_wake_estimate)
+            if bounded is not None:
+                return bounded
+
         if needs_two_blocks:
             return self._two_block_recovery(
                 sleep_start=sleep_start,

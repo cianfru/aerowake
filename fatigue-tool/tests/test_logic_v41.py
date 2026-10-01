@@ -127,8 +127,13 @@ def test_nap_ramp_and_habits():
     assert naps.nap_hours(20.0, 12, 'usually') == pytest.approx(1.25)
     assert naps.nap_hours(22.0, 12, 'usually') == pytest.approx(2.5)
     assert naps.nap_hours(1.0, 12, 'usually') == pytest.approx(2.5)
-    assert naps.nap_hours(22.0, 12, 'sometimes') == pytest.approx(1.25)
-    assert naps.nap_hours(19.0, 12, 'sometimes') == pytest.approx(0.625)
+    # 'sometimes' = population average: 54 % of crews nap (Signal et al. 2014).
+    assert naps.nap_hours(22.0, 12, 'sometimes') == pytest.approx(2.5 * 0.54)
+    assert naps.nap_hours(20.0, 12, 'sometimes') == pytest.approx(1.25 * 0.54)
+    assert naps.nap_hours(18.5, 12, 'sometimes') == 0  # below the shortest modelled nap
+    # Continuous: no step larger than the ramp slope between adjacent quarter hours.
+    steps = [naps.nap_hours(18 + q / 4, 12, h) for h in ('usually', 'sometimes') for q in range(17)]
+    assert max(abs(a - b) for a, b in zip(steps, steps[1:]) if a and b) < 0.2
     assert naps.nap_hours(23.0, 12, 'rarely') == 0
     # Window-limited: little time since waking means little or no nap.
     assert naps.nap_hours(23.0, 6.5, 'usually') == pytest.approx(0.5)
@@ -395,3 +400,25 @@ def test_replay_accepts_snapshots_from_both_kss_engines():
     snap['engine'] = 'aerowake-3.2'
     with pytest.raises(Exception):
         restore(snap)
+
+
+def test_curve_duty_peak_points_never_exceed_headline():
+    """A 'duty_peak' sample is the headline peak; later post-flight maxima are 'release_peak'."""
+    _, res = run([njf_turn('A', 10), njf_turn('B', 11), njf_turn('C', 12)])
+    timeline = res.roster.alertness_timeline
+    for tl in res.duty_timelines:
+        tagged = [p for p in timeline if p.get('duty_peak') == tl.duty_id]
+        assert tagged, tl.duty_id
+        assert all(p['kss'] <= tl.max_kss + 1e-9 for p in tagged)
+
+
+@pytest.mark.parametrize('habit', ['usually', 'sometimes', 'rarely'])
+def test_no_cliff_when_previous_release_moves_across_midday(habit):
+    """Moving the previous release in 15-min steps must not jump the next night duty's risk."""
+    peaks = []
+    for q in range(0, 25):  # previous report 04:00..10:00 -> release about 09:30..15:30
+        r = 4.0 + q / 4
+        _, res = run([turn('P', 9, 8.0), turn('A', 10, r), turn('X', 10, 26.5)], nap_habit=habit)
+        peaks.append(res.duty_timelines[-1].kss_peak_fdp)
+    jumps = [abs(a - b) for a, b in zip(peaks, peaks[1:])]
+    assert max(jumps) < 0.3, list(zip([4.0 + q / 4 for q in range(25)], peaks))

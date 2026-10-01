@@ -2123,22 +2123,25 @@ class BorbelyFatigueModel:
         # 30-minute curve never misses a duty peak (same model and sleep).
         seen = {p['t']: p for p in out}
         for tl in duty_timelines:
+            # Headline peak (HEADLINE_RISK_WINDOW) is tagged 'duty_peak'; a higher
+            # point after last on-blocks is real model output but is tagged
+            # 'release_peak' so it is never read as the duty's headline.
             peaks = {}
             kss_points = [p for p in tl.timeline if p.kss is not None and not p.is_in_rest]
+            whole = max(kss_points, key=lambda p: p.kss, default=None)
+            if whole is not None:
+                peaks[whole.timestamp_utc] = (whole.kss, 'release_peak')
             if tl.peak_time_utc is not None:
-                peaks[tl.peak_time_utc] = tl.max_kss
-            duty_peak = max(kss_points, key=lambda p: p.kss, default=None)
-            if duty_peak is not None:
-                peaks[duty_peak.timestamp_utc] = duty_peak.kss
-            for at, kss in peaks.items():
+                peaks[tl.peak_time_utc] = (tl.max_kss, 'duty_peak')
+            for at, (kss, tag) in peaks.items():
                 iso = at.astimezone(pytz.utc).isoformat()
                 if kss is None or not (month_start <= at <= month_end):
                     continue
                 if iso in seen:  # same instant: use the duty simulation's value
-                    seen[iso].update(kss=kss, asleep=False, on_duty=True, duty_peak=tl.duty_id)
+                    seen[iso].update(kss=kss, asleep=False, on_duty=True)
+                    seen[iso][tag] = tl.duty_id
                     continue
-                seen[iso] = {'t': iso, 'asleep': False, 'on_duty': True, 'kss': kss,
-                             'duty_peak': tl.duty_id}
+                seen[iso] = {'t': iso, 'asleep': False, 'on_duty': True, 'kss': kss, tag: tl.duty_id}
                 out.append(seen[iso])
         out.sort(key=lambda p: p['t'])
         return out
