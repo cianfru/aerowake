@@ -4,9 +4,10 @@ import { formatAircraftType, getTrainingDutyLabel, isTrainingDuty } from '@/lib/
 import { RISK_LEVEL_LABELS, classifyKss, riskClasses } from '@/lib/risk-scale';
 import { cn } from '@/lib/utils';
 
-/** CrewLink legend for training annotations; unknown codes are shown as printed. */
+/** CrewLink legend for training annotations; unknown codes are shown as printed.
+ *  EQ/LQ: the pilot is the tutor training or checking a new instructor/examiner (owner, Oct 2026). */
 const TRAINING_NOTES: Record<string, string> = {
-  EQ: 'TRT instructor required', LQ: 'TRE/SFE tutor required', aw: 'AWOPS', lpc: 'sim check',
+  EQ: 'tutor for a new instructor (TRT)', LQ: 'tutor for a new examiner (TRE/SFE)', aw: 'AWOPS', lpc: 'sim check',
   op: 'EBT recurrent day 2', rc: 'recency sim', rh: 'right-hand seat sim',
 };
 const trainingNoteLabel = (code: string) => TRAINING_NOTES[code] ?? code;
