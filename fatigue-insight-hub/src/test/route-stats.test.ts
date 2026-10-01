@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DutyAnalysis, FlightSegment } from '@/types/fatigue';
+import { riskCssColor } from '@/lib/risk-scale';
 import { buildRoutePairs, drawOrder, formatBlock, median, routeColour, routeLevel, routeWidth } from '@/components/fatigue/roster/route-stats';
 
 const seg = (departure: string, arrival: string, extra: Partial<FlightSegment> = {}): FlightSegment => ({
@@ -71,8 +72,8 @@ describe('route pairs', () => {
 describe('route presentation', () => {
   it('keeps low routes neutral but visible and uses the shared tokens otherwise', () => {
     expect(routeColour('low')).toContain('--foreground');
-    expect(routeColour('high')).toBe('hsl(var(--high))');
-    expect(routeColour('extreme')).toBe('hsl(var(--critical))');
+    expect(routeColour('high')).toBe(riskCssColor('high'));
+    expect(routeColour('extreme')).toBe(riskCssColor('extreme'));
   });
 
   it('scales width with the square root of sectors', () => {

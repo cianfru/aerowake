@@ -84,7 +84,8 @@ def tour_week_kss(analysis: dict) -> list[float | None]:
     out: list[float | None] = []
     for point in analysis['alertness_timeline']:
         t = datetime.fromisoformat(point['t']).astimezone(HOME)
-        if start <= t < end:
+        # Regular 30-min grid only; off-grid duty-peak instants are extra samples.
+        if start <= t < end and t.minute % 30 == 0 and t.second == 0:
             out.append(None if point['asleep'] else round(point['kss'], 2))
     return out
 
