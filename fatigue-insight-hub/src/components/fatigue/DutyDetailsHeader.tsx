@@ -1,5 +1,6 @@
+import { crewLabel } from '@/lib/crew';
 import type { ReactNode } from 'react';
-import { Plane, Monitor, BookOpen, FileText, FileWarning } from 'lucide-react';
+import { Plane, Monitor, BookOpen, FileText, FileWarning, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DutyAnalysis } from '@/types/fatigue';
 import { format } from 'date-fns';
@@ -38,6 +39,7 @@ export function DutyDetailsHeader({ duty, zoneLabel, onGenerateReport, onReportF
   const isTraining = isTrainingDuty(duty);
   const peak = resolveKss(duty.maxKss, duty.minPerformance, duty.modelVersion);
   const Icon = isTraining ? (duty.dutyType === 'simulator' ? Monitor : BookOpen) : Plane;
+  const crew = crewLabel(duty);
   const times = duty.reportTimeLocal && duty.releaseTimeLocal ? `${duty.reportTimeLocal}–${duty.releaseTimeLocal}` : '';
 
   return (
@@ -50,6 +52,7 @@ export function DutyDetailsHeader({ duty, zoneLabel, onGenerateReport, onReportF
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h2 className="text-lg font-semibold tracking-tight">{format(duty.date, 'EEE d MMM')}</h2>
             {peak != null && <RiskLabel level={classifyKss(peak)} />}
+            {crew && <span className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary/60 px-1.5 py-0.5 font-sans text-[11px] font-medium text-foreground/80"><Users className="h-3 w-3" aria-hidden="true" />{crew}</span>}
           </div>
           <p className="text-sm text-muted-foreground md:truncate">
             <span className="text-foreground">{dutyRoute(duty)}</span>

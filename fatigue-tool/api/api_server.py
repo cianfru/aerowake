@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 from core import BorbelyFatigueModel, ModelConfig, RiskThresholds
 from core.alertness import ENGINE_VERSION, KSS_ENGINE_VERSIONS, is_kss_engine, classify_kss, round_half_up
 from parsers.roster_parser import PDFRosterParser, CSVRosterParser, AirportDatabase
-from models.data_models import MonthlyAnalysis, DutyTimeline
+from models.data_models import MonthlyAnalysis, DutyTimeline, CrewComposition, RestFacilityClass, ULRCrewSet
 
 # Database & Auth imports
 from db.session import init_db, get_db, is_db_available
@@ -711,14 +711,14 @@ def _build_ulr_data(duty_timeline, duty) -> tuple:
     if hasattr(duty, 'inflight_rest_plan') and duty.inflight_rest_plan:
         rest_periods = duty.inflight_rest_plan.rest_periods
 
-    # Only emit IR overlay bars when the PDF actually contained an `IR` activity code
-    # on at least one segment.  For AUGMENTED_3 duties with no IR marker (e.g. the
-    # outbound operating leg of a ULR pair), AugmentedCrewRestPlanner still generates
-    # internal rest blocks to drive the fatigue model, but these should NOT appear as
-    # IR overlay bars on the chronogram — the pilot is on the flight deck, not resting.
+    # Every in-flight rest block the model scored is returned, so the pilot sees
+    # the rest behind the number. `source` says where it comes from: 'roster_ir'
+    # when the roster shows an IR (in-flight rest) sector, otherwise 'planned' —
+    # the standard rotation from the rest planner (e.g. Crew A on the operating
+    # leg of a 4-pilot ULR pair, or a 3-pilot crew), to be confirmed by the pilot.
     has_pdf_ir = getattr(duty, 'has_inflight_rest_segments', False)
 
-    for i, block in enumerate(getattr(duty_timeline, 'inflight_rest_blocks', []) if has_pdf_ir else []):
+    for i, block in enumerate(getattr(duty_timeline, 'inflight_rest_blocks', []) or []):
         period = rest_periods[i] if i < len(rest_periods) else None
 
         # Convert UTC block times to home-base TZ for chronogram positioning.
@@ -759,6 +759,7 @@ def _build_ulr_data(duty_timeline, duty) -> tuple:
             'crew_member_id': period.crew_member_id if period else None,
             'crew_set': period.crew_set if period else None,
             'is_during_wocl': period.is_during_wocl if period else False,
+            'source': 'roster_ir' if has_pdf_ir else 'planned',
         })
     return ulr_compliance_dict, inflight_blocks
 
@@ -870,6 +871,38 @@ def _risk_reasons(duty_timeline, duty, roster) -> List[str]:
 
 def _round_opt(value, digits=2):
     return None if value is None else round(value, digits)
+
+
+def _apply_crew_overrides(roster, overrides: dict) -> None:
+    """Per-duty crew overrides from the pilot, applied before simulation.
+
+    A value is either a crew set ('crew_a' | 'crew_b', 4-pilot ULR rotation) or
+    an object {'composition': 'standard' | 'augmented_3' | 'augmented_4',
+    'crew_set': ...}. The roster PDF only marks 4-pilot crews reliably (IR
+    sectors), so a pilot flying with 3 pilots, or with a different rotation,
+    states it here. Parser-detected values stay for duties without an override.
+    """
+    sets = {'crew_a': ULRCrewSet.CREW_A, 'crew_b': ULRCrewSet.CREW_B}
+    comps = {'standard': CrewComposition.STANDARD, 'augmented_3': CrewComposition.AUGMENTED_3,
+             'augmented_4': CrewComposition.AUGMENTED_4}
+    for d in roster.duties:
+        value = overrides.get(d.duty_id) if isinstance(overrides, dict) else None
+        if value is None:
+            continue
+        if isinstance(value, str):
+            value = {'crew_set': value}
+        if not isinstance(value, dict):
+            continue
+        comp = comps.get(value.get('composition'))
+        if comp is not None:
+            d.crew_composition = comp
+            if comp == CrewComposition.STANDARD:
+                d.is_ulr, d.ulr_crew_set, d.rest_facility_class = False, None, None
+            elif d.rest_facility_class is None:
+                d.rest_facility_class = RestFacilityClass.CLASS_1  # long-haul bunk, as the planner assumes
+        crew_set = sets.get(value.get('crew_set'))
+        if crew_set is not None and d.crew_composition == CrewComposition.AUGMENTED_4:
+            d.ulr_crew_set = crew_set
 
 
 def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
@@ -1246,13 +1279,7 @@ async def analyze_roster(
 
         # Only override duties that have an explicit per-duty override;
         # parser-detected defaults (from auto_detect_crew_augmentation) are preserved.
-        valid_crew_sets = {'crew_a': ULRCrewSet.CREW_A, 'crew_b': ULRCrewSet.CREW_B}
-
-        for d in roster.duties:
-            if hasattr(d, 'ulr_crew_set') and d.duty_id in overrides_dict:
-                override_val = valid_crew_sets.get(overrides_dict[d.duty_id])
-                if override_val:
-                    d.ulr_crew_set = override_val
+        _apply_crew_overrides(roster, overrides_dict)
         
         # ── Company detection & fleet/role extraction ──────────────────
         # Only run airline detection if user has no company yet

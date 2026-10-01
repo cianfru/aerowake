@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { mapTimelinePoints } from '@/lib/transform-analysis';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { canBeAugmented } from '@/lib/crew';
+import type { CrewCompositionValue } from '@/lib/api-client';
 import { DutyDebriefAction } from '@/components/fatigue/debrief/DutyDebriefAction';
 import { DutyAnalysis } from '@/types/fatigue';
 import { getDutyDetail } from '@/lib/api-client';
@@ -25,6 +27,8 @@ interface DutyDetailsDialogProps {
   dutyCrewOverride?: 'crew_a' | 'crew_b';
   onCrewChange?: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
   onCrewReset?: (dutyId: string) => void;
+  crewCompositionOverride?: CrewCompositionValue | null;
+  onCrewCompositionChange?: (dutyId: string, composition: CrewCompositionValue | null) => void;
   /** Optional: start a fatigue report pre-filled for this duty. */
   onReportFatigue?: (duty: DutyAnalysis) => void;
 }
@@ -46,6 +50,8 @@ export function DutyDetailsDialog({
   dutyCrewOverride,
   onCrewChange,
   onCrewReset,
+  crewCompositionOverride,
+  onCrewCompositionChange,
   onReportFatigue,
 }: DutyDetailsDialogProps) {
   const [detailedDuty, setDetailedDuty] = useState<DutyAnalysis | null>(null);
@@ -92,6 +98,7 @@ export function DutyDetailsDialog({
   const zoneLabel = [homeBase, offset].filter(Boolean).join(' · ');
 
   const hasCrewContent =
+    (canBeAugmented(displayDuty) && !!onCrewCompositionChange) ||
     (displayDuty.crewComposition === 'augmented_4' && !!onCrewChange) ||
     (displayDuty.isUlr && !!displayDuty.ulrCompliance) ||
     (displayDuty.inflightRestBlocks && displayDuty.inflightRestBlocks.length > 0);
@@ -147,6 +154,8 @@ export function DutyDetailsDialog({
                     onCrewChange={hasCrewContent ? onCrewChange : undefined}
                     onCrewReset={hasCrewContent ? onCrewReset : undefined}
                     hasCrewContent={!!hasCrewContent}
+                    crewCompositionOverride={crewCompositionOverride}
+                    onCrewCompositionChange={canBeAugmented(displayDuty) ? onCrewCompositionChange : undefined}
                   />
                 </div>
               </div>

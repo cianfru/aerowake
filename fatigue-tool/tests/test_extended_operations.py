@@ -784,3 +784,47 @@ class TestSimulationSmoke:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v', '--tb=short'])
+
+
+class TestPilotCrewOverrides:
+    """The pilot can state the crew the roster cannot show (e.g. 3 pilots)."""
+
+    def _pair(self):
+        from parsers.roster_parser import auto_detect_crew_augmentation
+        base = datetime(2026, 10, 5, tzinfo=UTC)
+        out_dep = base.replace(hour=20)
+        outbound = make_duty('out', base, out_dep - timedelta(hours=1), out_dep + timedelta(hours=17),
+                             [make_segment('QR920', DOH, AKL, out_dep, out_dep + timedelta(hours=16))])
+        ret_dep = out_dep + timedelta(days=2)
+        ir = make_segment('QR921', AKL, DOH, ret_dep, ret_dep + timedelta(hours=17))
+        ir.activity_code = 'IR'
+        inbound = make_duty('ret', base + timedelta(days=2), ret_dep - timedelta(hours=1),
+                            ret_dep + timedelta(hours=18), [ir])
+        roster = Roster(roster_id='t', pilot_id='p', month='2026-10', duties=[outbound, inbound],
+                        home_base_timezone=HOME_TZ, pilot_base='DOH')
+        auto_detect_crew_augmentation(roster)
+        return roster
+
+    def test_composition_and_crew_set_overrides(self):
+        from api.api_server import _apply_crew_overrides
+        roster = self._pair()
+        _apply_crew_overrides(roster, {'out': {'composition': 'augmented_3'}, 'ret': 'crew_a'})
+        out, ret = roster.duties
+        assert out.crew_composition == CrewComposition.AUGMENTED_3
+        assert out.rest_facility_class == RestFacilityClass.CLASS_1
+        assert ret.ulr_crew_set == ULRCrewSet.CREW_A
+        _apply_crew_overrides(roster, {'out': {'composition': 'standard'}})
+        assert out.crew_composition == CrewComposition.STANDARD and not out.is_ulr
+
+    def test_every_scored_inflight_rest_block_is_returned_with_its_source(self):
+        import io, contextlib
+        from core import BorbelyFatigueModel, ModelConfig
+        from api.api_server import _build_duty_response
+        roster = self._pair()
+        with contextlib.redirect_stdout(io.StringIO()):
+            res = BorbelyFatigueModel(ModelConfig.aerowake()).simulate_roster(roster)
+        for duty, tl in zip(roster.duties, res.duty_timelines):
+            resp = _build_duty_response(tl, duty, roster)
+            assert len(resp.inflight_rest_blocks) == len(tl.inflight_rest_blocks) > 0
+            expected = 'roster_ir' if duty.duty_id == 'ret' else 'planned'
+            assert {b['source'] for b in resp.inflight_rest_blocks} == {expected}

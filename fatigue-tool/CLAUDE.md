@@ -134,6 +134,12 @@ ORO.FTL.235 minimum rest; ORO.FTL.235(d) recovery rest (36h incl. 2 local nights
 ≤168h apart); FDP above the ORO.FTL.205 table. Disruptive elements follow
 ORO.FTL.105(8) (`EASAComplianceValidator.is_disruptive_duty`).
 
+### Augmented crew and Qatar FTL
+See `docs/QATAR_FTL.md`: IR sectors → 4-pilot (Crew B; paired legs Crew A); 3-pilot only by
+pilot override (`duty_crew_overrides` `{composition, crew_set}`, `_apply_crew_overrides`). All
+scored in-flight rest blocks are returned with `source` 'roster_ir' | 'planned'. ULR = Qatar
+FTL 7.18 (`QatarFTL718Validator`); augmented non-ULR FDP limits are still EASA CS FTL.1.205(c).
+
 ### Standby
 CrewLink PSBY/HSBY/SBY → `DutyType.HOME_STANDBY` on `Roster.standbys`: not scored
 (pilot at home, free to sleep), counts 25% toward cumulative duty. ASBY/APSBY →

@@ -1,4 +1,5 @@
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Users } from 'lucide-react';
+import { crewLabel } from '@/lib/crew';
 import { cn } from '@/lib/utils';
 import { riskClasses } from '@/lib/risk-scale';
 import type { DutyAnalysis } from '@/types/fatigue';
@@ -28,6 +29,7 @@ export function DutyWatchCard({ duty, onDetails, onReportFatigue, sharedReasons 
   const times = dutyTimes(duty);
   const route = dutyRoute(duty);
   const date = dutyDateLabel(duty);
+  const crew = crewLabel(duty);
   const reasons = (duty.riskReasons ?? []).filter((r) => !sharedReasons?.has(r)).slice(0, 3);
 
   return (
@@ -38,6 +40,7 @@ export function DutyWatchCard({ duty, onDetails, onReportFatigue, sharedReasons 
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h3 className="text-base font-semibold">{date}</h3>
             <p className="text-base text-foreground/90 break-words">{route}</p>
+            {crew && <span className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary/60 px-1.5 py-0.5 font-sans text-[11px] font-medium text-foreground/80"><Users className="h-3 w-3" aria-hidden="true" />{crew}</span>}
           </div>
           {times && (
             <p className="font-mono text-xs text-muted-foreground tabular">{times} <span className="font-sans">home-base time</span></p>

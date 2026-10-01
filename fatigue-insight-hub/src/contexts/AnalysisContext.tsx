@@ -1,3 +1,4 @@
+import type { CrewCompositionValue } from '@/lib/api-client';
 import { createContext, useContext, useReducer, useEffect, type ReactNode } from 'react';
 import { DEFAULT_NAP_HABIT, PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { loadPersistedSettings, savePersistedSettings } from '@/hooks/usePersistedSettings';
@@ -19,6 +20,8 @@ export interface AnalysisState {
   /** One-shot prefill for the fatigue-report wizard ("Report fatigue" on a duty). */
   fatigueReportPrefill: { dutyId: string; purpose?: 'roster_concern'; watchReference?: number } | null;
   dutyCrewOverrides: Map<string, 'crew_a' | 'crew_b'>;
+  /** Pilot-stated crew per duty (the roster only marks 4-pilot crews reliably). */
+  dutyCrewComposition: Map<string, CrewCompositionValue>;
   showLanding: boolean;
 }
 
@@ -46,6 +49,7 @@ function buildInitialState(): AnalysisState {
     activeSubTab: null,
     fatigueReportPrefill: null,
     dutyCrewOverrides: new Map(),
+    dutyCrewComposition: new Map(),
     showLanding: !landingDismissed,
   };
 }
@@ -64,6 +68,7 @@ type AnalysisAction =
   | { type: 'SET_FATIGUE_REPORT_PREFILL'; payload: AnalysisState['fatigueReportPrefill'] }
   | { type: 'SET_CREW_OVERRIDE'; payload: { dutyId: string; crewSet: 'crew_a' | 'crew_b' } }
   | { type: 'CLEAR_CREW_OVERRIDE'; payload: { dutyId: string } }
+  | { type: 'SET_CREW_COMPOSITION'; payload: { dutyId: string; composition: CrewCompositionValue | null } }
   | { type: 'REMOVE_FILE' }
   | { type: 'SET_SHOW_LANDING'; payload: boolean }
   | { type: 'LOAD_ANALYSIS'; payload: AnalysisResults }
@@ -113,6 +118,13 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
       return { ...state, dutyCrewOverrides: updated };
     }
 
+    case 'SET_CREW_COMPOSITION': {
+      const updated = new Map(state.dutyCrewComposition);
+      if (action.payload.composition) updated.set(action.payload.dutyId, action.payload.composition);
+      else updated.delete(action.payload.dutyId);
+      return { ...state, dutyCrewComposition: updated };
+    }
+
     case 'CLEAR_CREW_OVERRIDE': {
       const updated = new Map(state.dutyCrewOverrides);
       updated.delete(action.payload.dutyId);
@@ -127,6 +139,7 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
         analysisResults: null,
         selectedDuty: null,
         dutyCrewOverrides: new Map(),
+        dutyCrewComposition: new Map(),
       };
 
     case 'SET_SHOW_LANDING':
@@ -185,6 +198,8 @@ interface AnalysisContextValue {
   clearFatigueReportPrefill: () => void;
   setCrewOverride: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
   clearCrewOverride: (dutyId: string) => void;
+  /** null returns the duty to the crew read from the roster. */
+  setCrewComposition: (dutyId: string, composition: CrewCompositionValue | null) => void;
   removeFile: () => void;
   setShowLanding: (show: boolean) => void;
   loadAnalysis: (r: AnalysisResults) => void;
@@ -222,6 +237,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_CREW_OVERRIDE', payload: { dutyId, crewSet } }),
     clearCrewOverride: (dutyId) =>
       dispatch({ type: 'CLEAR_CREW_OVERRIDE', payload: { dutyId } }),
+    setCrewComposition: (dutyId, composition) =>
+      dispatch({ type: 'SET_CREW_COMPOSITION', payload: { dutyId, composition } }),
     removeFile: () => dispatch({ type: 'REMOVE_FILE' }),
     setShowLanding: (show) => dispatch({ type: 'SET_SHOW_LANDING', payload: show }),
     loadAnalysis: (r) => dispatch({ type: 'LOAD_ANALYSIS', payload: r }),

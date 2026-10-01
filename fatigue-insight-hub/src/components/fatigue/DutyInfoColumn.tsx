@@ -9,7 +9,8 @@ import { CrewRestTimeline } from './CrewRestTimeline';
 import { cn } from '@/lib/utils';
 import { SLEEP_DEFICIT_LABELS, sleepDeficitClass } from '@/lib/risk-scale';
 import { formatHomeDate, formatHomeTime } from '@/lib/home-time';
-import { toast } from 'sonner';
+import type { CrewCompositionValue } from '@/lib/api-client';
+import { crewLabel, inflightSleepHours, isAugmented } from '@/lib/crew';
 
 const STRATEGY_LABELS: Record<string, string> = {
   normal: 'Normal night',
@@ -54,6 +55,9 @@ interface DutyInfoColumnProps {
   onCrewChange?: (dutyId: string, crewSet: 'crew_a' | 'crew_b') => void;
   onCrewReset?: (dutyId: string) => void;
   hasCrewContent: boolean;
+  /** Pilot-stated crew for this duty (null = as read from the roster). */
+  crewCompositionOverride?: CrewCompositionValue | null;
+  onCrewCompositionChange?: (dutyId: string, composition: CrewCompositionValue | null) => void;
 }
 
 function SleepBlocks({ duty, homeTz }: { duty: DutyAnalysis; homeTz?: string }) {
@@ -80,9 +84,9 @@ function SleepBlocks({ duty, homeTz }: { duty: DutyAnalysis; homeTz?: string }) 
 }
 
 /** Sleep before the duty, the 7-day shortfall, FDP and crew context. */
-export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, onCrewReset, hasCrewContent }: DutyInfoColumnProps) {
+export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, onCrewReset, hasCrewContent, crewCompositionOverride, onCrewCompositionChange }: DutyInfoColumnProps) {
   const isTraining = isTrainingDuty(duty);
-  const [crewOpen, setCrewOpen] = useState(false);
+  const [crewOpen, setCrewOpen] = useState(isAugmented(duty));
   const est = duty.sleepEstimate;
   const deficit = duty.sleepDeficit7d;
   const away = duty.sleepEnvironment === 'hotel' || duty.sleepEnvironment === 'layover';
@@ -155,13 +159,31 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
             <span className="flex items-center gap-2">
               <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               Crew and in-flight rest
-              {duty.crewComposition && duty.crewComposition !== 'standard' && (
-                <span className="text-xs font-normal text-muted-foreground">{duty.crewComposition === 'augmented_4' ? '4 pilots' : '3 pilots'}</span>
-              )}
+              <span className="text-xs font-normal text-muted-foreground">{crewLabel(duty) ?? '2 pilots'}</span>
             </span>
             <ChevronDown className={cn('h-4 w-4 transition-transform', crewOpen && 'rotate-180')} aria-hidden="true" />
           </CollapsibleTrigger>
           <CollapsibleContent className="space-y-3 pt-3">
+            {onCrewCompositionChange && (
+              <div className="space-y-2 rounded-xl border border-border bg-card p-3 text-sm">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-muted-foreground">Crew on this duty</span>
+                  <div className="inline-flex rounded-lg bg-muted p-0.5" role="radiogroup" aria-label="Crew on this duty">
+                    {([['standard', '2 pilots'], ['augmented_3', '3 pilots'], ['augmented_4', '4 pilots']] as const).map(([value, label]) => (
+                      <button key={value} type="button" role="radio" aria-checked={duty.crewComposition === value}
+                        onClick={() => { if (duty.crewComposition !== value) onCrewCompositionChange(duty.dutyId || '', value); }}
+                        className={cn('min-h-[32px] rounded-md px-3 text-xs font-medium transition-colors', duty.crewComposition === value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {crewCompositionOverride
+                    ? <button type="button" className="text-xs text-primary underline-offset-2 hover:underline" onClick={() => onCrewCompositionChange(duty.dutyId || '', null)}>Use roster</button>
+                    : <span className="text-xs text-muted-foreground">From roster</span>}
+                </div>
+                <p className="text-xs text-muted-foreground">The roster marks 4-pilot crews by their in-flight rest (IR) sectors; a 3-pilot crew cannot be read from it. Changing the crew re-runs the analysis with the matching in-flight rest and FDP limits.</p>
+              </div>
+            )}
             {onCrewChange && duty.crewComposition === 'augmented_4' && (() => {
               const autoDetected = duty.ulrCrewSet || 'crew_b';
               const effective = dutyCrewOverride || autoDetected;
@@ -174,7 +196,7 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                         key={cs}
                         type="button"
                         aria-pressed={effective === cs}
-                        onClick={() => { onCrewChange(duty.dutyId || '', cs); toast.info(`Crew ${cs === 'crew_a' ? 'A' : 'B'} — run the analysis again to update`); }}
+                        onClick={() => { if (effective !== cs) onCrewChange(duty.dutyId || '', cs); }}
                         className={cn('min-h-[32px] rounded-md px-3 text-xs font-medium transition-colors', effective === cs ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
                       >
                         {cs === 'crew_a' ? 'A' : 'B'}
@@ -182,7 +204,7 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                     ))}
                   </div>
                   {dutyCrewOverride ? (
-                    onCrewReset && <button type="button" className="text-xs text-primary underline-offset-2 hover:underline" onClick={() => { onCrewReset(duty.dutyId || ''); toast.info(`Back to automatic: crew ${autoDetected === 'crew_a' ? 'A' : 'B'}`); }}>Use automatic</button>
+                    onCrewReset && <button type="button" className="text-xs text-primary underline-offset-2 hover:underline" onClick={() => onCrewReset(duty.dutyId || '')}>Use automatic</button>
                   ) : <span className="text-xs text-muted-foreground">Automatic</span>}
                 </div>
               );
@@ -203,6 +225,10 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
             {duty.inflightRestBlocks && duty.inflightRestBlocks.length > 0 && (
               <>
                 <CrewRestTimeline duty={duty} />
+                <p className="text-xs text-muted-foreground">
+                  In-flight sleep credited: <span className="font-mono tabular text-foreground">{inflightSleepHours(duty).toFixed(1)}h</span>
+                  {duty.inflightRestBlocks.some((b) => b.source === 'planned') ? ' · from the standard rest rotation (the roster shows no IR sector) — adjust the crew above if yours differs' : ' · from the IR sectors on your roster'}
+                </p>
                 <ul className="space-y-1 rounded-xl border border-border bg-card p-3 text-xs" aria-label="In-flight rest">
                   {duty.inflightRestBlocks.map((block, i) => (
                     <li key={i} className="flex items-center justify-between gap-3">
@@ -210,7 +236,7 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                         {homeTz ? `${formatHomeTime(block.startUtc, homeTz)}–${formatHomeTime(block.endUtc, homeTz)}` : `${block.startUtc.slice(11, 16)}Z–${block.endUtc.slice(11, 16)}Z`}
                       </span>
                       <span className="font-mono tabular">
-                        {(block.effectiveSleepHours ?? 0).toFixed(1)}h sleep of {(block.durationHours ?? 0).toFixed(1)}h{block.isDuringWocl ? ' · in WOCL' : ''}
+                        {(block.effectiveSleepHours ?? 0).toFixed(1)}h sleep of {(block.durationHours ?? 0).toFixed(1)}h{block.isDuringWocl ? ' · in WOCL' : ''}{block.source === 'planned' ? ' · planned' : ''}
                       </span>
                     </li>
                   ))}

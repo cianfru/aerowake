@@ -264,6 +264,8 @@ export interface DutyAnalysis {
     crewMemberId: string | null;
     crewSet: 'crew_a' | 'crew_b' | null;
     isDuringWocl: boolean;
+    /** 'roster_ir' = an IR sector on the roster; 'planned' = the standard rest rotation, to confirm. */
+    source: 'roster_ir' | 'planned';
   }[];
   returnToDeckPerformance: number | null;
   preDutyAwakeHours: number;

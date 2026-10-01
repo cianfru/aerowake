@@ -13,6 +13,9 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://aerowake-productio
 export type CrewComposition = 'standard' | 'augmented_3' | 'augmented_4';
 export type RestFacilityClass = 'class_1' | 'class_2' | 'class_3';
 export type ULRCrewSet = 'crew_a' | 'crew_b';
+export type CrewCompositionValue = 'standard' | 'augmented_3' | 'augmented_4';
+/** Per-duty crew override sent with an analysis: a crew set, or composition + optional set. */
+export type CrewOverride = ULRCrewSet | { composition?: CrewCompositionValue; crew_set?: ULRCrewSet };
 export type AcclimatizationState = 'acclimatized' | 'unknown' | 'departed';
 
 export interface InFlightRestBlock {
@@ -34,6 +37,7 @@ export interface InFlightRestBlock {
   crew_member_id: string | null;
   crew_set: ULRCrewSet | null;
   is_during_wocl: boolean;
+  source?: 'roster_ir' | 'planned';
 }
 
 export interface ULRCompliance {
@@ -476,7 +480,7 @@ export async function analyzeRoster(
   file: File,
   pilotId: string,
   homeBase?: string | null,
-  dutyCrewOverrides?: Map<string, ULRCrewSet>,
+  dutyCrewOverrides?: Map<string, CrewOverride>,
   options: { override?: boolean; napHabit?: string | null } = {},
 ): Promise<AnalysisResult> {
 

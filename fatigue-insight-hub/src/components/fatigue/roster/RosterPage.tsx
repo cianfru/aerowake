@@ -1,3 +1,4 @@
+import { useAnalyzeRoster, type RunAnalysisOptions } from '@/hooks/useAnalyzeRoster';
 import { format } from 'date-fns';
 import { RotateCcw } from 'lucide-react';
 import { useAnalysis } from '@/contexts/AnalysisContext';
@@ -43,10 +44,15 @@ function RosterHeader({ results, onNewRoster }: { results: AnalysisResults; onNe
  */
 export function RosterPage() {
   const {
-    state, selectDuty, setDrawerOpen, setCrewOverride, clearCrewOverride,
+    state, selectDuty, setDrawerOpen, setCrewOverride, clearCrewOverride, setCrewComposition,
     removeFile, openFatigueReportForDuty,
   } = useAnalysis();
-  const { analysisResults: results, selectedDuty, drawerOpen, dutyCrewOverrides, settings } = state;
+  const { analysisResults: results, selectedDuty, drawerOpen, dutyCrewOverrides, dutyCrewComposition, settings } = state;
+  const { runAnalysis, canReanalyse } = useAnalyzeRoster();
+  // Crew changes re-run the analysis in place when the roster file is loaded.
+  const rerun = (crew: RunAnalysisOptions['crew']) => { if (canReanalyse) runAnalysis({ crew, reveal: false }); };
+  // After a re-run, show the same duty from the new results.
+  const liveDuty = (selectedDuty && results?.duties.find((d) => d.dutyId && d.dutyId === selectedDuty.dutyId)) || selectedDuty;
 
   const reportFatigue = (duty: DutyAnalysis) => {
     if (duty.dutyId) openFatigueReportForDuty(duty.dutyId);
@@ -81,15 +87,17 @@ export function RosterPage() {
       </div>
 
       <DutyDetailsDialog
-        duty={selectedDuty}
+        duty={liveDuty}
         analysisId={results.analysisId}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
         homeTz={results.homeBaseTimezone}
         homeBase={results.pilotBase || settings.homeBase}
         dutyCrewOverride={dutyCrewOverrides.get(selectedDuty?.dutyId || '')}
-        onCrewChange={setCrewOverride}
-        onCrewReset={clearCrewOverride}
+        onCrewChange={(id, crewSet) => { setCrewOverride(id, crewSet); rerun({ dutyId: id, crewSet }); }}
+        onCrewReset={(id) => { clearCrewOverride(id); rerun({ dutyId: id, crewSet: null }); }}
+        crewCompositionOverride={dutyCrewComposition.get(selectedDuty?.dutyId || '') ?? null}
+        onCrewCompositionChange={(id, composition) => { setCrewComposition(id, composition); rerun({ dutyId: id, composition }); }}
         onReportFatigue={reportFatigue}
       />
       <AirlineDetectionPrompt />

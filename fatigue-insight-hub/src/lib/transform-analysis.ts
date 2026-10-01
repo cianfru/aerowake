@@ -469,6 +469,7 @@ export function transformAnalysisResult(
           crewMemberId: block.crew_member_id,
           crewSet: block.crew_set,
           isDuringWocl: block.is_during_wocl,
+          source: block.source === 'planned' ? 'planned' : 'roster_ir',
         })),
         returnToDeckPerformance: duty.return_to_deck_performance ?? null,
         preDutyAwakeHours: duty.pre_duty_awake_hours ?? 0,

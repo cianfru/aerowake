@@ -2,7 +2,7 @@
 
 ## Current launch contracts (September 2026)
 
-Use [launch hardening](docs/LAUNCH_HARDENING.md) and [roster reference](docs/ROSTER_REFERENCE.md) for current deployment and input contracts. Older explanatory notes below must not override these contracts.
+Use [launch hardening](docs/LAUNCH_HARDENING.md) and [roster reference](docs/ROSTER_REFERENCE.md) for current deployment and input contracts. Qatar Airways FTL rules (ULR 7.18, acclimatisation Table 7-1, augmented crew) and which values are still EASA-referenced: [Qatar FTL](docs/QATAR_FTL.md) — never invent a regulatory value. Older explanatory notes below must not override these contracts.
 
 - Store aware UTC instants; resolve home zones from verified airport codes. Distinguish reported sleep from inferred opportunities.
 - Current KSS is 1–9; index = 110 − 10 × KSS. Higher bands begin at KSS 5.5/6.5/7.5/8.5. Duty headline risk uses peak KSS, not landing alone. Never convert an unidentified legacy model index into KSS.
