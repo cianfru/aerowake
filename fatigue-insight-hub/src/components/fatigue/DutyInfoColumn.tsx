@@ -86,7 +86,7 @@ function SleepBlocks({ duty, homeTz }: { duty: DutyAnalysis; homeTz?: string }) 
 /** Sleep before the duty, the 7-day shortfall, FDP and crew context. */
 export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, onCrewReset, hasCrewContent, crewCompositionOverride, onCrewCompositionChange }: DutyInfoColumnProps) {
   const isTraining = isTrainingDuty(duty);
-  const [crewOpen, setCrewOpen] = useState(isAugmented(duty));
+  const [crewOpen, setCrewOpen] = useState(isAugmented(duty) || !!duty.augmentationSuggested);
   const est = duty.sleepEstimate;
   const deficit = duty.sleepDeficit7d;
   const away = duty.sleepEnvironment === 'hotel' || duty.sleepEnvironment === 'layover';
@@ -159,7 +159,7 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
             <span className="flex items-center gap-2">
               <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               Crew and in-flight rest
-              <span className="text-xs font-normal text-muted-foreground">{crewLabel(duty) ?? '2 pilots'}</span>
+              <span className="text-xs font-normal text-muted-foreground">{crewLabel(duty) ?? (duty.augmentationSuggested ? 'not on roster' : '2 pilots')}</span>
             </span>
             <ChevronDown className={cn('h-4 w-4 transition-transform', crewOpen && 'rotate-180')} aria-hidden="true" />
           </CollapsibleTrigger>
@@ -181,6 +181,11 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                     ? <button type="button" className="text-xs text-primary underline-offset-2 hover:underline" onClick={() => onCrewCompositionChange(duty.dutyId || '', null)}>Use roster</button>
                     : <span className="text-xs text-muted-foreground">From roster</span>}
                 </div>
+                {duty.augmentationSuggested && !crewCompositionOverride && (
+                  <p className="rounded-lg bg-secondary/60 px-3 py-2 text-xs text-foreground/90">
+                    This FDP is above the 2-pilot maximum and your roster does not show the crew. If you fly it with 3 or 4 pilots, set it here so in-flight rest and the augmented FDP limit are applied.
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">The roster marks 4-pilot crews by their in-flight rest (IR) sectors; a 3-pilot crew cannot be read from it. Changing the crew re-runs the analysis with the matching in-flight rest and FDP limits.</p>
               </div>
             )}

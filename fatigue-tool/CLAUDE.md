@@ -182,8 +182,14 @@ the same configuration.
   while asleep; ends at the last estimated sleep / last release + 2h — no points without a
   sleep estimate behind them.
 - `avg_sleep_per_night` covers only `sleep_coverage_days` (month start → last estimate).
-- Qatar CrewLink simulator codes: OPTR, FFS, FS1, AFTD, 77LP, AW8, PSIM (bare `SIM`
-  is an annotation, not a duty).
+- Qatar CrewLink simulator codes: OPTR, FFS, FS1, AFTD, AW8, PSIM, type-prefixed checks
+  (`\d\dLP`, `\d\dRC`, e.g. 32RC, 35LP, 77LP) and SIMI/SIMI2 (bare `SIM` is an annotation,
+  not a duty). Ground: EBTGR, TMTG, INAS, 6ESEC, 6EVS, EVNT, GTCT, GRND, AOFC. ISYU = home
+  standby; CTC (contactable) is not a duty. Any other code in a base column (RPT, code, base,
+  start, end) is read as ground duty and listed in the import review (`unrecognised_activity`).
+- Crew not on roster: a 2-pilot duty above the basic FDP maximum with a sector ≥ 7 h block
+  returns `augmentation_suggested` and the FDP finding asks the pilot to set the crew
+  (`easa_checks.augmentation_likely`); it is never assumed augmented.
 
 ## Code Conventions
 

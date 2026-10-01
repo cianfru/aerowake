@@ -138,6 +138,14 @@ def review(roster, parser, suffix, resolution=None, roster_format=None):
             f'{"duty" if count == 1 else "duties"}: 30 minutes after the last landing or training session. '
             "Check them against your operator's records."))
 
+    unknown = sorted(set(getattr(parser, 'unrecognised_codes', None) or ()))
+    if unknown:
+        checks.append(_check('unrecognised_activity', 'info',
+            f'Activity code{"s" if len(unknown) > 1 else ""} {", ".join(unknown)} '
+            f'{"are" if len(unknown) > 1 else "is"} not in Aerowake\'s list, so '
+            f'{"they are" if len(unknown) > 1 else "it is"} read as ground duty at base. '
+            'Check the times against your roster.'))
+
     base_source = resolution.source if resolution else None
     needs_confirmation = base_source == DUTY_PATTERN or any(c['severity'] == 'warning' for c in checks)
     airport = _airport(base)

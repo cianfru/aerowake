@@ -14,7 +14,7 @@ Supports: Qatar Airways, Emirates, Etihad, and other airlines with CrewLink-styl
 import re
 import pdfplumber
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import pytz
 import airportsdata
 
@@ -31,14 +31,46 @@ _IATA_DB = airportsdata.load('IATA')
 # ============================================================================
 # Simulator codes: Full Flight Simulator (FFS), OPC training (OPTR), etc.
 # These are high-cognitive-load sessions in a motion simulator.
-_SIMULATOR_CODES = {'OPTR', 'FFS', 'FS1', 'AFTD', '77LP', 'AW8', 'PSIM'}
+_SIMULATOR_CODES = {'OPTR', 'FFS', 'FS1', 'AFTD', '77LP', 'AW8', 'PSIM', 'SIMI'}
+# Type-prefixed sim checks (32RC A320 recency sim, 35LP A350 LPC/OPC, 77LP) and the
+# instructor-upgrade sim series (SIMI, SIMI2, ...). Bare "SIM" is an annotation, not a duty.
+_SIMULATOR_PATTERN = re.compile(r'^(\d{2}(LP|RC)|SIMI\d?)$')
 
-# Ground training codes: Classroom, meetings, assessments.
+# Ground training codes: Classroom, meetings, assessments, office duty.
 # Lower cognitive intensity than simulator, but still constrain sleep.
-_GROUND_TRAINING_CODES = {'EBTGR', 'TMTG', 'INAS', '6ESEC', '6EVS', 'EVNT'}
+_GROUND_TRAINING_CODES = {'EBTGR', 'TMTG', 'INAS', '6ESEC', '6EVS', 'EVNT',
+                          'GTCT', 'GRND', 'AOFC'}
 
 # Combined set for quick membership testing
 _ALL_TRAINING_CODES = _SIMULATOR_CODES | _GROUND_TRAINING_CODES
+
+# Standby codes: home (reserve) standby is not scored, airport standby is a duty.
+# ISYU = "Standby for Unannounced Duty" (CrewLink legend), a home/reserve standby.
+_HOME_STANDBY_CODES = ('PSBY', 'HSBY', 'SBY', 'ISYU')
+_AIRPORT_STANDBY_CODES = ('ASBY', 'APSBY')
+
+# Base activities that are not duties: CTC = contactable (reachable by phone).
+_NOT_DUTY_CODES = {'CTC'}
+
+# Report line; tolerates pdfplumber artefacts ("R PT:", a digit bled in from the
+# neighbouring column, a truncated minute "15:0").
+_RPT_RE = re.compile(r'R\s*P\s*T\s*:\s*(\d{2})\s*:\s*(\d{1,2})')
+_CLOCK_RE = re.compile(r'^\d{2}:\d{2}(\(\+1\))?$')
+
+
+def _is_simulator_code(code: str) -> bool:
+    return code in _SIMULATOR_CODES or bool(_SIMULATOR_PATTERN.match(code))
+
+
+def _report_clock(lines) -> Optional[Tuple[int, int]]:
+    """(hour, minute) of the first RPT line. A one-digit minute lost its last digit
+    to the neighbouring column and is read as the start of that ten-minute span."""
+    for line in lines:
+        match = _RPT_RE.search(line)
+        if match:
+            minute = match.group(2)
+            return int(match.group(1)), int(minute) * (10 if len(minute) == 1 else 1)
+    return None
 
 # Line training annotations that appear on actual flight segments.
 # These are metadata — the flight is still a normal flight duty.
@@ -107,6 +139,9 @@ class CrewLinkRosterParser:
         # Duties whose release is not printed and is set after the last landing
         # or session end (reported to the pilot as a counted review note).
         self.inferred_release_ids: set = set()
+        # Base activity codes not in the known lists, read as ground duties
+        # (reported to the pilot for review; see parsers/reconciliation.py).
+        self.unrecognised_codes: List[str] = []
 
     def _get_or_create_airport(self, code: str) -> Optional[Airport]:
         """
@@ -524,11 +559,13 @@ class CrewLinkRosterParser:
         first_item = lines[0].upper()
         # Standby columns look like training columns: RPT, code, DOH, start, end.
         tokens = {line.strip().upper() for line in lines}
-        standby_code = next((c for c in ('PSBY', 'HSBY', 'SBY', 'ASBY', 'APSBY') if c in tokens), None)
+        if tokens & _NOT_DUTY_CODES:
+            return None
+        standby_code = next((c for c in _HOME_STANDBY_CODES + _AIRPORT_STANDBY_CODES if c in tokens), None)
         if standby_code:
             duty = self._parse_training_duty(lines, date, standby_code)
             if duty is not None:
-                is_airport = standby_code in ('ASBY', 'APSBY')
+                is_airport = standby_code in _AIRPORT_STANDBY_CODES
                 duty.duty_type = DutyType.AIRPORT_STANDBY if is_airport else DutyType.HOME_STANDBY
                 duty.release_time_utc -= timedelta(minutes=30)  # no debrief buffer on standby
                 duty.duty_id = f"{duty.duty_id}_{standby_code}"
@@ -559,21 +596,22 @@ class CrewLinkRosterParser:
         report_time = None
         report_hour = None
         report_minute = None
-
-        for line in lines:
-            # Tolerate OCR artifacts that insert spaces inside "RPT"
-            # (e.g., "R PT:05:55" or "RP T:05:55" from pdfplumber)
-            rpt_match = re.match(r'R\s*P\s*T\s*:\s*(\d{2})\s*:\s*(\d{2})', line)
-            if rpt_match:
-                report_hour = int(rpt_match.group(1))
-                report_minute = int(rpt_match.group(2))
-                break
+        clock = _report_clock(lines)
+        if clock:
+            report_hour, report_minute = clock
 
         # Extract flight segments first to determine departure airport
         segments = self._extract_segments_from_lines(lines, date)
 
         if not segments:
-            return None
+            code = self._unknown_base_activity(lines)
+            if code is None:
+                return None
+            duty = self._parse_training_duty(lines, date, code)
+            if duty is not None:
+                self.unrecognised_codes.append(code)
+                self.inferred_release_ids.add(duty.duty_id)
+            return duty
         
         # Now create report time using proper timezone conversion
         if report_hour is not None:
@@ -683,7 +721,7 @@ class CrewLinkRosterParser:
         for line in lines:
             token = line.strip().upper()
             # Direct match against known training codes
-            if token in _ALL_TRAINING_CODES:
+            if token in _ALL_TRAINING_CODES or _SIMULATOR_PATTERN.match(token):
                 return token
             # Some codes may appear with prefix/suffix in PDF
             # (e.g. "6ESEC" could be embedded in a longer string)
@@ -691,6 +729,24 @@ class CrewLinkRosterParser:
                 if code in token and len(token) <= len(code) + 2:
                     return code
         return None
+
+    def _unknown_base_activity(self, lines: List[str]) -> Optional[str]:
+        """Code of an unlisted base activity: RPT, a non-numeric code, the home base and
+        start/end clocks, with no other airport (flights carry two airports)."""
+        if _report_clock(lines) is None:
+            return None
+        tokens = [line.strip().upper() for line in lines]
+        rpt_idx = next(i for i, line in enumerate(lines) if _RPT_RE.search(line))
+        if rpt_idx + 2 >= len(tokens):
+            return None
+        code, place = tokens[rpt_idx + 1], tokens[rpt_idx + 2]
+        if not re.fullmatch(r'[A-Z0-9]{2,6}', code) or code.isdigit() or place != self._get_home_base_code():
+            return None
+        if sum(1 for t in tokens if _CLOCK_RE.match(t)) < 2:
+            return None
+        if any(re.fullmatch(r'[A-Z]{3}', t) and t != place for t in tokens[rpt_idx + 2:]):
+            return None
+        return code
 
     def _parse_training_duty(
         self,
@@ -716,28 +772,37 @@ class CrewLinkRosterParser:
         # 1. Extract report time
         report_hour = None
         report_minute = None
-        for line in lines:
-            rpt_match = re.match(r'R\s*P\s*T\s*:\s*(\d{2})\s*:\s*(\d{2})', line)
-            if rpt_match:
-                report_hour = int(rpt_match.group(1))
-                report_minute = int(rpt_match.group(2))
-                break
+        clock = _report_clock(lines)
+        if clock:
+            report_hour, report_minute = clock
 
-        # 2. Extract start and end times from the column
-        # After the training code and location (DOH), there are two time entries
+        # 2. Extract start and end times from the column: the clock lines after the
+        # code. A day with two back-to-back activities (GTCT 08-12, then GRND 12-16)
+        # is one duty from the first start to the last end.
+        # Each activity is RPT, code, place, start, end; the duty/block hour totals
+        # printed lower in the column are clocks too and must not be read as times.
+        tokens = [line.strip().upper() for line in lines]
+        clock_lines = []
+        for i, token in enumerate(tokens):
+            if _RPT_RE.search(token):
+                clock_lines += [lines[j].strip() for j in (i + 3, i + 4)
+                                if j < len(tokens) and _CLOCK_RE.match(tokens[j])]
+        if len(clock_lines) < 2:
+            clock_lines, code_seen = [], False
+            for line, token in zip(lines, tokens):
+                if token == training_code or training_code in token:
+                    code_seen = True
+                elif code_seen and _CLOCK_RE.match(token) and len(clock_lines) < 2:
+                    clock_lines.append(line.strip())
         times_found = []
-        code_seen = False
-        for line in lines:
-            token = line.strip().upper()
-            if token == training_code or training_code in token:
-                code_seen = True
-                continue
-            if code_seen and re.search(r'\d{2}:\d{2}', line):
-                parsed_time = self._parse_time(line.strip(), date)
-                if parsed_time:
-                    times_found.append((parsed_time, line.strip()))
-                if len(times_found) >= 2:
-                    break
+        for text in clock_lines:
+            parsed_time = self._parse_time(text, date)
+            if parsed_time:
+                if times_found and parsed_time < times_found[-1][0]:
+                    parsed_time += timedelta(days=1)
+                times_found.append((parsed_time, text))
+        if len(times_found) > 2:
+            times_found = [times_found[0], times_found[-1]]
 
         if len(times_found) < 2:
             # Couldn't find start/end times — try fallback from RPT
@@ -805,7 +870,7 @@ class CrewLinkRosterParser:
                         annotations.append(part)
 
         # 5. Determine duty type
-        if training_code in _SIMULATOR_CODES:
+        if _is_simulator_code(training_code):
             duty_type = DutyType.SIMULATOR
         else:
             duty_type = DutyType.GROUND_TRAINING

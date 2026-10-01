@@ -97,3 +97,25 @@ def test_home_standby_column_is_parsed():
     assert duty.duty_type == DutyType.HOME_STANDBY
     assert duty.report_time_utc.astimezone(Q).strftime('%d %H:%M') == '22 22:00'
     assert duty.release_time_utc.astimezone(Q).strftime('%d %H:%M') == '23 04:00'
+
+
+def test_long_sector_above_two_pilot_fdp_asks_for_the_crew():
+    """CrewLink prints no crew size: a long sector whose FDP only an augmented crew allows
+    is flagged so the pilot states the crew (not silently assumed)."""
+    from core.easa_checks import augmentation_likely
+    from models.data_models import CrewComposition
+    nrt = Airport('HND', 'Asia/Tokyo')
+    rep = at(24, 18, 35)
+    seg = FlightSegment('813', nrt, DOH, rep + timedelta(hours=1), rep + timedelta(hours=12, minutes=10))
+    duty = Duty('D1', datetime(2026, 9, 24), rep, seg.scheduled_arrival_utc + timedelta(minutes=30), [seg], 'Asia/Qatar')
+    duty.max_fdp_hours, duty.extended_fdp_hours = 11.0, 13.0
+    assert augmentation_likely(duty)
+    roster = Roster('p', 'x', '2026-09', [duty], 'Asia/Qatar', pilot_base='DOH')
+    finding = next(f for f in run_checks(roster)['findings'] if f['rule'] == 'fdp_max')
+    assert 'set the crew' in finding['detail']
+    duty.crew_stated = True  # pilot confirmed 2 pilots
+    assert not augmentation_likely(duty)
+    duty.crew_stated, duty.crew_composition = False, CrewComposition.AUGMENTED_3
+    assert not augmentation_likely(duty)
+    duty.crew_composition, duty.max_fdp_hours = CrewComposition.STANDARD, 13.0
+    assert not augmentation_likely(duty)

@@ -230,6 +230,8 @@ export interface DutyAnalysis {
   // ULR / Augmented crew fields
   crewComposition: 'standard' | 'augmented_3' | 'augmented_4';
   ulrCrewSet: 'crew_a' | 'crew_b' | null;
+  /** 2-pilot duty above the basic FDP maximum with a long sector: probably augmented, crew not on the roster. */
+  augmentationSuggested?: boolean;
   restFacilityClass: 'class_1' | 'class_2' | 'class_3' | null;
   isUlr: boolean;
   acclimatizationState: 'acclimatized' | 'unknown' | 'departed';

@@ -267,6 +267,7 @@ export interface Duty {
   // ULR / Augmented crew fields
   crew_composition?: CrewComposition;
   ulr_crew_set?: 'crew_a' | 'crew_b' | null;
+  augmentation_suggested?: boolean;
   rest_facility_class?: RestFacilityClass | null;
   is_ulr?: boolean;
   acclimatization_state?: AcclimatizationState;

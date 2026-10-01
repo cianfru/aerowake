@@ -41,6 +41,7 @@ export function DutyWatchCard({ duty, onDetails, onReportFatigue, sharedReasons 
             <h3 className="text-base font-semibold">{date}</h3>
             <p className="text-base text-foreground/90 break-words">{route}</p>
             {crew && <span className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary/60 px-1.5 py-0.5 font-sans text-[11px] font-medium text-foreground/80"><Users className="h-3 w-3" aria-hidden="true" />{crew}</span>}
+            {!crew && duty.augmentationSuggested && <span className="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-1.5 py-0.5 font-sans text-[11px] font-medium text-muted-foreground" title="Above the 2-pilot FDP maximum; set the crew in Details"><Users className="h-3 w-3" aria-hidden="true" />Crew not on roster</span>}
           </div>
           {times && (
             <p className="font-mono text-xs text-muted-foreground tabular">{times} <span className="font-sans">home-base time</span></p>

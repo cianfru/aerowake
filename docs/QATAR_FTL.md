@@ -58,7 +58,9 @@ rotation (no rest in the first/last 90 min).
   (`parsers/roster_parser.py::auto_detect_crew_augmentation`). Both crews rest in flight on
   both sectors; the crew set selects the approved pattern. Until October 2026 the code
   assigned the crew per sector (IR leg = B, other leg = A), which put one leg of every
-  pairing on the wrong rest pattern. A 3-pilot crew cannot be read from the PDF.
+  pairing on the wrong rest pattern. A 3-pilot crew cannot be read from the PDF. A long sector
+  (≥ 7 h block) whose FDP is above the 2-pilot maximum, with no crew stated, is flagged
+  `augmentation_suggested` and the pilot is asked to set the crew; it is never assumed.
 - **Pilot override.** In duty details the pilot can set 2 / 3 / 4 pilots (and Crew A/B for
   4-pilot ULR). The analysis is re-run with `duty_crew_overrides`
   (`{duty_id: 'crew_a' | 'crew_b' | {composition, crew_set}}`) — `api_server._apply_crew_overrides`.

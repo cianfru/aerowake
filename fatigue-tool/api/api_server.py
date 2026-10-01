@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 # Import your fatigue model
 from core import BorbelyFatigueModel, ModelConfig, RiskThresholds
 from core.alertness import ENGINE_VERSION, KSS_ENGINE_VERSIONS, is_kss_engine, classify_kss, round_half_up
+from core.easa_checks import augmentation_likely
 from parsers.roster_parser import PDFRosterParser, CSVRosterParser, AirportDatabase
 from models.data_models import MonthlyAnalysis, DutyTimeline, CrewComposition, RestFacilityClass, ULRCrewSet
 
@@ -424,6 +425,9 @@ class DutyResponse(BaseModel):
     rest_facility_class: Optional[str] = None
     is_ulr: bool = False
     ulr_crew_set: Optional[str] = None  # "crew_a" | "crew_b" — parser-detected or overridden
+    # 2-pilot duty above the basic FDP maximum with a long sector, crew not stated:
+    # probably augmented; the pilot is asked to set the crew (easa_checks.augmentation_likely).
+    augmentation_suggested: bool = False
     acclimatization_state: str = "acclimatized"
     ulr_compliance: Optional[dict] = None
     inflight_rest_blocks: List[dict] = []
@@ -899,6 +903,7 @@ def _apply_crew_overrides(roster, overrides: dict) -> None:
         comp = comps.get(value.get('composition'))
         if comp is not None:
             d.crew_composition = comp
+            d.crew_stated = True
             if comp == CrewComposition.STANDARD:
                 d.is_ulr, d.ulr_crew_set, d.rest_facility_class = False, None, None
             elif d.rest_facility_class is None:
@@ -1058,6 +1063,7 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
         rest_facility_class=duty.rest_facility_class.value if getattr(duty, 'rest_facility_class', None) else None,
         is_ulr=getattr(duty_timeline, 'is_ulr', False),
         ulr_crew_set=duty.ulr_crew_set.value if getattr(duty, 'ulr_crew_set', None) else None,
+        augmentation_suggested=augmentation_likely(duty),
         acclimatization_state=duty_timeline.acclimatization_state.value if hasattr(getattr(duty_timeline, 'acclimatization_state', None), 'value') else str(getattr(duty_timeline, 'acclimatization_state', 'acclimatized')),
         ulr_compliance=ulr_compliance_dict,
         inflight_rest_blocks=inflight_blocks,
@@ -2143,6 +2149,7 @@ async def run_what_if(request: WhatIfRequest, db=Depends(get_db), principal=Depe
             new_comp = crew_map.get(mod.crew_composition)
             if new_comp:
                 duty.crew_composition = new_comp
+                duty.crew_stated = True
 
         # Crew set change
         if mod.crew_set is not None:

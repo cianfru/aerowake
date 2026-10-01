@@ -37,6 +37,21 @@ HOME_STANDBY_FACTOR = 0.25
 RECOVERY_REST_HOURS = 36.0
 RECOVERY_MAX_GAP_HOURS = 168.0
 APPROACHING = 0.9  # report "approaching" at 90 % of a limit
+# A sector this long can be flown with an augmented crew (matches the frontend's
+# LONG_SECTOR_BLOCK_HOURS in src/lib/crew.ts).
+LONG_SECTOR_BLOCK_HOURS = 7.0
+
+
+def augmentation_likely(duty: Duty) -> bool:
+    """A 2-pilot duty above the basic FDP maximum with a long sector, whose crew the
+    pilot has not stated. CrewLink prints no crew size (only IR sectors mark 4 pilots),
+    so such a duty is most likely flown with 3 or 4 pilots: the pilot is asked to set it."""
+    from models.data_models import CrewComposition
+    return (duty.duty_type == DutyType.FLIGHT and bool(duty.segments)
+            and duty.crew_composition == CrewComposition.STANDARD
+            and not getattr(duty, 'crew_stated', False)
+            and bool(duty.max_fdp_hours) and duty.fdp_hours > duty.max_fdp_hours + 1e-6
+            and any(s.block_time_hours >= LONG_SECTOR_BLOCK_HOURS for s in duty.segments))
 
 
 @dataclass
@@ -205,15 +220,17 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
         if d.duty_type != DutyType.FLIGHT or not d.segments or not d.max_fdp_hours:
             continue
         fdp = d.fdp_hours
+        crew_note = (' The roster does not show the crew: if this flight has 3 or 4 pilots, '
+                     'set the crew in the duty details.' if augmentation_likely(d) else '')
         if d.extended_fdp_hours and fdp > d.extended_fdp_hours + 1e-6:
             findings.append(_finding('fdp_max', 'ORO.FTL.205', 'warning', 'FDP exceeds the maximum with discretion',
                                      f'{_fmt(d.report_time_utc, tz)}: FDP {_h(fdp)}, maximum {_h(d.extended_fdp_hours)} '
-                                     'including commander’s discretion.',
+                                     'including commander’s discretion.' + crew_note,
                                      d.report_time_utc, d.release_time_utc, fdp, d.extended_fdp_hours))
         elif fdp > d.max_fdp_hours + 1e-6:
             findings.append(_finding('fdp_max', 'ORO.FTL.205', 'info', 'FDP above the basic maximum',
                                      f'{_fmt(d.report_time_utc, tz)}: FDP {_h(fdp)} vs basic maximum '
-                                     f'{_h(d.max_fdp_hours)} — an extension or commander’s discretion is needed.',
+                                     f'{_h(d.max_fdp_hours)} — an extension or commander’s discretion is needed.' + crew_note,
                                      d.report_time_utc, d.release_time_utc, fdp, d.max_fdp_hours))
 
     # This is a scoped checker, never a compliance certificate. Prior roster history is unknown.
