@@ -170,7 +170,7 @@ export function RouteNetwork({ duties, homeBase }: { duties: DutyAnalysis[]; hom
     >
       {!inDialog && (
         <button type="button" onClick={() => setExpanded(true)} aria-label="Expand map to full screen"
-          className="absolute right-3 top-3 z-10 grid h-11 w-11 place-items-center rounded-xl border border-border/80 bg-card/90 text-foreground/80 shadow-[var(--shadow-card)] transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:w-9">
+          className="absolute right-3 top-3 z-10 grid h-11 w-11 place-items-center rounded-[4px] border border-border/80 bg-card/90 text-foreground/80 shadow-[var(--shadow-card)] transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:w-9">
           <Maximize2 className="h-4 w-4" aria-hidden="true" />
         </button>
       )}

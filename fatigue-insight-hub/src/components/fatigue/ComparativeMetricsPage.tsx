@@ -84,7 +84,7 @@ export function ComparativeMetricsPage() {
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="mx-auto max-w-5xl">
           <Card variant="glass" className="p-8 md:p-12 text-center">
-            <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+            <div className="mx-auto flex items-center justify-center mb-4">
               <LogIn className="h-6 w-6 text-primary" />
             </div>
             <h3 className="text-lg font-semibold mb-2">Sign In Required</h3>
@@ -106,7 +106,7 @@ export function ComparativeMetricsPage() {
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="mx-auto max-w-5xl">
           <Card variant="glass" className="p-8 md:p-12 text-center">
-            <div className="mx-auto h-12 w-12 rounded-full bg-amber-500/10 flex items-center justify-center mb-4">
+            <div className="mx-auto flex items-center justify-center mb-4">
               <AlertTriangle className="h-6 w-6 text-amber-500" />
             </div>
             <h3 className="text-lg font-semibold mb-2">Company Not Detected</h3>

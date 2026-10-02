@@ -33,7 +33,7 @@ function RosterHeader({ results, onNewRoster }: { results: AnalysisResults; onNe
       <h1 data-analysis-heading tabIndex={-1} className="text-3xl font-semibold tracking-tight focus:outline-none md:text-[2.75rem] md:leading-tight">{monthLabel(results)}</h1>
       <p className="text-sm text-hero-muted">{facts}</p>
     </div>
-    <button type="button" onClick={onNewRoster} className="flex shrink-0 items-center gap-2 rounded-full border border-hero-on/30 bg-hero-on/10 px-4 py-2.5 text-sm transition-colors hover:bg-hero-on/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hero-on">
+    <button type="button" onClick={onNewRoster} className="flex shrink-0 items-center gap-2 rounded-[4px] border border-hero-on/30 bg-hero-on/10 px-4 py-2.5 text-sm transition-colors hover:bg-hero-on/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hero-on">
       <RotateCcw className="h-4 w-4" aria-hidden="true" />New roster
     </button>
   </header>;

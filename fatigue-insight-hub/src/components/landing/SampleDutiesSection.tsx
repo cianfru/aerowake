@@ -26,7 +26,7 @@ export function SampleDutiesSection() {
         <figure className="landing-card overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#2c566b] bg-[linear-gradient(110deg,#17384f_30%,#235669)] px-5 py-4 sm:px-6">
             <span className="text-sm font-medium text-[#f4f8fa]">Your roster at a glance</span>
-            <span className="rounded-full border border-[#4d7488] px-2.5 py-0.5 text-xs text-[#c9dde6]">Illustrative data</span>
+            <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#c9dde6]">Illustrative data</span>
           </div>
           <p className="border-b border-[#dbe7ed] bg-[#f3f8fa] px-5 py-2.5 text-xs text-[#526579] sm:px-6">Times in home-base time, {TOUR_BASE.code} ({TOUR_BASE.offset}) · headline figure is the duty's peak</p>
           <ul className="divide-y divide-[#dbe7ed] px-5 sm:px-6">

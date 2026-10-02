@@ -23,7 +23,7 @@ export function OperationsSection() {
       <ScrollReveal delay={60}>
         <ul className="mt-12 grid gap-4 sm:grid-cols-2">
           {POINTS.map(({ icon: Icon, title, body, ref }) => <li key={title} className="landing-card flex gap-4 p-6">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#c6dbe6] bg-[#edf3f6] text-[#087478] shadow-[inset_0_1px_0_#fcfdfe]"><Icon aria-hidden="true" className="h-[18px] w-[18px]" /></span>
+            <Icon aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-[#087478]" strokeWidth={1.5} />
             <div className="min-w-0">
               <h3 className="font-medium text-[#142e45]">{title}</h3>
               <p className="mt-1.5 text-sm leading-6 text-[#425d73]">{body}</p>

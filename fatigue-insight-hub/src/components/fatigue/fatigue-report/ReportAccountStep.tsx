@@ -20,7 +20,7 @@ const select = 'w-full rounded-md border border-input bg-background px-3 py-2 te
 
 function Chip({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
   return (
-    <label className={cn('inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors focus-within:ring-2 focus-within:ring-ring',
+    <label className={cn('inline-flex cursor-pointer items-center gap-2 rounded-[4px] border px-3 py-1.5 text-sm transition-colors focus-within:ring-2 focus-within:ring-ring',
       checked ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:text-foreground')}>
       <input type="checkbox" className="sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       {checked && <span aria-hidden="true">✓</span>}{children}

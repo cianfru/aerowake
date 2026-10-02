@@ -41,9 +41,7 @@ function StatCard({
             <p className="text-xs text-muted-foreground">{subValue}</p>
           )}
         </div>
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-          <Icon className="h-4.5 w-4.5 text-primary" />
-        </div>
+        <Icon className="h-5 w-5 text-primary" strokeWidth={1.75} aria-hidden="true" />
       </div>
     </Card>
   );

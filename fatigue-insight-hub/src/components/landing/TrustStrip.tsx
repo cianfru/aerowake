@@ -24,7 +24,7 @@ export function TrustStrip() {
       <ul className="grid gap-x-8 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
         {ITEMS.map(({ icon: Icon, title, body, to, cta }) => {
           const content = <>
-            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-[#3a6679] bg-[#18405a] text-[#7fd0dc] shadow-[inset_0_1px_0_#ffffff14]"><Icon aria-hidden="true" className="h-4 w-4" /></span>
+            <Icon aria-hidden="true" className="mb-3 block h-5 w-5 text-[#7fd0dc]" strokeWidth={1.5} />
             <span className="block font-medium text-[#f4f8fa]">{title}</span>
             <span className="mt-1.5 block text-sm leading-6 text-[#b9d0db]">{body}</span>
             <span className="mt-2 inline-block text-sm font-medium text-[#8fdce6] underline decoration-[#8fdce6]/40 underline-offset-4 group-hover:decoration-[#8fdce6]">{cta}</span>

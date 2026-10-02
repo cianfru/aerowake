@@ -31,8 +31,8 @@ export function HeroSection({ onEnter }: { onEnter: () => void }) {
             {DUTY_FRAME.map(({ icon: Icon, label }) => <li key={label} className="flex items-center gap-3"><Icon aria-hidden="true" className="h-4 w-4 text-[#087478]" />{label}</li>)}
           </ul>
         </div>
-        <ul aria-label="Every duty has a before and after" className="mt-5 flex flex-wrap justify-center gap-2 sm:hidden">
-          {DUTY_FRAME.map(({ icon: Icon, short }) => <li key={short} className="flex items-center gap-1.5 rounded-full border border-[#c6dbe6] bg-[#fcfdfe]/80 px-3 py-1.5 text-xs font-medium text-[#425d73]"><Icon aria-hidden="true" className="h-3.5 w-3.5 text-[#087478]" />{short}</li>)}
+        <ul aria-label="Every duty has a before and after" className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2 sm:hidden">
+          {DUTY_FRAME.map(({ icon: Icon, short }) => <li key={short} className="flex items-center gap-1.5 text-xs font-medium text-[#425d73]"><Icon aria-hidden="true" className="h-3.5 w-3.5 text-[#087478]" />{short}</li>)}
         </ul>
       </div>
     </div>

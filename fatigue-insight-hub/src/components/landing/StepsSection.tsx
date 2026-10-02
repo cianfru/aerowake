@@ -15,9 +15,9 @@ export function StepsSection() {
       </ScrollReveal>
       <ScrollReveal delay={60}>
         <ol className="relative mt-12 grid gap-10 md:grid-cols-3 md:gap-8">
-          <span aria-hidden="true" className="absolute left-5 right-5 top-5 hidden h-px bg-[linear-gradient(90deg,#b6cfd6,#b6cfd6_60%,transparent)] md:block" />
+          <span aria-hidden="true" className="absolute left-0 right-5 top-5 hidden h-px bg-[linear-gradient(90deg,#b6cfd6,#b6cfd6_60%,transparent)] md:block" />
           {STEPS.map((step, i) => <li key={step.title} className="relative space-y-4">
-            <span className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[#b6cfd6] bg-[#e7f0f2] font-mono text-sm font-semibold text-[#176b74] shadow-[inset_0_1px_0_#fcfdfe,0_0_0_6px_#f8fbfd]">{String(i + 1).padStart(2, '0')}</span>
+            <span className="relative inline-flex h-10 items-center bg-[#f8fbfd] pr-3 font-mono text-sm font-semibold text-[#176b74]">{String(i + 1).padStart(2, '0')}</span>
             <h3 className="text-xl font-medium text-[#142e45]">{step.title}</h3>
             <p className="text-base leading-7 text-[#425d73]">{step.body}</p>
           </li>)}

@@ -112,7 +112,7 @@ export function RosterUploadCard() {
     <Card variant="elevated" className="overflow-hidden rounded-2xl">
       <CardContent className="space-y-6 p-5 sm:p-6 md:p-9">
         <div className="space-y-3">
-          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary"><FileText className="h-6 w-6" aria-hidden="true" /></div>
+          <FileText className="mb-4 h-7 w-7 text-primary" strokeWidth={1.5} aria-hidden="true" />
           <h1 className="text-3xl font-semibold tracking-tight">Check your roster</h1>
           <p className="text-sm text-muted-foreground">
             Upload your monthly roster to plan rest around the duties that need it. Aerowake reads your home base

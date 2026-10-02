@@ -50,7 +50,7 @@ export function ScienceSection() {
           <figure className="landing-card p-5 text-[#142e45] sm:p-6">
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="font-medium">One overnight duty, two ways to prepare</h3>
-              <span className="rounded-full border border-[#c9dbe4] px-2.5 py-0.5 text-xs text-[#526579]">Published model · group average</span>
+              <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#526579]">Published model · group average</span>
             </div>
             <ScienceChart />
             <figcaption className="mt-4 space-y-2 border-t border-[#dbe7ed] pt-4 text-sm leading-6 text-[#425d73]">

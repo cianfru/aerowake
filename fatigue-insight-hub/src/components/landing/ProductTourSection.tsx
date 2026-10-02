@@ -56,7 +56,7 @@ export function ProductTourSection() {
         <Tabs value={view} onValueChange={setView} orientation={wide ? 'vertical' : 'horizontal'} className="mt-10 grid gap-6 lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-10">
           <TabsList aria-label="Workspace views" className="-mx-6 flex h-auto snap-x justify-start gap-2 overflow-x-auto bg-transparent px-6 pb-1 text-[#425d73] [scrollbar-width:none] lg:mx-0 lg:flex-col lg:items-stretch lg:overflow-visible lg:px-0">
             {VIEWS.map(({ id, label, icon: Icon, blurb }) => <TabsTrigger key={id} value={id}
-              className="group shrink-0 snap-start justify-start gap-2 whitespace-nowrap rounded-full border border-[#c6dbe6] bg-[#fcfdfe]/70 px-4 py-2 text-sm font-medium text-[#304a5f] shadow-none ring-offset-transparent transition-colors hover:bg-[#fcfdfe] data-[state=active]:border-[#175779] data-[state=active]:bg-[#175779] data-[state=active]:text-[#f8fbfd] data-[state=active]:shadow-[0_6px_14px_-8px_#175779] lg:whitespace-normal lg:rounded-2xl lg:border-transparent lg:bg-transparent lg:px-4 lg:py-3.5 lg:text-left lg:hover:bg-[#fcfdfe]/70 lg:data-[state=active]:border-[#c6dbe6] lg:data-[state=active]:bg-[#fcfdfe] lg:data-[state=active]:text-[#142e45] lg:data-[state=active]:shadow-[0_1px_2px_#17384f0d,0_14px_28px_-20px_#285c7680]">
+              className="group shrink-0 snap-start justify-start gap-2 whitespace-nowrap rounded-[4px] border border-[#c6dbe6] bg-[#fcfdfe]/70 px-4 py-2 text-sm font-medium text-[#304a5f] shadow-none ring-offset-transparent transition-colors hover:bg-[#fcfdfe] data-[state=active]:border-[#175779] data-[state=active]:bg-[#175779] data-[state=active]:text-[#f8fbfd] lg:whitespace-normal lg:rounded-none lg:border-0 lg:border-l-2 lg:border-[#c6dbe6] lg:bg-transparent lg:px-4 lg:py-3.5 lg:text-left lg:hover:bg-transparent lg:hover:text-[#142e45] lg:data-[state=active]:border-[#175779] lg:data-[state=active]:bg-transparent lg:data-[state=active]:text-[#142e45]">
               <Icon aria-hidden="true" className="h-4 w-4 shrink-0 lg:mt-0.5 lg:self-start lg:text-[#087478] lg:group-data-[state=active]:text-[#087478]" />
               <span className="lg:flex lg:flex-col lg:gap-1">
                 <span>{label}</span>
@@ -74,7 +74,7 @@ export function ProductTourSection() {
                   <p className="font-serif text-2xl leading-tight text-[#f4f8fa]">{TOUR_BASE.month}</p>
                   <p className="text-xs text-[#c9dde6]">{TOUR_TOTALS.duties} duties · {TOUR_TOTALS.sectors} sectors · {TOUR_BASE.code}</p>
                 </div>
-                <span className="rounded-full border border-[#4d7488] px-2.5 py-0.5 text-xs text-[#c9dde6]">Illustrative data</span>
+                <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#c9dde6]">Illustrative data</span>
               </div>
               {VIEWS.map(({ id, label, blurb, Preview }) => <TabsContent key={id} value={id} className="m-0 p-5 focus-visible:ring-inset sm:p-6">
                 <p className="mb-4 text-sm text-[#425d73] lg:hidden"><span className="font-semibold text-[#142e45]">{label}.</span> {blurb}</p>

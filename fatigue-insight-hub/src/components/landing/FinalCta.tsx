@@ -12,8 +12,8 @@ export function FinalCta({ onEnter }: { onEnter: () => void }) {
           <h2 id="final-cta-title" className="landing-h2">Start with your next roster.</h2>
           <p className="mt-5 text-lg leading-8 text-[#c9dde6]">No account needed. Upload a PDF or CSV, confirm the details and see every duty, sleep opportunity and scoped FTL check for the month.</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <button type="button" onClick={onEnter} className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#f4f8fa] px-7 py-3.5 text-sm font-semibold text-[#12324a] shadow-[0_10px_24px_-14px_#000] transition-colors hover:bg-[#dcebf2] sm:w-auto">Analyse a roster <ArrowRight aria-hidden="true" className="h-4 w-4" /></button>
-            <Link to="/report" className="inline-flex w-full items-center justify-center rounded-full border border-[#4d7488] px-6 py-3.5 text-sm font-semibold text-[#e8f2f6] transition-colors hover:bg-[#18405a] sm:w-auto">Log how a duty went</Link>
+            <button type="button" onClick={onEnter} className="inline-flex w-full items-center justify-center gap-2 rounded-[4px] bg-[#f4f8fa] px-7 py-3.5 text-sm font-semibold text-[#12324a] shadow-[0_10px_24px_-14px_#000] transition-colors hover:bg-[#dcebf2] sm:w-auto">Analyse a roster <ArrowRight aria-hidden="true" className="h-4 w-4" /></button>
+            <Link to="/report" className="inline-flex w-full items-center justify-center rounded-[4px] border border-[#4d7488] px-6 py-3.5 text-sm font-semibold text-[#e8f2f6] transition-colors hover:bg-[#18405a] sm:w-auto">Log how a duty went</Link>
           </div>
           <p className="mt-6 text-sm text-[#b9d0db]">Built by a line pilot, for line pilots.</p>
         </div>

@@ -57,7 +57,7 @@ export function ChoiceChips<T extends string>({ legend, options, value, onChange
           const on = isOn(option.value);
           const off = disabled?.(option.value) ?? false;
           const classes = cn(
-            'inline-flex min-h-10 items-center rounded-full border px-3.5 py-1.5 text-sm transition-colors',
+            'inline-flex min-h-10 items-center rounded-[4px] border px-3.5 py-1.5 text-sm transition-colors',
             'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring',
             on ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-foreground hover:bg-muted/60',
             off && 'cursor-not-allowed opacity-50',

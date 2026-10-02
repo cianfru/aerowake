@@ -45,9 +45,7 @@ export function DutyDetailsHeader({ duty, zoneLabel, onGenerateReport, onReportF
   return (
     <div className="flex flex-col gap-3 pr-10 md:flex-row md:items-center md:justify-between md:gap-6 md:pr-12">
       <div className="flex min-w-0 items-start gap-3">
-        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon className="h-4 w-4" aria-hidden="true" />
-        </span>
+        <Icon className="mt-1 h-5 w-5 shrink-0 text-primary" strokeWidth={1.75} aria-hidden="true" />
         <div className="min-w-0 space-y-0.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h2 className="text-lg font-semibold tracking-tight">{format(duty.date, 'EEE d MMM')}</h2>

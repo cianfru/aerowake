@@ -358,11 +358,11 @@
     scroll-margin-top: 4rem;
   }
   .landing-cta-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-full bg-[#175779] px-7 py-3.5 text-sm font-semibold text-[#f8fbfd] transition-[background-color,box-shadow] hover:bg-[#123e58];
+    @apply inline-flex items-center justify-center gap-2 rounded-[4px] bg-[#175779] px-7 py-3.5 text-sm font-semibold text-[#f8fbfd] transition-[background-color,box-shadow] hover:bg-[#123e58];
     box-shadow: 0 3px 5px -2px hsl(205 65% 20% / 0.3), 0 14px 26px -16px #175779, inset 0 1px 0 #ffffff26;
   }
   .landing-cta-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-full border border-[#b8cbd5] bg-[#fcfdfe] px-6 py-3.5 text-sm font-semibold text-[#173d57] transition-colors hover:bg-[#e3eef4];
+    @apply inline-flex items-center justify-center gap-2 rounded-[4px] border border-[#b8cbd5] bg-[#fcfdfe] px-6 py-3.5 text-sm font-semibold text-[#173d57] transition-colors hover:bg-[#e3eef4];
     box-shadow: 0 1px 2px #17384f14;
   }
   /* Square by construction, so the globe (and any halo it draws) stays concentric. */

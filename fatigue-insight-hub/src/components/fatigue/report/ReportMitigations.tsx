@@ -53,9 +53,7 @@ function MitigationItem({ mitigation, index }: { mitigation: Mitigation; index: 
   return (
     <div className="rounded-lg bg-secondary/15 border border-border/20 px-4 py-3 print:bg-gray-50 print:border-gray-200">
       <div className="flex items-start gap-3">
-        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-secondary/40 flex-shrink-0 mt-0.5 print:bg-gray-200">
-          <span className="text-[10px] font-bold text-muted-foreground">{index}</span>
-        </div>
+        <span className="mt-0.5 w-5 flex-shrink-0 font-mono text-xs font-semibold text-muted-foreground tabular">{String(index).padStart(2, '0')}</span>
         <div className="flex-1 space-y-1.5">
           <div className="flex items-center gap-2 flex-wrap">
             <Icon className={`h-3.5 w-3.5 ${config.color} print:text-gray-700`} />
