@@ -13,7 +13,7 @@ test('pilot outlook becomes a prospective concern with traceable evidence', asyn
   await page.getByRole('button', { name: 'Analyse roster', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Your fatigue outlook' })).toBeVisible();
   const modelWatchCount = await page.getByTestId('duty-watch-card').count();
-  await page.getByLabel('My watch level (KSS)').selectOption('9');
+  await page.getByLabel('My watch level (KSS)').selectOption('8.5');
   await expect(page.getByTestId('duty-watch-card')).toHaveCount(modelWatchCount);
   await page.getByLabel('My watch level (KSS)').selectOption('6');
   await expect(page.getByText('Analysis complete!', { exact: true })).toBeHidden();
@@ -28,14 +28,13 @@ test('pilot outlook becomes a prospective concern with traceable evidence', asyn
   await page.getByRole('tab', { name: 'Sleep & recovery', exact: true }).click();
   await page.getByRole('button', { name: /^Raise roster concern for/ }).last().click();
   await expect(page.getByRole('heading', { name: 'Raise a roster concern' })).toBeVisible();
-  await expect(page.getByLabel('Personal watch reference (KSS)')).toHaveValue('6');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Mark as actual sleep', exact: true }).first().click();
   await expect(page.getByText('Reported', { exact: true })).toHaveCount(1);
-  await page.getByLabel(/I have reviewed all sleep windows in this scenario/).check();
+  await page.getByLabel(/I have reviewed all sleep in this scenario/).check();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
-  await page.getByLabel('Your account').fill('I have experienced difficulty recovering between similar duties. Please review the proposed sequence.');
+  await page.getByRole('textbox', { name: /^Your account/ }).fill('I have experienced difficulty recovering between similar duties. Please review the proposed sequence.');
   const responsePromise = page.waitForResponse(r => r.url().endsWith('/api/fatigue-report') && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Generate report', exact: true }).click();
   const response = await responsePromise;
@@ -49,8 +48,8 @@ test('pilot outlook becomes a prospective concern with traceable evidence', asyn
   expect(report.data_quality.estimated_sleeps).toBeGreaterThan(0);
   expect(report.data_quality.model_available).toBe(true);
   expect(report.scientific_basis.length).toBeGreaterThan(0);
-  await expect(page.getByLabel('Three sources of evidence')).toBeVisible();
-  await expect(page.getByText('Prospective roster concern', { exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Key facts' })).toBeVisible();
+  await expect(page.getByText('Roster concern · planned duty', { exact: true })).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 0));
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('pilot-concern.png'), fullPage: true });

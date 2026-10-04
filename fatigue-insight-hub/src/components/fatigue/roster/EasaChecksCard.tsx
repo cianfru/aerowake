@@ -71,7 +71,7 @@ export function EasaChecksCard({ findings, summary }: EasaChecksCardProps) {
     <section aria-labelledby="easa-checks-heading" className="instrument-surface space-y-6">
       <div className="space-y-1">
         <h2 id="easa-checks-heading" className="text-title font-semibold">FTL checks</h2>
-        <p className="text-sm text-muted-foreground">Flight-time limitations (Regulation (EU) 965/2012, ORO.FTL) checked on the activities in this roster.</p>
+        <p className="text-sm text-muted-foreground">Flight-time limitations (Qatar Airways OM-A Chapter 7) checked on the activities in this roster.</p>
       </div>
 
       {warnings.length === 0 ? (
