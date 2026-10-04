@@ -28,6 +28,13 @@ export interface DiaryDay {
   duties: ReportDuty[]; sleeps: ReportSleep[]; dutyHours: number; plannedHours: number;
   reportedSleep: number; estimatedSleep: number;
 }
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
+/** "Mon, 7 Sept" for a YYYY-MM-DD day, spelled out so it reads the same in every browser and ICU version. */
+function dayLabel(day: string): string {
+  const d = new Date(`${day}T12:00:00Z`);
+  return `${WEEKDAYS[d.getUTCDay()]}, ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+}
 /** Calendar boundaries use the chosen zone, so DST days can contain 23 or 25 hours. */
 export function buildDiaryDays(from: string, to: string, event: string, tz: string, duties: ReportDuty[], sleeps: ReportSleep[]): DiaryDay[] {
   if (![from, to, event].every(s => Number.isFinite(Date.parse(s))) || Date.parse(to) <= Date.parse(from)) return [];
@@ -41,7 +48,7 @@ export function buildDiaryDays(from: string, to: string, event: string, tz: stri
     const ss = sleeps.filter(s => overlaps(s.start_utc, s.end_utc, start, end));
     const dutyHours = (status: string) => recordedHours(ds.filter(d => d.status === status).map(d => ({ start: d.report_utc, end: d.release_utc })), start, end);
     const sleepHours = (source: string) => recordedHours(ss.filter(s => s.source === source).map(s => ({ start: s.start_utc, end: s.end_utc })), start, end);
-    out.push({ date: day, start, end, label: new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }),
+    out.push({ date: day, start, end, label: dayLabel(day),
       event: diaryDate(event, tz) === day, duties: ds, sleeps: ss, dutyHours: dutyHours('operated'), plannedHours: dutyHours('planned'), reportedSleep: sleepHours('reported'), estimatedSleep: sleepHours('estimated') });
   }
   return out;
