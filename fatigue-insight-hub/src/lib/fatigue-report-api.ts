@@ -554,7 +554,8 @@ export const FTL_RULE_LABELS: Record<string, string> = {
   block_28d: 'Flight time, 28 days (ORO.FTL.210)',
   min_rest: 'Minimum rest (ORO.FTL.235)',
   recovery_rest: 'Recovery rest (ORO.FTL.235(d))',
-  fdp_max: 'Maximum FDP (ORO.FTL.205)',
+  fdp_max: 'Maximum FDP (OM-A 7.6)',
+  fdp_extension: 'Planned FDP extensions (OM-A 7.6.5)',
   standby: 'Standby (ORO.FTL.225)',
 };
 

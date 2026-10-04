@@ -426,6 +426,8 @@ export function transformAnalysisResult(
         riskAdvisory: (duty.risk_advisory as 'routine' | 'monitor' | 'consider_reporting' | 'report_recommended') ?? (duty.is_reportable ? 'report_recommended' : 'routine'),
         maxFdpHours: duty.max_fdp_hours,
         extendedFdpHours: duty.extended_fdp_hours,
+        plannedExtensionFdpHours: duty.planned_extension_fdp_hours ?? null,
+        fdpLimitReference: duty.fdp_limit_reference ?? null,
         actualFdpHours: duty.actual_fdp_hours ?? undefined,
         usedDiscretion: duty.used_discretion,
         circadianPhaseShiftValue: duty.circadian_phase_shift ?? undefined,

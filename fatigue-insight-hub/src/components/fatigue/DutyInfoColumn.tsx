@@ -149,6 +149,8 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
           actualFdpHours={duty.actualFdpHours ?? duty.dutyHours ?? 0}
           maxFdpHours={duty.maxFdpHours}
           extendedFdpHours={duty.extendedFdpHours}
+          plannedExtensionFdpHours={duty.plannedExtensionFdpHours}
+          fdpLimitReference={duty.fdpLimitReference}
           usedDiscretion={duty.usedDiscretion}
         />
       )}

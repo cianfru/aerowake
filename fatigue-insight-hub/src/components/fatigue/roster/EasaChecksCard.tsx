@@ -16,7 +16,8 @@ export const EASA_RULE_LABELS: Record<string, string> = {
   block_28d: 'Flight time in any 28 days (ORO.FTL.210)',
   min_rest: 'Minimum rest (ORO.FTL.235)',
   recovery_rest: 'Recurrent extended recovery rest (ORO.FTL.235)',
-  fdp_max: 'Maximum daily FDP (ORO.FTL.205)',
+  fdp_max: 'Maximum daily FDP (OM-A 7.6)',
+  fdp_extension: 'Planned FDP extensions (OM-A 7.6.5)',
 };
 
 const ruleLabel = (rule: string) => EASA_RULE_LABELS[rule] ?? rule.replace(/_/g, ' ');

@@ -237,10 +237,10 @@ export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
   },
   fdpUtilization: {
     description:
-      'How much of the maximum Flight Duty Period limit is consumed by this duty. Exceeding 100% requires Commander Discretion reporting.',
-    regulation: 'ORO.FTL.205',
-    threshold: '\u226475% normal, 75-100% high utilization, >100% exceedance',
-    actionTip: 'Monitor for delays that could push FDP beyond limits. Report any Commander Discretion use.',
+      'The FDP against the Qatar Airways maximum for this duty: Table 7-6 (or 7-7 in an unknown state of acclimatisation), Tables 7-9/7-10 with in-flight rest, or 7.18 for ULR. A 2-pilot FDP may be planned beyond it only with a Table 7-8 extension; beyond that, only commander\u2019s discretion for unforeseen circumstances.',
+    regulation: 'Qatar OM-A 7.6, 7.7',
+    threshold: '\u226490% normal, 90-100% close to the maximum, >100% extension or discretion',
+    actionTip: 'Monitor for delays that could push the FDP beyond limits. Discretion of more than 1 h is reported to the QCAA.',
   },
   workloadPhase: {
     description:

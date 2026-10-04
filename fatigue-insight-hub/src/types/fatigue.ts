@@ -150,8 +150,10 @@ export interface DutyAnalysis {
   riskAdvisory: 'routine' | 'monitor' | 'consider_reporting' | 'report_recommended';
   flightSegments: FlightSegment[];
   // EASA ORO.FTL fields
-  maxFdpHours?: number; // Base FDP limit from ORO.FTL.205
+  maxFdpHours?: number; // Maximum FDP (Qatar OM-A 7.6.3 / 7.6.6 / 7.18)
   extendedFdpHours?: number; // Extended limit with discretion
+  plannedExtensionFdpHours?: number | null; // OM-A 7.6.5 Table 7-8 (null = not allowed)
+  fdpLimitReference?: string | null; // OM-A table the maximum comes from
   actualFdpHours?: number; // Actual FDP worked
   usedDiscretion?: boolean; // Commander discretion used
   fdpExceedance?: number; // Hours over limit (if any)

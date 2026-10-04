@@ -256,6 +256,8 @@ export interface Duty {
   pinch_events: number;
   max_fdp_hours?: number;
   extended_fdp_hours?: number;
+  planned_extension_fdp_hours?: number | null;
+  fdp_limit_reference?: string | null;
   used_discretion?: boolean;
   actual_fdp_hours?: number | null;
   // Cabin environment
