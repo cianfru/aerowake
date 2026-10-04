@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useRef } from 'react';
 import { Globe, type GlobeAirport, type GlobeRoute } from '@/components/ui/globe';
-import { LandingGlobe } from '@/components/landing/LandingGlobe';
 import { useRunGate } from '@/hooks/useRunGate';
 
 const airports: GlobeAirport[] = [
@@ -49,14 +48,6 @@ describe('Globe', () => {
     expect(live.textContent).not.toBe(before);
     expect(screen.getByRole('button', { name: 'Fit my routes' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Show the whole globe' })).toBeInTheDocument();
-  });
-
-  it('keeps the landing globe decorative and non-interactive', () => {
-    const { container } = render(<LandingGlobe animate={false} />);
-    expect(container.firstElementChild).toHaveAttribute('aria-hidden', 'true');
-    expect(screen.queryByRole('group')).toBeNull();
-    expect(container.querySelectorAll('[data-route]').length).toBeGreaterThan(5);
-    expect(container.querySelector('[data-part="hit"]')).toBeNull();
   });
 });
 

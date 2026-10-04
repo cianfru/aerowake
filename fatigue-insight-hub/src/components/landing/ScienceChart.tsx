@@ -71,10 +71,10 @@ export function ScienceChart() {
         })}
       </div>}
     </div>
-    <table className="sr-only">
+    <div className="sr-only"><table>
       <caption>Predicted KSS at key times, home-base time</caption>
       <thead><tr><th scope="col">Time</th>{SERIES.map((s) => <th key={s.key} scope="col">{s.label}</th>)}</tr></thead>
       <tbody>{[S.duty[0], 20, S.duty[1]].map((h) => <tr key={h}><th scope="row">{clockAt(h)}</th>{SERIES.map((s) => <td key={s.key}>{formatKssValue(s.values[Math.round(h / S.stepHours)] ?? 0)}</td>)}</tr>)}</tbody>
-    </table>
+    </table></div>
   </div>;
 }
