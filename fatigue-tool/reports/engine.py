@@ -880,6 +880,8 @@ def _easa_checks(inp: ReportInput, duties: List[DutyIn]) -> Dict:
             limits = validator.calculate_fdp_limits(duty)
             duty.max_fdp_hours = limits['max_fdp']
             duty.extended_fdp_hours = limits['extended_fdp']
+            duty.planned_extension_fdp_hours = limits.get('planned_extension_fdp')
+            duty.fdp_limit_reference = limits.get('reference')
         (standbys if d.duty_type == 'home_standby' else built).append(duty)
     roster = Roster('report', 'pilot', '', built, inp.home_timezone, pilot_base=inp.home_base, standbys=standbys)
     try:

@@ -125,3 +125,11 @@ def test_unknown_codes_take_their_type_from_the_legend():
     roster = Roster('reference', 'synthetic', '2026-10', [sim], 'Asia/Qatar', pilot_base='DOH')
     warnings = review(roster, parser, '.pdf')['warnings']
     assert any('ZSM' in w and 'A380 Recency Sim' in w and 'simulator' in w for w in warnings)
+
+
+def test_code_repeated_as_annotation_is_not_an_airport():
+    """A CRM day prints the code again under the times ("CRM"); it is not a second airport."""
+    parser = CrewLinkRosterParser(timezone_format='local', home_base='DOH', home_timezone='Asia/Qatar')
+    parser.code_legend = {'CRM': 'Crew Resources Management Training'}
+    duty = parser._parse_column_to_duty(datetime(2026, 10, 5), ['RPT:03:45\nCRM\nDOH\n04:00\n11:30\nCRM', '07:45\n00:00'])
+    assert duty.duty_type == DutyType.GROUND_TRAINING and duty.duty_hours == 8.25

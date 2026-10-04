@@ -113,6 +113,8 @@ class EASAComplianceValidator:
                 'actual_fdp': actual_fdp,
                 'used_discretion': actual_fdp > max_fdp,
                 'exceeds_discretion': actual_fdp > max_fdp + discretion,
+                'planned_extension_fdp': None,
+                'reference': 'OM-A 7.18.1',
                 'is_ulr': True,
                 'crew_composition': getattr(duty, 'crew_composition', CrewComposition.STANDARD).value
                     if hasattr(getattr(duty, 'crew_composition', None), 'value') else 'standard',
@@ -131,27 +133,25 @@ class EASAComplianceValidator:
                 'actual_fdp': actual_fdp,
                 'used_discretion': actual_fdp > max_fdp,
                 'exceeds_discretion': actual_fdp > max_fdp + discretion,
+                'planned_extension_fdp': None,  # 7.6.5(4): not combined with in-flight rest
+                'reference': ('OM-A 7.6.6 Table 7-10' if sectors <= augmented_params.long_sector_max_sectors and any(
+                    s.block_time_hours > augmented_params.long_sector_min_flight_hours for s in duty.segments)
+                    else 'OM-A 7.6.6 Table 7-9'),
                 'is_ulr': False,
                 'crew_composition': duty.crew_composition.value
                     if hasattr(duty.crew_composition, 'value') else 'standard',
             }
 
-        # ORO.FTL.205(b), Table 2 (EASA Air Operations, March 2026).
-        # Rows change at 15/30-minute boundaries, not whole hours.
-        minute = report_local.hour * 60 + report_local.minute
-        if 360 <= minute < 810:
-            base = 13.0
-        elif 810 <= minute < 1020:
-            base = 12.75 - 0.25 * ((minute - 810) // 30)
-        elif 300 <= minute < 360:
-            base = 12.0 + 0.25 * ((minute - 300) // 15)
-        else:
-            base = 11.0
+        # Qatar OM-A 7.6.3 Table 7-6 (same rows as ORO.FTL.205(b) Table 2) at reference time;
+        # Table 7-7 under Qatar Airways' approved FRM in an unknown state of acclimatisation.
         from models.data_models import AcclimatizationState
-        if duty.acclimatization_state == AcclimatizationState.UNKNOWN:
-            base = 11.0  # Table 3; no assumption of an approved FRM extension.
-        max_fdp = max(9.0, base - 0.5 * max(0, sectors - 2)) if sectors else 0.0
-        extended_fdp = max_fdp + 2.0
+        from core.qatar_ftl import basic_max_fdp, extension_max_fdp, DISCRETION_HOURS
+        minute = report_local.hour * 60 + report_local.minute
+        unknown = duty.acclimatization_state == AcclimatizationState.UNKNOWN
+        max_fdp = basic_max_fdp(minute, sectors, unknown) if sectors else 0.0
+        # 7.6.5 Table 7-8: planned extension without in-flight rest (acclimatised only).
+        planned_extension = None if unknown or not sectors else extension_max_fdp(minute, sectors)
+        extended_fdp = max_fdp + DISCRETION_HOURS  # 7.7.1.2(2)-(3): discretion from the basic maximum
         used_discretion = actual_fdp > max_fdp
 
         return {
@@ -160,6 +160,8 @@ class EASAComplianceValidator:
             'actual_fdp': actual_fdp,
             'used_discretion': used_discretion,
             'exceeds_discretion': actual_fdp > extended_fdp,
+            'planned_extension_fdp': planned_extension,
+            'reference': 'OM-A 7.6.3 Table 7-7' if unknown else 'OM-A 7.6.3 Table 7-6',
             'is_ulr': False,
             'crew_composition': getattr(duty, 'crew_composition', CrewComposition.STANDARD).value
                 if hasattr(getattr(duty, 'crew_composition', None), 'value') else 'standard',

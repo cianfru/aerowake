@@ -119,3 +119,31 @@ def test_long_sector_above_two_pilot_fdp_asks_for_the_crew():
     assert not augmentation_likely(duty)
     duty.crew_composition, duty.max_fdp_hours = CrewComposition.STANDARD, 13.0
     assert not augmentation_likely(duty)
+
+
+def _limits(d):
+    from core.compliance import EASAComplianceValidator as V
+    lim = V(EASAFatigueFramework()).calculate_fdp_limits(d)
+    d.max_fdp_hours, d.extended_fdp_hours = lim['max_fdp'], lim['extended_fdp']
+    d.planned_extension_fdp_hours, d.fdp_limit_reference = lim['planned_extension_fdp'], lim['reference']
+    return d
+
+
+def test_planned_extension_is_noted_and_limited_to_two_in_7_days():
+    """OM-A 7.6.5: report 08:00, 2 sectors: basic 13:00, Table 7-8 extension 14:00."""
+    ext = [_limits(flight_duty(day, 8, 14.0)) for day in (1, 3, 5)]  # FDP 13:30
+    assert ext[0].planned_extension_fdp_hours == 14.0
+    res = run_checks(roster(ext[:2]))
+    notes = [f for f in res['findings'] if f['rule'] == 'fdp_max']
+    assert len(notes) == 2 and all(f['severity'] == 'info' and 'planned extension' in f['detail'] for f in notes)
+    assert res['summary']['coverage']['fdp_max']['status'] == 'passed'
+    res = run_checks(roster(ext))
+    assert 'fdp_extension' in rules(res)
+
+
+def test_fdp_beyond_the_planned_maximum_is_a_warning():
+    late = _limits(flight_duty(10, 20, 12.5))  # report 20:00: basic 11:00, extension not allowed; FDP 12:00
+    assert late.planned_extension_fdp_hours is None
+    res = run_checks(roster([late]))
+    finding = next(f for f in res['findings'] if f['rule'] == 'fdp_max')
+    assert finding['severity'] == 'warning' and 'no planned extension' in finding['detail']

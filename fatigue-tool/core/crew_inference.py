@@ -4,17 +4,16 @@ CrewLink marks augmented sectors only for first officers (`IR`, In-flight Rest);
 captain's roster shows PIC and nothing else. The crew size is therefore inferred from
 the FDP the duty needs:
 
-* FDP above the 2-pilot maximum plus the planned extension (ORO.FTL.205(b), (d): +1 h)
+* FDP above the most a 2-pilot crew may be planned for — Qatar OM-A 7.6.5 Table 7-8 (planned
+  extension) where an extension is allowed at that start time, else 7.6.3 Table 7-6 / 7-7 —
   cannot be flown by 2 pilots;
 * the smallest augmented crew whose maximum covers it is taken — 3 pilots up to the
-  CS FTL.1.205(c)(2) limit, else 4 (rest facility class 1, the long-haul bunk);
+  OM-A 7.6.6 Table 7-9 / 7-10 limit, else 4 (rest facility class 1, the long-haul bunk);
 * FDP > 18 h, or a flight to or from AKL, is ULR: 4 pilots (Qatar OM-A 7.18.1, 7.18.3; DFW
   and MIA are ULR only in the season their scheduled FDP exceeds 18 h).
 
-Qatar's own augmented FDP table (OM-A Chapter 7) was not in the supplied excerpts, so
-the 3/4-pilot limits are EASA-referenced (docs/QATAR_FTL.md). A duty between the
-2-pilot maximum and maximum + 1 h may be a planned extension with 2 pilots: it stays
-2 pilots and is flagged for the pilot (easa_checks.augmentation_likely).
+A duty between the basic maximum and the Table 7-8 extension may be a planned extension
+with 2 pilots: it stays 2 pilots and is flagged for the pilot (easa_checks.augmentation_likely).
 
 The pilot's own crew setting always wins (duty.crew_stated). IR-marked duties keep the
 roster's augmentation; their size (3 or 4) and ULR status come from the same rules.
@@ -26,8 +25,6 @@ from typing import Dict, Optional
 
 from models.data_models import CrewComposition, DutyType, RestFacilityClass, ULRCrewSet
 
-# ORO.FTL.205(d): a planned FDP may be extended by up to 1 h (2-pilot crew).
-PLANNED_EXTENSION_HOURS = 1.0
 # Sectors this long can be augmented (frontend LONG_SECTOR_BLOCK_HOURS, src/lib/crew.ts).
 LONG_SECTOR_BLOCK_HOURS = 7.0
 
@@ -50,8 +47,9 @@ def required_crew(duty, validator, augmented_params, ulr_params,
         return CrewComposition.AUGMENTED_4
     standard = copy.copy(duty)
     standard.crew_composition, standard.is_ulr = CrewComposition.STANDARD, False
-    basic = validator.calculate_fdp_limits(standard, reference_timezone=reference_timezone)['max_fdp']
-    if not basic or duty.fdp_hours <= basic + PLANNED_EXTENSION_HOURS + 1e-6:
+    limits = validator.calculate_fdp_limits(standard, reference_timezone=reference_timezone)
+    two_pilot = limits.get('planned_extension_fdp') or limits['max_fdp']
+    if not two_pilot or duty.fdp_hours <= two_pilot + 1e-6:
         return None
     three = augmented_params.get_max_fdp(CrewComposition.AUGMENTED_3, RestFacilityClass.CLASS_1, duty.segments)
     return CrewComposition.AUGMENTED_3 if duty.fdp_hours <= three + 1e-6 else CrewComposition.AUGMENTED_4

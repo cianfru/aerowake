@@ -813,7 +813,8 @@ class CrewLinkRosterParser:
             return None
         if sum(1 for t in tokens if _CLOCK_RE.match(t)) < 2:
             return None
-        if any(re.fullmatch(r'[A-Z]{3}', t) and t != place for t in tokens[rpt_idx + 2:]):
+        # A flight has a second airport; the code repeated as an annotation ("CRM") is not one.
+        if any(re.fullmatch(r'[A-Z]{3}', t) and t not in (place, code) for t in tokens[rpt_idx + 2:]):
             return None
         return code
 

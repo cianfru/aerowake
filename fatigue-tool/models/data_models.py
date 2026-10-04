@@ -192,7 +192,10 @@ class Duty:
     training_legend: Optional[Dict[str, str]] = None
 
     # EASA FTL limits
-    max_fdp_hours: Optional[float] = None  # Base FDP limit from EASA table
+    max_fdp_hours: Optional[float] = None  # Base FDP limit (Qatar OM-A 7.6.3 / 7.6.6 / 7.18)
+    # 7.6.5 Table 7-8 maximum with a planned extension (None = not allowed / not applicable)
+    planned_extension_fdp_hours: Optional[float] = None
+    fdp_limit_reference: Optional[str] = None  # e.g. 'OM-A 7.6.3 Table 7-6'
     extended_fdp_hours: Optional[float] = None  # With captain discretion (+2h or +3h augmented)
     used_discretion: bool = False  # True if actual FDP exceeds base limit
 

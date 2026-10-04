@@ -1016,6 +1016,7 @@ class BorbelyFatigueModel:
                 # supplied duties: no FDP verdict (reported as not assessed).
                 duty.max_fdp_hours = None
                 duty.extended_fdp_hours = None
+                duty.planned_extension_fdp_hours = duty.fdp_limit_reference = None
                 duty.used_discretion = False
             elif duty.duty_type == DutyType.FLIGHT:
                 fdp_limits = self.validator.calculate_fdp_limits(
@@ -1026,6 +1027,8 @@ class BorbelyFatigueModel:
                 )
                 duty.max_fdp_hours = fdp_limits['max_fdp']
                 duty.extended_fdp_hours = fdp_limits['extended_fdp']
+                duty.planned_extension_fdp_hours = fdp_limits.get('planned_extension_fdp')
+                duty.fdp_limit_reference = fdp_limits.get('reference')
                 duty.used_discretion = fdp_limits['used_discretion']
             else:
                 duty.max_fdp_hours = None

@@ -41,9 +41,17 @@ def test_fdp_within_planned_extension_stays_two_pilots():
     d = duty(DOH, HND, (21, 6, 15), 10.5)  # FDP 11:30, basic 13:00
     run(d)
     assert d.crew_composition == CrewComposition.STANDARD
-    d = duty(DOH, HND, (24, 18, 35), 10 + 50 / 60)  # FDP 11:50 vs 11:00 + 1 h extension
+    # Report 18:35: Table 7-6 11:00, Table 7-8 extension 11:15 (OM-A 7.6.5).
+    d = duty(DOH, HND, (24, 18, 35), 10 + 10 / 60)  # FDP 11:10, within the extension
     run(d)
     assert d.crew_composition == CrewComposition.STANDARD
+    d = duty(DOH, HND, (24, 18, 35), 10 + 50 / 60)  # FDP 11:50 > 11:15
+    run(d)
+    assert d.crew_composition == CrewComposition.AUGMENTED_3
+    # Report 19:30: Table 7-8 "Not allowed", so the 2-pilot limit is the basic 11:00.
+    d = duty(DOH, HND, (24, 19, 30), 10 + 5 / 60)  # FDP 11:05
+    run(d)
+    assert d.crew_composition == CrewComposition.AUGMENTED_3
 
 
 def test_three_or_four_pilots_by_the_augmented_limit():

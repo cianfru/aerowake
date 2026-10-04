@@ -267,12 +267,15 @@ def _mnl_trip(return_hours_after):
     return [d1, d2]
 
 
-def test_acclimatisation_unknown_state_uses_table_3():
-    # MNL is +5 h from DOH; reporting 56 h after leaving base is state X.
+def test_acclimatisation_unknown_state_uses_qatar_table_7_7():
+    # MNL is +5 h from DOH; reporting 56 h after leaving base is state X. Qatar Airways
+    # has an approved FRM: OM-A 7.6.3 Table 7-7, 12:00 for 1-2 sectors (EASA Table 3: 11:00).
     _, res = run(_mnl_trip(56))
     back = res.roster.duties[1]
     assert back.acclimatization_state == AcclimatizationState.UNKNOWN
-    assert back.max_fdp_hours == 11.0
+    assert back.max_fdp_hours == 12.0
+    assert back.fdp_limit_reference == 'OM-A 7.6.3 Table 7-7'
+    assert back.planned_extension_fdp_hours is None  # 7.6.5 is for acclimatised crew only
     tl = res.duty_timelines[1]
     assert tl.acclimatization_basis == 'determined'
 

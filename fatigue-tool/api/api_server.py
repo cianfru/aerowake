@@ -402,6 +402,8 @@ class DutyResponse(BaseModel):
     # EASA FDP limits
     max_fdp_hours: Optional[float]  # Base FDP limit
     extended_fdp_hours: Optional[float]  # With captain discretion
+    planned_extension_fdp_hours: Optional[float] = None  # OM-A 7.6.5 Table 7-8 (None = not allowed)
+    fdp_limit_reference: Optional[str] = None  # OM-A paragraph/table of max_fdp_hours
     used_discretion: bool  # True if exceeded base limit
     actual_fdp_hours: Optional[float] = None  # Actual FDP (report to last landing + 30min)
     
@@ -1050,6 +1052,8 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
         pinch_events=len(duty_timeline.pinch_events),
         max_fdp_hours=duty.max_fdp_hours,
         extended_fdp_hours=duty.extended_fdp_hours,
+        planned_extension_fdp_hours=getattr(duty, 'planned_extension_fdp_hours', None),
+        fdp_limit_reference=getattr(duty, 'fdp_limit_reference', None),
         used_discretion=duty.used_discretion,
         actual_fdp_hours=round(duty.fdp_hours, 2) if duty.segments else None,
         circadian_phase_shift=round(duty_timeline.circadian_phase_shift, 2),
