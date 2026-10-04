@@ -368,7 +368,8 @@ def test_postgres_roster_deletion_keeps_debrief_and_account_deletion_removes_it(
         try:
             auth = lambda user: {'Authorization': 'Bearer ' + create_access_token(str(user))}  # noqa: E731
             join = {'consent_version': config.CONSENT_VERSION, 'accepted': True}
-            request = body(rated_at_utc=datetime.now(timezone.utc).isoformat()).model_dump(mode='json')
+            # The autouse fixture freezes the server clock at NOW; rate relative to it, not to the real clock.
+            request = body().model_dump(mode='json')
             assert client.post('/api/debriefs', headers=auth(owner), json=request).status_code == 403
             assert client.put('/api/study/enrolment', headers=auth(owner), json=join).status_code == 200
             assert client.put('/api/study/enrolment', headers=auth(other), json=join).status_code == 200
