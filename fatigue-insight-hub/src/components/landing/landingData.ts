@@ -17,7 +17,7 @@ export const HERO_COPY_OPTIONS = {
   A: {
     eyebrow: 'For line pilots · Built on published sleep science',
     headline: 'Know your roster before you fly it.',
-    subline: 'See which duties press on sleep and your body clock, plan rest around them, and keep a clear, factual record of how each duty actually went. Built on published sleep science and referenced to EASA ORO.FTL.',
+    subline: 'See which duties press on your sleep and body clock, plan rest around them, and keep a clear record of how each duty went.',
   },
   B: {
     eyebrow: 'For line pilots · Built on published sleep science',

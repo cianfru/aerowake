@@ -18,12 +18,13 @@ describe('landing page', () => {
     expect(screen.getByText(HERO_COPY.subline)).toBeInTheDocument();
   });
 
-  it('offers analysis first and reporting second, in British English', () => {
+  it('offers analysis and a sample roster, with reporting reachable in British English', () => {
     const onEnter = renderLanding();
     fireEvent.click(screen.getByRole('button', { name: 'Analyse my roster' }));
     fireEvent.click(screen.getByRole('button', { name: 'Analyse roster' }));
     fireEvent.click(screen.getByRole('button', { name: 'Analyse a roster' }));
     expect(onEnter).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole('link', { name: /Explore a sample roster/ })).toHaveAttribute('href', '#tour');
     const logLinks = screen.getAllByRole('link', { name: 'Log how a duty went' });
     expect(logLinks.length).toBeGreaterThan(0);
     logLinks.forEach((link) => expect(link).toHaveAttribute('href', '/report'));
@@ -62,6 +63,34 @@ describe('landing page', () => {
     outlook.focus();
     fireEvent.keyDown(outlook, { key: 'ArrowRight' });
     await waitFor(() => expect(screen.getByRole('tab', { name: /Calendar/ })).toHaveAttribute('aria-selected', 'true'));
+  });
+
+  it('updates the duty explanation when a visitor selects a different duty', () => {
+    renderLanding();
+    const roster = screen.getByRole('figure', { name: 'Interactive illustrative roster' });
+    const daytime = within(roster).getByRole('button', { name: /Sat 3 Oct/ });
+    const overnight = within(roster).getByRole('button', { name: /Mon 5 Oct/ });
+    expect(within(roster).getByRole('button', { name: /Wed 7 Oct/ })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(overnight);
+    expect(overnight).toHaveAttribute('aria-pressed', 'true');
+    expect(within(roster).getByText(/04:47 body clock/)).toBeInTheDocument();
+    fireEvent.click(daytime);
+    expect(daytime).toHaveAttribute('aria-pressed', 'true');
+    expect(overnight).toHaveAttribute('aria-pressed', 'false');
+    expect(within(roster).getByText(/stays outside the 02:00–05:59/)).toBeInTheDocument();
+  });
+
+  it('opens the compact navigation and closes it by link or Escape', () => {
+    renderLanding();
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+    const navigation = screen.getByRole('navigation', { name: 'Mobile navigation' });
+    fireEvent.click(within(navigation).getByRole('link', { name: 'The workspace' }));
+    expect(screen.queryByRole('navigation', { name: 'Mobile navigation' })).not.toBeInTheDocument();
+    const toggle = screen.getByRole('button', { name: 'Open navigation' });
+    fireEvent.click(toggle);
+    fireEvent.keyDown(screen.getByRole('navigation', { name: 'Mobile navigation' }), { key: 'Escape' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveFocus();
   });
 
   it('keeps every section reachable from the header links', () => {

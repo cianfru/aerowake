@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 
 export const LANDING_CANONICAL_URL = 'https://aerowake.madebylantern.xyz/';
 /** Browser bar colour for the always-daylight landing page. */
-export const LANDING_THEME_COLOR = '#edf3f6';
+export const LANDING_THEME_COLOR = '#f5f5ef';
 
 /**
  * Head tags that belong to the landing page only. index.html is the shell for
