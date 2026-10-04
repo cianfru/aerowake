@@ -142,8 +142,10 @@ size (3/4, ULR) from the planned FDP for every long-haul duty without a pilot se
 'roster_ir' | 'fdp' | 'pilot'. Pilot override: `duty_crew_overrides` `{composition, crew_set}`. All
 scored in-flight rest blocks are returned with `source` 'roster_ir' | 'planned' and
 `approved_plan` (Qatar figure). ULR = Qatar FTL 7.18 (`QatarFTL718Validator`), with the approved
-rest patterns `QATAR_ULR_REST_PATTERNS` (Figures 7-3..7-8); augmented non-ULR FDP limits are
-still EASA CS FTL.1.205(c) pending OM-A Chapter 7 tables.
+rest patterns `QATAR_ULR_REST_PATTERNS` (Figures 7-3..7-8). FDP limits are Qatar OM-A 7.6
+(`core/qatar_ftl.py`: Tables 7-6, 7-7, 7-8; Tables 7-9/7-10 in `AugmentedFDPParameters`); rest
+rules 7.6.6, 7.11, 7.13 in `core/qatar_rest.py`. Duties return `planned_extension_fdp_hours`
+and `fdp_limit_reference`.
 
 ### Standby
 CrewLink PSBY/HSBY/SBY → `DutyType.HOME_STANDBY` on `Roster.standbys`: not scored
@@ -177,8 +179,8 @@ the same configuration.
   `sleep_quality` is its last main sleep before report (+ later naps); earlier recovery
   sleep moves to `post_duty_<prev id>`. Top-level sleep start/end = that main block (what-if
   baseline). What-if overrides replace the main block, or any block via `block_start_utc`.
-- Acclimatisation: `compliance.determine_acclimatisation` (ORO.FTL.105(1) Table 1). Unknown
-  state → Table 3; undeterminable (e.g. roster starts abroad) → no FDP verdict.
+- Acclimatisation: `compliance.determine_acclimatisation` (OM-A 7.6.1 Table 7-1). Unknown
+  state → OM-A Table 7-7 (FRM); undeterminable (e.g. roster starts abroad) → no FDP verdict.
 - `Roster.alertness_timeline` (API `alertness_timeline`): 30-min KSS samples across the
   month from the same engine, plus each duty's peak instants (`duty_peak`); `kss=None`
   while asleep; ends at the last estimated sleep / last release + 2h — no points without a
@@ -194,9 +196,9 @@ the same configuration.
   simulator, standby → standby, day off/leave/contactable → not a duty, else ground; without
   a legend entry it is ground. Each is listed in the import review (`unrecognised_activity`).
   Duties return `training_legend` (code → roster meaning) for the code and its notes.
-- Crew not on roster: beyond the 2-pilot basic maximum + 1 h the crew is inferred
-  (`core/crew_inference.py`); between the basic maximum and + 1 h (possible planned extension)
-  it stays 2 pilots, returns `augmentation_suggested` and the FDP finding asks the pilot.
+- Crew not on roster: beyond the 2-pilot planned maximum (Table 7-8 extension where allowed,
+  else Table 7-6/7-7) the crew is inferred (`core/crew_inference.py`); within an extension it
+  stays 2 pilots, returns `augmentation_suggested` and the FDP finding asks the pilot.
 
 ## Code Conventions
 

@@ -172,13 +172,16 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
             continue
         rest = (nxt.report_time_utc - prev.release_time_utc).total_seconds() / 3600
         at_home = bool(roster.pilot_base) and (not prev.segments or prev.segments[-1].arrival_airport.code == roster.pilot_base)
-        minimum = max(prev.duty_hours, 12.0 if at_home else 10.0)
+        # OM-A 7.13.1/7.13.2: at least the preceding duty, or 12 h at base / 10 h away. Under
+        # reduced rest (7.13.6) the floor is 12 h / 10 h; between the floor and the preceding
+        # duty, qatar_rest notes a possible reduced rest instead.
+        minimum = 12.0 if at_home else 10.0
         if rest < minimum:
             findings.append(_finding(
-                'min_rest', 'ORO.FTL.235(a)/(b)', 'warning', 'Rest shorter than the minimum',
+                'min_rest', 'OM-A 7.13.1 / 7.13.2', 'warning', 'Rest shorter than the minimum',
                 f'{_h(rest)} between release {_fmt(prev.release_time_utc, tz)} and report '
-                f'{_fmt(nxt.report_time_utc, tz)}; minimum {"at home base" if at_home else "away from base"} '
-                f'is {_h(minimum)}. Check whether a reduced-rest scheme applied.',
+                f'{_fmt(nxt.report_time_utc, tz)}; the minimum {"at home base" if at_home else "away from base"} '
+                f'is {_h(max(prev.duty_hours, minimum))}, and never below {_h(minimum)} even with reduced rest.',
                 prev.release_time_utc, nxt.report_time_utc, rest, round(minimum, 2)))
 
     # ---- ORO.FTL.235(d) recurrent extended recovery rest -------------------
@@ -214,6 +217,10 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
                     f'At least {_h(gap)} without qualifying recovery rest in the supplied activities.',
                     start, end, gap, RECOVERY_MAX_GAP_HOURS))
     summary['recovery_rests'] = len(recovery)
+
+    # ---- Qatar OM-A 7.6.6 / 7.11 / 7.13 rest rules -------------------------------
+    from core import qatar_rest
+    findings.extend(qatar_rest.run(roster, duties, activities, tz, recovery, _finding, _fmt, _h))
 
     # ---- FDP above the maximum: Qatar OM-A 7.6.3 / 7.6.5 / 7.6.6 / 7.7.1 ----------
     extensions = []
@@ -261,7 +268,8 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
 
     # This is a scoped checker, never a compliance certificate. Prior roster history is unknown.
     coverage = {}
-    for rule in ('duty_7d', 'duty_14d', 'duty_28d', 'block_28d', 'min_rest', 'recovery_rest'):
+    for rule in ('duty_7d', 'duty_14d', 'duty_28d', 'block_28d', 'min_rest', 'recovery_rest',
+                 'time_zone_rest', 'disruptive', 'standby'):
         failed = any(f['rule'] == rule and f['severity'] == 'warning' for f in findings)
         coverage[rule] = {'status': 'failed' if failed else 'incomplete_history',
                           'reason': 'Only supplied activities were assessed; boundary history is unknown.'}

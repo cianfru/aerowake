@@ -51,7 +51,7 @@ describe('full text', () => {
     expect(text).toContain('EZY801/802/803 LGW → EDI → LGW → EDI');
     expect(text).toMatch(/24 h 5h00 · 48 h 11h15 · 72 h 16h45/);
     expect(text).toContain('FTL CHECKS PERFORMED');
-    expect(text).toMatch(/Minimum rest \(ORO\.FTL\.235\): /);
+    expect(text).toMatch(/Minimum rest \(OM-A 7\.13\.1, 7\.13\.2, 7\.6\.6\): /);
   });
 
   it('does not repeat identical notes', () => {

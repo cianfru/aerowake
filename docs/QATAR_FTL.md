@@ -5,7 +5,7 @@ under its QCAA-approved FTL scheme (Operations Manual Part A, Chapter 7), not EA
 ORO.FTL directly. This note records which Qatar rules are in the code, where, and
 which values still need confirming against the current OM-A Chapter 7. **Update it
 whenever an FTL value changes.** Never invent a regulatory value: if a table is not
-confirmed here, the app must label the check as EASA-referenced or not assessed.
+confirmed here, the app must label the check as not assessed.
 
 ## Encoded from Qatar FTL
 
@@ -24,10 +24,23 @@ confirmed here, the app must label the check as EASA-referenced or not assessed.
 | 7.18.4.3 post-ULR | at base: **4 consecutive local nights**; away: 48 h including 2 local nights (arrival time zone) | same |
 | 7.18.11 rest patterns | Figures 7-3 to 7-8, per crew (table below), scaled to the scheduled block | `QATAR_ULR_REST_PATTERNS`, `ULRRestPlanner.approved_pattern` |
 | 7.18.6 / 7.18.7 | discretion: FDP + up to 3 h (> 2 h reported to QCAA); reduced rest away ≥ 24 h incl. 1 local night | params (reduced rest not yet checked) |
+| 7.6.3 Table 7-6 maximum daily FDP, acclimatised | by start at reference time and sectors (same rows as ORO.FTL.205(b) Table 2) | `core/qatar_ftl.py` `basic_max_fdp`; `compliance.calculate_fdp_limits` |
+| 7.6.3 Table 7-7 unknown state of acclimatisation (approved FRM) | 12:00 for 1–2 sectors, −0:30 per sector, 9:00 at 8 | same |
+| 7.6.5 Table 7-8 planned extension without in-flight rest | by start time and 1–5 sectors; not allowed 19:00–06:14; at most twice in 7 days; +2 h pre/post rest or +4 h post | `extension_max_fdp`; `easa_checks` (`fdp_max` info, `fdp_extension`) |
+| 7.6.6 Tables 7-9 / 7-10 in-flight rest | 3 pilots 16/15/14 h, 4 pilots 17/16/15 h (class 1/2/3); +1 h with ≤ 2 sectors and one > 9 h; ≤ 3 sectors | `AugmentedFDPParameters` |
+| 7.6.6(3) rest after an in-flight-rest FDP | ≥ preceding duty, or 14 h | `core/qatar_rest.py` |
+| 7.7.1.2 commander's discretion | +2 h, +3 h augmented, from the basic maximum; rest never below 10 h | `qatar_ftl.DISCRETION_HOURS`, `AugmentedFDPParameters` |
+| 7.8.1 cumulative | 60/110/190 duty h in 7/14/28 days; 100 h flight time in 28 days | `easa_checks` |
+| 7.11.3 home standby | at most 16 h; 25 % counts as duty | `qatar_rest`, `easa_checks` |
+| 7.13.1 / 7.13.2 minimum rest | ≥ preceding duty, or 12 h at base / 10 h away | `easa_checks` (`min_rest`) |
+| 7.13.4 disruptive schedules | early start 05:00–05:59, late finish 23:00–01:59, night 02:00–04:59; late/night → early start at base needs 1 local night; ≥ 4 disruptive → next recovery rest 60 h | `compliance.is_disruptive_duty`, `qatar_rest` |
+| 7.13.5 time zones | Table 7-12 local nights at base after a rotation with ≥ 4 h difference; 14 h away after a ≥ 4 h FDP; 3 local nights between east-west rotations | `qatar_rest.table_7_12` |
+| 7.13.6 reduced rest | never below 12 h / 10 h; noted between that floor and the preceding duty | `qatar_rest` (`reduced_rest`) |
+| 7.13.7 recovery rest | 36 h incl. 2 local nights, ≤ 168 h apart; 2 local days twice a month | `easa_checks`, `qatar_rest` |
 | Compliance check | `QatarFTL718Validator` → `ulr_compliance` on each ULR duty | API `DutyResponse.ulr_compliance` |
 
-Source: OM-A Chapter 7, Section 7.6.1 and Supplement 7.18 (excerpts supplied by the owner,
-October 2026; the documents themselves are not stored in the repository).
+Source: OM-A Chapter 7 (full chapter supplied by the owner, October 2026; the manual itself is
+not stored in the repository). Tables are pinned cell by cell in `tests/test_qatar_ftl.py`.
 
 ### Approved ULR rest patterns (7.18.11), hours from off-blocks
 
@@ -62,13 +75,12 @@ rotation (no rest in the first/last 90 min).
 - **Crew size from the FDP** (`core/crew_inference.py`). IR appears only on a first officer's
   roster; a captain's shows PIC (owner, October 2026). So for every long-haul duty (a sector
   ≥ 7 h block) whose crew the pilot has not set: FDP > 18 h or AKL → 4 pilots, ULR (DFW/MIA only when FDP > 18 h);
-  FDP above the 2-pilot basic maximum + 1 h (ORO.FTL.205(d) planned extension) → the smallest
-  augmented crew whose CS FTL.1.205(c)(2) class-1 limit covers it (3 pilots 16 h, 4 pilots 17 h,
-  +1 h with ≤ 2 sectors and one > 9 h). IR duties are sized by the same rule (3 or 4). Inferred
-  4-pilot duties without IR default to Crew A. Between the basic maximum and + 1 h the crew
-  stays 2 pilots (a planned extension is possible) and the pilot is asked
-  (`augmentation_suggested`). `crew_source` = 'roster_ir' | 'fdp' | 'pilot'. The 3/4-pilot
-  limits are EASA-referenced until the Qatar augmented FDP table is supplied.
+  FDP above the 2-pilot planned maximum (7.6.5 Table 7-8 where an extension is allowed at that
+  start time, else Table 7-6/7-7) → the smallest augmented crew whose 7.6.6 Table 7-9/7-10
+  class-1 limit covers it (3 pilots 16 h, 4 pilots 17 h, +1 h with ≤ 2 sectors and one > 9 h).
+  IR duties are sized by the same rule (3 or 4). Inferred 4-pilot duties without IR default to
+  Crew A. Within a planned extension the crew stays 2 pilots and the pilot is asked
+  (`augmentation_suggested`). `crew_source` = 'roster_ir' | 'fdp' | 'pilot'.
 - **Pilot override.** In duty details the pilot can set 2 / 3 / 4 pilots (and Crew A/B for
   4-pilot ULR). The analysis is re-run with `duty_crew_overrides`
   (`{duty_id: 'crew_a' | 'crew_b' | {composition, crew_set}}`) — `api_server._apply_crew_overrides`.
@@ -81,25 +93,16 @@ rotation (no rest in the first/last 90 min).
   to be confirmed by the pilot). Watch cards and duty details show a crew badge
   ("4 pilots · ULR · Crew B", "3 pilots").
 
-## Still EASA-referenced — confirm against Qatar OM-A Chapter 7
+## Not yet modelled
 
-These values are from EASA and are **not yet confirmed** as Qatar's:
-
-| Item | Current value (EASA source) | Where |
+| Item | OM-A | Why |
 |---|---|---|
-| Augmented FDP maximum (non-ULR) | 3 pilots: 16 / 15 / 14 h; 4 pilots: 17 / 16 / 15 h for rest facility class 1 / 2 / 3 (CS FTL.1.205(c)(2)) | `AugmentedFDPParameters.fdp_table` |
-| Long-sector bonus | +1 h when ≤ 2 sectors and one sector > 9 h flight time | same |
-| Augmented sector limit | 3 sectors | same |
-| Minimum in-flight rest | 2 h for the landing crew, 90 min for the others | same |
-| Commander's discretion, augmented | 3 h | same |
-| Standard-crew FDP table | ORO.FTL.205(b) Table 2 / Table 3, 30 min per sector after the 2nd, minimum 9 h | `core/compliance.py` |
-| Disruptive schedules | EASA "early type" definitions | `core/compliance.py` |
-| Rest facility class default | Class 1 (bunk) when the pilot sets 3/4 pilots without a class | `_apply_crew_overrides` |
+| FDP reduction after standby (home > 6 h, 8 h augmented, 23:00–07:00 excluded; airport > 4 h, 16 h combined) | 7.11.2 / 7.11.3 | CrewLink does not show a call-out from standby |
+| Split duty (+50 % of a break ≥ 3 h) | 7.6.7 | breaks are not identified on the roster |
+| Reduced-rest consequences (next rest extended, next FDP reduced, ≤ 2 between recovery rests) | 7.13.6 | reduced rest is not marked on the roster; it is only noted |
+| Delayed reporting | 7.7.2 | not on the roster |
+| Rest facility class other than class 1 | 7.6.6 | assumed bunk (class 1) unless the pilot sets it |
+| Reporting times (Tables 7-2 – 7-5) | 7.6.2 | the roster's printed report time is used |
 
-Not in the supplied excerpts (still needed): **Table 7-6** Maximum Daily FDP (acclimatised),
-the unknown-acclimatisation FDP table, the **augmented-crew / in-flight rest FDP table**, and
-**Table 7-12** minimum local nights of rest to compensate for time-zone differences.
-
-When the owner supplies the OM-A Chapter 7 tables, replace these values, cite the
-Qatar paragraph in the parameter docstring, move the row to the table above, and add
-a test that pins the value.
+When the OM-A is revised, update `core/qatar_ftl.py` / `core/qatar_rest.py`, cite the paragraph,
+update this table and the tests that pin the value.
