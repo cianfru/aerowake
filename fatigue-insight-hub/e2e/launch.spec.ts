@@ -81,7 +81,13 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.getByRole('tab',{name:'Outlook',exact:true}).click();
   // No duty reaches the default watch level in this roster, so report from the navigation.
-  await page.getByRole('navigation',{name:'Sections'}).getByRole('button',{name:'Report fatigue',exact:true}).click();
+  const sections=page.getByRole('navigation',{name:'Sections'});
+  if(await sections.isVisible()) await sections.getByRole('button',{name:'Report fatigue',exact:true}).click();
+  else {
+    // Phones keep the sections behind the menu.
+    await page.getByRole('button',{name:'Open navigation',exact:true}).click();
+    await page.getByRole('dialog',{name:'Navigation',exact:true}).getByRole('button',{name:'Report fatigue'}).click();
+  }
   await expect(page).toHaveURL(/\/report$/);
   await page.getByLabel(/Keep a draft in this browser tab/).check();
   await page.getByRole('button',{name:'Next',exact:true}).click();
