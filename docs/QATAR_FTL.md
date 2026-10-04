@@ -18,7 +18,7 @@ confirmed here, the app must label the check as EASA-referenced or not assessed.
 | 7.18 pre-ULR rest | 48 h duty-free including 2 local nights | same |
 | 7.18 post-ULR rest | 4 local nights at base; away: 48 h including 2 local nights | same |
 | 7.18 monthly limit | at most 2 ULR duties per calendar month | same |
-| ULR city pairs | DOH–AKL permanent; DOH–DFW, DOH–MIA seasonal | same (check each season) |
+| 7.18.3 ULR city pairs | AKL always ULR; DFW and MIA ULR "depending on the season", i.e. only when the scheduled FDP > 18 h (7.18.1) | `QatarFTL718Parameters`, `crew_inference._is_ulr` |
 | 7.6.1 Table 7-1 acclimatisation | B/X/D by time-zone difference and elapsed time; rows > 2 & < 4, ≥ 4 & ≤ 6, > 6 & ≤ 9, > 9 & ≤ 12 (exactly 4 h is the second row) | `AcclimatizationCalculator`; used by `compliance.determine_acclimatisation` |
 | 7.18.4.3 pre-ULR | 48 h free of duty **including 2 local nights**, checked before departures from base | `QatarFTL718Validator` |
 | 7.18.4.3 post-ULR | at base: **4 consecutive local nights**; away: 48 h including 2 local nights (arrival time zone) | same |
@@ -61,7 +61,7 @@ rotation (no rest in the first/last 90 min).
   pairing on the wrong rest pattern.
 - **Crew size from the FDP** (`core/crew_inference.py`). IR appears only on a first officer's
   roster; a captain's shows PIC (owner, October 2026). So for every long-haul duty (a sector
-  ≥ 7 h block) whose crew the pilot has not set: FDP > 18 h or a ULR city pair → 4 pilots, ULR;
+  ≥ 7 h block) whose crew the pilot has not set: FDP > 18 h or AKL → 4 pilots, ULR (DFW/MIA only when FDP > 18 h);
   FDP above the 2-pilot basic maximum + 1 h (ORO.FTL.205(d) planned extension) → the smallest
   augmented crew whose CS FTL.1.205(c)(2) class-1 limit covers it (3 pilots 16 h, 4 pilots 17 h,
   +1 h with ≤ 2 sectors and one > 9 h). IR duties are sized by the same rule (3 or 4). Inferred

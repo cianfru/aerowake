@@ -84,3 +84,17 @@ def test_ir_duty_is_sized_by_its_fdp():
     run(akl)
     assert akl.crew_composition == CrewComposition.AUGMENTED_4 and akl.is_ulr
     assert akl.ulr_crew_set == ULRCrewSet.CREW_B and akl.crew_source == 'roster_ir'
+
+
+DFW = Airport('DFW', 'America/Chicago')
+
+
+def test_seasonal_ulr_pairs_follow_the_fdp():
+    """OM-A 7.18.3: DFW and MIA may be ULR depending on the season — only when the
+    scheduled FDP exceeds 18 h; AKL is always ULR."""
+    off_season = duty(DOH, DFW, (5, 7, 0), 15.0)  # FDP 16:00
+    run(off_season)
+    assert not off_season.is_ulr and off_season.crew_composition == CrewComposition.AUGMENTED_3
+    ulr_season = duty(DOH, DFW, (5, 7, 0), 17.5)  # FDP 18:30
+    run(ulr_season)
+    assert ulr_season.is_ulr and ulr_season.crew_composition == CrewComposition.AUGMENTED_4

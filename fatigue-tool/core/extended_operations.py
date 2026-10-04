@@ -132,7 +132,9 @@ class QatarFTL718Parameters:
     # Monthly limits
     max_ulr_per_calendar_month: int = 2
 
-    # Known ULR city pairs
+    # ULR city pairs, Qatar OM-A 7.18.3 Note: "Flights to and from AKL will be planned as ULR.
+    # Flights to and from DFW and MIA may be planned as ULR depending on the season."
+    # Seasonal pairs are ULR only when the scheduled FDP exceeds 18 h (7.18.1).
     permanent_ulr_pairs: List[Tuple[str, str]] = field(default_factory=lambda: [
         ("DOH", "AKL"),
     ])

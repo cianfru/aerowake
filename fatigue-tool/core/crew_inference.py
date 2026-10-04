@@ -8,7 +8,8 @@ the FDP the duty needs:
   cannot be flown by 2 pilots;
 * the smallest augmented crew whose maximum covers it is taken — 3 pilots up to the
   CS FTL.1.205(c)(2) limit, else 4 (rest facility class 1, the long-haul bunk);
-* FDP > 18 h, or a Qatar ULR city pair, is ULR: 4 pilots (Qatar FTL 7.18).
+* FDP > 18 h, or a flight to or from AKL, is ULR: 4 pilots (Qatar OM-A 7.18.1, 7.18.3; DFW
+  and MIA are ULR only in the season their scheduled FDP exceeds 18 h).
 
 Qatar's own augmented FDP table (OM-A Chapter 7) was not in the supplied excerpts, so
 the 3/4-pilot limits are EASA-referenced (docs/QATAR_FTL.md). A duty between the
@@ -32,10 +33,13 @@ LONG_SECTOR_BLOCK_HOURS = 7.0
 
 
 def _is_ulr(duty, ulr_params) -> bool:
+    """Qatar OM-A 7.18.1/7.18.3: ULR = an approved city pair with a scheduled FDP over 18 h.
+    Flights to and from AKL are always planned as ULR; DFW and MIA only in the season when
+    the scheduled FDP exceeds 18 h, so for them (and any other pair) the FDP decides."""
     if duty.fdp_hours > ulr_params.ulr_fdp_threshold_hours:
         return True
-    pairs = {frozenset(p) for p in [*ulr_params.permanent_ulr_pairs, *ulr_params.seasonal_ulr_pairs]}
-    return any(frozenset((s.departure_airport.code, s.arrival_airport.code)) in pairs
+    always = {frozenset(p) for p in ulr_params.permanent_ulr_pairs}
+    return any(frozenset((s.departure_airport.code, s.arrival_airport.code)) in always
                for s in duty.segments if not s.is_deadhead)
 
 
