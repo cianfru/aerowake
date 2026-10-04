@@ -58,7 +58,13 @@ def required_crew(duty, validator, augmented_params, ulr_params,
 def infer_crew(duties, acclimatisation: Dict, validator, augmented_params, ulr_params) -> None:
     """Set crew size on long-haul flight duties whose crew the pilot has not stated."""
     for duty in duties:
-        if (duty.duty_type != DutyType.FLIGHT or not duty.segments or getattr(duty, 'crew_stated', False)
+        if duty.duty_type == DutyType.FLIGHT and duty.segments and getattr(duty, 'crew_stated', False):
+            # The pilot's crew stands; a stated 4-pilot crew still gets its ULR status and Crew A/B.
+            if duty.crew_composition == CrewComposition.AUGMENTED_4:
+                duty.is_ulr = _is_ulr(duty, ulr_params)
+                duty.ulr_crew_set = duty.ulr_crew_set or ULRCrewSet.CREW_A
+            continue
+        if (duty.duty_type != DutyType.FLIGHT or not duty.segments
                 or not any(s.block_time_hours >= LONG_SECTOR_BLOCK_HOURS for s in duty.segments)):
             continue
         accl = acclimatisation.get(duty.duty_id) or {}

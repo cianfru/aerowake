@@ -97,7 +97,10 @@ export function DutyDetailsDialog({
   const offset = homeTz ? zoneOffsetLabel(homeTz, displayDuty.reportTimeUtc || undefined) : '';
   const zoneLabel = [homeBase, offset].filter(Boolean).join(' · ');
 
+  // The crew can change at the last minute on any flight duty, so the choice is always offered.
+  const hasFlights = (displayDuty.flightSegments ?? []).length > 0;
   const hasCrewContent =
+    (hasFlights && (!!onCrewCompositionChange || !!onCrewChange)) ||
     (canBeAugmented(displayDuty) && !!onCrewCompositionChange) ||
     (displayDuty.crewComposition === 'augmented_4' && !!onCrewChange) ||
     (displayDuty.isUlr && !!displayDuty.ulrCompliance) ||

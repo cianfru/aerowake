@@ -39,7 +39,7 @@ from core import BorbelyFatigueModel, ModelConfig, RiskThresholds
 from core.alertness import ENGINE_VERSION, KSS_ENGINE_VERSIONS, is_kss_engine, classify_kss, round_half_up
 from core.easa_checks import augmentation_likely
 from parsers.roster_parser import PDFRosterParser, CSVRosterParser, AirportDatabase
-from models.data_models import MonthlyAnalysis, DutyTimeline, CrewComposition, RestFacilityClass, ULRCrewSet
+from models.data_models import MonthlyAnalysis, DutyTimeline, CrewComposition, RestFacilityClass, ULRCrewSet, DutyType
 
 # Database & Auth imports
 from db.session import init_db, get_db, is_db_available
@@ -889,11 +889,12 @@ def _round_opt(value, digits=2):
 def _apply_crew_overrides(roster, overrides: dict) -> None:
     """Per-duty crew overrides from the pilot, applied before simulation.
 
-    A value is either a crew set ('crew_a' | 'crew_b', 4-pilot ULR rotation) or
-    an object {'composition': 'standard' | 'augmented_3' | 'augmented_4',
-    'crew_set': ...}. The roster PDF only marks 4-pilot crews reliably (IR
-    sectors), so a pilot flying with 3 pilots, or with a different rotation,
-    states it here. Parser-detected values stay for duties without an override.
+    A value is either a crew set ('crew_a' | 'crew_b') or an object
+    {'composition': 'standard' | 'augmented_3' | 'augmented_4', 'crew_set': ...}.
+    Crew A/B exist only with 4 pilots, so choosing a crew set without a composition
+    makes the duty a 4-pilot crew of that set, whatever the roster or the FDP estimate
+    said (a last-minute crew change). A composition other than 4 pilots ignores the set.
+    Parser-detected values stay for duties without an override.
     """
     sets = {'crew_a': ULRCrewSet.CREW_A, 'crew_b': ULRCrewSet.CREW_B}
     comps = {'standard': CrewComposition.STANDARD, 'augmented_3': CrewComposition.AUGMENTED_3,
@@ -915,9 +916,13 @@ def _apply_crew_overrides(roster, overrides: dict) -> None:
             elif d.rest_facility_class is None:
                 d.rest_facility_class = RestFacilityClass.CLASS_1  # long-haul bunk, as the planner assumes
         crew_set = sets.get(value.get('crew_set'))
-        if crew_set is not None and d.crew_composition != CrewComposition.AUGMENTED_3:
-            # Kept for 4-pilot duties, including those sized from the FDP during simulation.
-            d.ulr_crew_set = crew_set
+        if crew_set is not None:
+            if comp is None and d.duty_type == DutyType.FLIGHT and d.segments:
+                d.crew_composition = CrewComposition.AUGMENTED_4
+                d.crew_stated, d.crew_source = True, 'pilot'
+                d.rest_facility_class = d.rest_facility_class or RestFacilityClass.CLASS_1
+            if d.crew_composition == CrewComposition.AUGMENTED_4:
+                d.ulr_crew_set = crew_set
 
 
 def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:

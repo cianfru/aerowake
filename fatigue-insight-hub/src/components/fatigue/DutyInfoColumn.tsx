@@ -196,9 +196,10 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                 </p>
               </div>
             )}
-            {onCrewChange && duty.crewComposition === 'augmented_4' && (() => {
-              const autoDetected = duty.ulrCrewSet || 'crew_b';
-              const effective = dutyCrewOverride || autoDetected;
+            {onCrewChange && (() => {
+              // Always offered: a last-minute change overrides the roster. Crew A/B need 4 pilots,
+              // so choosing one sets a 4-pilot crew.
+              const effective = dutyCrewOverride || (duty.crewComposition === 'augmented_4' ? duty.ulrCrewSet : null);
               return (
                 <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3 text-sm">
                   <span className="text-muted-foreground">Crew set</span>
@@ -216,8 +217,9 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                     ))}
                   </div>
                   {dutyCrewOverride ? (
-                    onCrewReset && <button type="button" className="text-xs text-primary underline-offset-2 hover:underline" onClick={() => onCrewReset(duty.dutyId || '')}>Use automatic</button>
-                  ) : <span className="text-xs text-muted-foreground">Automatic</span>}
+                    onCrewReset && <button type="button" className="text-xs text-primary underline-offset-2 hover:underline" onClick={() => onCrewReset(duty.dutyId || '')}>Use roster</button>
+                  ) : <span className="text-xs text-muted-foreground">{effective ? 'From roster' : 'Not set'}</span>}
+                  <p className="basis-full text-xs text-muted-foreground">Crew A and B exist with 4 pilots: choosing one sets a 4-pilot crew and overrides the roster.</p>
                 </div>
               );
             })()}

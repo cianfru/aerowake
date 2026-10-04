@@ -94,8 +94,14 @@ export function RosterPage() {
         homeTz={results.homeBaseTimezone}
         homeBase={results.pilotBase || settings.homeBase}
         dutyCrewOverride={dutyCrewOverrides.get(selectedDuty?.dutyId || '')}
-        onCrewChange={(id, crewSet) => { setCrewOverride(id, crewSet); rerun({ dutyId: id, crewSet }); }}
-        onCrewReset={(id) => { clearCrewOverride(id); rerun({ dutyId: id, crewSet: null }); }}
+        onCrewChange={(id, crewSet) => {
+          setCrewComposition(id, 'augmented_4'); setCrewOverride(id, crewSet);
+          rerun({ dutyId: id, composition: 'augmented_4', crewSet });
+        }}
+        onCrewReset={(id) => {
+          clearCrewOverride(id); setCrewComposition(id, null);
+          rerun({ dutyId: id, composition: null, crewSet: null });
+        }}
         crewCompositionOverride={dutyCrewComposition.get(selectedDuty?.dutyId || '') ?? null}
         onCrewCompositionChange={(id, composition) => { setCrewComposition(id, composition); rerun({ dutyId: id, composition }); }}
         onReportFatigue={reportFatigue}

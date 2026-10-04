@@ -940,3 +940,41 @@ class TestCrewSetFromIR:
             return round((d.inflight_rest_plan.rest_periods[0].start_utc - seg.scheduled_departure_utc).total_seconds() / 3600, 2)
         assert first_rest(out) == 0.5   # Figure 7-3, Crew B
         assert first_rest(ret) == 4.0   # Figure 7-4, Crew B
+
+
+class TestCrewSetOverrideAlwaysWins:
+    """A pilot's Crew A/B choice overrides the roster and the FDP estimate (last-minute change)."""
+
+    def _roster(self, crew_set=None, composition=CrewComposition.STANDARD):
+        duty = make_ulr_duty(fdp_hours=14.0, crew_set=crew_set)
+        duty.crew_composition, duty.is_ulr = composition, False
+        return Roster(roster_id='r', pilot_id='p', month='2026-10', duties=[duty],
+                      home_base_timezone=HOME_TZ, pilot_base='DOH')
+
+    def test_crew_set_alone_makes_a_four_pilot_crew(self):
+        from api.api_server import _apply_crew_overrides
+        roster = self._roster()
+        _apply_crew_overrides(roster, {roster.duties[0].duty_id: 'crew_b'})
+        d = roster.duties[0]
+        assert d.crew_composition == CrewComposition.AUGMENTED_4 and d.ulr_crew_set == ULRCrewSet.CREW_B
+        assert d.crew_stated and d.crew_source == 'pilot'
+
+    def test_overrides_the_roster_crew_set_and_survives_inference(self):
+        from api.api_server import _apply_crew_overrides
+        from core.crew_inference import infer_crew
+        from core.compliance import EASAComplianceValidator
+        from core.extended_operations import AugmentedFDPParameters, QatarFTL718Parameters
+        from core.parameters import EASAFatigueFramework
+        roster = self._roster(crew_set=ULRCrewSet.CREW_B, composition=CrewComposition.AUGMENTED_4)
+        roster.duties[0].crew_source = 'roster_ir'
+        _apply_crew_overrides(roster, {roster.duties[0].duty_id: 'crew_a'})
+        infer_crew(roster.duties, {}, EASAComplianceValidator(EASAFatigueFramework()),
+                   AugmentedFDPParameters(), QatarFTL718Parameters())
+        assert roster.duties[0].crew_composition == CrewComposition.AUGMENTED_4
+        assert roster.duties[0].ulr_crew_set == ULRCrewSet.CREW_A
+
+    def test_three_pilots_ignores_a_crew_set(self):
+        from api.api_server import _apply_crew_overrides
+        roster = self._roster()
+        _apply_crew_overrides(roster, {roster.duties[0].duty_id: {'composition': 'augmented_3', 'crew_set': 'crew_a'}})
+        assert roster.duties[0].crew_composition == CrewComposition.AUGMENTED_3

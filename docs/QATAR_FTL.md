@@ -82,8 +82,9 @@ rotation (no rest in the first/last 90 min).
   IR duties are sized by the same rule (3 or 4). Inferred 4-pilot duties without IR default to
   Crew A. Within a planned extension the crew stays 2 pilots and the pilot is asked
   (`augmentation_suggested`). `crew_source` = 'roster_ir' | 'fdp' | 'pilot'.
-- **Pilot override.** In duty details the pilot can set 2 / 3 / 4 pilots (and Crew A/B for
-  4-pilot ULR). The analysis is re-run with `duty_crew_overrides`
+- **Pilot override.** On every flight duty the pilot can set 2 / 3 / 4 pilots and Crew A/B, whatever
+  the roster or the FDP estimate says (a last-minute change). Crew A/B exist with 4 pilots, so
+  choosing one makes a 4-pilot crew of that set. The analysis is re-run with `duty_crew_overrides`
   (`{duty_id: 'crew_a' | 'crew_b' | {composition, crew_set}}`) — `api_server._apply_crew_overrides`.
   The choice is stored in the replay snapshot.
 - **Model.** Augmented duties get crew-specific pre-duty sleep strategies and in-flight
