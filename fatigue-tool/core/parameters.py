@@ -386,10 +386,11 @@ class PreDutyNapAssumptions:
     and like the ramp it should be calibrated with pilot debrief data.
 
     Shape: the assumed nap length rises linearly with report time on the body
-    clock, from 0 h at ``ramp_start_hour`` to the full nap at
-    ``ramp_full_hour`` and stays full for reports up to 04:00. This avoids
-    a step change in risk for a small change in report time (the previous
-    rule added a 2–2.5 h nap only from 20:00). The full nap is the existing
+    clock, from 0 h at ``ramp_start_hour`` (14:00, the start of the late-report
+    afternoon nap) to the full nap at ``ramp_full_hour`` (20:00, where the
+    night-departure nap began) and stays full for reports up to 04:00. An
+    afternoon or evening report therefore keeps a pre-duty nap, without a step
+    change in risk for a small change in report time. The full nap is the existing
     night-departure nap: up to ``max_nap_hours``, limited by the window
     between the last wake-up (plus ``min_wake_before_nap_hours``) and the
     wake buffer before report.
@@ -398,8 +399,8 @@ class PreDutyNapAssumptions:
     ``sometimes_fraction`` (about 1.3 h at most); 'rarely' = no nap.
     """
 
-    ramp_start_hour: float = 18.0
-    ramp_full_hour: float = 22.0
+    ramp_start_hour: float = 14.0
+    ramp_full_hour: float = 20.0
     ramp_end_hour: float = 4.0            # reports 04:00+ use the early-start rules
     max_nap_hours: float = 2.5            # one NREM–REM cycle plus margin
     min_wake_before_nap_hours: float = 6.0
@@ -430,6 +431,8 @@ class PreDutyNapAssumptions:
         if habit == 'sometimes':
             # Population average: the nap weighted by how many crews take one.
             hours *= self.sometimes_fraction
+        # Whole minutes, so nap times read cleanly (14:30, not 14:30:18).
+        hours = round(hours * 60) / 60
         return hours if hours >= self.min_nap_hours else 0.0
 
 

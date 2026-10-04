@@ -113,7 +113,7 @@ describe('illustrative tour data', () => {
     const routes = aggregateRoutes();
     const njf = routes.find((r) => r.key === 'DOH-NJF');
     expect(njf).toMatchObject({ from: 'DOH', to: 'NJF', duties: 3, sectors: 6 });
-    expect(njf?.worstKss).toBe(6.62);
+    expect(njf?.worstKss).toBe(6.41);
     expect(routes.map((r) => r.worstKss)).toEqual([...routes.map((r) => r.worstKss)].sort((a, b) => b - a));
     expect(routes.every((r) => r.from === 'DOH')).toBe(true);
   });

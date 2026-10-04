@@ -38,7 +38,7 @@ const STRATEGY_RATIONALE: Record<string, string> = {
   restricted: 'Used when rest is under 9h: sleep is physically limited by the schedule. Repeated restriction degrades performance even with partial recovery (Van Dongen et al. 2003; Belenky et al. 2003).',
   extended: 'Used when rest exceeds 14h. Longer sleep after restriction supports partial recovery, with diminishing returns beyond about 9h (Banks et al. 2010; Kitamura et al. 2016).',
   recovery: 'Recovery at home with no duty constraint. Recovery from sleep loss builds over several nights, most in the first (Banks et al. 2010).',
-  nap: 'Used for night departures (report 20:00 or later): a normal previous night plus a pre-duty nap (Dinges et al. 1987; Signal et al. 2014).',
+  nap: 'Used for afternoon, evening and night reports: a normal previous night plus a pre-duty nap. About half of crew nap before evening departures; the assumed nap grows from 14:00 reports to its full length at 20:00 and follows your nap setting (Dinges et al. 1987; Signal et al. 2014).',
   afternoon_nap: 'Used for late reports (14:00–20:00). About half of crew nap before evening departures (Signal et al. 2014); the nap follows the post-lunch dip (Dinges et al. 1987).',
   augmented_4_sleep: 'Ultra-long-range four-pilot operations: two normal nights before departure (Signal et al. 2014).',
   augmented_3: 'Three-pilot augmented operations: a 22:00 bedtime plus an optional pre-duty nap for night departures (Signal et al. 2014; Gander et al. 2013).',

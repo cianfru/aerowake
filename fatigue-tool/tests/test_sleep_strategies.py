@@ -218,11 +218,13 @@ class TestNapStrategy:
 
 
 class TestLateReportStrategy:
-    """Late report (14:00-20:00 local): normal night, no assumed pre-duty nap.
+    """Late report (14:00-20:00 local): normal night plus the ramped pre-duty nap.
 
-    Policy: only about half of crews nap before late departures (Signal et
-    al. 2014). Assuming a nap on the first duty but not on inter-duty days
-    made identical late duties score inconsistently, so no nap is assumed.
+    About half of crews nap before evening departures (Signal et al. 2014).
+    The nap ramps from 0 h at 14:00 to the full nap at 20:00 and follows the
+    pilot's nap habit; inter-duty gaps use the same ramp, so identical late
+    duties score alike. With the default habit a 15:00 report is too early
+    for a modelled nap.
     """
 
     def test_1500_report_gets_normal_night_only(self):
@@ -231,12 +233,16 @@ class TestLateReportStrategy:
         assert strategy.strategy_type == 'normal'
         assert len(strategy.sleep_blocks) == 1
 
-    def test_1800_report_night_ends_in_morning(self):
+    def test_1800_report_night_ends_in_morning_plus_nap(self):
         report = datetime(2025, 3, 10, 15, 0, tzinfo=pytz.utc)   # 18:00 DOH
         strategy = _get_strategy(_make_duty('D014', report, report + timedelta(hours=6), DOH, DXB))
-        wake_local = strategy.sleep_blocks[-1].end_utc.astimezone(pytz.timezone('Asia/Qatar'))
-        assert strategy.strategy_type == 'normal'
+        night, nap = strategy.sleep_blocks
+        wake_local = night.end_utc.astimezone(pytz.timezone('Asia/Qatar'))
         assert 6 <= wake_local.hour <= 9
+        # Average pre-duty nap before an evening report (Signal et al. 2014),
+        # ending the wake buffer before report.
+        assert strategy.strategy_type == 'nap'
+        assert nap.end_utc == report - timedelta(hours=2)
 
 
 class TestExtendedStrategy:

@@ -98,7 +98,7 @@ The `UnifiedSleepCalculator.estimate_sleep_blocks()` routes to one of 5 strategi
 
 | Strategy | Trigger | Behavior |
 |----------|---------|----------|
-| Night Departure | Report >= 18:00 or < 04:00 | Night sleep + pre-duty nap ramped by report time and nap habit |
+| Late/Night Departure | Report >= 14:00 or < 04:00 | Night sleep + pre-duty nap ramped by report time and nap habit |
 | Early Morning | Report < 07:00 | Roach (2012) regression, 4-6.6h |
 | WOCL Anchor | WOCL crossing + >6h duty | 4.5h consolidated anchor sleep |
 | Recovery | Post-duty hotel/home | Environment-adjusted sleep block |
@@ -166,8 +166,8 @@ the same configuration.
 ### Sleep-estimation rules worth knowing
 - Pre-duty nap (`PreDutyNapAssumptions`): stated per analysis as `nap_habit`
   ('usually' | 'sometimes' | 'rarely', default 'sometimes'; form field on analyze /
-  reanalyze / what-if, echoed as `assumptions`). Length ramps from 0 h at 18:00 to the
-  night-departure nap (≤2.5 h, window-limited) at 22:00 body time; 'sometimes' scales it by
+  reanalyze / what-if, echoed as `assumptions`). Length ramps from 0 h at 14:00 to the
+  night-departure nap (≤2.5 h, window-limited) at 20:00 body time; 'sometimes' scales it by
   the 54 % nap prevalence of Signal et al. (2014); 'rarely' none. Modelling assumption to calibrate with pilot debrief data. The duty's
   sleep explanation, `assumed_nap_hours` and risk reasons state it.
 - Afternoon release before a night report (`DaytimeSleepBounds`): ≤2.5 h afternoon nap

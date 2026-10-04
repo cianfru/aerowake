@@ -82,7 +82,6 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         # Operational thresholds
         self.NIGHT_FLIGHT_THRESHOLD = 20  # EASA late-type duty
         self.EARLY_REPORT_THRESHOLD = 6   # Before 06:00 local → early_bedtime
-        self.AFTERNOON_REPORT_THRESHOLD = 14  # After 14:00 local → afternoon_nap
         self.ANCHOR_TIMEZONE_SHIFT = 3.0  # ≥3h timezone crossing → anchor strategy
         self.RESTRICTED_REST_HOURS = 9.0  # <9h rest → restricted strategy
         self.SPLIT_REST_HOURS = 10.0      # <10h rest → split strategy
@@ -271,17 +270,12 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         if 4 <= report_hour < self.EARLY_REPORT_THRESHOLD:
             return self._early_morning_strategy(duty, previous_duty)
 
-        # 5. Evening/night departure (report from the nap-ramp start, 18:00,
-        #    or <04:00). Night sleep + a pre-duty nap whose length ramps with
-        #    report time and nap habit (PreDutyNapAssumptions), so there is no
-        #    step change in the assumed sleep at any single report time.
+        # 5. Afternoon, evening or night departure (report from the nap-ramp
+        #    start, 14:00, or <04:00). Night sleep + a pre-duty nap whose length
+        #    ramps with report time and nap habit (PreDutyNapAssumptions), so
+        #    there is no step change in the assumed sleep at any report time.
         if report_hour >= self.config.nap_assumptions.ramp_start_hour or report_hour < 4:
             return self._night_departure_strategy(duty, previous_duty)
-
-        # 6. Late report (14:00-18:00 local): normal previous-night sleep,
-        #    no pre-duty nap assumed.
-        if report_hour >= self.AFTERNOON_REPORT_THRESHOLD:
-            return self._afternoon_nap_strategy(duty, previous_duty)
 
         # 7. Extended sleep — long rest period (>14h) allows extra sleep.
         if rest_hours is not None and rest_hours > self.EXTENDED_REST_HOURS:

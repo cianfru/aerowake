@@ -123,16 +123,18 @@ def test_first_duty_after_days_off_shows_its_last_night_not_older_recovery():
 # ---------------------------------------------------------------- LOGIC-05 + owner decision (2)
 def test_nap_ramp_and_habits():
     naps = PreDutyNapAssumptions()
-    assert naps.nap_hours(17.9, 12, 'usually') == 0
-    assert naps.nap_hours(20.0, 12, 'usually') == pytest.approx(1.25)
+    # Ramp from 14:00 (late-report afternoon nap) to the full nap at 20:00.
+    assert naps.nap_hours(13.9, 12, 'usually') == 0
+    assert naps.nap_hours(17.0, 12, 'usually') == pytest.approx(1.25)
+    assert naps.nap_hours(20.0, 12, 'usually') == pytest.approx(2.5)
     assert naps.nap_hours(22.0, 12, 'usually') == pytest.approx(2.5)
     assert naps.nap_hours(1.0, 12, 'usually') == pytest.approx(2.5)
     # 'sometimes' = population average: 54 % of crews nap (Signal et al. 2014).
-    assert naps.nap_hours(22.0, 12, 'sometimes') == pytest.approx(2.5 * 0.54)
-    assert naps.nap_hours(20.0, 12, 'sometimes') == pytest.approx(1.25 * 0.54)
-    assert naps.nap_hours(18.5, 12, 'sometimes') == 0  # below the shortest modelled nap
+    assert naps.nap_hours(20.0, 12, 'sometimes') == pytest.approx(2.5 * 0.54, abs=1 / 60)
+    assert naps.nap_hours(17.0, 12, 'sometimes') == pytest.approx(1.25 * 0.54, abs=1 / 60)
+    assert naps.nap_hours(14.5, 12, 'sometimes') == 0  # below the shortest modelled nap
     # Continuous: no step larger than the ramp slope between adjacent quarter hours.
-    steps = [naps.nap_hours(18 + q / 4, 12, h) for h in ('usually', 'sometimes') for q in range(17)]
+    steps = [naps.nap_hours(14 + q / 4, 12, h) for h in ('usually', 'sometimes') for q in range(25)]
     assert max(abs(a - b) for a, b in zip(steps, steps[1:]) if a and b) < 0.2
     assert naps.nap_hours(23.0, 12, 'rarely') == 0
     # Window-limited: little time since waking means little or no nap.
@@ -357,7 +359,8 @@ def test_analyze_rejects_unknown_nap_habit(client):
 
 
 def test_what_if_on_first_duty_after_days_off(client):
-    body = _analyze(client).json()
+    # No assumed pre-duty nap, so awake time at report runs from the main sleep.
+    body = _analyze(client, nap_habit='rarely').json()
     duty = next(d for d in body['duties'] if d['date'] == '2026-10-12')
     sq = duty['sleep_quality']
     start = datetime.fromisoformat(sq['sleep_start_utc'])
@@ -368,7 +371,7 @@ def test_what_if_on_first_duty_after_days_off(client):
     assert r.status_code == 200, r.text
     after = next(d for d in r.json()['duties'] if d['duty_id'] == duty['duty_id'])
     assert after['pre_duty_awake_hours'] == pytest.approx(duty['pre_duty_awake_hours'] - 2, abs=0.1)
-    assert r.json()['assumptions']['nap_habit'] == 'sometimes'
+    assert r.json()['assumptions']['nap_habit'] == 'rarely'
 
 
 def test_what_if_can_target_any_block(client):
