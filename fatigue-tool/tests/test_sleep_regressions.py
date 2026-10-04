@@ -459,3 +459,36 @@ class TestSleepQualityExtraction:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+# ============================================================================
+# Attribution: a duty shows its last main sleep and the naps after it.
+# Bug: a recovery nap the day before (after a morning ground duty) was listed
+# under the next day's afternoon report, as if napped just before the flight.
+# ============================================================================
+
+def test_recovery_nap_before_last_night_is_not_a_pre_duty_nap():
+    from models.data_models import Roster, DutyType
+    HAN = _make_airport('HAN', 'Asia/Ho_Chi_Minh', lat=21.22, lon=105.81)
+    ground = Duty(duty_id='G1', date=datetime(2026, 10, 22).date(),
+                  report_time_utc=datetime(2026, 10, 22, 3, 40, tzinfo=pytz.utc),
+                  release_time_utc=datetime(2026, 10, 22, 8, 30, tzinfo=pytz.utc),
+                  segments=[], home_base_timezone='Asia/Qatar', duty_type=DutyType.SIMULATOR)
+    flight = _make_duty('F1', datetime(2026, 10, 23, 14, 5, tzinfo=pytz.utc),
+                        datetime(2026, 10, 23, 22, 40, tzinfo=pytz.utc), DOH, HAN)
+    roster = Roster(roster_id='r', pilot_id='p', month='2026-10', duties=[ground, flight],
+                    home_base_timezone='Asia/Qatar', pilot_base='DOH')
+    model = BorbelyFatigueModel(ModelConfig.aerowake())
+    model.simulate_roster(roster)
+    entry = model.sleep_strategies['F1']
+    blocks = entry['sleep_blocks']
+    first_start = min(datetime.fromisoformat(b['sleep_start_utc']) for b in blocks)
+    # Everything listed for the flight starts at or after its last main sleep.
+    main_starts = [datetime.fromisoformat(b['sleep_start_utc']) for b in blocks if b['sleep_type'] == 'main']
+    assert main_starts and first_start == max(main_starts)
+    # Any earlier recovery nap stays visible under the ground duty.
+    earlier = [b for k, v in model.sleep_strategies.items() if k != 'F1'
+               for b in v.get('sleep_blocks', [])
+               if b['sleep_type'] == 'nap' and b['sleep_start_utc'].startswith('2026-10-22')]
+    for b in earlier:
+        assert datetime.fromisoformat(b['sleep_end_utc']) < max(main_starts)

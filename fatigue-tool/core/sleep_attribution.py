@@ -182,17 +182,24 @@ def attribute_sleep(roster, blocks: List[SleepBlock], strategies: Dict[str, Any]
             continue
         mains = [b for b in in_gap if b.is_anchor_sleep and not b.is_inflight_rest]
         last_main = mains[-1] if mains else None
-        if last_main is None or owner.get(block_key(last_main)) == own:
-            pre = [b for b in in_gap if owner.get(block_key(b)) == own
-                   or (block_key(b) not in owner and (last_main is None or b.start_utc >= last_main.start_utc))]
+        if last_main is None:
+            pre = [b for b in in_gap if owner.get(block_key(b)) == own or block_key(b) not in owner]
         else:
+            # Only the last main sleep and what follows it: a recovery nap the
+            # duty's own estimate placed before that night belongs to the
+            # previous duty, not to this one's pre-duty sleep.
             pre = [b for b in in_gap if b.start_utc >= last_main.start_utc]
         if not pre:
             continue
         moved = [b for b in in_gap if owner.get(block_key(b)) == own and b not in pre]
         if moved and i:
             prev_id = duties[i - 1].duty_id
-            out[f'post_duty_{prev_id}'] = refresh(f'post_duty_{prev_id}', moved, data or {})
+            post = dict(data or {})
+            post['explanation'] = 'Recovery sleep after the previous duty: ' + ', '.join(
+                f"{b.environment} {_clock(b.start_utc, pytz.timezone(b.location_timezone))}–"
+                f"{_clock(b.end_utc, pytz.timezone(b.location_timezone))} local ({b.duration_hours:.1f}h)"
+                for b in moved) + '.'
+            out[f'post_duty_{prev_id}'] = refresh(f'post_duty_{prev_id}', moved, post)
 
         naps = pre_duty_naps(pre)
         gap_naps = [b for b in naps if block_key(b) not in owner]
@@ -200,7 +207,7 @@ def attribute_sleep(roster, blocks: List[SleepBlock], strategies: Dict[str, Any]
         main_owner = owner.get(block_key(main)) if main is not None else None
         source = strategies.get(main_owner) or data or {}
         entry = dict(source)
-        if main_owner != own and main is not None:
+        if main is not None and (main_owner != own or moved):
             # The gap-fill night (or another entry's block) is the last main sleep.
             tz = pytz.timezone(main.location_timezone)
             entry['strategy_type'] = 'normal'
