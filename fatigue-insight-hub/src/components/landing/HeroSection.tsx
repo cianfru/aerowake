@@ -1,17 +1,15 @@
-import { useState } from 'react';
-import { ArrowDown, ArrowRight, Pause, Play } from 'lucide-react';
+import { ArrowDown, ArrowRight } from 'lucide-react';
 import { HERO_COPY } from './landingData';
 import { RosterExample } from './RosterExample';
 import { HeroGlobe } from './HeroGlobe';
 
 export function HeroSection({ onEnter }: { onEnter: () => void }) {
-  const [motionPaused, setMotionPaused] = useState(false);
   return <section id="top" aria-labelledby="hero-title" className="aw-hero">
-    <HeroGlobe paused={motionPaused} />
+    <HeroGlobe />
     <div className="aw-container">
       <div className="aw-hero-topline">
         <span>Built by a line pilot. For line pilots.</span>
-        <div className="aw-hero-tools"><span className="aw-mono">Roster / Rest / Reflection</span><button type="button" className="aw-motion-toggle" aria-label={motionPaused ? 'Resume background motion' : 'Pause background motion'} aria-pressed={motionPaused} onClick={() => setMotionPaused(!motionPaused)}>{motionPaused ? <Play size={13} aria-hidden="true" /> : <Pause size={13} aria-hidden="true" />}</button></div>
+        <div className="aw-hero-tools"><span className="aw-mono">Roster / Rest / Reflection</span></div>
       </div>
       <div className="aw-hero-grid">
         <div className="aw-hero-copy">

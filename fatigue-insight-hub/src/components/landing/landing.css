@@ -49,8 +49,6 @@
 .aw-hero-topline { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: #bcd0dd; font-size: 11px; }
 .aw-hero-topline .aw-mono { text-transform: uppercase; }
 .aw-hero-tools { display: flex; align-items: center; gap: 24px; }
-.aw-motion-toggle { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; border: 1px solid #53758a; border-radius: 50%; color: #d1e8e9; background: #102e4340; transition: background .2s; }
-.aw-motion-toggle:hover { background: #28536c; }
 .landing-editorial .aw-hero :is(a, button):focus-visible { outline-color: #80d6c8; }
 .landing-editorial .aw-hero .aw-duty:focus-visible { outline-color: #087478; }
 @keyframes aw-atmosphere { from { transform: translate(-20px, 10px) scale(.94); } to { transform: translate(20px, -15px) scale(1.05); } }
@@ -279,5 +277,4 @@
 @media (prefers-reduced-motion: reduce) {
   .landing-editorial *, .landing-editorial *::before, .landing-editorial *::after { transition: none !important; }
   .aw-hero-globe::before { animation: none; }
-  .aw-motion-toggle { display: none; }
-}
+  }

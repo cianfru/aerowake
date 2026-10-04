@@ -14,14 +14,14 @@ const ROUTES = LANDING_ROUTE_PAIRS.slice(0, 5).map(route => {
 });
 
 /** A background globe, drawn locally: no map services, labels or hit targets. */
-export function HeroGlobe({ paused }: { paused: boolean }) {
+export function HeroGlobe() {
   const root = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const phase = useRef(0);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [budget] = useState(motionBudget);
   const visible = useRunGate(root);
-  const running = visible && !paused && !reducedMotion && budget !== 'static';
+  const running = visible && !reducedMotion && budget !== 'static';
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
