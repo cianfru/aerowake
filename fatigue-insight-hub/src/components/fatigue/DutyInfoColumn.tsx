@@ -181,7 +181,7 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                   </div>
                   {crewCompositionOverride
                     ? <button type="button" className="text-xs text-primary underline-offset-2 hover:underline" onClick={() => onCrewCompositionChange(duty.dutyId || '', null)}>Use roster</button>
-                    : <span className="text-xs text-muted-foreground">{duty.crewSource === 'fdp' ? 'From the FDP' : 'From roster'}</span>}
+                    : <span className="text-xs text-muted-foreground">{duty.crewSource === 'fdp' ? 'Estimated from the FDP' : 'From roster'}</span>}
                 </div>
                 {duty.augmentationSuggested && !crewCompositionOverride && (
                   <p className="rounded-lg bg-secondary/60 px-3 py-2 text-xs text-foreground/90">
@@ -190,8 +190,8 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                 )}
                 <p className="text-xs text-muted-foreground">
                   {duty.crewSource === 'fdp' && !crewCompositionOverride
-                    ? 'Your roster does not print the crew, so it is set from the planned FDP: longer than 2 pilots may fly, so the smallest augmented crew whose limit covers it (EASA in-flight rest table, bunk; ULR routes and FDP over 18 h are 4 pilots). '
-                    : 'First officers see augmented sectors as IR (in-flight rest); captains see none, so the crew is otherwise set from the planned FDP. '}
+                    ? 'No IR (in-flight rest) on this duty, so the crew is estimated from the planned FDP: the smallest augmented crew the Qatar OM-A 7.6.6 limit allows for a bunk (ULR routes and an FDP over 18 h are 4 pilots). Confirm it or choose the crew you flew. '
+                    : 'IR (in-flight rest) on the roster marks an augmented crew, whatever your rank. Without IR the crew is estimated from the planned FDP and you can choose it here. '}
                   Changing the crew re-runs the analysis with the matching in-flight rest and FDP limits.
                 </p>
               </div>

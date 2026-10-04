@@ -43,10 +43,10 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
       • The paired outbound duty that arrived at the same layover station
         → pilot was Crew A (operating) on that leg; the aircraft still had 4 pilots.
 
-    IR appears only on a first officer's roster (a captain's shows PIC), and it does not
-    say 3 or 4 pilots. This pass marks IR pairings; core/crew_inference.py then sizes them
-    and every other long-haul duty from the planned FDP (EASA in-flight rest table, Qatar
-    ULR), before simulation.
+    IR is treated as IR whatever the pilot's rank, and it does not say 3 or 4 pilots. This
+    pass marks IR pairings; core/crew_inference.py then sizes them from the planned FDP and
+    estimates the crew of every other long-haul duty the same way (Qatar OM-A 7.6.6, ULR
+    7.18), before simulation. The pilot can set the crew on any duty.
 
     Crew A / Crew B (Qatar FTL 7.18.4.1, 7.18.9.3): a pilot belongs to ONE crew for the
     whole pairing. Crew A operates the outbound sector from base and is the relief crew on

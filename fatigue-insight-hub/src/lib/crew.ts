@@ -3,7 +3,7 @@ import type { DutyAnalysis } from '@/types/fatigue';
 /** Sectors of at least this block time can be flown augmented, so the pilot may state the crew. */
 export const LONG_SECTOR_BLOCK_HOURS = 7;
 
-export type CrewInfo = Pick<DutyAnalysis, 'crewComposition' | 'ulrCrewSet' | 'isUlr' | 'flightSegments' | 'inflightRestBlocks'>;
+export type CrewInfo = Pick<DutyAnalysis, 'crewComposition' | 'ulrCrewSet' | 'isUlr' | 'flightSegments' | 'inflightRestBlocks'> & Partial<Pick<DutyAnalysis, 'crewSource'>>;
 
 export function isAugmented(duty: Pick<DutyAnalysis, 'crewComposition'>): boolean {
   return duty.crewComposition === 'augmented_3' || duty.crewComposition === 'augmented_4';
@@ -16,11 +16,13 @@ export function canBeAugmented(duty: CrewInfo): boolean {
 
 /** '4 pilots · ULR · Crew B', '3 pilots', or null for a standard crew. */
 export function crewLabel(duty: CrewInfo): string | null {
+  // No IR on the roster: the size is an estimate from the planned FDP until the pilot confirms it.
+  const estimated = duty.crewSource === 'fdp' ? 'estimated' : null;
   if (duty.crewComposition === 'augmented_4') {
     const set = duty.ulrCrewSet === 'crew_a' ? 'Crew A' : duty.ulrCrewSet === 'crew_b' ? 'Crew B' : null;
-    return ['4 pilots', duty.isUlr ? 'ULR' : null, set].filter(Boolean).join(' · ');
+    return ['4 pilots', duty.isUlr ? 'ULR' : null, set, estimated].filter(Boolean).join(' · ');
   }
-  if (duty.crewComposition === 'augmented_3') return '3 pilots';
+  if (duty.crewComposition === 'augmented_3') return ['3 pilots', estimated].filter(Boolean).join(' · ');
   return null;
 }
 

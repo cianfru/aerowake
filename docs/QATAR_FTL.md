@@ -72,9 +72,10 @@ rotation (no rest in the first/last 90 min).
   both sectors; the crew set selects the approved pattern. Until October 2026 the code
   assigned the crew per sector (IR leg = B, other leg = A), which put one leg of every
   pairing on the wrong rest pattern.
-- **Crew size from the FDP** (`core/crew_inference.py`). IR appears only on a first officer's
-  roster; a captain's shows PIC (owner, October 2026). So for every long-haul duty (a sector
-  ≥ 7 h block) whose crew the pilot has not set: FDP > 18 h or AKL → 4 pilots, ULR (DFW/MIA only when FDP > 18 h);
+- **Crew size from the FDP** (`core/crew_inference.py`). IR is treated as IR
+  whatever the pilot's rank (owner, October 2026). A duty without IR is not known to be
+  augmented, so its crew is an estimate the pilot can change (`crew_source` 'fdp', shown as
+  "estimated"). For every long-haul duty (a sector ≥ 7 h block) whose crew the pilot has not set: FDP > 18 h or AKL → 4 pilots, ULR (DFW/MIA only when FDP > 18 h);
   FDP above the 2-pilot planned maximum (7.6.5 Table 7-8 where an extension is allowed at that
   start time, else Table 7-6/7-7) → the smallest augmented crew whose 7.6.6 Table 7-9/7-10
   class-1 limit covers it (3 pilots 16 h, 4 pilots 17 h, +1 h with ≤ 2 sectors and one > 9 h).

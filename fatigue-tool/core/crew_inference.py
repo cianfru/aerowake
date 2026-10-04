@@ -1,8 +1,8 @@
 """Crew size from the planned FDP, for rosters that do not print it.
 
-CrewLink marks augmented sectors only for first officers (`IR`, In-flight Rest); a
-captain's roster shows PIC and nothing else. The crew size is therefore inferred from
-the FDP the duty needs:
+CrewLink marks an augmented sector with `IR` (In-flight Rest). IR is treated as IR whatever
+the pilot's rank; a duty without IR is not known to be augmented, so its crew size is an
+estimate from the FDP the duty needs (flagged `crew_source` 'fdp', the pilot can choose):
 
 * FDP above the most a 2-pilot crew may be planned for — Qatar OM-A 7.6.5 Table 7-8 (planned
   extension) where an extension is allowed at that start time, else 7.6.3 Table 7-6 / 7-7 —
@@ -80,8 +80,8 @@ def infer_crew(duties, acclimatisation: Dict, validator, augmented_params, ulr_p
         duty.is_ulr = _is_ulr(duty, ulr_params)
         duty.rest_facility_class = duty.rest_facility_class or RestFacilityClass.CLASS_1
         if need == CrewComposition.AUGMENTED_4:
-            # Crew A/B comes from the IR sector when the roster has one. A captain's roster
-            # does not say: Crew A (operates the outbound from base, Qatar FTL 7.18.9.3)
+            # Crew A/B comes from the IR sector when the roster has one. Without IR it is
+            # not known: Crew A (operates the outbound from base, Qatar FTL 7.18.9.3)
             # for the whole pairing, which the pilot can switch.
             if duty.ulr_crew_set is None:
                 duty.ulr_crew_set = ULRCrewSet.CREW_A

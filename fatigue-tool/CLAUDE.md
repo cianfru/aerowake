@@ -135,7 +135,7 @@ ORO.FTL.235 minimum rest; ORO.FTL.235(d) recovery rest (36h incl. 2 local nights
 ORO.FTL.105(8) (`EASAComplianceValidator.is_disruptive_duty`).
 
 ### Augmented crew and Qatar FTL
-See `docs/QATAR_FTL.md`: IR (first officers only) = relief on that sector → augmented; one crew
+See `docs/QATAR_FTL.md`: IR = relief on that sector → augmented, whatever the rank; one crew
 per pairing (IR leaving base → Crew B both legs; IR returning to base → Crew A both legs). Crew
 size (3/4, ULR) from the planned FDP for every long-haul duty without a pilot setting
 (`core/crew_inference.py`, run at the start of `simulate_roster`, before sleep); `crew_source`

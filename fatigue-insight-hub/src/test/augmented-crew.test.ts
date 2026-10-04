@@ -21,6 +21,14 @@ describe('augmented crew presentation', () => {
     expect(canBeAugmented(duty({ crewComposition: 'augmented_3' }))).toBe(true);
   });
 
+  it('marks a crew estimated from the FDP, not one read from IR or set by the pilot', () => {
+    expect(crewLabel(duty({ crewComposition: 'augmented_3', crewSource: 'fdp' }))).toBe('3 pilots · estimated');
+    expect(crewLabel(duty({ crewComposition: 'augmented_3', crewSource: 'roster_ir' }))).toBe('3 pilots');
+    expect(crewLabel(duty({ crewComposition: 'augmented_4', ulrCrewSet: 'crew_a', isUlr: true, crewSource: 'fdp' })))
+      .toBe('4 pilots · ULR · Crew A · estimated');
+    expect(crewLabel(duty({ crewComposition: 'augmented_3', crewSource: 'pilot' }))).toBe('3 pilots');
+  });
+
   it('sums credited in-flight sleep', () => {
     const blocks = [{ effectiveSleepHours: 1.2 }, { effectiveSleepHours: 2.3 }] as DutyAnalysis['inflightRestBlocks'];
     expect(inflightSleepHours(duty({ inflightRestBlocks: blocks }))).toBeCloseTo(3.5);
