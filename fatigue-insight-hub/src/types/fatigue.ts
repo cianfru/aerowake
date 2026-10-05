@@ -226,7 +226,16 @@ export interface DutyAnalysis {
       sleepStartHourHomeTz?: number;
       sleepEndDayHomeTz?: number;
       sleepEndHourHomeTz?: number;
+      /** Why this block is there, with its published basis; undefined = the strategy explains it. */
+      basis?: string;
+      /** 'pilot' = set or added by the pilot (planned sleep, not reported). */
+      source?: 'estimated' | 'pilot';
+      qualityFactors?: SleepQualityFactors;
+      environment?: string;
+      locationTimezone?: string;
     }>;
+    /** Includes sleep the pilot set or removed. */
+    isUserOverride?: boolean;
   };
 
   // ULR / Augmented crew fields
@@ -367,6 +376,11 @@ export interface RestDaySleepBlock {
   sleepStartHour?: number;
   sleepEndDay?: number;
   sleepEndHour?: number;
+  sleepStartUtc?: string;
+  sleepEndUtc?: string;
+  basis?: string;
+  source?: 'estimated' | 'pilot';
+  qualityFactors?: SleepQualityFactors;
 }
 
 // Rest day sleep (transformed from backend)
@@ -383,6 +397,21 @@ export interface RestDaySleep {
   confidenceBasis?: string;
   qualityFactors?: SleepQualityFactors;
   references?: SleepReference[];
+  isUserOverride?: boolean;
+}
+
+/** A pilot change to the estimated sleep, as stored with the analysis. */
+export interface SleepEditItem {
+  id: string;
+  action: 'remove' | 'replace' | 'add';
+  kind?: 'main' | 'nap' | null;
+  environment?: 'home' | 'hotel' | null;
+  targetStartUtc?: string | null;
+  targetEndUtc?: string | null;
+  startUtc?: string | null;
+  endUtc?: string | null;
+  /** False when the change no longer matches an estimated sleep. */
+  applied: boolean;
 }
 
 // ── EASA ORO.FTL roster-level checks ─────────────────────────
@@ -458,6 +487,8 @@ export interface AnalysisResults {
   };
   // Rest day sleep data
   restDaysSleep?: RestDaySleep[];
+  /** The pilot's sleep changes stored with this analysis. */
+  sleepEdits?: SleepEditItem[];
   // Circadian adaptation curve across the roster
   bodyClockTimeline?: BodyClockTimelineEntry[];
   // Company detection (first upload only)

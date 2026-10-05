@@ -223,7 +223,7 @@ function baseSleepFields(
     originalEndHour: block?.sleepEndHourHomeTz ?? est.sleepEndHourHomeTz ?? est.sleepEndHour,
     sleepStartZulu: isoToZulu(block?.sleepStartUtc ?? est.sleepStartIso) ?? undefined,
     sleepEndZulu: isoToZulu(block?.sleepEndUtc ?? est.sleepEndIso) ?? undefined,
-    qualityFactors: est.qualityFactors,
+    qualityFactors: block?.qualityFactors ?? est.qualityFactors,
     explanation: est.explanation,
     confidenceBasis: est.confidenceBasis,
     confidence: est.confidence,
@@ -233,6 +233,8 @@ function baseSleepFields(
     sleepStartIso: (block ?? first)?.sleepStartUtc ?? undefined,
     sleepEndIso: (block ?? first)?.sleepEndUtc ?? undefined,
     blockKey: duty.dutyId ? `${duty.dutyId}::${blockIdx}` : undefined,
+    basis: (block ?? first)?.basis,
+    source: (block ?? first)?.source,
   };
 }
 
@@ -251,14 +253,16 @@ function restDaySleepFields(restDay: RestDaySleep, blockIdx: number, startHour: 
     originalEndHour: endHour,
     sleepStartZulu: isoToZulu(block.sleepStartIso) ?? undefined,
     sleepEndZulu: isoToZulu(block.sleepEndIso) ?? undefined,
-    qualityFactors: restDay.qualityFactors,
+    qualityFactors: block.qualityFactors ?? restDay.qualityFactors,
     explanation: restDay.explanation,
     confidenceBasis: restDay.confidenceBasis,
     confidence: restDay.confidence,
     references: restDay.references,
     blockKey: `rest::${format(restDay.date, 'yyyy-MM-dd')}::${blockIdx}`,
-    sleepStartIso: block.sleepStartIso,
-    sleepEndIso: block.sleepEndIso,
+    sleepStartIso: block.sleepStartUtc ?? block.sleepStartIso,
+    sleepEndIso: block.sleepEndUtc ?? block.sleepEndIso,
+    basis: block.basis,
+    source: block.source,
   };
 }
 

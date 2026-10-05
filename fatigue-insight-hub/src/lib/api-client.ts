@@ -111,6 +111,11 @@ export interface SleepBlockResponse {
   sleep_start_hour_home_tz?: number | null;
   sleep_end_day_home_tz?: number | null;
   sleep_end_hour_home_tz?: number | null;
+  /** Why this block is there (plain language with its published basis); null = see the strategy. */
+  basis?: string | null;
+  /** 'pilot' = set or added by the pilot (planned, not reported). */
+  source?: 'estimated' | 'pilot' | null;
+  quality_factors?: SleepEstimate['quality_factors'] | null;
 }
 
 // Strategic sleep estimator output (SleepQualityResponse from backend)
@@ -174,6 +179,8 @@ export interface SleepEstimate {
     short: string;
     full: string;
   }>;
+  /** The entry includes sleep the pilot set or removed. */
+  is_user_override?: boolean;
   // Sleep environment and quality indicators
   sleep_environment?: 'home' | 'layover';
   sleep_quality_label?: 'poor' | 'fair' | 'good' | 'excellent';
@@ -358,6 +365,11 @@ export interface RestDaySleepBlock {
   sleep_start_hour?: number | null;
   sleep_end_day?: number | null;
   sleep_end_hour?: number | null;
+  sleep_start_utc?: string | null;
+  sleep_end_utc?: string | null;
+  basis?: string | null;
+  source?: 'estimated' | 'pilot' | null;
+  quality_factors?: SleepEstimate['quality_factors'] | null;
 }
 
 // Rest day sleep entry from backend
@@ -386,6 +398,19 @@ export interface RestDaySleep {
     short: string;
     full: string;
   }>;
+  is_user_override?: boolean;
+}
+
+/** A pilot change to the estimated sleep (stored with the analysis). */
+export interface SleepEditPayload {
+  id?: string;
+  action: 'remove' | 'replace' | 'add';
+  kind?: 'main' | 'nap' | null;
+  environment?: 'home' | 'hotel' | null;
+  target_start_utc?: string | null;
+  target_end_utc?: string | null;
+  start_utc?: string | null;
+  end_utc?: string | null;
 }
 
 export interface AnalysisResult {
@@ -452,6 +477,10 @@ export interface AnalysisResult {
     headline_risk_window?: string | null;
   } | null;
 
+  /** The pilot's sleep changes stored with this analysis; `applied` false = no longer matches. */
+  sleep_edits?: Array<SleepEditPayload & { applied?: boolean; note?: string }> | null;
+  timezone_format?: string | null;
+
   // Fatigue continuity (multi-roster chaining)
   continuity_from_month?: string | null;
   initial_conditions?: {
@@ -487,7 +516,7 @@ export async function analyzeRoster(
   pilotId: string,
   homeBase?: string | null,
   dutyCrewOverrides?: Map<string, CrewOverride>,
-  options: { override?: boolean; napHabit?: string | null } = {},
+  options: { override?: boolean; napHabit?: string | null; sleepEdits?: SleepEditPayload[] } = {},
 ): Promise<AnalysisResult> {
 
   const formData = new FormData();
@@ -496,6 +525,8 @@ export async function analyzeRoster(
   if (homeBase) formData.append('home_base', homeBase);
   if (homeBase && options.override) formData.append('home_base_override', 'true');
   if (options.napHabit) formData.append('nap_habit', options.napHabit);
+  // The pilot's sleep changes carry over to a new run of the same roster.
+  if (options.sleepEdits?.length) formData.append('sleep_edits', JSON.stringify(options.sleepEdits));
   // One model only (aerowake-4.0-kss) — the backend ignores presets.
 
   // Per-duty crew set overrides (parser auto-detection provides defaults)
@@ -718,6 +749,26 @@ export interface WhatIfRequest {
   analysis_id: string;
   modifications?: DutyModification[];
   sleep_modifications?: SleepModification[];
+}
+
+/**
+ * Store the pilot's sleep changes for an analysis (the full list; [] restores the
+ * model's estimates) and return the recalculated analysis (same id).
+ */
+export async function saveSleepEdits(analysisId: string, edits: SleepEditPayload[]): Promise<AnalysisResult> {
+  const response = await apiFetch(`${API_BASE_URL}/api/analysis/${encodeURIComponent(analysisId)}/sleep-edits`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ edits }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    const detail = typeof error.detail === 'string' ? error.detail : null;
+    throw new Error(detail || (response.status === 404
+      ? 'This analysis is no longer available. Analyse the roster again to change its sleep.'
+      : 'Your sleep change could not be saved. Try again.'));
+  }
+  return response.json();
 }
 
 export async function runWhatIf(request: WhatIfRequest): Promise<AnalysisResult> {

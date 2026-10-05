@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BedDouble, Building2, ChevronDown, Home, Moon, Users } from 'lucide-react';
+import { Building2, ChevronDown, Home, Users } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { InfoTooltip, FATIGUE_INFO } from '@/components/ui/InfoTooltip';
 import { DutyAnalysis } from '@/types/fatigue';
@@ -8,7 +8,9 @@ import { FDPUtilizationBar } from './FDPUtilizationBar';
 import { CrewRestTimeline } from './CrewRestTimeline';
 import { cn } from '@/lib/utils';
 import { SLEEP_DEFICIT_LABELS, sleepDeficitClass } from '@/lib/risk-scale';
-import { formatHomeDate, formatHomeTime } from '@/lib/home-time';
+import { formatHomeTime } from '@/lib/home-time';
+import { useAnalysis } from '@/contexts/AnalysisContext';
+import { SleepBlockList } from './sleep/SleepBlockList';
 import type { CrewCompositionValue } from '@/lib/api-client';
 import { crewLabel, inflightSleepHours, isAugmented } from '@/lib/crew';
 
@@ -60,26 +62,32 @@ interface DutyInfoColumnProps {
   onCrewCompositionChange?: (dutyId: string, composition: CrewCompositionValue | null) => void;
 }
 
+const isIso = (v?: string) => !!v && /^\d{4}-\d{2}-\d{2}T/.test(v) && Number.isFinite(Date.parse(v));
+
 function SleepBlocks({ duty, homeTz }: { duty: DutyAnalysis; homeTz?: string }) {
-  const blocks = (duty.sleepEstimate?.sleepBlocks ?? []).filter((b) => b.sleepStartUtc && b.sleepEndUtc)
-    .sort((a, b) => Date.parse(a.sleepStartUtc!) - Date.parse(b.sleepStartUtc!));
-  if (!blocks.length || !homeTz) return null;
+  const { state } = useAnalysis();
+  const est = duty.sleepEstimate;
+  const blocks = est?.sleepBlocks ?? [];
+  if (!homeTz || !isIso(duty.reportTimeUtc)) return null;
+  const report = duty.reportTimeUtc!;
+  // Removed estimates are listed from the previous release to this report.
+  const previous = (state.analysisResults?.duties ?? [])
+    .map((d) => d.releaseTimeUtc).filter((r): r is string => isIso(r) && Date.parse(r!) <= Date.parse(report))
+    .sort((x, y) => Date.parse(x) - Date.parse(y)).pop();
+  const napEnd = new Date(Date.parse(report) - 2 * 3600000).toISOString();
+  const napStart = new Date(Date.parse(report) - 3 * 3600000).toISOString();
   return (
-    <ul className="space-y-1" aria-label="Estimated sleep before this duty">
-      {blocks.map((b, i) => (
-        <li key={i} className="flex items-center justify-between gap-3 text-sm">
-          <span className="flex items-center gap-2">
-            {b.sleepType === 'nap' ? <Moon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" /> : <BedDouble className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />}
-            {b.sleepType === 'nap' ? 'Nap' : 'Sleep'}
-          </span>
-          <span className="font-mono tabular">
-            <span className="mr-1.5 font-sans text-muted-foreground">{formatHomeDate(b.sleepStartUtc, homeTz).split(' ').slice(0, 2).join(' ')}</span>
-            {formatHomeTime(b.sleepStartUtc, homeTz)}–{formatHomeTime(b.sleepEndUtc, homeTz)}
-            {b.durationHours != null && <span className="ml-2 text-muted-foreground">{b.durationHours.toFixed(1)}h</span>}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <SleepBlockList
+      blocks={blocks}
+      homeTz={homeTz}
+      rationale={est ? STRATEGY_RATIONALE[est.sleepStrategy] : undefined}
+      confidence={est?.confidence}
+      confidenceBasis={est?.confidenceBasis}
+      references={est?.references}
+      window={{ from: previous, to: report }}
+      addDefault={{ startUtc: napStart, endUtc: napEnd }}
+      ariaLabel="Estimated sleep before this duty"
+    />
   );
 }
 
@@ -139,7 +147,10 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
           </div>
         )}
         <p className="text-xs text-muted-foreground">
-          Estimated from the roster, not sleep you recorded. The shortfall compares the last 7 days with 8h a day.
+          {est?.isUserOverride
+            ? 'Includes sleep you changed; the rest is estimated from the roster. None of it is sleep you recorded. '
+            : 'Estimated from the roster, not sleep you recorded. '}
+          Tap ⓘ to see why each sleep is there and to change it. The shortfall compares the last 7 days with 8h a day.
           {duty.woclExposure > 0 ? ` This duty spends ${duty.woclExposure.toFixed(1)}h in the body-clock low.` : ''}
         </p>
       </section>

@@ -1,24 +1,17 @@
 /**
- * useSleepEdits — manages ephemeral sleep overrides for what-if recalculation.
+ * useSleepEdits — drag edits of sleep bars on the home-base chronogram.
  *
- * Pilots adjust sleep timing via drag handles on the homebase chronogram.
- * Edits accumulate in a Map keyed by blockKey (unique per sleep block:
- * "${dutyId}::${blockIndex}"). When the pilot clicks "Apply & Recalculate",
- * edits are grouped by dutyId (last edit per duty wins) and sent to
- * `POST /api/what-if` as `sleep_modifications[]`. The backend re-runs the
- * full Borbely simulation and returns a new AnalysisResult.
- *
- * After recalculation, the original (pre-edit) analysis is preserved in a ref
- * so the user can "Reset to Original" without re-uploading the roster.
+ * Pilots adjust a bar's edges; edits gather in a Map keyed by blockKey. "Apply
+ * and recalculate" turns each into a change of that block's times, adds them to
+ * the changes already stored with the analysis and saves the full list
+ * (PUT /api/analysis/{id}/sleep-edits). The analysis keeps its id and the
+ * changes stay with the roster. "Restore all estimates" saves an empty list.
  */
 
-import { useState, useCallback, useMemo, useRef } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { runWhatIf } from '@/lib/api-client';
-import { transformAnalysisResult } from '@/lib/transform-analysis';
-import { useAnalysis } from '@/contexts/AnalysisContext';
-import { useToast } from '@/hooks/use-toast';
-import type { AnalysisResults } from '@/types/fatigue';
+import { useState, useCallback, useMemo } from 'react';
+import { useSaveSleepEdits } from '@/hooks/useSaveSleepEdits';
+import { removeBlock, retimeBlock } from '@/lib/sleep-edits';
+import type { TimelineSleepBar } from '@/lib/timeline-types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,6 +21,10 @@ export interface SleepEdit {
   dutyId: string;
   /** Unique per-block key: "${dutyId}::${blockIndex}" — used as Map key */
   blockKey: string;
+  /** 'main' or 'nap' */
+  sleepType?: string;
+  /** 'pilot' when the block is already one the pilot set */
+  source?: 'estimated' | 'pilot';
   /** Original bedtime as decimal hour in homebase TZ (for display / reset) */
   originalStartHour: number;
   /** Original wake-up as decimal hour in homebase TZ */
@@ -57,49 +54,31 @@ export interface UseSleepEditsReturn {
   activateEdit: (blockKey: string) => void;
   /** Exit drag-edit mode */
   deactivateEdit: () => void;
-  /** Whether an original (pre-recalculation) analysis is stored */
+  /** Whether the analysis holds any sleep changes of the pilot's */
   hasOriginal: boolean;
-  /** Restore the analysis to the state before any what-if recalculation */
+  /** Put every model estimate back (clears the stored changes) */
   resetToOriginal: () => void;
+  /** Remove one block (saved straight away) */
+  removeBar: (bar: TimelineSleepBar) => void;
 }
 
-// ---------------------------------------------------------------------------
-// Helper: convert homebase decimal hour delta to UTC ISO timestamp
-// ---------------------------------------------------------------------------
-
-/**
- * Given an original UTC ISO timestamp and a delta in hours (new hour - original
- * hour in homebase), compute the new UTC ISO string. This avoids needing a
- * timezone library — we just shift the original UTC time by the same delta.
- */
+/** Shift a UTC instant by the same number of hours as the drag moved it. */
 function shiftUtcIso(originalUtcIso: string, deltaHours: number): string {
   const d = new Date(originalUtcIso);
   d.setTime(d.getTime() + deltaHours * 3600_000);
   return d.toISOString();
 }
 
-// ---------------------------------------------------------------------------
-// Hook
-// ---------------------------------------------------------------------------
-
 export function useSleepEdits(
-  analysisId: string | undefined,
+  // Kept for the call sites; the saved changes belong to the analysis on screen.
+  _analysisId?: string,
 ): UseSleepEditsReturn {
   const [pendingEdits, setPendingEdits] = useState<Map<string, SleepEdit>>(new Map());
   const [activeBarId, setActiveBarId] = useState<string | null>(null);
-  const { state, setAnalysisResults } = useAnalysis();
-  const { toast } = useToast();
+  const { edits, save, isSaving } = useSaveSleepEdits();
 
-  // Snapshot of the analysis before any what-if recalculation
-  const originalAnalysisRef = useRef<AnalysisResults | null>(null);
-
-  const activateEdit = useCallback((blockKey: string) => {
-    setActiveBarId(blockKey);
-  }, []);
-
-  const deactivateEdit = useCallback(() => {
-    setActiveBarId(null);
-  }, []);
+  const activateEdit = useCallback((blockKey: string) => setActiveBarId(blockKey), []);
+  const deactivateEdit = useCallback(() => setActiveBarId(null), []);
 
   const addEdit = useCallback((edit: SleepEdit) => {
     setPendingEdits((prev) => {
@@ -125,83 +104,36 @@ export function useSleepEdits(
     });
   }, []);
 
-  const clearEdits = useCallback(() => {
+  const clearEdits = useCallback(() => setPendingEdits(new Map()), []);
+
+  const applyEdits = useCallback(() => {
+    let next = edits;
+    for (const e of pendingEdits.values()) {
+      const block = { sleepStartUtc: e.originalStartIso, sleepEndUtc: e.originalEndIso, sleepType: e.sleepType, source: e.source };
+      next = retimeBlock(next, block,
+        shiftUtcIso(e.originalStartIso, e.newStartHour - e.originalStartHour),
+        shiftUtcIso(e.originalEndIso, e.newEndHour - e.originalEndHour));
+    }
+    const n = pendingEdits.size;
+    save(next, `${n} sleep change${n > 1 ? 's' : ''} saved and fatigue recalculated`);
     setPendingEdits(new Map());
-  }, []);
+    setActiveBarId(null);
+  }, [edits, pendingEdits, save]);
 
-  const mutation = useMutation({
-    mutationFn: async () => {
-      if (!analysisId || pendingEdits.size === 0) {
-        throw new Error('No edits to apply');
-      }
+  const resetToOriginal = useCallback(() => {
+    save([], 'All sleep estimates restored');
+    setPendingEdits(new Map());
+  }, [save]);
 
-      // Snapshot original analysis before first recalculation
-      if (!originalAnalysisRef.current && state.analysisResults) {
-        originalAnalysisRef.current = state.analysisResults;
-      }
-
-      // Group edits by dutyId — the backend accepts one modification per duty_id.
-      // If multiple blocks of the same duty are edited, last one wins.
-      const editsByDuty = new Map<string, SleepEdit>();
-      for (const edit of pendingEdits.values()) {
-        editsByDuty.set(edit.dutyId, edit);
-      }
-
-      // Convert each edit to UTC sleep modifications
-      const sleepModifications = Array.from(editsByDuty.values()).map((edit) => {
-        const startDelta = edit.newStartHour - edit.originalStartHour;
-        const endDelta = edit.newEndHour - edit.originalEndHour;
-        return {
-          duty_id: edit.dutyId,
-          sleep_start_utc: shiftUtcIso(edit.originalStartIso, startDelta),
-          sleep_end_utc: shiftUtcIso(edit.originalEndIso, endDelta),
-        };
-      });
-
-      return runWhatIf({
-        analysis_id: analysisId,
-        sleep_modifications: sleepModifications,
-      });
-    },
-    onSuccess: (result) => {
-      // Transform API result into frontend AnalysisResults
-      const month = state.analysisResults?.month ?? new Date();
-      const transformed = transformAnalysisResult(result, month);
-      setAnalysisResults(transformed);
-      clearEdits();
-      toast({
-        title: 'Sleep edits applied',
-        description: `Fatigue model recalculated with ${pendingEdits.size} sleep modification${pendingEdits.size > 1 ? 's' : ''}.`,
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: 'Recalculation failed',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
-  });
+  const removeBar = useCallback((bar: TimelineSleepBar) => {
+    if (!bar.sleepStartIso || !bar.sleepEndIso) return;
+    save(removeBlock(edits, { sleepStartUtc: bar.sleepStartIso, sleepEndUtc: bar.sleepEndIso, sleepType: bar.sleepType, source: bar.source }),
+      bar.sleepType === 'nap' ? 'Nap removed and fatigue recalculated' : 'Sleep removed and fatigue recalculated');
+  }, [edits, save]);
 
   const hasEdits = pendingEdits.size > 0;
   const editCount = pendingEdits.size;
-  const hasOriginal = originalAnalysisRef.current != null;
-
-  const applyEdits = useCallback(() => {
-    mutation.mutate();
-  }, [mutation]);
-
-  const resetToOriginal = useCallback(() => {
-    if (originalAnalysisRef.current) {
-      setAnalysisResults(originalAnalysisRef.current);
-      originalAnalysisRef.current = null;
-      clearEdits();
-      toast({
-        title: 'Analysis restored',
-        description: 'Reverted to the original analysis before sleep edits.',
-      });
-    }
-  }, [setAnalysisResults, clearEdits, toast]);
+  const hasOriginal = edits.length > 0;
 
   return useMemo(() => ({
     pendingEdits,
@@ -209,7 +141,7 @@ export function useSleepEdits(
     removeEdit,
     clearEdits,
     applyEdits,
-    isApplying: mutation.isPending,
+    isApplying: isSaving,
     hasEdits,
     editCount,
     activeBarId,
@@ -217,5 +149,6 @@ export function useSleepEdits(
     deactivateEdit,
     hasOriginal,
     resetToOriginal,
-  }), [pendingEdits, addEdit, removeEdit, clearEdits, applyEdits, mutation.isPending, hasEdits, editCount, activeBarId, activateEdit, deactivateEdit, hasOriginal, resetToOriginal]);
+    removeBar,
+  }), [pendingEdits, addEdit, removeEdit, clearEdits, applyEdits, isSaving, hasEdits, editCount, activeBarId, activateEdit, deactivateEdit, hasOriginal, resetToOriginal, removeBar]);
 }

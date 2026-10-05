@@ -12,7 +12,7 @@ import { DayLabel } from './DayLabel';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
-import type { TimelineData, TimelinePeakMarker } from '@/lib/timeline-types';
+import type { TimelineData, TimelinePeakMarker, TimelineSleepBar } from '@/lib/timeline-types';
 import type { DutyAnalysis } from '@/types/fatigue';
 import type { SleepEdit } from '@/hooks/useSleepEdits';
 
@@ -27,6 +27,8 @@ interface TimelineGridProps {
   onSleepEdit?: (edit: SleepEdit) => void;
   /** Callback when user resets a single sleep edit */
   onRemoveEdit?: (blockKey: string) => void;
+  /** Remove a sleep block (saved with the analysis). */
+  onRemoveBlock?: (bar: TimelineSleepBar) => void;
   /** ID (blockKey) of the sleep bar currently in drag-edit mode */
   activeEditBarId?: string | null;
   /** Called on double-click to enter drag-edit mode (by blockKey) */
@@ -58,6 +60,7 @@ export function TimelineGrid({
   pendingEdits,
   onSleepEdit,
   onRemoveEdit,
+  onRemoveBlock,
   activeEditBarId,
   onActivateEdit,
   onDeactivateEdit,
@@ -149,6 +152,7 @@ export function TimelineGrid({
                     pendingEdit={bar.blockKey ? pendingEdits?.get(bar.blockKey) ?? null : null}
                     onSleepEdit={onSleepEdit}
                     onRemoveEdit={onRemoveEdit}
+                    onRemoveBlock={onRemoveBlock}
                     isEditing={bar.blockKey === activeEditBarId}
                     onActivateEdit={onActivateEdit}
                     onDeactivateEdit={onDeactivateEdit}

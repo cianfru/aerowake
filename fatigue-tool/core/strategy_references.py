@@ -34,11 +34,40 @@ def get_confidence_basis(strategy) -> str:
             '54% of crew nap before evening departures; nap timing and '
             'duration vary between individuals'
         )
-    elif st == 'split_sleep':
+    elif st == 'nap':
         return (
-            f'Lower confidence ({c:.0%}) — anchor sleep concept validated '
-            'in laboratory (Minors & Waterhouse 1983) but limited field '
-            'data on pilot adoption of this specific pattern'
+            f'Moderate confidence ({c:.0%}) — the night before is well predicted, but '
+            'whether and how long a pilot naps before an evening or night departure varies: '
+            'about half of crews nap (Signal et al. 2014). Your nap setting and your own '
+            'changes replace the average.'
+        )
+    elif st in ('split', 'split_sleep'):
+        return (
+            f'Lower confidence ({c:.0%}) — rest too short for one sleep; split sleep is '
+            'validated in laboratory studies (Jackson et al. 2014; Kosmadopoulos et al. 2017) '
+            'but how pilots divide a short rest varies'
+        )
+    elif st == 'anchor':
+        return (
+            f'Moderate confidence ({c:.0%}) — sleep anchored to home-base time on a '
+            'transmeridian trip (Minors & Waterhouse 1981); pilots differ in how far they '
+            'keep home time'
+        )
+    elif st == 'restricted':
+        return (
+            f'Low confidence ({c:.0%}) — the rest is short, so the sleep is set by the '
+            'roster rather than by habit; actual sleep may be shorter still'
+        )
+    elif st == 'extended':
+        return (
+            f'Moderate confidence ({c:.0%}) — a long rest allows extra sleep, with '
+            'diminishing returns beyond about 9 h (Banks et al. 2010)'
+        )
+    elif st in ('augmented_3_pilot', 'ulr_pre_duty'):
+        return (
+            f'Moderate confidence ({c:.0%}) — pre-departure sleep for augmented and '
+            'ultra-long-range crews follows published crew studies (Signal et al. 2014; '
+            'Gander et al. 2013); individual preparation varies'
         )
     elif st == 'recovery':
         return (

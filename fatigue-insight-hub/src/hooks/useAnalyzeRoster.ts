@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { toPayload } from '@/lib/sleep-edits';
 import { analyzeRoster, type CrewCompositionValue, type CrewOverride, type ULRCrewSet } from '@/lib/api-client';
 import { transformAnalysisResult } from '@/lib/transform-analysis';
 import { useAnalysis } from '@/contexts/AnalysisContext';
@@ -78,8 +79,10 @@ export function useAnalyzeRoster({ inlineErrors = false }: { inlineErrors?: bool
     mutationFn: async ({ file, homeBase, override, napHabit, crew }: AnalyzeVariables) => {
       const base = (homeBase || '').trim().toUpperCase() || null;
       const crewOverrides = mergeCrewOverrides(state.dutyCrewOverrides, state.dutyCrewComposition, crew);
+      // A re-run of the roster on screen keeps the pilot's sleep changes.
+      const sleepEdits = toPayload(state.analysisResults?.sleepEdits ?? []);
       return analyzeRoster(file, state.settings.pilotId, base, crewOverrides,
-        { override: !!override && !!base, napHabit: napHabit ?? state.settings.napHabit });
+        { override: !!override && !!base, napHabit: napHabit ?? state.settings.napHabit, sleepEdits });
     },
     onSuccess: (result, variables) => {
       if (variables.file !== currentFile.current) return;

@@ -140,7 +140,7 @@ export function EditableSleepBar({
       document.body.style.userSelect = '';
 
       const el = getRowEl();
-      if (!el || !bar.sleepId || !bar.blockKey || !bar.sleepStartIso || !bar.sleepEndIso) {
+      if (!el || !bar.blockKey || !bar.sleepStartIso || !bar.sleepEndIso) {
         setDragState(null);
         return;
       }
@@ -164,8 +164,10 @@ export function EditableSleepBar({
         }
 
         onSleepEdit({
-          dutyId: bar.sleepId!,
+          dutyId: bar.sleepId ?? '',
           blockKey: bar.blockKey!,
+          sleepType: bar.sleepType,
+          source: bar.source,
           originalStartHour: rowStart,
           originalEndHour: rowEnd,
           newStartHour: newStart,

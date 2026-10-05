@@ -76,6 +76,7 @@ export function Chronogram({ duties, statistics, month, pilotBase, onDutySelect,
             pendingEdits={sleepEdits.pendingEdits}
             onSleepEdit={sleepEdits.addEdit}
             onRemoveEdit={sleepEdits.removeEdit}
+            onRemoveBlock={sleepEdits.removeBar}
             activeEditBarId={sleepEdits.activeBarId}
             onActivateEdit={sleepEdits.activateEdit}
             onDeactivateEdit={sleepEdits.deactivateEdit}
@@ -108,10 +109,10 @@ export function Chronogram({ duties, statistics, month, pilotBase, onDutySelect,
       {/* After recalculation, with no new edits pending */}
       {sleepEdits.hasOriginal && !sleepEdits.hasEdits && (
         <div className="sticky bottom-3 z-10 flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-card px-4 py-3" style={{ boxShadow: 'var(--shadow-elevated)' }}>
-          <span className="text-sm text-muted-foreground">Showing results with your sleep edits</span>
-          <Button variant="outline" size="sm" onClick={sleepEdits.resetToOriginal}>
+          <span className="text-sm text-muted-foreground">Includes your sleep changes, saved with this roster</span>
+          <Button variant="outline" size="sm" onClick={sleepEdits.resetToOriginal} disabled={sleepEdits.isApplying}>
             <RotateCcw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-            Back to the original
+            Restore all estimates
           </Button>
         </div>
       )}

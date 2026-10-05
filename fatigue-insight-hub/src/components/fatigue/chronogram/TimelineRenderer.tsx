@@ -5,7 +5,7 @@ import { useChronogramZoom } from '@/hooks/useChronogramZoom';
 import { CalendarLegend } from './CalendarLegend';
 import { TimelineGrid } from './TimelineGrid';
 import { ROW_HEIGHT } from '@/lib/fatigue-utils';
-import type { TimelineData } from '@/lib/timeline-types';
+import type { TimelineData, TimelineSleepBar } from '@/lib/timeline-types';
 import type { DutyAnalysis } from '@/types/fatigue';
 import type { SleepEdit } from '@/hooks/useSleepEdits';
 
@@ -20,6 +20,8 @@ interface TimelineRendererProps {
   onSleepEdit?: (edit: SleepEdit) => void;
   /** Callback when user resets a single sleep edit */
   onRemoveEdit?: (blockKey: string) => void;
+  /** Remove a sleep block (saved with the analysis). */
+  onRemoveBlock?: (bar: TimelineSleepBar) => void;
   /** ID of the sleep bar currently in drag-edit mode (blockKey) */
   activeEditBarId?: string | null;
   /** Called on double-click to enter drag-edit mode (blockKey) */
@@ -40,6 +42,7 @@ export function TimelineRenderer({
   pendingEdits,
   onSleepEdit,
   onRemoveEdit,
+  onRemoveBlock,
   activeEditBarId,
   onActivateEdit,
   onDeactivateEdit,
@@ -97,6 +100,7 @@ export function TimelineRenderer({
             pendingEdits={pendingEdits}
             onSleepEdit={onSleepEdit}
             onRemoveEdit={onRemoveEdit}
+            onRemoveBlock={onRemoveBlock}
             activeEditBarId={activeEditBarId}
             onActivateEdit={onActivateEdit}
             onDeactivateEdit={onDeactivateEdit}

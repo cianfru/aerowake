@@ -158,6 +158,11 @@ function transformSleepEstimate(sleep: SleepEstimate) {
     sleepStartHourHomeTz: b.sleep_start_hour_home_tz ?? undefined,
     sleepEndDayHomeTz: b.sleep_end_day_home_tz ?? undefined,
     sleepEndHourHomeTz: b.sleep_end_hour_home_tz ?? undefined,
+    basis: b.basis ?? undefined,
+    source: b.source === 'pilot' ? 'pilot' as const : 'estimated' as const,
+    qualityFactors: b.quality_factors ?? undefined,
+    environment: b.environment ?? undefined,
+    locationTimezone: b.location_timezone ?? undefined,
   }));
 
   return {
@@ -189,6 +194,7 @@ function transformSleepEstimate(sleep: SleepEstimate) {
     qualityFactors: sleep.quality_factors,
     references: sleep.references,
     sleepBlocks,
+    isUserOverride: sleep.is_user_override === true,
   };
 }
 
@@ -356,6 +362,11 @@ export function transformAnalysisResult(
         sleepStartHour: block.sleep_start_hour ?? undefined,
         sleepEndDay: block.sleep_end_day ?? undefined,
         sleepEndHour: block.sleep_end_hour ?? undefined,
+        sleepStartUtc: block.sleep_start_utc ?? undefined,
+        sleepEndUtc: block.sleep_end_utc ?? undefined,
+        basis: block.basis ?? undefined,
+        source: block.source === 'pilot' ? 'pilot' as const : 'estimated' as const,
+        qualityFactors: block.quality_factors ?? undefined,
       })),
       totalSleepHours: restDay.total_sleep_hours,
       effectiveSleepHours: restDay.effective_sleep_hours,
@@ -366,6 +377,18 @@ export function transformAnalysisResult(
       confidenceBasis: restDay.confidence_basis,
       qualityFactors: restDay.quality_factors,
       references: restDay.references,
+      isUserOverride: restDay.is_user_override === true,
+    })),
+    sleepEdits: (result.sleep_edits ?? []).map((e, i) => ({
+      id: e.id || `edit-${i + 1}`,
+      action: e.action,
+      kind: e.kind ?? null,
+      environment: e.environment ?? null,
+      targetStartUtc: e.target_start_utc ?? null,
+      targetEndUtc: e.target_end_utc ?? null,
+      startUtc: e.start_utc ?? null,
+      endUtc: e.end_utc ?? null,
+      applied: e.applied !== false,
     })),
     bodyClockTimeline: result.body_clock_timeline?.map((entry) => ({
       timestampUtc: entry.timestamp_utc,

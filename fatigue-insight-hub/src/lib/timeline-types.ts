@@ -103,6 +103,10 @@ export interface TimelineSleepBar {
   sleepEndIso?: string;
   /** Unique key per sleep block: "${dutyId}::${blockIndex}" — used as pendingEdits Map key */
   blockKey?: string;
+  /** Why this block is there (backend basis); undefined = the strategy explains it. */
+  basis?: string;
+  /** 'pilot' = set or added by the pilot (planned, not reported). */
+  source?: 'estimated' | 'pilot';
 }
 
 // ---------------------------------------------------------------------------

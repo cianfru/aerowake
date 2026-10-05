@@ -25,6 +25,8 @@ interface SleepBarPopoverProps {
   onSleepEdit?: (edit: SleepEdit) => void;
   /** Called when user resets a single edit */
   onRemoveEdit?: (blockKey: string) => void;
+  /** Remove this block (saved with the analysis) */
+  onRemoveBlock?: (bar: TimelineSleepBar) => void;
   /** Whether this bar is currently in drag-edit mode */
   isEditing?: boolean;
   /** Called on double-click to enter edit mode (by blockKey) */
@@ -57,6 +59,7 @@ export function SleepBarPopover({
   isEditable,
   pendingEdit,
   onSleepEdit,
+  onRemoveBlock,
   isEditing,
   onActivateEdit,
   onDeactivateEdit,
@@ -80,7 +83,8 @@ export function SleepBarPopover({
   const windowHours = ((displayEndHour - displayStartHour) % 24 + 24) % 24;
 
   // Only the primary half of an overnight sleep is editable; the continuation follows.
-  const canEdit = isEditable && bar.blockKey && bar.sleepId && bar.sleepStartIso && bar.sleepEndIso && !bar.isOvernightContinuation;
+  const canEdit = isEditable && bar.blockKey && bar.sleepStartIso && bar.sleepEndIso && !bar.isOvernightContinuation;
+  const pilot = bar.source === 'pilot';
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -114,7 +118,7 @@ export function SleepBarPopover({
     );
   }
 
-  const title = isNap ? 'Nap (estimated)' : 'Sleep (estimated)';
+  const title = pilot ? (isNap ? 'Nap you set' : 'Sleep you set') : isNap ? 'Nap (estimated)' : 'Sleep (estimated)';
 
   return (
     <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
@@ -162,7 +166,10 @@ export function SleepBarPopover({
             </p>
             {hasEdit && <span className="rounded-[4px] border border-primary/40 px-1.5 py-0.5 text-[11px] font-medium text-primary">Edited</span>}
           </div>
-          <p className="text-muted-foreground">Estimated sleep from the roster, not a record of sleep taken.</p>
+          <p className="text-muted-foreground">
+            {pilot ? 'Planned sleep you set; the model uses your times. Not a record of sleep taken.' : 'Estimated sleep from the roster, not a record of sleep taken.'}
+          </p>
+          {bar.basis && <p className="leading-relaxed text-foreground/90">{bar.basis}</p>}
 
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
             <dt className="text-muted-foreground">Window (home base)</dt>
@@ -194,9 +201,16 @@ export function SleepBarPopover({
           )}
 
           {canEdit && (
-            <button type="button" className="rounded-md border border-border px-3 py-2 text-xs font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setPopoverOpen(false); onActivateEdit?.(bar.blockKey!); }}>
-              Adjust sleep times
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="rounded-md border border-border px-3 py-2 text-xs font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setPopoverOpen(false); onActivateEdit?.(bar.blockKey!); }}>
+                Adjust sleep times
+              </button>
+              {onRemoveBlock && (
+                <button type="button" className="rounded-md border border-border px-3 py-2 text-xs font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setPopoverOpen(false); onRemoveBlock(bar); }}>
+                  {isNap && !pilot ? 'I don’t nap here' : 'Remove'}
+                </button>
+              )}
+            </div>
           )}
 
           {bar.qualityFactors && (
