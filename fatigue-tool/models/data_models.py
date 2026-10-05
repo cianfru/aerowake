@@ -295,6 +295,9 @@ class Roster:
     # Stated modelling assumptions for this analysis ({nap_habit,
     # headline_risk_window}); kept with the inputs so replays match.
     analysis_assumptions: Dict[str, str] = field(default_factory=dict)
+    # Pilot sleep edits (core/sleep_edits.py): remove, move or add a sleep block.
+    # Kept with the inputs so every replay and reanalysis applies them.
+    sleep_edits: List[Dict[str, Any]] = field(default_factory=list)
     # Days of the month with sleep estimates (avg sleep denominator).
     sleep_coverage_days: Optional[float] = None
 
@@ -515,7 +518,14 @@ class SleepBlock:
     sleep_start_hour: Optional[float] = None   # Decimal hour in home base TZ (0-24)
     sleep_end_day: Optional[int] = None        # Day of month (1-31) in home base TZ
     sleep_end_hour: Optional[float] = None     # Decimal hour in home base TZ (0-24)
-    
+
+    # Why the block is there, in plain language with its published basis (shown to
+    # the pilot); None = the entry's strategy explains it.
+    basis: Optional[str] = None
+    # 'estimated' (model) or 'pilot' (set, moved or added by the pilot: planned
+    # sleep the pilot stated, still not reported sleep).
+    source: str = 'estimated'
+
     @property
     def recovery_value(self) -> float:
         """

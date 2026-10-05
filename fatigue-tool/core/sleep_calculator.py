@@ -752,7 +752,11 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
                 duration_hours=quality.actual_sleep_hours, quality_factor=quality.sleep_efficiency,
                 effective_sleep_hours=quality.effective_sleep_hours, is_anchor_sleep=not is_nap,
                 environment=sleep_location, sleep_start_day=ss_day, sleep_start_hour=ss_hour,
-                sleep_end_day=se_day, sleep_end_hour=se_hour))
+                sleep_end_day=se_day, sleep_end_hour=se_hour,
+                basis=(("Afternoon nap after an afternoon release before a night report. Sleep that "
+                        "starts in the afternoon runs against the body clock's wake signal, so it is "
+                        "kept to at most 2.5 h and ends by 18:00 body time; the main sleep follows in "
+                        "the evening (Lavie 1986; Dijk & Czeisler 1994).") if is_nap else None)))
             qualities.append(quality)
             previous_end = end_utc
 

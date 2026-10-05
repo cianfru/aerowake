@@ -173,7 +173,9 @@ class SleepStrategyMixin:
             sleep_start_day=ns_day,
             sleep_start_hour=ns_hour,
             sleep_end_day=ne_day,
-            sleep_end_hour=ne_hour
+            sleep_end_hour=ne_hour,
+            basis=self.config.nap_assumptions.describe(
+                report_body.hour + report_body.minute / 60.0, available_for_nap),
         )
 
         total_effective = morning_quality.effective_sleep_hours + nap_quality.effective_sleep_hours
@@ -695,6 +697,9 @@ class SleepStrategyMixin:
                     sleep_start_hour=nps_hour,
                     sleep_end_day=npe_day,
                     sleep_end_hour=npe_hour,
+                    basis=("Ultra-long-range departure: a nap before report on top of two normal "
+                           "nights. About half of ULR crews nap before the outbound flight "
+                           "(54 %, Signal et al. 2014)."),
                 ))
 
         total_effective = sum(q.effective_sleep_hours for q in quality_analyses)
@@ -834,6 +839,8 @@ class SleepStrategyMixin:
                 sleep_start_hour=nps_hour,
                 sleep_end_day=npe_day,
                 sleep_end_hour=npe_hour,
+                basis=("Augmented-crew night departure: a 1 h nap 3–2 h before report. About half "
+                       "of long-haul crews nap before an evening departure (54 %, Signal et al. 2014)."),
             ))
 
         total_effective = sum(q.effective_sleep_hours for q in quality_analyses)
@@ -1151,7 +1158,10 @@ class SleepStrategyMixin:
             sleep_start_day=ns_day,
             sleep_start_hour=ns_hour,
             sleep_end_day=ne_day,
-            sleep_end_hour=ne_hour
+            sleep_end_hour=ne_hour,
+            basis=("Rest between duties is too short for one consolidated sleep, so it is split into "
+                   "a main sleep and this nap. Split sleep keeps performance close to one block when "
+                   "the total is the same (Jackson et al. 2014; Kosmadopoulos et al. 2017)."),
         )
 
         total_effective = main_quality.effective_sleep_hours + nap_quality.effective_sleep_hours
@@ -1318,7 +1328,11 @@ class SleepStrategyMixin:
             sleep_start_day=ss_day,
             sleep_start_hour=ss_hour,
             sleep_end_day=ne_day,
-            sleep_end_hour=ne_hour
+            sleep_end_hour=ne_hour,
+            basis=("Daytime recovery sleep after a release in your body-clock morning. The body "
+                   "clock's wake signal cuts daytime sleep short (about 2.5 h of sleep from a 3 h "
+                   "opportunity, National Academies 2011), so a 3–4 h nap is assumed, then a normal "
+                   "night before the next duty (recovery after sleep loss: Banks et al. 2010)."),
         )
 
         # Block 2: Night sleep

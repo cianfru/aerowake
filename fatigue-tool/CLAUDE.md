@@ -170,6 +170,14 @@ the same configuration.
   night-departure nap (≤2.5 h, window-limited) at 20:00 body time; 'sometimes' scales it by
   the 54 % nap prevalence of Signal et al. (2014); 'rarely' none. Modelling assumption to calibrate with pilot debrief data. The duty's
   sleep explanation, `assumed_nap_hours` and risk reasons state it.
+- Every modelled nap carries `basis` (plain-language reason with its published source,
+  e.g. `PreDutyNapAssumptions.describe`); blocks return `source` 'estimated' | 'pilot'.
+- Pilot sleep edits (`core/sleep_edits.py`, `Roster.sleep_edits`): remove / replace / add a
+  block. `PUT /api/analysis/{id}/sleep-edits` stores the full list with the analysis inputs
+  (same id; saved analyses are updated, replays and reanalyses re-apply them);
+  `/api/analyze` takes `sleep_edits` to carry them to a new upload (invalid ones dropped).
+  Pilot blocks are planned sleep the pilot stated, never reported sleep. Responses return
+  `sleep_edits` with `applied`.
 - Afternoon release before a night report (`DaytimeSleepBounds`): ≤2.5 h afternoon nap
   ending by 18:00 body time + evening sleep from 21:00 — never one long afternoon block.
 - The pre-simulation debt estimate uses the simulation ledger (`_advance_sleep_debt`) over

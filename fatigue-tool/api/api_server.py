@@ -21,7 +21,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Dict, Optional, List
 import math
 import tempfile
@@ -50,6 +50,7 @@ from auth.dependencies import get_optional_user
 from api.analysis_access import (analysis_store, analysis_principal, Principal, remember,
                                  authorize, load as load_analysis, evict_roster)
 from api.replay import snapshot, restore
+from core.sleep_edits import normalise as normalise_sleep_edits
 from api.hardening import read_upload, run_compute
 from admin.routes import admin_router
 from company.routes import router as company_router
@@ -265,6 +266,11 @@ class SleepBlockResponse(BaseModel):
 
     # Per-block quality factor breakdown (populated for all sleep types)
     quality_factors: Optional[QualityFactorsResponse] = None
+    # Why this block is there (plain language with its published basis); None =
+    # the entry's strategy explanation covers it.
+    basis: Optional[str] = None
+    # 'estimated' (model) or 'pilot' (set or added by the pilot: planned, not reported).
+    source: str = 'estimated'
 
 
 class ReferenceResponse(BaseModel):
@@ -326,6 +332,7 @@ class SleepQualityResponse(BaseModel):
     confidence_basis: Optional[str] = None         # Why confidence is at this level
     quality_factors: Optional[QualityFactorsResponse] = None  # Factor breakdown
     references: List[ReferenceResponse] = []       # Supporting literature
+    is_user_override: bool = False                 # includes sleep the pilot set or removed
 
 
 class DutyResponse(BaseModel):
@@ -455,6 +462,7 @@ class RestDaySleepResponse(BaseModel):
     confidence_basis: Optional[str] = None
     quality_factors: Optional[QualityFactorsResponse] = None
     references: List[ReferenceResponse] = []
+    is_user_override: bool = False
 
     # Recovery context (for recovery strategy_type)
     recovery_night_number: Optional[int] = None           # Which recovery night (1-indexed)
@@ -526,6 +534,8 @@ class AnalysisResponse(BaseModel):
     # Fatigue continuity (multi-roster chaining)
     continuity_from_month: Optional[str] = None   # "2026-01" if prior state was injected
     initial_conditions: Optional[dict] = None      # {process_s, sleep_debt, circadian_phase_shift}
+    # Pilot sleep changes stored with this analysis, each with ``applied``.
+    sleep_edits: List[dict] = []
 
 
 
@@ -671,6 +681,7 @@ def _build_sleep_quality(duty_timeline) -> Optional[SleepQualityResponse]:
         confidence_basis=sqd.get('confidence_basis'),
         quality_factors=sqd.get('quality_factors'),
         references=sqd.get('references', []),
+        is_user_override=bool(sqd.get('is_user_override')),
         sleep_start_iso=earliest.get('sleep_start_iso'),
         sleep_end_iso=latest.get('sleep_end_iso'),
         sleep_start_utc=earliest.get('sleep_start_utc'),
@@ -808,6 +819,7 @@ def _roster_insights(roster, duties_response) -> dict:
                 alertness_timeline=getattr(roster, 'alertness_timeline', []) or [],
                 assumptions=getattr(roster, 'analysis_assumptions', None) or None,
                 sleep_coverage_days=getattr(roster, 'sleep_coverage_days', None),
+                sleep_edits=list(getattr(roster, 'sleep_edit_results', None) or []),
                 engine_version=ENGINE_VERSION)
 
 
@@ -1197,6 +1209,7 @@ def _build_rest_days_sleep(sleep_strategies: dict) -> List[RestDaySleepResponse]
                 confidence_basis=data.get('confidence_basis'),
                 quality_factors=data.get('quality_factors'),
                 references=data.get('references', []),
+                is_user_override=bool(data.get('is_user_override')),
                 # Recovery context
                 recovery_night_number=data.get('recovery_night_number'),
                 cumulative_recovery_fraction=data.get('cumulative_recovery_fraction'),
@@ -1246,6 +1259,7 @@ async def analyze_roster(
     crew_set: str = Form("crew_b"),
     duty_crew_overrides: str = Form("{}"),
     nap_habit: Optional[str] = Form(None),
+    sleep_edits: str = Form("[]"),
     user: Optional[User] = Depends(get_optional_user),
     principal: Principal = Depends(analysis_principal),
     db=Depends(get_db),
@@ -1347,6 +1361,12 @@ async def analyze_roster(
         # Single model: legacy preset names are accepted and ignored.
         config = _model_config(nap_habit)
         roster.analysis_assumptions = dict(config.assumptions)
+        # The pilot's sleep changes carried over from the previous analysis of this
+        # roster; any that no longer fit the duties are dropped.
+        try:
+            roster.sleep_edits = normalise_sleep_edits(json.loads(sleep_edits or '[]'), roster, strict=False)
+        except (ValueError, TypeError):
+            raise HTTPException(422, 'sleep_edits must be a JSON list of sleep changes')
 
         # Use the month actually parsed from the roster (not the form default)
         effective_month = roster.month or month
@@ -2062,6 +2082,51 @@ async def reanalyze_roster(
     return response
 
 
+def _assemble_response(analysis_id: str, roster, monthly_analysis, model, **extra) -> AnalysisResponse:
+    """The full analysis response for a simulated roster (fields as /api/analyze)."""
+    duties_response = []
+    for dt in monthly_analysis.duty_timelines:
+        duty_idx = roster.get_duty_index(dt.duty_id)
+        if duty_idx is None:
+            continue
+        duties_response.append(_build_duty_response(dt, roster.duties[duty_idx], roster))
+    fields = dict(
+        analysis_id=analysis_id,
+        roster_id=roster.roster_id,
+        pilot_id=roster.pilot_id,
+        pilot_name=roster.pilot_name,
+        pilot_base=roster.pilot_base,
+        pilot_aircraft=roster.pilot_aircraft,
+        home_base_timezone=roster.home_base_timezone,
+        month=roster.month,
+        total_duties=len(roster.duties),
+        total_sectors=sum(len(d.segments) for d in roster.duties),
+        total_duty_hours=round(sum(d.duty_hours for d in roster.duties), 1),
+        total_block_hours=round(sum(sum(s.block_hours for s in d.segments if hasattr(s, 'block_hours'))
+                                    for d in roster.duties), 1),
+        high_risk_duties=monthly_analysis.high_risk_duties,
+        critical_risk_duties=monthly_analysis.critical_risk_duties,
+        total_pinch_events=monthly_analysis.total_pinch_events,
+        avg_sleep_per_night=monthly_analysis.average_sleep_per_night,
+        max_sleep_debt=monthly_analysis.max_sleep_debt,
+        average_sleep_debt=getattr(monthly_analysis, 'average_sleep_debt', 0.0),
+        worst_duty_id=monthly_analysis.lowest_performance_duty,
+        worst_performance=monthly_analysis.lowest_performance_value,
+        duties=duties_response,
+        **_roster_insights(roster, duties_response),
+        rest_days_sleep=_build_rest_days_sleep(model.sleep_strategies),
+        body_clock_timeline=[
+            {"timestamp_utc": ts, "phase_shift_hours": ps, "reference_timezone": tz}
+            for ts, ps, tz in monthly_analysis.body_clock_timeline
+        ],
+        total_ulr_duties=getattr(monthly_analysis, "total_ulr_duties", 0),
+        total_augmented_duties=getattr(monthly_analysis, "total_augmented_duties", 0),
+        ulr_violations=getattr(monthly_analysis, "ulr_violations", []),
+    )
+    fields.update(extra)
+    return AnalysisResponse(**fields)
+
+
 # ============================================================================
 # WHAT-IF SCENARIO ANALYSIS
 # ============================================================================
@@ -2239,56 +2304,74 @@ async def run_what_if(request: WhatIfRequest, db=Depends(get_db), principal=Depe
     model = BorbelyFatigueModel(config)
     monthly_analysis = await run_compute(model.simulate_roster, modified_roster, sleep_overrides=sleep_overrides)
 
-    # 10. Build response (same shape as /api/analyze)
-    whatif_id = str(uuid4())
+    # 10. Build response (same shape as /api/analyze); not stored.
+    return _assemble_response(str(uuid4()), modified_roster, monthly_analysis, model)
 
-    duties_response = []
-    for dt in monthly_analysis.duty_timelines:
-        duty_idx = modified_roster.get_duty_index(dt.duty_id)
-        if duty_idx is None:
-            continue
-        duties_response.append(
-            _build_duty_response(dt, modified_roster.duties[duty_idx], modified_roster)
-        )
 
-    rest_days_sleep = _build_rest_days_sleep(model.sleep_strategies)
+class SleepEditIn(BaseModel):
+    """One pilot change to the estimated sleep (core/sleep_edits.py)."""
+    id: Optional[str] = Field(None, max_length=64)
+    action: str                                   # 'remove' | 'replace' | 'add'
+    kind: Optional[str] = None                    # 'main' | 'nap'
+    environment: Optional[str] = None             # 'home' | 'hotel'
+    target_start_utc: Optional[str] = None        # the estimated block it changes
+    target_end_utc: Optional[str] = None
+    start_utc: Optional[str] = None               # the pilot's times (replace, add)
+    end_utc: Optional[str] = None
 
-    return AnalysisResponse(
-        analysis_id=whatif_id,
-        roster_id=modified_roster.roster_id,
-        pilot_id=modified_roster.pilot_id,
-        pilot_name=modified_roster.pilot_name,
-        pilot_base=modified_roster.pilot_base,
-        pilot_aircraft=modified_roster.pilot_aircraft,
-        home_base_timezone=modified_roster.home_base_timezone,
-        month=modified_roster.month,
-        total_duties=len(modified_roster.duties),
-        total_sectors=sum(len(d.segments) for d in modified_roster.duties),
-        total_duty_hours=round(sum(d.duty_hours for d in modified_roster.duties), 1),
-        total_block_hours=round(
-            sum(
-                sum(s.block_hours for s in d.segments if hasattr(s, 'block_hours'))
-                for d in modified_roster.duties
-            ), 1
-        ),
-        high_risk_duties=monthly_analysis.high_risk_duties,
-        critical_risk_duties=monthly_analysis.critical_risk_duties,
-        total_pinch_events=monthly_analysis.total_pinch_events,
-        avg_sleep_per_night=monthly_analysis.average_sleep_per_night,
-        max_sleep_debt=monthly_analysis.max_sleep_debt,
-        worst_duty_id=monthly_analysis.lowest_performance_duty,
-        worst_performance=monthly_analysis.lowest_performance_value,
-        duties=duties_response,
-        **_roster_insights(modified_roster, duties_response),
-        rest_days_sleep=rest_days_sleep,
-        body_clock_timeline=[
-            {"timestamp_utc": ts, "phase_shift_hours": ps, "reference_timezone": tz}
-            for ts, ps, tz in monthly_analysis.body_clock_timeline
-        ],
-        total_ulr_duties=getattr(monthly_analysis, "total_ulr_duties", 0),
-        total_augmented_duties=getattr(monthly_analysis, "total_augmented_duties", 0),
-        ulr_violations=getattr(monthly_analysis, "ulr_violations", []),
+
+class SleepEditsRequest(BaseModel):
+    edits: List[SleepEditIn] = Field(default_factory=list, max_length=200)
+
+
+@app.put("/api/analysis/{analysis_id}/sleep-edits", response_model=AnalysisResponse)
+async def save_sleep_edits(analysis_id: str, request: SleepEditsRequest, db=Depends(get_db),
+                           principal=Depends(analysis_principal)):
+    """Replace the pilot's sleep changes for an analysis and return it recalculated.
+
+    The full list is sent each time (an empty list restores the model's
+    estimates). The changes are stored with the analysis inputs, so the saved
+    analysis, replays and reanalyses all use them. Same analysis id.
+    """
+    import copy
+    record = await authorize(analysis_id, principal, db)
+    _monthly, cached_roster, _strategies = await load_analysis(analysis_id, principal, db)
+    replay = (record.analysis_json.get('_replay') if record is not None else None) or None
+    # Start from the stored inputs when there are any (the cached roster has been
+    # through a simulation already); a guest analysis has only the cache.
+    roster = restore(replay) if replay else copy.deepcopy(cached_roster)
+    try:
+        roster.sleep_edits = normalise_sleep_edits([e.model_dump() for e in request.edits], roster)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    config = _model_config(None, getattr(roster, 'analysis_assumptions', None))
+    roster.analysis_assumptions = dict(config.assumptions)
+    replay_input = snapshot(roster, (replay or {}).get('provenance')) if replay else None
+    model = BorbelyFatigueModel(config)
+    monthly = await run_compute(model.simulate_roster, roster)
+
+    previous = record.analysis_json if record is not None else {}
+    response = _assemble_response(
+        analysis_id, roster, monthly, model,
+        roster_id=str(previous.get('roster_id') or roster.roster_id),
+        timezone_format=previous.get('timezone_format'),
+        company_detection=previous.get('company_detection'),
+        continuity_from_month=previous.get('continuity_from_month'),
+        initial_conditions=previous.get('initial_conditions'),
     )
+    if record is not None:
+        response.persistence_status = 'saved'
+        record.analysis_json = {**response.model_dump(mode='json'), '_replay': replay_input}
+        try:
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            logger.error('Failed to save sleep changes')
+            raise HTTPException(503, 'Your sleep changes could not be saved. Try again.')
+        remember(analysis_id, (monthly, roster, model.sleep_strategies), principal, record.roster_id)
+    else:
+        remember(analysis_id, (monthly, roster, model.sleep_strategies), principal)
+    return response
 
 
 # ============================================================================

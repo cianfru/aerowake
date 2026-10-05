@@ -127,3 +127,39 @@ def test_saved_csv_replays_after_cache_eviction_and_reanalysis(database_client):
     assert rerun.json()['persistence_status'] == 'saved'
     assert rerun.json()['duties'] == saved['duties']
     assert c.get(f'/api/analysis/{analysis_id}', headers=headers(owner)).status_code == 200
+
+
+def test_sleep_changes_are_saved_with_the_analysis(database_client):
+    c, owner, other, _ = database_client
+    csv = (b'Date,Flight,Departure,Arrival,STD,STA,Report,Release\n'
+           b'2026-09-08,TEST1,LGW,FCO,08:00,11:00,07:00,12:00\n'
+           b'2026-09-10,TEST2,LGW,FCO,08:00,11:00,07:00,12:00\n')
+    saved = c.post('/api/analyze', headers=headers(owner), files={'file': ('synthetic.csv', csv, 'text/csv')},
+                   data={'home_base': 'LGW', 'month': '2026-09'}).json()
+    analysis_id, duty = saved['analysis_id'], saved['duties'][1]
+    main = next(b for b in duty['sleep_quality']['sleep_blocks'] if b['sleep_type'] == 'main')
+    from datetime import datetime, timedelta
+    start = datetime.fromisoformat(main['sleep_start_utc']) + timedelta(hours=1)
+    edit = {'id': 'm1', 'action': 'replace', 'target_start_utc': main['sleep_start_utc'],
+            'target_end_utc': main['sleep_end_utc'], 'start_utc': start.isoformat(),
+            'end_utc': main['sleep_end_utc']}
+    path = f'/api/analysis/{analysis_id}/sleep-edits'
+    assert c.put(path, headers=headers(other), json={'edits': [edit]}).status_code == 404
+    r = c.put(path, headers=headers(owner), json={'edits': [edit]})
+    assert r.status_code == 200, r.text
+    assert r.json()['persistence_status'] == 'saved'
+
+    def pilot_start(body):
+        blocks = next(d for d in body['duties'] if d['duty_id'] == duty['duty_id'])['sleep_quality']['sleep_blocks']
+        return [b['sleep_start_utc'] for b in blocks if b['source'] == 'pilot']
+
+    assert pilot_start(r.json()) == [start.isoformat()]
+    analysis_store.clear()
+    assert pilot_start(c.get(f'/api/analysis/{analysis_id}', headers=headers(owner)).json()) == [start.isoformat()]
+    cold = c.get(f"/api/duty/{analysis_id}/{duty['duty_id']}", headers=headers(owner))
+    assert cold.status_code == 200, cold.text
+    # The stored inputs carry the change into a reanalysis.
+    rerun = c.post(f"/api/rosters/{saved['roster_id']}/reanalyze", headers=headers(owner))
+    assert rerun.status_code == 200, rerun.text
+    assert pilot_start(rerun.json()) == [start.isoformat()]
+    assert rerun.json()['sleep_edits'][0]['id'] == 'm1'

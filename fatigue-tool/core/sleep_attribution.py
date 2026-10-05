@@ -91,6 +91,8 @@ def block_dict(block: SleepBlock, home_tz, sleep_type: Optional[str] = None,
         'effective_hours': block.effective_sleep_hours,
         'quality_factor': block.quality_factor,
         'quality_factors': quality_factors,
+        'basis': block.basis,
+        'source': block.source,
     }
 
 
@@ -131,9 +133,29 @@ def _nap_sentence(naps: List[SleepBlock], habit: str) -> str:
     return f" Assumed pre-duty nap {spans} local ({round_half_up(hours, 1):.1f}h; nap habit: {habit})."
 
 
+def _pilot_sentence(members: List[SleepBlock], removed: List[tuple]) -> str:
+    """What the pilot changed in this entry, in plain language."""
+    parts = []
+    for b in members:
+        if b.source == 'pilot':
+            tz = pytz.timezone(b.location_timezone)
+            parts.append(f"{'Nap' if not b.is_anchor_sleep else 'Sleep'} you set: "
+                         f"{_clock(b.start_utc, tz)}–{_clock(b.end_utc, tz)} local ({b.duration_hours:.1f}h).")
+    for start, end, is_nap, tz_name in removed:
+        if is_nap and not any(b.source == 'pilot' and b.start_utc < end and b.end_utc > start for b in members):
+            tz = pytz.timezone(tz_name)
+            parts.append(f"You removed the assumed nap {_clock(start, tz)}–{_clock(end, tz)} local.")
+    return (' ' + ' '.join(parts)) if parts else ''
+
+
 def attribute_sleep(roster, blocks: List[SleepBlock], strategies: Dict[str, Any],
-                    home_tz, nap_habit: str) -> Dict[str, Any]:
-    """Return entries that describe exactly ``blocks`` (see module docstring)."""
+                    home_tz, nap_habit: str, removed: Optional[Dict[str, tuple]] = None) -> Dict[str, Any]:
+    """Return entries that describe exactly ``blocks`` (see module docstring).
+
+    ``removed`` maps the start of each estimated block the pilot removed or
+    replaced (core/sleep_edits.py) to (start, end, is_nap, timezone), so entries say so.
+    """
+    removed = removed or {}
     blocks = sorted(blocks, key=lambda b: b.start_utc)
     final = {block_key(b): b for b in blocks}
 
@@ -159,10 +181,23 @@ def attribute_sleep(roster, blocks: List[SleepBlock], strategies: Dict[str, Any]
         if main is not None:
             entry['sleep_start_time'] = _clock(main.start_utc, home_tz)
             entry['sleep_end_time'] = _clock(main.end_utc, home_tz)
-        naps = pre_duty_naps(members)
+        naps = [b for b in pre_duty_naps(members) if b.source != 'pilot']
         entry['assumed_nap_hours'] = round(sum(b.duration_hours for b in naps), 2) if naps else None
         claimed.update(block_key(b) for b in members)
         return entry
+
+    def mark_pilot(entry: Dict[str, Any], members: List[SleepBlock], gone: List[tuple]) -> None:
+        if not gone and not any(b.source == 'pilot' for b in members):
+            return
+        entry['explanation'] = (entry.get('explanation', '') + _pilot_sentence(members, gone)).strip()
+        entry['is_user_override'] = True
+        entry['confidence_basis'] = ('Includes sleep you set or removed: the model uses your times as '
+                                     'planned sleep, not as sleep you reported having had. '
+                                     + (entry.get('confidence_basis') or ''))
+
+    def removed_for(key: str, lo, hi) -> List[tuple]:
+        return [v for k, v in removed.items()
+                if owner.get(k) == key or (k not in owner and (lo is None or v[0] >= lo) and v[0] < hi)]
 
     duties = roster.duties
     for i, duty in enumerate(duties):
@@ -172,7 +207,14 @@ def attribute_sleep(roster, blocks: List[SleepBlock], strategies: Dict[str, Any]
                                  or getattr(duty, 'is_augmented_crew', False)):
             members = [final[bd['sleep_start_utc']] for bd in data.get('sleep_blocks', [])
                        if bd.get('sleep_start_utc') in final]
-            out[own] = refresh(own, members, data)
+            lo = duties[i - 1].release_time_utc if i else None
+            members += [b for b in blocks if b.source == 'pilot' and b not in members
+                        and block_key(b) not in claimed and b.start_utc < duty.report_time_utc
+                        and (lo is None or b.start_utc >= lo)]
+            members.sort(key=lambda b: b.start_utc)
+            entry = dict(data)
+            mark_pilot(entry, members, removed_for(own, lo, duty.report_time_utc))
+            out[own] = refresh(own, members, entry)
             continue
         gap_start = duties[i - 1].release_time_utc if i else None
         in_gap = [b for b in blocks if b.start_utc < duty.report_time_utc
@@ -202,16 +244,20 @@ def attribute_sleep(roster, blocks: List[SleepBlock], strategies: Dict[str, Any]
             out[f'post_duty_{prev_id}'] = refresh(f'post_duty_{prev_id}', moved, post)
 
         naps = pre_duty_naps(pre)
-        gap_naps = [b for b in naps if block_key(b) not in owner]
+        gap_naps = [b for b in naps if block_key(b) not in owner and b.source != 'pilot']
         main = main_block(pre)
         main_owner = owner.get(block_key(main)) if main is not None else None
         source = strategies.get(main_owner) or data or {}
         entry = dict(source)
-        if main is not None and (main_owner != own or moved):
-            # The gap-fill night (or another entry's block) is the last main sleep.
+        gone = removed_for(own, gap_start, duty.report_time_utc)
+        edited = bool(gone) or any(b.source == 'pilot' for b in pre)
+        if main is not None and (main_owner != own or moved or edited):
+            # The gap-fill night (or another entry's block, or the pilot's) is the
+            # last main sleep; the strategy's own wording no longer fits.
             tz = pytz.timezone(main.location_timezone)
             entry['strategy_type'] = 'normal'
-            entry['explanation'] = (f"Last main sleep before report: {main.environment} "
+            entry['explanation'] = ('' if main.source == 'pilot' else
+                                    f"Last main sleep before report: {main.environment} "
                                     f"{_clock(main.start_utc, tz)}–{_clock(main.end_utc, tz)} local "
                                     f"({main.duration_hours:.1f}h).")
             entry.pop('recovery_night_number', None)
@@ -228,6 +274,7 @@ def attribute_sleep(roster, blocks: List[SleepBlock], strategies: Dict[str, Any]
         entry.setdefault('confidence', 0.6)
         entry.setdefault('warnings', [])
         entry.setdefault('references', get_strategy_references('recovery'))
+        mark_pilot(entry, pre, gone)
         out[own] = refresh(own, pre, entry)
 
     # Remaining blocks keep (or get) their rest-day/post-duty entries.
@@ -241,6 +288,11 @@ def attribute_sleep(roster, blocks: List[SleepBlock], strategies: Dict[str, Any]
             key = f"rest_{b.start_utc.astimezone(home_tz).date().isoformat()}"
         remaining.setdefault(key, []).append(b)
     for key, members in remaining.items():
+        if any(m.source == 'pilot' for m in members) and key in strategies:
+            base = dict(strategies[key])
+            mark_pilot(base, members, [])
+            out[key] = refresh(key, members, base)
+            continue
         base = strategies.get(key) or {
             'strategy_type': 'nap' if all(not m.is_anchor_sleep for m in members) else 'recovery',
             'confidence': 0.6,

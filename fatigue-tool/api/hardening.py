@@ -41,6 +41,8 @@ from starlette.responses import JSONResponse
 
 MAX_UPLOAD_BYTES = int(float(os.environ.get('MAX_UPLOAD_MB', '10')) * 1024 * 1024)
 RATE_LIMIT_PER_MINUTE = int(os.environ.get('RATE_LIMIT_PER_MINUTE', '20'))
+# PUT /api/analysis/{id}/sleep-edits re-runs the model.
+RATE_LIMITED_PUT_SUFFIXES = ('/sleep-edits',)
 RATE_LIMITED_PREFIXES = ('/api/analyze', '/api/what-if', '/api/fatigue-report', '/api/rosters/', '/api/roster/', '/api/auth/', '/api/duty/', '/api/statistics/')
 
 
@@ -103,8 +105,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._lock = threading.Lock()
 
     async def dispatch(self, request, call_next):
-        if (self.per_minute > 0 and request.method in ('POST', 'GET')
-                and request.url.path.startswith(RATE_LIMITED_PREFIXES)):
+        path = request.url.path
+        if self.per_minute > 0 and (
+                (request.method in ('POST', 'GET') and path.startswith(RATE_LIMITED_PREFIXES))
+                or (request.method == 'PUT' and path.endswith(RATE_LIMITED_PUT_SUFFIXES))):
             now = time.monotonic()
             key = client_ip(request)
             with self._lock:

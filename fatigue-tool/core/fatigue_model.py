@@ -39,6 +39,7 @@ from core.extended_operations import (
 from core.strategy_references import get_confidence_basis, get_strategy_references
 from core import alertness as aw
 from core.sleep_attribution import attribute_sleep
+from core.sleep_edits import apply as apply_sleep_edits
 
 class BorbelyFatigueModel:
     """
@@ -1716,7 +1717,9 @@ class BorbelyFatigueModel:
                             quality_factor=nap_quality.sleep_efficiency,
                             effective_sleep_hours=nap_quality.effective_sleep_hours,
                             is_anchor_sleep=False,
-                            environment=rest_env
+                            environment=rest_env,
+                            basis=self.config.nap_assumptions.describe(
+                                report_body.hour + report_body.minute / 60.0, available_window),
                         )
                         sleep_blocks.append(nap_block)
 
@@ -1785,16 +1788,22 @@ class BorbelyFatigueModel:
                             sleep_start_hour=prev.sleep_start_hour,
                             sleep_end_day=new_end_home.day,
                             sleep_end_hour=new_end_home.hour + new_end_home.minute / 60.0,
+                            basis=prev.basis,
+                            source=prev.source,
                         )
                     else:
                         resolved_blocks.pop()
             resolved_blocks.append(block)
         sleep_blocks = resolved_blocks
 
+        # The pilot's own changes (remove / move / add a block) replace the estimate.
+        sleep_blocks, pilot_removed, roster.sleep_edit_results = apply_sleep_edits(
+            sleep_blocks, roster, self.sleep_calculator)
+
         # Describe exactly the blocks the model uses (naps included), with
         # each duty's entry holding its last main sleep before report.
         sleep_strategies = attribute_sleep(roster, sleep_blocks, sleep_strategies, home_tz,
-                                           self.config.nap_assumptions.habit)
+                                           self.config.nap_assumptions.habit, removed=pilot_removed)
         return sleep_blocks, sleep_strategies
 
     # ------------------------------------------------------------------

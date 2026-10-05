@@ -435,6 +435,33 @@ class PreDutyNapAssumptions:
         hours = round(hours * 60) / 60
         return hours if hours >= self.min_nap_hours else 0.0
 
+    def describe(self, report_body_hour: float, available_hours: float, habit: str = None) -> str:
+        """Plain-language basis for an assumed pre-duty nap (shown to the pilot)."""
+        habit = habit or self.habit
+        h = report_body_hour % 24
+        clock = f"{int(h):02d}:{int(round((h % 1) * 60)) % 60:02d}"
+        fraction = self.ramp_fraction(report_body_hour)
+        full = self.full_nap_hours(available_hours)
+        parts = [
+            "About half of crews nap before an evening or night departure: 54 % of 52 long-haul "
+            "pilots napped before the outbound flight (Signal et al. 2014); evening departures "
+            "make an afternoon nap easier (Signal et al. 2024; Holmes et al. 2012).",
+            f"The assumed nap grows from none for a {self.ramp_start_hour:02.0f}:00 report to the full "
+            f"nap (up to {self.max_nap_hours:g} h) from {self.ramp_full_hour:02.0f}:00; a report at "
+            f"{clock} body-clock time gives {fraction:.0%} of it.",
+        ]
+        if full < self.max_nap_hours:
+            parts.append(f"It is limited to {full:.1f} h because the model places a nap only after "
+                         f"{self.min_wake_before_nap_hours:g} h awake since the main sleep (a modelling choice).")
+        if habit == 'sometimes':
+            parts.append(f"Your nap setting is 'sometimes', so the length is the average across crews "
+                         f"({self.sometimes_fraction:.0%} of that nap).")
+        elif habit == 'usually':
+            parts.append("Your nap setting is 'usually', so the full nap for this report time is assumed.")
+        parts.append("Nap length and timing are modelling assumptions to be calibrated with pilot data; "
+                     "remove or change the nap if it does not match what you do.")
+        return ' '.join(parts)
+
 
 @dataclass
 class DaytimeSleepBounds:
