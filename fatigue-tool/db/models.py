@@ -81,6 +81,8 @@ class User(Base):
     study_enrolled_at = Column(DateTime(timezone=True), nullable=True)
     study_consent_version = Column(String(40), nullable=True)
     study_withdrawn_at = Column(DateTime(timezone=True), nullable=True)
+    # Usual bedtime, wake-up and nap habit (migration 005); applied to new analyses.
+    sleep_preferences = Column(JSONB, nullable=True)
     auth_version = Column(Integer, default=0, nullable=False)
 
     # Company membership (auto-detected from roster, confirmed by pilot)

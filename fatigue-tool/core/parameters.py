@@ -16,7 +16,7 @@ Scientific Foundation:
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 
 @dataclass
@@ -463,6 +463,70 @@ class PreDutyNapAssumptions:
         return ' '.join(parts)
 
 
+def _clock_hours(value: str, name: str) -> float:
+    """'HH:MM' (24-hour) → hours after midnight."""
+    try:
+        hh, mm = str(value).strip().split(':')
+        h, m = int(hh), int(mm)
+    except (ValueError, AttributeError):
+        raise ValueError(f'{name} must be a 24-hour time like 23:00')
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        raise ValueError(f'{name} must be a 24-hour time like 23:00')
+    return h + m / 60.0
+
+
+def clock_label(hours: float) -> str:
+    """Hours after midnight (may be ≥ 24) → 'HH:MM'."""
+    minutes = int(round(hours * 60)) % (24 * 60)
+    return f'{minutes // 60:02d}:{minutes % 60:02d}'
+
+
+@dataclass
+class SleepHabits:
+    """The pilot's usual night at home, stated per analysis (a preference).
+
+    Default 23:00–07:00: alarm-constrained workday timing consistent with pilot
+    actigraphy (Signal et al. 2009, Aviat Space Environ Med 80:1012-1017; Gander
+    et al. 2013, Aviat Space Environ Med 84:105-115). Chronotypes differ widely
+    (Roenneberg et al. 2007, Sleep Med Rev 11:429-438), so a pilot can state their
+    own times. They set the habitual night (home, rest days, the night before a
+    duty), the bedtime from which early-report advances are counted, the body-clock
+    morning that ends an evening sleep, and the usual sleep length.
+
+    ``bedtime_hour`` is hours after midnight of the evening before, so 00:30 is
+    24.5. Accepted: bedtime 20:00–02:00, wake-up 04:00–11:00, 5–11 h apart.
+    """
+    bedtime_hour: float = 23.0
+    wake_hour: float = 7.0
+
+    def __post_init__(self):
+        if not 20.0 <= self.bedtime_hour <= 26.0:
+            raise ValueError('Usual bedtime must be between 20:00 and 02:00')
+        if not 4.0 <= self.wake_hour <= 11.0:
+            raise ValueError('Usual wake-up must be between 04:00 and 11:00')
+        if not 5.0 <= self.duration_hours <= 11.0:
+            raise ValueError('Usual night must last 5–11 hours')
+
+    @property
+    def duration_hours(self) -> float:
+        return self.wake_hour + 24.0 - self.bedtime_hour
+
+    @property
+    def is_default(self) -> bool:
+        return self.bedtime_hour == 23.0 and self.wake_hour == 7.0
+
+    @classmethod
+    def from_clock(cls, bedtime: Optional[str] = None, wake: Optional[str] = None) -> 'SleepHabits':
+        bed = _clock_hours(bedtime, 'Usual bedtime') if bedtime else 23.0
+        if bed < 12.0:
+            bed += 24.0   # 00:30 is after midnight of the evening before
+        return cls(bedtime_hour=bed, wake_hour=_clock_hours(wake, 'Usual wake-up') if wake else 7.0)
+
+    @property
+    def labels(self) -> Dict[str, str]:
+        return {'usual_bedtime': clock_label(self.bedtime_hour), 'usual_wake_time': clock_label(self.wake_hour)}
+
+
 @dataclass
 class DaytimeSleepBounds:
     """Bounds for sleep after an afternoon release before a night report.
@@ -581,12 +645,14 @@ class ModelConfig:
     nap_assumptions: PreDutyNapAssumptions = field(default_factory=PreDutyNapAssumptions)
     daytime_sleep_bounds: DaytimeSleepBounds = field(default_factory=DaytimeSleepBounds)
     headline_risk_window: str = HEADLINE_RISK_WINDOW
+    sleep_habits: SleepHabits = field(default_factory=SleepHabits)
 
     @property
     def assumptions(self) -> Dict[str, str]:
         """Analysis-level assumptions echoed in API responses."""
         return {'nap_habit': self.nap_assumptions.habit,
-                'headline_risk_window': self.headline_risk_window}
+                'headline_risk_window': self.headline_risk_window,
+                **self.sleep_habits.labels}
 
     def __post_init__(self):
         if self.nap_assumptions.habit not in NAP_HABITS:
@@ -602,7 +668,8 @@ class ModelConfig:
             self.ulr_params = ULRParameters()
 
     @classmethod
-    def aerowake(cls, nap_habit: str = None, headline_risk_window: str = None):
+    def aerowake(cls, nap_habit: str = None, headline_risk_window: str = None,
+                 usual_bedtime: str = None, usual_wake_time: str = None):
         """
         The single AeroWake model configuration (engine aerowake-4.1-kss).
 
@@ -697,6 +764,7 @@ class ModelConfig:
             ),
             nap_assumptions=PreDutyNapAssumptions(habit=nap_habit or DEFAULT_NAP_HABIT),
             headline_risk_window=headline_risk_window or HEADLINE_RISK_WINDOW,
+            sleep_habits=SleepHabits.from_clock(usual_bedtime, usual_wake_time),
         )
 
     # Legacy preset names resolve to the single model so stored analyses

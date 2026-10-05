@@ -552,17 +552,26 @@ from api.hardening import BoundedStore, RateLimitMiddleware, validate_upload
 # HELPER FUNCTIONS
 # ============================================================================
 
-def _model_config(nap_habit: Optional[str] = None, stored: Optional[dict] = None) -> ModelConfig:
-    """The single model with the analysis's stated nap habit.
+def _model_config(nap_habit: Optional[str] = None, stored: Optional[dict] = None,
+                  usual_bedtime: Optional[str] = None, usual_wake_time: Optional[str] = None) -> ModelConfig:
+    """The single model with the analysis's stated assumptions.
 
-    ``nap_habit`` from the request wins; otherwise the habit stored with the
-    analysis inputs; otherwise the default ('sometimes').
+    Each of the nap habit, usual bedtime and usual wake-up comes from the
+    request; otherwise from the assumptions stored with the analysis inputs (or
+    the pilot's saved preferences, passed as ``stored``); otherwise the default.
     """
     from core.parameters import NAP_HABITS
-    habit = (nap_habit or '').strip().lower() or (stored or {}).get('nap_habit') or None
+    stored = stored or {}
+    habit = (nap_habit or '').strip().lower() or stored.get('nap_habit') or None
     if habit is not None and habit not in NAP_HABITS:
         raise HTTPException(422, f"nap_habit must be one of: {', '.join(NAP_HABITS)}")
-    return ModelConfig.aerowake(nap_habit=habit)
+    try:
+        return ModelConfig.aerowake(
+            nap_habit=habit,
+            usual_bedtime=(usual_bedtime or '').strip() or stored.get('usual_bedtime') or None,
+            usual_wake_time=(usual_wake_time or '').strip() or stored.get('usual_wake_time') or None)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
 
 
 def classify_risk(performance: Optional[float], thresholds=None) -> str:
@@ -1259,6 +1268,8 @@ async def analyze_roster(
     crew_set: str = Form("crew_b"),
     duty_crew_overrides: str = Form("{}"),
     nap_habit: Optional[str] = Form(None),
+    usual_bedtime: Optional[str] = Form(None),
+    usual_wake_time: Optional[str] = Form(None),
     sleep_edits: str = Form("[]"),
     user: Optional[User] = Depends(get_optional_user),
     principal: Principal = Depends(analysis_principal),
@@ -1359,7 +1370,10 @@ async def analyze_roster(
 
         # Get config
         # Single model: legacy preset names are accepted and ignored.
-        config = _model_config(nap_habit)
+        # The request states the pilot's habits; a signed-in pilot's saved
+        # preferences fill whatever it leaves out.
+        config = _model_config(nap_habit, (getattr(user, 'sleep_preferences', None) or {}) if user else None,
+                               usual_bedtime, usual_wake_time)
         roster.analysis_assumptions = dict(config.assumptions)
         # The pilot's sleep changes carried over from the previous analysis of this
         # roster; any that no longer fit the duties are dropped.
@@ -1903,6 +1917,8 @@ async def reanalyze_roster(
     config_preset: str = Form("default"),
     crew_set: str = Form("crew_b"),
     nap_habit: Optional[str] = Form(None),
+    usual_bedtime: Optional[str] = Form(None),
+    usual_wake_time: Optional[str] = Form(None),
     user: User = Depends(_get_current_user),
     db=Depends(get_db),
 ):
@@ -1932,7 +1948,8 @@ async def reanalyze_roster(
 
     # Run analysis
     # Single model: legacy preset names are accepted and ignored.
-    config = _model_config(nap_habit, getattr(roster_obj, 'analysis_assumptions', None))
+    config = _model_config(nap_habit, getattr(roster_obj, 'analysis_assumptions', None),
+                           usual_bedtime, usual_wake_time)
     roster_obj.analysis_assumptions = dict(config.assumptions)
 
     # ── Fatigue continuity for re-analysis ────────────────────

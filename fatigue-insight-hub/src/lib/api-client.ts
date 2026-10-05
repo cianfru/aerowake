@@ -475,6 +475,9 @@ export interface AnalysisResult {
     nap_habit?: string | null;
     /** Which window the headline risk uses, e.g. 'duty' or 'fdp'. */
     headline_risk_window?: string | null;
+    /** The usual night the analysis assumed, 'HH:MM'. */
+    usual_bedtime?: string | null;
+    usual_wake_time?: string | null;
   } | null;
 
   /** The pilot's sleep changes stored with this analysis; `applied` false = no longer matches. */
@@ -516,7 +519,7 @@ export async function analyzeRoster(
   pilotId: string,
   homeBase?: string | null,
   dutyCrewOverrides?: Map<string, CrewOverride>,
-  options: { override?: boolean; napHabit?: string | null; sleepEdits?: SleepEditPayload[] } = {},
+  options: { override?: boolean; napHabit?: string | null; usualBedtime?: string | null; usualWakeTime?: string | null; sleepEdits?: SleepEditPayload[] } = {},
 ): Promise<AnalysisResult> {
 
   const formData = new FormData();
@@ -525,6 +528,8 @@ export async function analyzeRoster(
   if (homeBase) formData.append('home_base', homeBase);
   if (homeBase && options.override) formData.append('home_base_override', 'true');
   if (options.napHabit) formData.append('nap_habit', options.napHabit);
+  if (options.usualBedtime) formData.append('usual_bedtime', options.usualBedtime);
+  if (options.usualWakeTime) formData.append('usual_wake_time', options.usualWakeTime);
   // The pilot's sleep changes carry over to a new run of the same roster.
   if (options.sleepEdits?.length) formData.append('sleep_edits', JSON.stringify(options.sleepEdits));
   // One model only (aerowake-4.0-kss) — the backend ignores presets.
@@ -642,8 +647,12 @@ export async function deleteRoster(rosterId: string): Promise<void> {
 
 export async function reanalyzeRoster(
   rosterId: string,
+  options: { napHabit?: string | null; usualBedtime?: string | null; usualWakeTime?: string | null } = {},
 ): Promise<AnalysisResult> {
   const formData = new FormData();
+  if (options.napHabit) formData.append('nap_habit', options.napHabit);
+  if (options.usualBedtime) formData.append('usual_bedtime', options.usualBedtime);
+  if (options.usualWakeTime) formData.append('usual_wake_time', options.usualWakeTime);
 
   const response = await apiFetch(`${API_BASE_URL}/api/rosters/${rosterId}/reanalyze`, {
     method: 'POST',

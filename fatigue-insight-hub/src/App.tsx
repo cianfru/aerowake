@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { AnalysisProvider } from "@/contexts/AnalysisContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { fromPayload } from "@/lib/sleep-preferences";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { RegisterPage } from "@/components/auth/RegisterPage";
 import { AdminRoute } from "@/components/auth/AdminRoute";
@@ -35,7 +36,7 @@ function ThemeSync() {
 function SessionBoundary({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
   if (isLoading) return <div className="p-8 text-sm text-muted-foreground" role="status">Loading your session…</div>;
-  return <AnalysisProvider key={user?.id ?? 'guest'}>{children}</AnalysisProvider>;
+  return <AnalysisProvider key={user?.id ?? 'guest'} initialSettings={fromPayload(user?.sleep_preferences)}>{children}</AnalysisProvider>;
 }
 
 function Welcome() {

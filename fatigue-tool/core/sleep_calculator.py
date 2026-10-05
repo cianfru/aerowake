@@ -63,15 +63,15 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         self.config = config or ModelConfig.aerowake()
         self._quality_engine = SleepQualityEngine(self.config)
         
-        # Sleep timing parameters — operational defaults for working-age pilots.
-        # Roenneberg et al. (2007) Sleep Med Rev 11:429-438 characterised
-        # chronotype distributions (avg free-day mid-sleep ~04:00-05:00);
-        # the 23:00 bedtime here reflects alarm-constrained workday timing,
-        # consistent with pilot actigraphy in Signal et al. (2009) and
-        # Gander et al. (2013).
-        self.NORMAL_BEDTIME_HOUR = 23
-        self.NORMAL_WAKE_HOUR = 7
-        self.NORMAL_SLEEP_DURATION = 8.0
+        # Sleep timing: the pilot's usual night (core/parameters.py SleepHabits;
+        # default 23:00–07:00, alarm-constrained workday timing consistent with
+        # pilot actigraphy in Signal et al. (2009) and Gander et al. (2013);
+        # chronotypes differ, Roenneberg et al. (2007)). Bedtime may be ≥ 24
+        # (after midnight of the evening before).
+        habits = self.config.sleep_habits
+        self.NORMAL_BEDTIME_HOUR = habits.bedtime_hour
+        self.NORMAL_WAKE_HOUR = habits.wake_hour
+        self.NORMAL_SLEEP_DURATION = habits.duration_hours
         
         # Minimum pre-duty preparation buffer (hours).
         # Conservative estimate: pilots need time for commute, briefing,
@@ -119,6 +119,15 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         """
         home_dt = dt.astimezone(self.home_tz)
         return home_dt.day, home_dt.hour + home_dt.minute / 60.0
+
+    @staticmethod
+    def _clock_on(dt: datetime, hour: float, days: int = 0) -> datetime:
+        """``dt``'s calendar day at ``hour`` (hours after midnight, ≥ 24 = the next
+        day), moved by ``days``. Keeps ``dt``'s time zone."""
+        minutes = int(round(hour * 60))
+        day_shift, minutes = divmod(minutes, 24 * 60)
+        return dt.replace(hour=minutes // 60, minute=minutes % 60, second=0, microsecond=0) \
+            + timedelta(days=days + day_shift)
 
     def _detect_layover(
         self,
@@ -497,19 +506,16 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         if report_bio_hour < 7.0 or report_bio_hour >= 22.0:
             # Early/WOCL duty: anticipate bedtime by 1-2h
             # Arsintescu (2022): avg 21:15 for 05:00-07:00 starts
-            # For WOCL (report 22:00-04:00): use 21:00 bio time
-            anticipated_bedtime_hour = 21.0
+            # For WOCL (report 22:00-04:00): use 21:00 bio time (or the usual
+            # bedtime when it is earlier still)
+            anticipated_bedtime_hour = min(21.0, float(self.NORMAL_BEDTIME_HOUR))
         else:
-            anticipated_bedtime_hour = float(self.NORMAL_BEDTIME_HOUR)  # 23.0
+            anticipated_bedtime_hour = float(self.NORMAL_BEDTIME_HOUR)  # usual, 23.0 by default
 
         # Compute anticipated bedtime in sleep timezone
         nap_end_time = sleep_start + timedelta(hours=base_duration)
         nap_end_bio = nap_end_time.astimezone(bio_tz)
-        bio_bedtime = nap_end_bio.replace(
-            hour=int(anticipated_bedtime_hour),
-            minute=int((anticipated_bedtime_hour % 1) * 60),
-            second=0, microsecond=0
-        )
+        bio_bedtime = self._clock_on(nap_end_bio, anticipated_bedtime_hour)
         if bio_bedtime <= nap_end_bio:
             bio_bedtime += timedelta(days=1)
         bio_bedtime_in_sleep_tz = bio_bedtime.astimezone(sleep_tz)
@@ -831,11 +837,8 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
             # so effective sleep is base_duration even though time-in-bed
             # may be longer. Cap at base_duration + 1h (accounts for
             # slight circadian extension without producing absurd blocks).
-            bio_morning = sleep_start_bio.replace(
-                hour=self.NORMAL_WAKE_HOUR, minute=0, second=0, microsecond=0
-            )
-            # Morning is always the next calendar day for evening onset
-            bio_morning += timedelta(days=1)
+            # Morning (the usual wake-up) is always the next calendar day for evening onset
+            bio_morning = self._clock_on(sleep_start_bio, self.NORMAL_WAKE_HOUR, 1)
             bio_morning_in_sleep_tz = bio_morning.astimezone(sleep_tz)
             # Gate extends to bio morning, but never more than +1h beyond base
             max_wake = sleep_start + timedelta(hours=base_duration + 1.0)

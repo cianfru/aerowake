@@ -35,7 +35,14 @@ def offline_004():
 def test_head_is_the_revision_the_api_requires():
     result = alembic('heads')
     assert result.returncode == 0, result.stderr
-    assert result.stdout.split()[0] == EXPECTED_SCHEMA_REVISION == '004'
+    assert result.stdout.split()[0] == EXPECTED_SCHEMA_REVISION == '005'
+
+
+def test_005_adds_only_the_nullable_preferences_column():
+    result = alembic('upgrade', '004:005', '--sql')
+    assert result.returncode == 0, result.stderr
+    ddl = [line for line in result.stdout.splitlines() if line.startswith(('ALTER', 'CREATE', 'DROP'))]
+    assert ddl == ['ALTER TABLE users ADD COLUMN sleep_preferences JSONB;']
 
 
 def test_offline_ddl_links_are_nullable_and_survive_roster_deletion():

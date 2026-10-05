@@ -3,21 +3,16 @@ import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { buildRosterForecast, DEFAULT_WATCH_KSS } from '@/lib/roster-forecast';
 import { RISK_LEVEL_LABELS, classifyKss, riskClasses } from '@/lib/risk-scale';
-import type { AnalysisResults, DutyAnalysis, NapHabit } from '@/types/fatigue';
+import type { AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { dutyDateLabel, dutyRoute } from './roster-utils';
 import { MonthStrip } from './MonthStrip';
 import { TextAction } from './primitives';
+import { SleepHabitsPanel } from '../SleepHabitsPanel';
 
 const hours = (n: number | undefined | null) => n != null && Number.isFinite(n) ? `${n.toFixed(1)}h` : '—';
 
 /** Watch levels offered: the useful part of the scale, where the bands sit. */
 export const WATCH_LEVELS = Array.from({ length: 8 }, (_, i) => 5 + i * 0.5);
-
-export const NAP_HABIT_LABELS: Record<NapHabit, string> = {
-  usually: 'Usually',
-  sometimes: 'Sometimes',
-  rarely: 'Rarely',
-};
 
 /** One short line: what the numbers on this page assume. */
 export function assumptionsLine(results: Pick<AnalysisResults, 'assumptions'>): string {
@@ -29,7 +24,9 @@ export function assumptionsLine(results: Pick<AnalysisResults, 'assumptions'>): 
   const nap = naps === 'usually' ? 'a full pre-duty nap before late and night duties'
     : naps === 'rarely' ? 'no pre-duty nap'
     : 'the average pre-duty nap (about half of crews nap before evening departures)';
-  return `Assumes the estimated sleep shown in the calendar, ${nap}, and ${rating}.`;
+  const night = results.assumptions?.usualBedtime && results.assumptions?.usualWakeTime
+    ? `a usual night of ${results.assumptions.usualBedtime}–${results.assumptions.usualWakeTime}, ` : '';
+  return `Assumes the estimated sleep shown in the calendar, ${night}${nap}, and ${rating}.`;
 }
 
 interface ForecastProps {
@@ -38,52 +35,15 @@ interface ForecastProps {
   onConcern: (duty: DutyAnalysis, reference: number) => void;
   reference: number;
   onReferenceChange: (reference: number) => void;
-  /** Pre-duty nap assumption for the next analysis. */
-  napHabit: NapHabit;
-  onNapHabitChange: (habit: NapHabit) => void;
-  /** The roster file is still loaded, so a change re-runs the analysis now. */
-  canReanalyse?: boolean;
-  isUpdating?: boolean;
 }
 
-function NapHabitControl({ value, onChange, pendingNote }: { value: NapHabit; onChange: (v: NapHabit) => void; pendingNote?: string }) {
-  const hintId = useId();
-  return (
-    <fieldset className="min-w-0 space-y-1.5" aria-describedby={hintId}>
-      <legend className="text-xs font-medium">Pre-duty naps</legend>
-      <div role="radiogroup" aria-label="Pre-duty naps" className="inline-flex rounded-lg border border-border bg-card p-0.5">
-        {(Object.keys(NAP_HABIT_LABELS) as NapHabit[]).map((habit) => (
-          <button
-            key={habit}
-            type="button"
-            role="radio"
-            aria-checked={value === habit}
-            onClick={() => onChange(habit)}
-            className={cn(
-              'min-h-[36px] rounded-md px-3 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              value === habit ? 'bg-primary/15 text-primary ring-1 ring-inset ring-primary/40' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {NAP_HABIT_LABELS[habit]}
-          </button>
-        ))}
-      </div>
-      <p id={hintId} className="text-xs text-muted-foreground">Before late reports.{pendingNote ? ` ${pendingNote}` : ''}</p>
-    </fieldset>
-  );
-}
-
-export function RosterForecast({ results, reference, onReferenceChange, onDetails, napHabit, onNapHabitChange, canReanalyse = false, isUpdating = false }: ForecastProps) {
+export function RosterForecast({ results, reference, onReferenceChange, onDetails }: ForecastProps) {
   const rows = useMemo(() => buildRosterForecast(results, reference), [results, reference]);
   const watchHintId = useId();
   const first = rows.find(row => row.reachesWatch);
   const assessed = rows.filter(row => row.peak != null);
   const highest = assessed.reduce<typeof first>((best, row) => !best || row.peak! > best.peak! ? row : best, undefined);
   const highestLevel = highest?.peak != null ? classifyKss(highest.peak) : null;
-  const napsUsed = results.assumptions?.napHabit;
-  const pendingNote = isUpdating ? 'Updating the analysis…'
-    : napsUsed && napsUsed !== napHabit && !canReanalyse ? 'Applies the next time you analyse this roster.'
-    : undefined;
 
   return <section id="fatigue-outlook" aria-labelledby="forecast-heading" className="instrument-surface scroll-mt-24 space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-5">
@@ -100,7 +60,7 @@ export function RosterForecast({ results, reference, onReferenceChange, onDetail
           </select>
           <p id={watchHintId} className="max-w-[15rem] text-xs text-muted-foreground">Your own marker on the strip below; the model bands don&apos;t change.</p>
         </div>
-        <NapHabitControl value={napHabit} onChange={onNapHabitChange} pendingNote={pendingNote} />
+        <SleepHabitsPanel />
       </div>
     </div>
 

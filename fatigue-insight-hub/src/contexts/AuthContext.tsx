@@ -1,5 +1,6 @@
 import { getStoredToken, getStoredRefreshToken, storeTokens, clearTokens, getAuthHeaders, apiFetch, sessionChanged, sessionGeneration } from '@/lib/auth-session';
 export { getAuthHeaders } from '@/lib/auth-session';
+import type { SleepPreferencesPayload } from '@/lib/sleep-preferences';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 
@@ -21,6 +22,8 @@ export interface UserProfile {
   company_name: string | null;
   company_role: string;
   created_at: string;
+  /** Usual bedtime, wake-up and nap habit; null = model defaults. */
+  sleep_preferences?: SleepPreferencesPayload | null;
 }
 
 interface TokenResponse {
@@ -39,7 +42,7 @@ interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, displayName?: string, pilotId?: string, homeBase?: string) => Promise<void>;
   logout: () => Promise<void>;
-  updateProfile: (data: { display_name?: string; pilot_id?: string; home_base?: string }) => Promise<void>;
+  updateProfile: (data: { display_name?: string; pilot_id?: string; home_base?: string; sleep_preferences?: SleepPreferencesPayload }) => Promise<void>;
   confirmCompany: (companyName: string, companyIcao?: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -203,7 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // ── Update Profile ──
-  const updateProfile = async (data: { display_name?: string; pilot_id?: string; home_base?: string }) => {
+  const updateProfile = async (data: { display_name?: string; pilot_id?: string; home_base?: string; sleep_preferences?: SleepPreferencesPayload }) => {
     const token = getStoredToken();
     if (!token) throw new Error('Not authenticated');
 
@@ -218,7 +221,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (!res.ok) {
-      throw new Error('Failed to update profile');
+      const error = await res.json().catch(() => ({}));
+      throw new Error(typeof error.detail === 'string' ? error.detail : 'Failed to update profile');
     }
 
     const user: UserProfile = await res.json();

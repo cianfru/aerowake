@@ -170,6 +170,11 @@ the same configuration.
   night-departure nap (≤2.5 h, window-limited) at 20:00 body time; 'sometimes' scales it by
   the 54 % nap prevalence of Signal et al. (2014); 'rarely' none. Modelling assumption to calibrate with pilot debrief data. The duty's
   sleep explanation, `assumed_nap_hours` and risk reasons state it.
+- Usual night (`SleepHabits`, default 23:00–07:00): form fields `usual_bedtime` /
+  `usual_wake_time` on analyze / reanalyze, echoed in `assumptions`; a signed-in pilot's
+  saved `users.sleep_preferences` (migration 005, `PUT /api/auth/me`) fill what the request
+  omits. Sets the habitual night, the bedtime early starts advance from, the body-clock
+  morning that ends evening sleep and the usual sleep length.
 - Every modelled nap carries `basis` (plain-language reason with its published source,
   e.g. `PreDutyNapAssumptions.describe`); blocks return `source` 'estimated' | 'pilot'.
 - Pilot sleep edits (`core/sleep_edits.py`, `Roster.sleep_edits`): remove / replace / add a

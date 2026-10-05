@@ -78,12 +78,32 @@ class UserResponse(BaseModel):
     company_name: Optional[str] = None
     company_role: str = "pilot"
     created_at: str
+    # {usual_bedtime 'HH:MM', usual_wake_time 'HH:MM', nap_habit}; None = model defaults
+    sleep_preferences: Optional[dict] = None
+
+
+class SleepPreferences(BaseModel):
+    """The pilot's usual night and nap habit, used for new analyses."""
+    usual_bedtime: str = Field('23:00', max_length=5)
+    usual_wake_time: str = Field('07:00', max_length=5)
+    nap_habit: str = Field('sometimes', max_length=12)
+
+    def normalised(self) -> dict:
+        from core.parameters import NAP_HABITS, SleepHabits
+        try:
+            habits = SleepHabits.from_clock(self.usual_bedtime, self.usual_wake_time)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+        if self.nap_habit not in NAP_HABITS:
+            raise HTTPException(422, f"nap_habit must be one of: {', '.join(NAP_HABITS)}")
+        return {**habits.labels, 'nap_habit': self.nap_habit}
 
 
 class UpdateProfileRequest(BaseModel):
     display_name: Optional[str] = Field(None, max_length=100)
     pilot_id: Optional[str] = Field(None, max_length=50)
     home_base: Optional[str] = Field(None, max_length=10)
+    sleep_preferences: Optional[SleepPreferences] = None
 
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -128,6 +148,7 @@ def _user_to_response(user: User) -> UserResponse:
         company_name=company_name,
         company_role=user.company_role or "pilot",
         created_at=user.created_at.isoformat() if user.created_at else "",
+        sleep_preferences=user.sleep_preferences or None,
     )
 
 
@@ -272,6 +293,8 @@ async def update_profile(
         user.pilot_id = body.pilot_id
     if body.home_base is not None:
         user.home_base = body.home_base
+    if body.sleep_preferences is not None:
+        user.sleep_preferences = body.sleep_preferences.normalised()
 
     await db.commit()
     await db.refresh(user)

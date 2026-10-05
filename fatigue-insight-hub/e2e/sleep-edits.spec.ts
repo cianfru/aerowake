@@ -37,3 +37,27 @@ test('the pilot sees why a nap is assumed and can remove it, then undo', async (
   await expect(sleep).toContainText('Nap · assumed');
   expect(errors).toEqual([]);
 });
+
+test('the pilot states a usual night and the roster is recalculated with it', async ({ page }) => {
+  await page.goto('/roster');
+  await page.getByLabel('Choose roster file (PDF or CSV)').setInputFiles({ name: 'synthetic.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await page.getByLabel('Home base', { exact: true }).fill('DOH');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('button', { name: 'Analyse roster', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Your fatigue outlook' })).toBeVisible();
+  await expect(page.getByText('23:00–07:00', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Change', exact: true }).click();
+  await page.getByLabel('Bedtime (24-hour)').fill('00:00');
+  await page.getByLabel('Wake-up (24-hour)').fill('06:00');
+  await page.getByRole('radio', { name: 'Rarely' }).click();
+  await page.getByRole('button', { name: 'Save and recalculate' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved on this device' })).toBeVisible();
+  // The analysis now states the pilot's night, and no assumed nap appears.
+  await expect(page.getByText('00:00–06:00', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Calendar', exact: true }).click();
+  await page.getByRole('region', { name: 'Roster calendar', exact: true })
+    .getByRole('button', { name: 'Open duty on Sat 5 Sep: TEST1', exact: true }).click();
+  const sleep = page.getByRole('dialog', { name: 'Duty details, Sat 5 Sep 2026' }).getByRole('list', { name: 'Estimated sleep before this duty' });
+  await expect(sleep).toContainText('00:00–06:00');
+  await expect(sleep).not.toContainText('Nap · assumed');
+});

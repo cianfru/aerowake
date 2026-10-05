@@ -2,10 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, CalendarDays, Compass, Globe2, Moon, ShieldCheck } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { useAnalyzeRoster } from '@/hooks/useAnalyzeRoster';
-import { useAnalysis } from '@/contexts/AnalysisContext';
 import type { AnalysisResults, DutyAnalysis } from '@/types/fatigue';
-import { DEFAULT_NAP_HABIT } from '@/types/fatigue';
 import { DEFAULT_WATCH_KSS } from '@/lib/roster-forecast';
 import { KSS_LABELS, RISK_LEVEL_KSS_RANGE, RISK_LEVEL_LABELS, riskClasses, type RiskLevel } from '@/lib/risk-scale';
 import { cn } from '@/lib/utils';
@@ -68,8 +65,6 @@ function useStuck(sentinel: React.RefObject<HTMLElement>) {
 
 /** Visited views stay mounted so switching tabs cannot discard sleep edits or map state. */
 export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDutySelect, onReportFatigue, onConcern }: Props) {
-  const { state, setSettings } = useAnalysis();
-  const { runAnalysis, canReanalyse, isAnalyzing } = useAnalyzeRoster();
   const [view, setView] = useState<RosterView>('outlook');
   const [visited, setVisited] = useState<Set<RosterView>>(() => new Set(['outlook']));
   const [reference, setReference] = useState(DEFAULT_WATCH_KSS);
@@ -79,7 +74,6 @@ export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDu
   const watch = useMemo(() => selectDutiesToWatch(results), [results]);
   const groups = useMemo(() => groupDutiesToWatch(watch), [watch]);
   const index = views.findIndex(item => item.id === view);
-  const napHabit = state.settings.napHabit ?? DEFAULT_NAP_HABIT;
 
   /**
    * Show a view from its top. When the rail is stuck the page is scrolled to
@@ -121,9 +115,7 @@ export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDu
     <div ref={panels}>
       <TabsContent value="outlook" data-view="outlook" forceMount hidden={view !== 'outlook'} className="mt-5 space-y-8">
         <DebriefQueue />
-        <RosterForecast results={results} reference={reference} onReferenceChange={setReference} onDetails={onDutySelect} onConcern={onConcern}
-          napHabit={napHabit} canReanalyse={canReanalyse} isUpdating={isAnalyzing}
-          onNapHabitChange={habit => { setSettings({ napHabit: habit }); if (canReanalyse) runAnalysis({ napHabit: habit, reveal: false }); }} />
+        <RosterForecast results={results} reference={reference} onReferenceChange={setReference} onDetails={onDutySelect} onConcern={onConcern} />
         <section aria-labelledby="watch-heading" className="space-y-4">
           <SectionHeading id="watch-heading" title="Duties to watch" />
           <p className="-mt-3 text-xs text-muted-foreground" data-testid="watch-criterion">

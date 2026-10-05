@@ -163,3 +163,26 @@ def test_sleep_changes_are_saved_with_the_analysis(database_client):
     assert rerun.status_code == 200, rerun.text
     assert pilot_start(rerun.json()) == [start.isoformat()]
     assert rerun.json()['sleep_edits'][0]['id'] == 'm1'
+
+
+def test_saved_sleep_preferences_apply_to_new_analyses(database_client):
+    c, owner, other, _ = database_client
+    bad = c.put('/api/auth/me', headers=headers(owner),
+                json={'sleep_preferences': {'usual_bedtime': '18:00', 'usual_wake_time': '06:00', 'nap_habit': 'usually'}})
+    assert bad.status_code == 422
+    saved = c.put('/api/auth/me', headers=headers(owner),
+                  json={'sleep_preferences': {'usual_bedtime': '0:30', 'usual_wake_time': '07:30', 'nap_habit': 'rarely'}})
+    assert saved.status_code == 200, saved.text
+    prefs = {'usual_bedtime': '00:30', 'usual_wake_time': '07:30', 'nap_habit': 'rarely'}
+    assert saved.json()['sleep_preferences'] == prefs
+    assert c.get('/api/auth/me', headers=headers(owner)).json()['sleep_preferences'] == prefs
+    assert c.get('/api/auth/me', headers=headers(other)).json()['sleep_preferences'] is None
+    csv = b'Date,Flight,Departure,Arrival,STD,STA,Report,Release\n2026-09-08,TEST1,LGW,FCO,08:00,11:00,07:00,12:00\n'
+    body = c.post('/api/analyze', headers=headers(owner), files={'file': ('synthetic.csv', csv, 'text/csv')},
+                  data={'home_base': 'LGW', 'month': '2026-09'}).json()
+    assert {k: body['assumptions'][k] for k in prefs} == prefs
+    # The request still wins over the saved preference.
+    body = c.post('/api/analyze', headers=headers(owner), files={'file': ('synthetic.csv', csv, 'text/csv')},
+                  data={'home_base': 'LGW', 'month': '2026-09', 'nap_habit': 'usually'}).json()
+    assert body['assumptions']['nap_habit'] == 'usually'
+    assert c.get('/api/auth/export', headers=headers(owner)).json()['sleep_preferences'] == prefs

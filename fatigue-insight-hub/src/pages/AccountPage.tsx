@@ -5,7 +5,17 @@ import { getAuthHeaders, useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StudyParticipation } from '@/components/fatigue/debrief/StudyParticipation';
+import { SleepHabitsEditor } from '@/components/fatigue/SleepHabitsEditor';
+import { useSleepPreferences } from '@/hooks/useSleepPreferences';
 const api = import.meta.env.VITE_API_URL || 'https://aerowake-production.up.railway.app';
+
+function AccountSleepHabits() {
+  const { preferences, apply, isApplying } = useSleepPreferences();
+  return <SleepHabitsEditor value={preferences} busy={isApplying} onSave={async (next) => {
+    const outcome = await apply(next);
+    return outcome === 'recalculated' ? 'Saved to your account. Recalculating the roster on screen…' : 'Saved to your account.';
+  }} />;
+}
 
 export default function AccountPage() {
   const { user, logout, refreshProfile } = useAuth();
@@ -31,6 +41,7 @@ export default function AccountPage() {
     <Link to="/" className="text-primary">← Back to AeroWake</Link><h1 className="text-3xl font-semibold">Your account and data</h1>
     {message && <p role="status" className="rounded-md border p-4 text-sm">{message}</p>}
     {!user ? <p><Link to="/login" className="underline">Sign in</Link> to manage saved data.</p> : <>
+      <section className="space-y-3" aria-labelledby="sleep-habits-heading"><h2 id="sleep-habits-heading" className="text-lg font-medium">Your sleep habits</h2><p className="text-sm text-muted-foreground">The model starts from an average pilot. Your usual night and nap habit replace those averages in every analysis you run while signed in. You can still change any single sleep on a duty.</p><AccountSleepHabits /></section>
       <section className="space-y-3"><h2 className="text-lg font-medium">Email verification</h2><p className="text-sm text-muted-foreground">{user.email} · {user.email_verified ? 'Verified' : 'Not verified'}</p>{!user.email_verified && <Button disabled={busy} onClick={() => act('verification/request')}>Send verification email</Button>}</section>
       <section className="space-y-3"><h2 className="text-lg font-medium">Optional comparisons</h2><p className="text-sm text-muted-foreground">Compare with pilots who opt in to the same self-declared airline group. Membership is not employer-verified. Groups smaller than five are hidden; this does not guarantee anonymity.</p><label className="flex items-start gap-3 text-sm"><input type="checkbox" disabled={busy} checked={user.metrics_consent ?? false} onChange={e => act('consent', 'PUT', { enabled: e.target.checked })} /><span>Include my roster statistics in cohort comparisons. I can withdraw at any time.</span></label></section>
       <section className="space-y-3"><h2 className="text-lg font-medium">Pilot study participation</h2><p className="text-sm text-muted-foreground">Optional. Duty debriefs and the sleep diary are private to you, never sent to your operator or any company. Export or delete individual debriefs under History › Debriefs; withdrawing here stops new entries and can delete everything you gave.</p><StudyParticipation /></section>

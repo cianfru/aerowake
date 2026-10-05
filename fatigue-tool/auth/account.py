@@ -129,6 +129,7 @@ async def export_account(user=Depends(get_current_user), db=Depends(get_db)):
                                .options(selectinload(Roster.analyses)))).scalars().all()
     observations = (await db.execute(select(PilotObservation).where(PilotObservation.user_id == user.id))).scalars().all()
     return {'schema': 1, 'email': user.email, 'display_name': user.display_name,
+            'sleep_preferences': user.sleep_preferences,
             'rosters': [{'month': r.month, 'filename': r.filename,
                          'analyses': [a.analysis_json for a in r.analyses]} for r in rosters],
             'study_observations': [o.payload for o in observations]}

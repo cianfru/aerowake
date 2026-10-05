@@ -14,6 +14,9 @@ export interface RunAnalysisOptions {
   override?: boolean;
   /** Pre-duty nap habit; defaults to the pilot's setting. */
   napHabit?: NapHabit;
+  /** Usual night ('HH:MM'); defaults to the pilot's setting. */
+  usualBedtime?: string;
+  usualWakeTime?: string;
   /** Scroll to and focus the workspace heading when done (default true). */
   reveal?: boolean;
   /** A crew change made in this same interaction (React state is not updated yet). */
@@ -76,13 +79,15 @@ export function useAnalyzeRoster({ inlineErrors = false }: { inlineErrors?: bool
   currentFile.current = state.actualFileObject;
 
   const mutation = useMutation({
-    mutationFn: async ({ file, homeBase, override, napHabit, crew }: AnalyzeVariables) => {
+    mutationFn: async ({ file, homeBase, override, napHabit, usualBedtime, usualWakeTime, crew }: AnalyzeVariables) => {
       const base = (homeBase || '').trim().toUpperCase() || null;
       const crewOverrides = mergeCrewOverrides(state.dutyCrewOverrides, state.dutyCrewComposition, crew);
       // A re-run of the roster on screen keeps the pilot's sleep changes.
       const sleepEdits = toPayload(state.analysisResults?.sleepEdits ?? []);
-      return analyzeRoster(file, state.settings.pilotId, base, crewOverrides,
-        { override: !!override && !!base, napHabit: napHabit ?? state.settings.napHabit, sleepEdits });
+      return analyzeRoster(file, state.settings.pilotId, base, crewOverrides, {
+        override: !!override && !!base, napHabit: napHabit ?? state.settings.napHabit, sleepEdits,
+        usualBedtime: usualBedtime ?? state.settings.usualBedtime, usualWakeTime: usualWakeTime ?? state.settings.usualWakeTime,
+      });
     },
     onSuccess: (result, variables) => {
       if (variables.file !== currentFile.current) return;
@@ -107,7 +112,7 @@ export function useAnalyzeRoster({ inlineErrors = false }: { inlineErrors?: bool
     // Without an explicit base, reuse the last confirmed one only as a
     // fallback; a roster header still wins on the server.
     const homeBase = options.homeBase ?? (state.settings.homeBase || null);
-    mutation.mutate({ file, homeBase, override: options.override, napHabit: options.napHabit, reveal: options.reveal, crew: options.crew });
+    mutation.mutate({ file, homeBase, override: options.override, napHabit: options.napHabit, usualBedtime: options.usualBedtime, usualWakeTime: options.usualWakeTime, reveal: options.reveal, crew: options.crew });
   };
 
   return {

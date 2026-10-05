@@ -340,7 +340,8 @@ def test_analyze_echoes_assumptions_and_new_duty_fields(client):
     r = _analyze(client, nap_habit='usually')
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body['assumptions'] == {'nap_habit': 'usually', 'headline_risk_window': 'fdp'}
+    assert body['assumptions'] == {'nap_habit': 'usually', 'headline_risk_window': 'fdp',
+                                   'usual_bedtime': '23:00', 'usual_wake_time': '07:00'}
     assert body['engine_version'] == 'aerowake-4.1-kss'
     for d in body['duties']:
         assert d['model_version'] == 'aerowake-4.1-kss'

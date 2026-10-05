@@ -34,8 +34,9 @@ const DEFAULT_SETTINGS: PilotSettings = {
   theme: 'light',
 };
 
-function buildInitialState(): AnalysisState {
-  const persisted = loadPersistedSettings();
+function buildInitialState(initial: Partial<PilotSettings> = {}): AnalysisState {
+  // Account preferences (signed in) win over what this device remembered.
+  const persisted = { ...loadPersistedSettings(), ...initial };
   // Once the user has dismissed the landing page, remember it
   const landingDismissed = localStorage.getItem('aerowake_landing_dismissed') === 'true';
   return {
@@ -208,8 +209,8 @@ interface AnalysisContextValue {
 
 const AnalysisContext = createContext<AnalysisContextValue | null>(null);
 
-export function AnalysisProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(analysisReducer, undefined, buildInitialState);
+export function AnalysisProvider({ children, initialSettings }: { children: ReactNode; initialSettings?: Partial<PilotSettings> }) {
+  const [state, dispatch] = useReducer(analysisReducer, initialSettings, buildInitialState);
 
   // Persist settings to localStorage whenever they change
   useEffect(() => {

@@ -108,6 +108,8 @@ export function mapAssumptions(raw: AnalysisResult['assumptions']): AnalysisResu
   const out: NonNullable<AnalysisResults['assumptions']> = {};
   if (isNapHabit(napHabit)) out.napHabit = napHabit;
   if (typeof raw.headline_risk_window === 'string' && raw.headline_risk_window) out.headlineRiskWindow = raw.headline_risk_window;
+  if (typeof raw.usual_bedtime === 'string' && raw.usual_bedtime) out.usualBedtime = raw.usual_bedtime;
+  if (typeof raw.usual_wake_time === 'string' && raw.usual_wake_time) out.usualWakeTime = raw.usual_wake_time;
   return Object.keys(out).length ? out : undefined;
 }
 

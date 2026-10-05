@@ -25,6 +25,7 @@ import pytz
 
 from models.data_models import Duty, SleepBlock
 from core.sleep_quality import SleepQualityAnalysis
+from core.parameters import clock_label
 
 
 # Forward reference — the actual SleepStrategy dataclass is defined
@@ -78,8 +79,8 @@ class SleepStrategyMixin:
         # previous evening (e.g. 00:20 report on D → sleep D-2 23:00 → D-1 07:00),
         # otherwise it would be placed after the report.
         anchor = report_local if report_local.hour >= 12 else report_local - timedelta(days=1)
-        morning_sleep_start = anchor.replace(hour=self.NORMAL_BEDTIME_HOUR, minute=0) - timedelta(days=1)
-        morning_sleep_end = anchor.replace(hour=7, minute=0)
+        morning_sleep_start = self._clock_on(anchor, self.NORMAL_BEDTIME_HOUR, -1)
+        morning_sleep_end = self._clock_on(anchor, self.NORMAL_WAKE_HOUR)
 
         morning_sleep_start_utc, morning_sleep_end_utc, morning_warnings = self._validate_sleep_no_overlap(
             morning_sleep_start.astimezone(pytz.utc), morning_sleep_end.astimezone(pytz.utc), duty, previous_duty
@@ -400,7 +401,8 @@ class SleepStrategyMixin:
 
         Pilots advance bedtime by 1–2h before early starts, constrained
         by the Wake Maintenance Zone (~19:00–21:00).  Linear ramp from
-        habitual 23:00 down to 21:30 for reports between 09:00 and 06:00.
+        the usual bedtime (23:00 by default) down to 21:30 for reports
+        between 09:00 and 06:00; never later than the usual bedtime.
 
         References:
             Arsintescu et al. (2022) J Sleep Res 31(3):e13521
@@ -410,15 +412,15 @@ class SleepStrategyMixin:
         Returns:
             Bedtime hour (21.5–23.0) as float.
         """
-        HABITUAL = float(self.NORMAL_BEDTIME_HOUR)   # 23.0
+        HABITUAL = float(self.NORMAL_BEDTIME_HOUR)   # usual bedtime, 23.0 by default
         WMZ_FLOOR = 21.5    # Cannot advance past WMZ (Roach 2012)
         EARLY_THRESHOLD = 9.0  # Reports ≥09:00 use habitual bedtime
 
         if report_hour >= EARLY_THRESHOLD:
             return HABITUAL
-        # Linear ramp: 21:30 at report≤06:00, 23:00 at report=09:00
+        # Linear ramp: 21:30 at report≤06:00, the usual bedtime at report=09:00
         fraction = max(0.0, report_hour - 6.0) / (EARLY_THRESHOLD - 6.0)
-        return WMZ_FLOOR + fraction * (HABITUAL - WMZ_FLOOR)
+        return min(HABITUAL, WMZ_FLOOR + fraction * (HABITUAL - WMZ_FLOOR))
 
     def _normal_sleep_strategy(
         self,
@@ -438,11 +440,7 @@ class SleepStrategyMixin:
         report_local = duty.report_time_utc.astimezone(sleep_tz)
         report_hour = report_local.hour + report_local.minute / 60.0
         bedtime_hour = self._anticipated_bedtime(report_hour)
-        sleep_start = report_local.replace(
-            hour=int(bedtime_hour),
-            minute=int((bedtime_hour % 1) * 60),
-            second=0, microsecond=0,
-        ) - timedelta(days=1)
+        sleep_start = self._clock_on(report_local, bedtime_hour, -1)
 
         bio_tz = pytz.timezone(
             self.home_tz.zone if (self.is_layover and self.layover_duration_hours <= 48)
@@ -518,7 +516,7 @@ class SleepStrategyMixin:
             explanation=(
                 f"Normal sleep at {location_desc} ({sleep_quality.effective_sleep_hours:.1f}h effective), "
                 f"{awake_hours:.1f}h awake before duty"
-                + (f" — bedtime advanced to {int(bedtime_hour)}:{int((bedtime_hour % 1) * 60):02d} for early report"
+                + (f" — bedtime advanced to {clock_label(bedtime_hour)} for early report"
                    if bedtime_hour < self.NORMAL_BEDTIME_HOUR else "")
             ),
             quality_analysis=[sleep_quality]
@@ -572,8 +570,8 @@ class SleepStrategyMixin:
         )
 
         # Night 1: 2 nights before duty (in local sleep timezone)
-        night1_start = report_local.replace(hour=23, minute=0, second=0) - timedelta(days=2)
-        night1_end = report_local.replace(hour=7, minute=0, second=0) - timedelta(days=1)
+        night1_start = self._clock_on(report_local, self.NORMAL_BEDTIME_HOUR, -2)
+        night1_end = self._clock_on(report_local, self.NORMAL_WAKE_HOUR, -1)
 
         # Clamp Night 1 start to previous duty release (UTC comparison).
         if earliest_sleep_utc is not None:
@@ -610,8 +608,8 @@ class SleepStrategyMixin:
             ))
 
         # Night 2: night before duty (in local sleep timezone)
-        night2_start = report_local.replace(hour=23, minute=0, second=0) - timedelta(days=1)
-        night2_end = report_local.replace(hour=7, minute=0, second=0)
+        night2_start = self._clock_on(report_local, self.NORMAL_BEDTIME_HOUR, -1)
+        night2_end = self._clock_on(report_local, self.NORMAL_WAKE_HOUR)
 
         # Cap night2_end at report_time - MIN_WAKE_BEFORE_REPORT (2h).
         # For early-morning departures (e.g. report 06:30) the hard-coded
@@ -756,9 +754,10 @@ class SleepStrategyMixin:
         blocks = []
         quality_analyses = []
 
-        # Single night: night before duty (enhanced quality for augmented crew)
-        night_start = report_local.replace(hour=22, minute=0, second=0) - timedelta(days=1)
-        night_end = report_local.replace(hour=7, minute=0, second=0)
+        # Single night: night before duty (enhanced quality for augmented crew),
+        # going to bed an hour before the usual bedtime.
+        night_start = self._clock_on(report_local, self.NORMAL_BEDTIME_HOUR - 1.0, -1)
+        night_end = self._clock_on(report_local, self.NORMAL_WAKE_HOUR)
 
         # Validate against duty overlaps
         night_start_utc, night_end_utc, warnings = self._validate_sleep_no_overlap(
@@ -878,8 +877,8 @@ class SleepStrategyMixin:
         report_local = duty.report_time_utc.astimezone(sleep_tz)
         report_home = duty.report_time_utc.astimezone(self.home_tz)
 
-        home_bedtime = report_home.replace(hour=self.NORMAL_BEDTIME_HOUR, minute=0) - timedelta(days=1)
-        home_wake = report_home.replace(hour=self.NORMAL_WAKE_HOUR, minute=0)
+        home_bedtime = self._clock_on(report_home, self.NORMAL_BEDTIME_HOUR, -1)
+        home_wake = self._clock_on(report_home, self.NORMAL_WAKE_HOUR)
 
         if home_wake.astimezone(pytz.utc) > duty.report_time_utc - timedelta(hours=self.MIN_WAKE_BEFORE_REPORT):
             home_wake = (duty.report_time_utc - timedelta(hours=self.MIN_WAKE_BEFORE_REPORT)).astimezone(self.home_tz)
@@ -1202,11 +1201,7 @@ class SleepStrategyMixin:
         report_local = duty.report_time_utc.astimezone(sleep_tz)
         report_hour = report_local.hour + report_local.minute / 60.0
         bedtime_hour = self._anticipated_bedtime(report_hour)
-        sleep_start = report_local.replace(
-            hour=int(bedtime_hour),
-            minute=int((bedtime_hour % 1) * 60),
-            second=0, microsecond=0,
-        ) - timedelta(days=1)
+        sleep_start = self._clock_on(report_local, bedtime_hour, -1)
 
         extended_duration = min(9.0, self.MAX_REALISTIC_SLEEP)
         bio_tz_obj = pytz.timezone(
@@ -1270,7 +1265,7 @@ class SleepStrategyMixin:
                 f"Extended sleep at {location_desc}: {rest_hours:.1f}h rest period, "
                 f"{sleep_quality.effective_sleep_hours:.1f}h effective "
                 f"(recovery opportunity)"
-                + (f" — bedtime advanced to {int(bedtime_hour)}:{int((bedtime_hour % 1) * 60):02d} for early report"
+                + (f" — bedtime advanced to {clock_label(bedtime_hour)} for early report"
                    if bedtime_hour < self.NORMAL_BEDTIME_HOUR else "")
             ),
             quality_analysis=[sleep_quality]

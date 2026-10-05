@@ -20,6 +20,10 @@ export interface PilotSettings {
   homeBase: string;
   /** Pre-duty nap assumption sent with the next analysis. */
   napHabit: NapHabit;
+  /** Usual bedtime at home, 'HH:MM' (default 23:00). */
+  usualBedtime?: string;
+  /** Usual wake-up at home, 'HH:MM' (default 07:00). */
+  usualWakeTime?: string;
   analysisType: 'single' | 'range';
   selectedMonth: Date;
   startDate?: Date;
@@ -484,6 +488,9 @@ export interface AnalysisResults {
     napHabit?: NapHabit;
     /** Window of the headline risk, e.g. 'duty' or 'fdp'. */
     headlineRiskWindow?: string;
+    /** The usual night the analysis assumed, 'HH:MM'. */
+    usualBedtime?: string;
+    usualWakeTime?: string;
   };
   // Rest day sleep data
   restDaysSleep?: RestDaySleep[];

@@ -1109,6 +1109,12 @@ class BorbelyFatigueModel:
         balance = sleep_hours - self.params.baseline_sleep_need_hours * days
         return max(0.0, debt - (balance / 1.15 if balance > 0 else balance))
 
+    def _usual_clock(self, day, bedtime: bool) -> datetime:
+        """Naive wall time of the usual bedtime (evening of ``day``; a bedtime after
+        midnight falls on the next day) or wake-up (on ``day``) — SleepHabits."""
+        hours = self.config.sleep_habits.bedtime_hour if bedtime else self.config.sleep_habits.wake_hour
+        return datetime.combine(day, time()) + timedelta(hours=hours)
+
     def _extract_sleep_from_roster(
         self,
         roster: Roster,
@@ -1149,12 +1155,8 @@ class BorbelyFatigueModel:
                 roff_fill_cutoff = first_duty_report_home.date()
                 night_number = 1
                 while fill_date < roff_fill_cutoff - timedelta(days=1):
-                    sleep_start = home_tz.localize(
-                        datetime.combine(fill_date, time(23, 0))
-                    )
-                    sleep_end = home_tz.localize(
-                        datetime.combine(fill_date + timedelta(days=1), time(7, 0))
-                    )
+                    sleep_start = home_tz.localize(self._usual_clock(fill_date, bedtime=True))
+                    sleep_end = home_tz.localize(self._usual_clock(fill_date + timedelta(days=1), bedtime=False))
                     rest_day_key = f"rest_{fill_date.isoformat()}"
                     rest_quality = self.sleep_calculator.calculate_sleep_quality(
                         sleep_start=sleep_start,
@@ -1385,9 +1387,7 @@ class BorbelyFatigueModel:
                 # post-arrival sleep block (arrival + 1h wind-down → 07:00)
                 # before advancing to the next full night.
                 candidate_date = last_block_end_local.date()
-                candidate_bedtime = rest_tz.localize(
-                    datetime.combine(candidate_date, time(23, 0))
-                )
+                candidate_bedtime = rest_tz.localize(self._usual_clock(candidate_date, bedtime=True))
 
                 recovery_night_number = 1
 
@@ -1396,11 +1396,7 @@ class BorbelyFatigueModel:
                     # post-arrival recovery block: (arrival + 1h) → 07:00.
                     trunc_start = last_block_end_local + timedelta(hours=1)
                     trunc_end = rest_tz.localize(
-                        datetime.combine(
-                            last_block_end_local.date() + timedelta(days=1),
-                            time(7, 0)
-                        )
-                    )
+                        self._usual_clock(last_block_end_local.date() + timedelta(days=1), bedtime=False))
                     # Cap by next duty report buffer
                     if trunc_end.astimezone(pytz.utc) > latest_wake_utc:
                         trunc_end = latest_wake_utc.astimezone(rest_tz)
@@ -1510,16 +1506,11 @@ class BorbelyFatigueModel:
 
                     # Advance to next full night for the main loop
                     candidate_date = last_block_end_local.date() + timedelta(days=1)
-                    candidate_bedtime = rest_tz.localize(
-                        datetime.combine(candidate_date, time(23, 0))
-                    )
+                    candidate_bedtime = rest_tz.localize(self._usual_clock(candidate_date, bedtime=True))
                 while True:
                     sleep_start = candidate_bedtime
                     sleep_end = rest_tz.localize(
-                        datetime.combine(
-                            candidate_date + timedelta(days=1), time(7, 0)
-                        )
-                    )
+                        self._usual_clock(candidate_date + timedelta(days=1), bedtime=False))
 
                     # Stop if bedtime is past latest wake (no room for sleep)
                     if sleep_start.astimezone(pytz.utc) >= latest_wake_utc:
@@ -1651,9 +1642,7 @@ class BorbelyFatigueModel:
 
                     recovery_night_number += 1
                     candidate_date += timedelta(days=1)
-                    candidate_bedtime = rest_tz.localize(
-                        datetime.combine(candidate_date, time(23, 0))
-                    )
+                    candidate_bedtime = rest_tz.localize(self._usual_clock(candidate_date, bedtime=True))
 
                 # ── Pre-duty nap for late-night reports ──────────────
                 # When a multi-day gap ends with a late report (≥20:00 local),
