@@ -35,7 +35,7 @@ def offline_004():
 def test_head_is_the_revision_the_api_requires():
     result = alembic('heads')
     assert result.returncode == 0, result.stderr
-    assert result.stdout.split()[0] == EXPECTED_SCHEMA_REVISION == '005'
+    assert result.stdout.split()[0] == EXPECTED_SCHEMA_REVISION == '006'
 
 
 def test_005_adds_only_the_nullable_preferences_column():

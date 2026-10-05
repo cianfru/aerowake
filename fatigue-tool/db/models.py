@@ -324,6 +324,39 @@ class DutyDebrief(Base):
     )
 
 
+class InflightLog(Base):
+    """A sleepiness rating the pilot logged during a duty (often offline, synced later).
+
+    Owner-scoped. ``predicted_kss`` is the model's value at that instant, taken on
+    the server from the pilot's own saved analysis. ``study_enrolled`` records
+    whether the pilot was enrolled in the pilot study when it was saved; only
+    those rows may be used for model calibration (docs/PILOT_STUDY.md).
+    """
+    __tablename__ = 'inflight_logs'
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    client_id = Column(UUID(as_uuid=True), nullable=False)
+    analysis_id = Column(String(100), ForeignKey('analyses.id', ondelete='SET NULL'), nullable=True)
+    duty_id = Column(String(64), nullable=True)
+    duty_report_utc = Column(DateTime(timezone=True), nullable=True)
+    recorded_at_utc = Column(DateTime(timezone=True), nullable=False)
+    kss = Column(SmallInteger, nullable=False)
+    phase = Column(String(20), nullable=True)
+    note = Column(Text, nullable=True)
+    predicted_kss = Column(Float, nullable=True)
+    engine_version = Column(String(40), nullable=True)
+    recorded_offline = Column(Boolean, nullable=False, default=False)
+    prediction_seen = Column(Boolean, nullable=False, default=True)
+    study_enrolled = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    __table_args__ = (
+        UniqueConstraint('user_id', 'client_id', name='uq_inflight_logs_client'),
+        CheckConstraint('kss BETWEEN 1 AND 9', name='ck_inflight_logs_kss'),
+        Index('ix_inflight_logs_user_recorded', 'user_id', 'recorded_at_utc'),
+    )
+
+
 class AccountActionToken(Base):
     __tablename__ = 'account_action_tokens'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

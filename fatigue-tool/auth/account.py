@@ -128,11 +128,16 @@ async def export_account(user=Depends(get_current_user), db=Depends(get_db)):
     rosters = (await db.execute(select(Roster).where(Roster.user_id == user.id)
                                .options(selectinload(Roster.analyses)))).scalars().all()
     observations = (await db.execute(select(PilotObservation).where(PilotObservation.user_id == user.id))).scalars().all()
+    from db.models import InflightLog
+    from study.inflight import serialize as serialize_inflight
+    inflight = (await db.execute(select(InflightLog).where(InflightLog.user_id == user.id)
+                                 .order_by(InflightLog.recorded_at_utc))).scalars().all()
     return {'schema': 1, 'email': user.email, 'display_name': user.display_name,
             'sleep_preferences': user.sleep_preferences,
             'rosters': [{'month': r.month, 'filename': r.filename,
                          'analyses': [a.analysis_json for a in r.analyses]} for r in rosters],
-            'study_observations': [o.payload for o in observations]}
+            'study_observations': [o.payload for o in observations],
+            'inflight_log': [serialize_inflight(r) for r in inflight]}
 
 @router.delete('/account', status_code=204)
 async def delete_account(body: PasswordRequest, user=Depends(get_current_user), db=Depends(get_db)):

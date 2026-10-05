@@ -186,3 +186,48 @@ def test_saved_sleep_preferences_apply_to_new_analyses(database_client):
                   data={'home_base': 'LGW', 'month': '2026-09', 'nap_habit': 'usually'}).json()
     assert body['assumptions']['nap_habit'] == 'usually'
     assert c.get('/api/auth/export', headers=headers(owner)).json()['sleep_preferences'] == prefs
+
+
+def test_inflight_log_syncs_once_with_the_model_prediction(database_client):
+    from datetime import datetime, timedelta, timezone
+    c, owner, other, _ = database_client
+    csv = b'Date,Flight,Departure,Arrival,STD,STA,Report,Release\n2026-09-08,TEST1,LGW,FCO,08:00,11:00,07:00,12:00\n'
+    saved = c.post('/api/analyze', headers=headers(owner), files={'file': ('synthetic.csv', csv, 'text/csv')},
+                   data={'home_base': 'LGW', 'month': '2026-09'}).json()
+    duty = saved['duties'][0]
+    report = datetime.fromisoformat(duty['report_time_utc'])
+    at = report + timedelta(hours=2)
+    # A rating logged in flight on that duty, sent after landing.
+    entry = {'client_id': str(uuid.uuid4()), 'recorded_at_utc': at.isoformat(), 'kss': 6, 'phase': 'cruise',
+             'note': 'Heavy eyes over the Alps', 'analysis_id': saved['analysis_id'], 'duty_id': duty['duty_id'],
+             'duty_report_utc': duty['report_time_utc'], 'recorded_offline': True}
+    # The duty is in the past here (synthetic 2026-09), so freeze "now" just after it.
+    import study.inflight as inflight
+    original = inflight.utc_now
+    inflight.utc_now = lambda: report + timedelta(days=2)
+    try:
+        late = dict(entry, client_id=str(uuid.uuid4()), recorded_at_utc=(report + timedelta(hours=30)).isoformat())
+        r = c.post('/api/inflight-log', headers=headers(owner), json={'entries': [entry, late]})
+        assert r.status_code == 200, r.text
+        first, second = r.json()['results']
+        assert first['status'] == 'saved' and second['status'] == 'rejected'
+        assert 'outside this duty' in second['reason']
+        row = first['entry']
+        assert row['kss'] == 6 and row['phase'] == 'cruise' and row['recorded_offline'] is True
+        assert row['predicted_kss'] is not None and 1 <= row['predicted_kss'] <= 9
+        assert row['study_enrolled'] is False
+        # Resending the same entry (sync retry) does not duplicate it.
+        again = c.post('/api/inflight-log', headers=headers(owner), json={'entries': [entry]})
+        assert again.json()['results'][0]['entry']['id'] == row['id']
+        # Another pilot's analysis gives no prediction and no link.
+        foreign = dict(entry, client_id=str(uuid.uuid4()))
+        other_row = c.post('/api/inflight-log', headers=headers(other), json={'entries': [foreign]}).json()['results'][0]['entry']
+        assert other_row['predicted_kss'] is None and other_row['analysis_id'] is None
+    finally:
+        inflight.utc_now = original
+    assert [e['id'] for e in c.get('/api/inflight-log', headers=headers(owner)).json()] == [row['id']]
+    assert c.get('/api/auth/export', headers=headers(owner)).json()['inflight_log'][0]['id'] == row['id']
+    assert c.delete(f"/api/inflight-log/{row['id']}", headers=headers(other)).status_code == 404
+    assert c.delete(f"/api/inflight-log/{row['id']}", headers=headers(owner)).status_code == 204
+    assert c.get('/api/inflight-log', headers=headers(owner)).json() == []
+    assert c.post('/api/inflight-log', json={'entries': []}).status_code == 401

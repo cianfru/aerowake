@@ -15,7 +15,7 @@ from db.models import Base
 logger = logging.getLogger(__name__)
 
 # Alembic head this release requires; migrations run before the API starts.
-EXPECTED_SCHEMA_REVISION = '005'
+EXPECTED_SCHEMA_REVISION = '006'
 
 # ─── Connection Setup ────────────────────────────────────────────────────────
 
