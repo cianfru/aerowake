@@ -62,7 +62,7 @@ export function RosterDropZone({ onFile }: { onFile: (file: File, kind: RosterFi
       {error && <p id={errorId} role="alert" className="text-sm font-medium text-destructive">{error}</p>}
       <div className="space-y-2 text-xs text-muted-foreground">
         <p>
-          Reads Qatar Airways CrewLink and easyJet roster PDFs. Other airlines: fill in the CSV template.
+          Reads CrewLink and easyJet roster PDFs. Other airlines: fill in the CSV template.
         </p>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <a

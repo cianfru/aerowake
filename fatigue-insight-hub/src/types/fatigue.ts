@@ -154,10 +154,10 @@ export interface DutyAnalysis {
   riskAdvisory: 'routine' | 'monitor' | 'consider_reporting' | 'report_recommended';
   flightSegments: FlightSegment[];
   // EASA ORO.FTL fields
-  maxFdpHours?: number; // Maximum FDP (Qatar OM-A 7.6.3 / 7.6.6 / 7.18)
+  maxFdpHours?: number; // Maximum FDP (ORO.FTL.205 / CS FTL.1.205(c) / ULR approval)
   extendedFdpHours?: number; // Extended limit with discretion
-  plannedExtensionFdpHours?: number | null; // OM-A 7.6.5 Table 7-8 (null = not allowed)
-  fdpLimitReference?: string | null; // OM-A table the maximum comes from
+  plannedExtensionFdpHours?: number | null; // CS FTL.1.205(a) extension (null = not allowed)
+  fdpLimitReference?: string | null; // rule the maximum comes from
   actualFdpHours?: number; // Actual FDP worked
   usedDiscretion?: boolean; // Commander discretion used
   fdpExceedance?: number; // Hours over limit (if any)
@@ -285,7 +285,7 @@ export interface DutyAnalysis {
     isDuringWocl: boolean;
     /** 'roster_ir' = an IR sector on the roster; 'planned' = the standard rest rotation, to confirm. */
     source: 'roster_ir' | 'planned';
-    /** Qatar FTL 7.18.11 figure (e.g. '7-3') when the times follow an approved ULR rest plan. */
+    /** Approved ULR rest plan id when the times follow one. */
     approvedPlan: string | null;
   }[];
   returnToDeckPerformance: number | null;

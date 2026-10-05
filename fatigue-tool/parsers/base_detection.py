@@ -22,7 +22,7 @@ ENTERED = 'entered'
 # proposed. The pilot still confirms it; below this share they enter it.
 CSV_BASE_SHARE = 0.6
 
-SUPPORTED_FORMATS = ('Aerowake reads Qatar Airways CrewLink and easyJet roster PDFs, '
+SUPPORTED_FORMATS = ('Aerowake reads CrewLink and easyJet roster PDFs, '
                      'and CSV files in the Aerowake template format.')
 
 

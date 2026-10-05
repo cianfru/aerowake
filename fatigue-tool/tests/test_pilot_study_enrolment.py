@@ -53,9 +53,10 @@ def client_for(user, db):
     return TestClient(app)
 
 
-def test_enrolment_is_required_to_record():
+def test_a_pilot_who_opted_out_cannot_record():
     limits.reset()
-    user = SimpleNamespace(id=uuid4(), study_consent_version=None, study_enrolled_at=None, study_withdrawn_at=None)
+    user = SimpleNamespace(id=uuid4(), study_consent_version=config.CONSENT_VERSION, study_enrolled_at=NOW,
+                           study_withdrawn_at=NOW)
     with client_for(user, SimpleNamespace()) as client:
         assert client.post('/api/pilot-study/observations', json=body().model_dump(mode='json')).status_code == 403
 

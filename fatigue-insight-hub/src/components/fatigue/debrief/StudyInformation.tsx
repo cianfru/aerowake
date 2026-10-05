@@ -13,7 +13,7 @@ export function StudyInformation({ className, headingLevel = 3 }: { className?: 
     <div className={cn('space-y-4 text-sm leading-relaxed text-foreground', className)}>
       <section className="space-y-1">
         <H className={heading}>What it is</H>
-        <p>The pilot study checks how well Aerowake's sleepiness forecasts match what pilots actually feel. Taking part is voluntary, and Aerowake works fully without it.</p>
+        <p>Aerowake learns from every pilot: in-flight ratings, debriefs and diary entries are pooled to check and calibrate its sleepiness forecasts against what pilots actually feel. The more pilots log, the better the average. Every signed-in pilot contributes; you can stop at any time and Aerowake works fully without it.</p>
       </section>
       <section className="space-y-1">
         <H className={heading}>Not a report to your operator</H>
@@ -29,15 +29,15 @@ export function StudyInformation({ className, headingLevel = 3 }: { className?: 
       </section>
       <section className="space-y-1">
         <H className={heading}>What is stored</H>
-        <p>The duty dates, times and routes from the roster you analysed; your sleepiness ratings (Karolinska Sleepiness Scale and, if you choose, Samn-Perelli) and when you gave them; sleep you confirm; what you did to manage fatigue; an optional private note; and the model forecast for that duty. Sleep and sleepiness are health-related information, so they are collected only with your explicit consent.</p>
+        <p>The duty dates, times and routes from the roster you analysed; your sleepiness ratings (Karolinska Sleepiness Scale and, if you choose, Samn-Perelli) and when you gave them; sleep you confirm; what you did to manage fatigue; an optional private note; and the model forecast for that duty. Sleep and sleepiness are health-related information: they are stored only when you choose to log them, and you can stop contributing and delete them at any time.</p>
       </section>
       <section className="space-y-1">
         <H className={heading}>Your choices</H>
-        <p>You can skip any optional question. You can export your entries, delete a single entry or all of them, and withdraw at any time from History or Account. When you withdraw you choose whether to delete what you have already given.</p>
+        <p>You can skip any optional question. You can export your entries, delete a single entry or all of them, and stop contributing at any time from History or Account. When you stop you choose whether to delete what you have already given.</p>
       </section>
       <section className="space-y-1">
         <H className={heading}>Who can see it</H>
-        <p>You. The database administrator and hosting provider can technically access stored data and must keep it confidential. Company dashboards and peer comparisons never include study data.</p>
+        <p>Your own entries: you. For calibration, entries are analysed pooled and pseudonymised, without your name, email, airline, flight numbers or notes. The database administrator and hosting provider can technically access stored data and must keep it confidential. Company dashboards and peer comparisons never include this data.</p>
       </section>
       <section className="space-y-1">
         <H className={heading}>How long it is kept</H>

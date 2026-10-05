@@ -60,29 +60,38 @@ upgrades as described in [launch hardening](LAUNCH_HARDENING.md).
 
 ## Enrolment, consent and data protection
 
-Enrolment is one-time and versioned (`duty-debrief-v1`), stored on the account
-(`study_enrolled_at`, `study_consent_version`, `study_withdrawn_at`). It covers
-both the diary and duty debriefs; a changed consent text needs a new version and
-re-enrolment. The information sheet shown before joining reads its governance
-values from one place on each side (`fatigue-insight-hub/src/lib/study-config.ts`,
-`fatigue-tool/study/config.py`). Current values, pending owner confirmation:
+Participation is the default for every signed-in pilot (`calibration-v2`): the
+model is calibrated on a pooled, pseudonymised average across all pilots, so the
+more pilots log, the better. A pilot's first in-flight rating, debrief or diary
+entry records participation on the account (`study_enrolled_at`,
+`study_consent_version`); there is no separate joining step. A pilot can stop
+contributing at any time (`study_withdrawn_at`); only then does the app show the
+information sheet again with an explicit "Contribute again" step, and new debriefs
+and diary entries are refused (403) while opted out. In-flight ratings from an
+opted-out pilot are kept for that pilot with `study_enrolled = false` and are left
+out of calibration. Guests' ratings stay on their device until they sign in. The
+information sheet reads its governance values from one place on each side
+(`fatigue-insight-hub/src/lib/study-config.ts`, `fatigue-tool/study/config.py`).
+Current values, pending owner confirmation:
 
 | Item | Value |
 |------|-------|
 | Data controller | the Aerowake project owner (a private individual) |
 | Contact | the in-app Support link |
-| Purpose | checking and calibrating the Aerowake sleepiness model only; results will not be published |
-| Retention | until you withdraw, or 24 months after your last activity |
+| Purpose | calibrating the Aerowake sleepiness model against what pilots actually feel, pooled and pseudonymised across all pilots; results will not be published |
+| Retention | until you stop contributing and delete it, or 24 months after your last activity |
 
-The sheet states that joining is voluntary; that the diary is not a fatigue report
-to the operator and is not shared with any company; that sleep and sleepiness
-are health-related data collected only with explicit consent; how to export,
-delete single records or everything, and withdraw; and that pseudonymised
+The sheet, the in-flight log and the debrief sheet state that ratings are pooled,
+pseudonymised, to calibrate the model; that entries are not a fatigue report to
+the operator and are not shared with any company; that sleep and sleepiness are
+health-related data stored only when the pilot logs them; how to export, delete
+single records or everything, and stop contributing; and that pseudonymised
 exports are not anonymous. Controlled rest is listed only "where your operator
 permits it". A debrief is not a fitness-for-duty assessment. If results were ever
 to be published, seek research ethics review and preregister first (see below).
-Legal review of local data-protection rules (for example GDPR Art. 9 and the
-pilot's home-country law) remains a launch gate.
+**Default participation of health-related data needs legal review before launch**
+(for example GDPR Art. 9 explicit consent and the pilot's home-country law, and a
+privacy notice at sign-up); that review remains a launch gate.
 
 Withdrawal (`DELETE /api/study/enrolment?delete_data=true|false`) records the
 date and optionally deletes all debriefs and diary observations. Per-user limits:

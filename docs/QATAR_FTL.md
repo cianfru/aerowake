@@ -7,6 +7,18 @@ which values still need confirming against the current OM-A Chapter 7. **Update 
 whenever an FTL value changes.** Never invent a regulatory value: if a table is not
 confirmed here, the app must label the check as not assessed.
 
+**User-facing references.** The app is operator-neutral: findings, tooltips and
+coverage text cite the QCAA / EASA flight time limitations (ORO.FTL / CS FTL),
+never the operator's manual. Values are unchanged; the mapping is FDP Table 7-6 →
+ORO.FTL.205(b) Table 2, 7-7 → ORO.FTL.205(b) Table 4, 7-8 → CS FTL.1.205(a),
+7-9/7-10 → CS FTL.1.205(c), discretion → ORO.FTL.205(f), minimum and reduced rest
+→ ORO.FTL.235(a)–(c), time-zone rest → CS FTL.1.235(b), disruptive schedules →
+CS FTL.1.235(a), recovery rest → ORO.FTL.235(d), standby → ORO.FTL.225 /
+CS FTL.1.225. The only operator-specific items shown are the ultra-long-range city
+pairs with their approved rest plans ("ULR (operator approval)") and how the
+augmented crew is handled. The OM-A paragraph numbers below stay as internal
+provenance in code comments and this note.
+
 ## Encoded from Qatar FTL
 
 | Rule | Value in code | Where |

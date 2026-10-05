@@ -201,7 +201,7 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                 )}
                 <p className="text-xs text-muted-foreground">
                   {duty.crewSource === 'fdp' && !crewCompositionOverride
-                    ? 'No IR (in-flight rest) on this duty, so the crew is estimated from the planned FDP: the smallest augmented crew the Qatar OM-A 7.6.6 limit allows for a bunk (ULR routes and an FDP over 18 h are 4 pilots). Confirm it or choose the crew you flew. '
+                    ? 'No IR (in-flight rest) on this duty, so the crew is estimated from the planned FDP: the smallest augmented crew the in-flight rest limit (CS FTL.1.205(c)) allows for a bunk (ULR routes and an FDP over 18 h are 4 pilots). Confirm it or choose the crew you flew. '
                     : 'IR (in-flight rest) on the roster marks an augmented crew, whatever your rank. Without IR the crew is estimated from the planned FDP and you can choose it here. '}
                   Changing the crew re-runs the analysis with the matching in-flight rest and FDP limits.
                 </p>
@@ -253,7 +253,7 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                 <p className="text-xs text-muted-foreground">
                   In-flight sleep credited: <span className="font-mono tabular text-foreground">{inflightSleepHours(duty).toFixed(1)}h</span>
                   {duty.inflightRestBlocks[0]?.approvedPlan
-                    ? ` · times from the approved Qatar ULR rest plan (FTL 7.18.11, Figure ${duty.inflightRestBlocks[0].approvedPlan}), Crew ${duty.ulrCrewSet === 'crew_a' ? 'A' : 'B'}`
+                    ? ` · times from the approved ULR rest plan for this city pair, Crew ${duty.ulrCrewSet === 'crew_a' ? 'A' : 'B'}`
                     : duty.inflightRestBlocks.some((b) => b.source === 'planned') ? ' · from the standard rest rotation (the roster shows no IR sector) — adjust the crew above if yours differs' : ' · from the IR sectors on your roster'}
                 </p>
                 <ul className="space-y-1 rounded-xl border border-border bg-card p-3 text-xs" aria-label="In-flight rest">

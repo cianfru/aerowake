@@ -237,8 +237,8 @@ export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
   },
   fdpUtilization: {
     description:
-      'The FDP against the Qatar Airways maximum for this duty: Table 7-6 (or 7-7 in an unknown state of acclimatisation), Tables 7-9/7-10 with in-flight rest, or 7.18 for ULR. A 2-pilot FDP may be planned beyond it only with a Table 7-8 extension; beyond that, only commander\u2019s discretion for unforeseen circumstances.',
-    regulation: 'Qatar OM-A 7.6, 7.7',
+      'The FDP against the maximum for this duty under the QCAA / EASA flight time limitations: the daily FDP table (ORO.FTL.205), the in-flight rest limits with an augmented crew (CS FTL.1.205(c)), or the ULR approval. A 2-pilot FDP may be planned beyond it only with an extension (CS FTL.1.205(a)); beyond that, only commander\u2019s discretion for unforeseen circumstances (ORO.FTL.205(f)).',
+    regulation: 'ORO.FTL.205',
     threshold: '\u226490% normal, 90-100% close to the maximum, >100% extension or discretion',
     actionTip: 'Monitor for delays that could push the FDP beyond limits. Discretion of more than 1 h is reported to the QCAA.',
   },

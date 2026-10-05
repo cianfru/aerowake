@@ -14,14 +14,14 @@ export const EASA_RULE_LABELS: Record<string, string> = {
   duty_14d: 'Duty in any 14 days (ORO.FTL.210)',
   duty_28d: 'Duty in any 28 days (ORO.FTL.210)',
   block_28d: 'Flight time in any 28 days (ORO.FTL.210)',
-  min_rest: 'Minimum rest (OM-A 7.13.1, 7.13.2, 7.6.6)',
-  reduced_rest: 'Reduced rest (OM-A 7.13.6)',
-  recovery_rest: 'Recurrent extended recovery rest (OM-A 7.13.7)',
-  time_zone_rest: 'Rest after time-zone rotations (OM-A 7.13.5)',
-  disruptive: 'Disruptive schedules (OM-A 7.13.4)',
-  standby: 'Standby (OM-A 7.11)',
-  fdp_max: 'Maximum daily FDP (OM-A 7.6)',
-  fdp_extension: 'Planned FDP extensions (OM-A 7.6.5)',
+  min_rest: 'Minimum rest (ORO.FTL.235)',
+  reduced_rest: 'Reduced rest (ORO.FTL.235(c))',
+  recovery_rest: 'Recurrent extended recovery rest (ORO.FTL.235(d))',
+  time_zone_rest: 'Rest after time-zone rotations (CS FTL.1.235(b))',
+  disruptive: 'Disruptive schedules (CS FTL.1.235(a))',
+  standby: 'Standby (ORO.FTL.225)',
+  fdp_max: 'Maximum daily FDP (ORO.FTL.205)',
+  fdp_extension: 'Planned FDP extensions (ORO.FTL.205(d))',
 };
 
 const ruleLabel = (rule: string) => EASA_RULE_LABELS[rule] ?? rule.replace(/_/g, ' ');
@@ -71,7 +71,7 @@ export function EasaChecksCard({ findings, summary }: EasaChecksCardProps) {
     <section aria-labelledby="easa-checks-heading" className="instrument-surface space-y-6">
       <div className="space-y-1">
         <h2 id="easa-checks-heading" className="text-title font-semibold">FTL checks</h2>
-        <p className="text-sm text-muted-foreground">Flight-time limitations (Qatar Airways OM-A Chapter 7) checked on the activities in this roster.</p>
+        <p className="text-sm text-muted-foreground">Flight-time limitations (QCAA / EASA ORO.FTL) checked on the activities in this roster.</p>
       </div>
 
       {warnings.length === 0 ? (

@@ -6,21 +6,21 @@ interface FDPUtilizationBarProps {
   actualFdpHours: number;
   maxFdpHours: number;
   extendedFdpHours?: number;
-  /** Qatar OM-A 7.6.5 Table 7-8 limit; null = not allowed at this report time. */
+  /** Planned extension limit (CS FTL.1.205(a)); null = not allowed at this report time. */
   plannedExtensionFdpHours?: number | null;
-  /** OM-A table the maximum comes from, e.g. 'OM-A 7.6.3 Table 7-6'. */
+  /** Where the maximum comes from, e.g. 'ORO.FTL.205(b) Table 2'. */
   fdpLimitReference?: string | null;
   usedDiscretion?: boolean;
 }
 
 /**
  * Flight duty period against the operator's limits, in the order they apply:
- * the maximum (OM-A 7.6.3 / 7.6.6 / 7.18), a planned extension (7.6.5, 2-pilot crews
+ * the maximum (ORO.FTL.205, CS FTL.1.205(c) or the ULR approval), a planned extension (CS FTL.1.205(a), 2-pilot crews
  * only) and commander's discretion (7.7.1, unforeseen circumstances only).
  */
 export function FDPUtilizationBar({ actualFdpHours, maxFdpHours, extendedFdpHours, plannedExtensionFdpHours, fdpLimitReference, usedDiscretion }: FDPUtilizationBarProps) {
   const discretion = extendedFdpHours && extendedFdpHours > maxFdpHours ? extendedFdpHours : undefined;
-  const basicTable = !fdpLimitReference || fdpLimitReference.includes('7.6.3');
+  const basicTable = !fdpLimitReference || fdpLimitReference.startsWith('ORO.FTL.205');
   const extension = basicTable && plannedExtensionFdpHours && plannedExtensionFdpHours > maxFdpHours ? plannedExtensionFdpHours : undefined;
   const planned = extension ?? maxFdpHours;
   const upper = Math.max((discretion ?? planned) * 1.08, actualFdpHours * 1.05);
@@ -30,12 +30,12 @@ export function FDPUtilizationBar({ actualFdpHours, maxFdpHours, extendedFdpHour
   const overBasic = actualFdpHours > maxFdpHours + 1e-6;
 
   const rows: [string, string, string][] = [
-    ['Maximum', hhmm(maxFdpHours), fdpLimitReference ?? 'OM-A 7.6.3'],
+    ['Maximum', hhmm(maxFdpHours), fdpLimitReference ?? 'ORO.FTL.205(b)'],
   ];
   if (basicTable) {
-    rows.push(['Planned extension', extension ? hhmm(extension) : 'Not allowed', 'OM-A 7.6.5 Table 7-8 · twice in 7 days']);
+    rows.push(['Planned extension', extension ? hhmm(extension) : 'Not allowed', 'CS FTL.1.205(a) · twice in 7 days']);
   }
-  if (discretion) rows.push(["Commander's discretion", hhmm(discretion), 'OM-A 7.7.1 · unforeseen only']);
+  if (discretion) rows.push(["Commander's discretion", hhmm(discretion), 'ORO.FTL.205(f) · unforeseen only']);
 
   return (
     <section className="rounded-2xl border border-border bg-card p-5" style={{ boxShadow: 'var(--shadow-card)' }} aria-labelledby="fdp-heading">

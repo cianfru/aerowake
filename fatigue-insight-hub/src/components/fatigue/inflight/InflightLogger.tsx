@@ -145,8 +145,10 @@ export function InflightLogger({ duty, analysisId, homeTz, title = 'How sleepy d
       )}
       <p className="text-[11px] leading-relaxed text-muted-foreground">
         {syncing ? 'Sending your ratings… ' : syncError ? `${syncError} They stay on this device. ` : ''}
-        Your ratings are private. If you take part in the pilot study they help calibrate the model against what pilots
-        actually feel. This log does not replace your operator’s fatigue reporting.
+        {isAuthenticated
+          ? 'Your ratings are pooled, pseudonymised, with every pilot’s to calibrate the model against what pilots actually feel. Delete them here or stop contributing in your account. '
+          : 'Sign in so your ratings reach your account and help calibrate the model for every pilot. '}
+        This log does not replace your operator’s fatigue reporting.
       </p>
     </section>
   );

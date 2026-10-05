@@ -4,8 +4,9 @@ The app saves each rating on the device first (it works without a connection)
 and sends a batch here when the pilot is online and signed in. Each entry carries
 a client id, so a resent batch never duplicates rows. The server adds the
 model's predicted KSS at that instant from the pilot's own saved analysis (owner
-authorisation first). Rows are private to the pilot; ``study_enrolled`` marks
-the ones that may be used to calibrate the model (docs/PILOT_STUDY.md).
+authorisation first). Every pilot contributes: ratings are pooled, pseudonymised,
+to calibrate the model; ``study_enrolled`` is False only for a pilot who opted
+out, whose ratings are kept for them but not used (docs/PILOT_STUDY.md).
 """
 from datetime import timedelta
 from typing import List, Literal, Optional
@@ -20,7 +21,7 @@ from auth.dependencies import get_current_user
 from db.models import InflightLog
 from db.session import get_db
 from study import config
-from study.debriefs import is_enrolled, kss_near, utc_now
+from study.debriefs import is_enrolled, kss_near, record_participation, utc_now
 from study.limits import throttle
 
 router = APIRouter(prefix='/api', tags=['In-flight log'])
@@ -113,6 +114,8 @@ async def save_inflight_log(body: InflightBatch, user=Depends(get_current_user),
         raise HTTPException(429, 'Too many in-flight ratings saved recently. They stay on your device; try again later.',
                             headers={'Retry-After': '3600'})
     forecasts = await _forecasts(fresh, user, db)
+    if fresh:
+        record_participation(user, now)
     enrolled = is_enrolled(user)
     results, added = [], []
     for entry in body.entries:

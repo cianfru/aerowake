@@ -45,14 +45,14 @@ def test_rest_after_in_flight_rest_fdp_is_14_hours():
     out.crew_composition = CrewComposition.AUGMENTED_3
     back = leg(JFK, DOH, out.release_time_utc + timedelta(hours=13), 12.5, 'BACK')  # 13 h rest
     res = run_checks(roster([out, back]))
-    assert any('7.6.6' in f['detail'] for f in found(res, 'min_rest'))
+    assert any('in-flight rest (augmented crew)' in f['detail'] for f in found(res, 'min_rest'))
 
 
 def test_away_rest_after_four_time_zones_is_14_hours():
     out = leg(DOH, BKK, at(1, 2), 6.5, 'OUT')  # +4 h
     back = leg(BKK, DOH, out.release_time_utc + timedelta(hours=12), 6.5, 'BACK')
     res = run_checks(roster([out, back]))
-    assert any('7.13.5' in f['detail'] for f in found(res, 'min_rest'))
+    assert any('4 or more time zones (CS FTL.1.235(b))' in f['detail'] for f in found(res, 'min_rest'))
 
 
 def test_rest_between_floor_and_duty_length_is_possible_reduced_rest():
@@ -81,10 +81,10 @@ def test_east_west_transition_needs_three_local_nights():
     east_back = leg(SYD, DOH, east_out.release_time_utc + timedelta(hours=30), 14.5, 'E2')
     west_out = leg(DOH, JFK, east_back.release_time_utc + timedelta(hours=40), 14.0, 'W1')
     res = run_checks(roster([east_out, east_back, west_out]))
-    assert any(f['reference'] == 'OM-A 7.13.5(1)(C)' for f in found(res, 'time_zone_rest'))
+    assert any(f['title'].startswith('East-west') for f in found(res, 'time_zone_rest'))
     west_out = leg(DOH, JFK, east_back.release_time_utc + timedelta(days=5), 14.0, 'W2')
     res = run_checks(roster([east_out, east_back, west_out]))
-    assert not any(f['reference'] == 'OM-A 7.13.5(1)(C)' for f in found(res, 'time_zone_rest'))
+    assert not any(f['title'].startswith('East-west') for f in found(res, 'time_zone_rest'))
 
 
 def turn(report, did):
@@ -118,9 +118,9 @@ def test_two_local_days_twice_a_month():
     # Duties every 2nd day: each break is a recovery rest (36 h, 2 local nights) with 1 whole local day.
     duties = [leg(DOH, LHR, at(day, 8), 3.0, f'D{day}') for day in range(1, 32, 2)]
     res = run_checks(roster(duties))
-    assert any(f['reference'] == 'OM-A 7.13.7' for f in found(res, 'recovery_rest'))
+    assert any(f['reference'] == 'ORO.FTL.235(d)' and 'twice' in f['detail'] for f in found(res, 'recovery_rest'))
     # Two breaks of 3 days give 2 whole local days twice.
     days = [1, 2, 6, 7, 8, 9, 13, 14, 15, 16, 17, 22, 23, 24, 25, 30]
     duties = [leg(DOH, LHR, at(day, 8), 3.0, f'E{day}') for day in days]
     res = run_checks(roster(duties))
-    assert not any(f['reference'] == 'OM-A 7.13.7' for f in found(res, 'recovery_rest'))
+    assert not any(f['reference'] == 'ORO.FTL.235(d)' and 'twice' in f['detail'] for f in found(res, 'recovery_rest'))

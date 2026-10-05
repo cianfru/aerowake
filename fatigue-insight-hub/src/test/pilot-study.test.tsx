@@ -38,7 +38,7 @@ describe('pilot study diary', () => {
   it('offers guests a sign-in button instead of a dead end', () => {
     auth.value = { isAuthenticated: false, user: null };
     render(wrap(<PilotStudyPage />));
-    fireEvent.click(screen.getByRole('button', { name: /sign in to join the study/i }));
+    fireEvent.click(screen.getByRole('button', { name: /sign in to keep a diary/i }));
     expect(screen.getByRole('dialog')).toHaveTextContent('Auth sheet');
   });
 
@@ -93,10 +93,16 @@ describe('pilot study diary', () => {
     expect(screen.queryByText(/Invalid or expired token/)).toBeNull();
   });
 
-  it('asks to join the study before showing the diary', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(json({ ...ENROLLED, enrolled: false }))));
+  it('asks a pilot who stopped contributing before showing the diary', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(json({ ...ENROLLED, enrolled: false, withdrawn_at: '2026-09-02T00:00:00Z' }))));
     render(wrap(<PilotStudyPage />));
-    expect(await screen.findByRole('button', { name: /read about the study/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /contribute again/i })).toBeInTheDocument();
     expect(screen.queryByText(/How sleepy are you right now/)).toBeNull();
+  });
+
+  it('shows the diary to a pilot who never opted out', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(json(url.endsWith('/api/study/enrolment') ? { ...ENROLLED, enrolled: false } : { observations: [] }))));
+    render(wrap(<PilotStudyPage />));
+    expect(await screen.findByText(/How sleepy are you right now/)).toBeInTheDocument();
   });
 });

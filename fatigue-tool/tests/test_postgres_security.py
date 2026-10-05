@@ -215,7 +215,7 @@ def test_inflight_log_syncs_once_with_the_model_prediction(database_client):
         row = first['entry']
         assert row['kss'] == 6 and row['phase'] == 'cruise' and row['recorded_offline'] is True
         assert row['predicted_kss'] is not None and 1 <= row['predicted_kss'] <= 9
-        assert row['study_enrolled'] is False
+        assert row['study_enrolled'] is True  # every pilot contributes unless they opted out
         # Resending the same entry (sync retry) does not duplicate it.
         again = c.post('/api/inflight-log', headers=headers(owner), json={'entries': [entry]})
         assert again.json()['results'][0]['entry']['id'] == row['id']

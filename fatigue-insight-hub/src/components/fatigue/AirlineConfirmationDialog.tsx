@@ -143,7 +143,7 @@ export function AirlineConfirmationDialog({
                 </label>
                 <Input
                   id="airline-name"
-                  placeholder="e.g. Qatar Airways"
+                  placeholder="e.g. your airline"
                   value={customName}
                   onChange={(e) => setCustomName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleCustomSubmit()}

@@ -156,14 +156,22 @@ describe('DutyDebriefAction', () => {
     expect(body.prediction_seen).toBe(true);
   });
 
-  it('opens the enrolment information before the first debrief', async () => {
-    vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(json(url.endsWith('/api/study/enrolment') ? { ...ENROLLED, enrolled: false } : { debriefs: [] }))));
+  it('asks a pilot who stopped contributing before the debrief', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(json(url.endsWith('/api/study/enrolment') ? { ...ENROLLED, enrolled: false, withdrawn_at: '2026-09-01T00:00:00Z' } : { debriefs: [] }))));
     render(wrap(<DutyDebriefAction duty={FLOWN} analysisId="a1" now={NOW} />));
     fireEvent.click(await screen.findByRole('button', { name: /debrief this flown duty/i }));
-    expect(await screen.findByRole('heading', { name: /join the aerowake pilot study/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /contribute again/i })).toBeInTheDocument();
     expect(screen.getByText(/not a fatigue report and are not sent to your operator/)).toBeInTheDocument();
     expect(screen.getByText(/pseudonymised, not anonymous/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /join the study/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^contribute again$/i })).toBeDisabled();
+  });
+
+  it('goes straight to the debrief for a pilot who never opted out', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(json(url.endsWith('/api/study/enrolment') ? { ...ENROLLED, enrolled: false, withdrawn_at: null } : { debriefs: [] }))));
+    render(wrap(<DutyDebriefAction duty={FLOWN} analysisId="a1" now={NOW} />));
+    fireEvent.click(await screen.findByRole('button', { name: /debrief this flown duty/i }));
+    expect(await screen.findByText(/pooled, pseudonymised/)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /contribute again/i })).not.toBeInTheDocument();
   });
 });
 

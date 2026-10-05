@@ -190,11 +190,18 @@ def test_every_route_requires_sign_in(method, path):
         assert getattr(client, method)(path, **kwargs).status_code == 401
 
 
-def test_not_enrolled_or_withdrawn_cannot_save():
-    for user in (enrolled(study_consent_version=None), enrolled(study_withdrawn_at=NOW),
+def test_only_a_pilot_who_opted_out_cannot_save():
+    with client_for(enrolled(study_withdrawn_at=NOW), FakeDB()) as client:
+        assert client.post('/api/debriefs', json=body().model_dump(mode='json')).status_code == 403
+
+
+def test_every_pilot_contributes_from_the_first_rating():
+    # Not yet recorded, or recorded under an older notice: the first save records participation.
+    for user in (enrolled(study_consent_version=None, study_enrolled_at=None),
                  enrolled(study_consent_version='older-version')):
         with client_for(user, FakeDB()) as client:
-            assert client.post('/api/debriefs', json=body().model_dump(mode='json')).status_code == 403
+            assert client.post('/api/debriefs', json=body().model_dump(mode='json')).status_code != 403
+        assert user.study_consent_version == config.CONSENT_VERSION and user.study_enrolled_at is not None
 
 
 def test_other_owner_analysis_is_404_before_any_json_read(monkeypatch):
@@ -370,7 +377,6 @@ def test_postgres_roster_deletion_keeps_debrief_and_account_deletion_removes_it(
             join = {'consent_version': config.CONSENT_VERSION, 'accepted': True}
             # The autouse fixture freezes the server clock at NOW; rate relative to it, not to the real clock.
             request = body().model_dump(mode='json')
-            assert client.post('/api/debriefs', headers=auth(owner), json=request).status_code == 403
             assert client.put('/api/study/enrolment', headers=auth(owner), json=join).status_code == 200
             assert client.put('/api/study/enrolment', headers=auth(other), json=join).status_code == 200
             assert client.post('/api/debriefs', headers=auth(other), json=request).status_code == 404

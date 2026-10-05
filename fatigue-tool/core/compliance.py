@@ -114,7 +114,7 @@ class EASAComplianceValidator:
                 'used_discretion': actual_fdp > max_fdp,
                 'exceeds_discretion': actual_fdp > max_fdp + discretion,
                 'planned_extension_fdp': None,
-                'reference': 'OM-A 7.18.1',
+                'reference': 'ULR (operator approval)',
                 'is_ulr': True,
                 'crew_composition': getattr(duty, 'crew_composition', CrewComposition.STANDARD).value
                     if hasattr(getattr(duty, 'crew_composition', None), 'value') else 'standard',
@@ -134,9 +134,9 @@ class EASAComplianceValidator:
                 'used_discretion': actual_fdp > max_fdp,
                 'exceeds_discretion': actual_fdp > max_fdp + discretion,
                 'planned_extension_fdp': None,  # 7.6.5(4): not combined with in-flight rest
-                'reference': ('OM-A 7.6.6 Table 7-10' if sectors <= augmented_params.long_sector_max_sectors and any(
+                'reference': ('CS FTL.1.205(c), in-flight rest, long sector' if sectors <= augmented_params.long_sector_max_sectors and any(
                     s.block_time_hours > augmented_params.long_sector_min_flight_hours for s in duty.segments)
-                    else 'OM-A 7.6.6 Table 7-9'),
+                    else 'CS FTL.1.205(c), in-flight rest'),
                 'is_ulr': False,
                 'crew_composition': duty.crew_composition.value
                     if hasattr(duty.crew_composition, 'value') else 'standard',
@@ -161,7 +161,7 @@ class EASAComplianceValidator:
             'used_discretion': used_discretion,
             'exceeds_discretion': actual_fdp > extended_fdp,
             'planned_extension_fdp': planned_extension,
-            'reference': 'OM-A 7.6.3 Table 7-7' if unknown else 'OM-A 7.6.3 Table 7-6',
+            'reference': 'ORO.FTL.205(b) Table 4, unknown acclimatisation (FRM)' if unknown else 'ORO.FTL.205(b) Table 2',
             'is_ulr': False,
             'crew_composition': getattr(duty, 'crew_composition', CrewComposition.STANDARD).value
                 if hasattr(getattr(duty, 'crew_composition', None), 'value') else 'standard',

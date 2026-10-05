@@ -41,28 +41,28 @@ export function StudyParticipation({ compact }: { compact?: boolean }) {
     <div className="space-y-3">
       {data?.enrolled ? (
         <p className="text-sm">
-          <span className="font-medium">Taking part</span>
+          <span className="font-medium">Contributing</span>
           <span className="text-muted-foreground"> · since {since} · {data.debriefs} debriefs, {data.observations} diary entries</span>
         </p>
       ) : (
         <p className="text-sm text-muted-foreground">
-          {data?.withdrawn_at ? 'You have left the study. You can rejoin at any time.' : 'Not taking part. The study is optional and Aerowake works fully without it.'}
+          {data?.withdrawn_at ? 'You stopped contributing. Your ratings are not used to calibrate the model. You can turn it back on at any time.' : 'Every pilot contributes: your first in-flight rating or debrief is pooled, pseudonymised, with everyone else’s to calibrate the model.'}
         </p>
       )}
       {!compact && <p className="text-xs text-muted-foreground">Retention: {STUDY_RETENTION}.</p>}
       <div className="flex flex-wrap gap-2">
         {data?.enrolled
-          ? <Button variant="outline" size="sm" onClick={() => setLeaveOpen(true)}>Withdraw from the study</Button>
-          : <Button size="sm" onClick={() => setJoinOpen(true)}>{data?.withdrawn_at ? 'Rejoin the study' : 'Read about the study'}</Button>}
+          ? <Button variant="outline" size="sm" onClick={() => setLeaveOpen(true)}>Stop contributing</Button>
+          : <Button size="sm" onClick={() => setJoinOpen(true)}>{data?.withdrawn_at ? 'Contribute again' : 'How your ratings are used'}</Button>}
       </div>
       {message && <p role="status" className="text-sm">{message}</p>}
       <StudyEnrolmentDialog open={joinOpen} onOpenChange={setJoinOpen} />
       <ConfirmDialog
         open={leaveOpen}
         onOpenChange={setLeaveOpen}
-        title="Withdraw from the study?"
-        description="No new debriefs or diary entries can be saved after you withdraw. Your existing entries are kept unless you tick the box below. You can rejoin later."
-        confirmLabel={deleteData ? 'Withdraw and delete my entries' : 'Withdraw'}
+        title="Stop contributing?"
+        description="Your ratings will no longer be used to calibrate the model and no new debriefs or diary entries can be saved. Existing entries are kept unless you tick the box below. You can turn it back on later."
+        confirmLabel={deleteData ? 'Stop and delete my entries' : 'Stop contributing'}
         destructive={deleteData}
         onConfirm={leave}
         busy={busy}

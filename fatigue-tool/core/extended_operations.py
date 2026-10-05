@@ -661,7 +661,7 @@ class QatarFTL718Validator:
         if approved is not None:
             plan = approved['crew_a'] + approved['crew_b']
             if len(plan) < self.params.ulr_min_rest_periods or max(e - s for s, e in plan) < self.params.ulr_min_long_rest_hours:
-                violations.append(f"Approved rest plan (Figure {approved['figure']}) does not meet 7.18.4.3")
+                violations.append("The approved rest plan for this city pair has fewer than 2 rest periods or none of 4 h")
                 rest_ok = False
         elif duty.inflight_rest_plan:
             periods = duty.inflight_rest_plan.rest_periods

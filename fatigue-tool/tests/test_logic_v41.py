@@ -276,7 +276,7 @@ def test_acclimatisation_unknown_state_uses_qatar_table_7_7():
     back = res.roster.duties[1]
     assert back.acclimatization_state == AcclimatizationState.UNKNOWN
     assert back.max_fdp_hours == 12.0
-    assert back.fdp_limit_reference == 'OM-A 7.6.3 Table 7-7'
+    assert back.fdp_limit_reference == 'ORO.FTL.205(b) Table 4, unknown acclimatisation (FRM)'
     assert back.planned_extension_fdp_hours is None  # 7.6.5 is for acclimatised crew only
     tl = res.duty_timelines[1]
     assert tl.acclimatization_basis == 'determined'

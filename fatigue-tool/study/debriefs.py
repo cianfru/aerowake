@@ -328,9 +328,23 @@ def is_enrolled(user):
             and getattr(user, 'study_withdrawn_at', None) is None)
 
 
+def has_opted_out(user):
+    return getattr(user, 'study_withdrawn_at', None) is not None
+
+
+def record_participation(user, now=None):
+    """Every pilot contributes: the first rating records participation under the
+    current notice (shown where the pilot saves it). A pilot who opted out stays out."""
+    if has_opted_out(user) or is_enrolled(user):
+        return
+    user.study_enrolled_at = now or utc_now()
+    user.study_consent_version = config.CONSENT_VERSION
+
+
 async def require_enrolled(user=Depends(get_current_user)):
-    if not is_enrolled(user):
-        raise HTTPException(403, 'Join the pilot study before saving debriefs.')
+    if has_opted_out(user):
+        raise HTTPException(403, 'You have stopped contributing ratings. Turn it back on in your account to save debriefs.')
+    record_participation(user)
     return user
 
 

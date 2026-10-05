@@ -552,14 +552,14 @@ export const FTL_RULE_LABELS: Record<string, string> = {
   duty_14d: 'Duty hours, 14 days (ORO.FTL.210)',
   duty_28d: 'Duty hours, 28 days (ORO.FTL.210)',
   block_28d: 'Flight time, 28 days (ORO.FTL.210)',
-  min_rest: 'Minimum rest (OM-A 7.13.1, 7.13.2, 7.6.6)',
-  reduced_rest: 'Reduced rest (OM-A 7.13.6)',
-  recovery_rest: 'Recovery rest (OM-A 7.13.7)',
-  time_zone_rest: 'Rest after time-zone rotations (OM-A 7.13.5)',
-  disruptive: 'Disruptive schedules (OM-A 7.13.4)',
-  fdp_max: 'Maximum FDP (OM-A 7.6)',
-  fdp_extension: 'Planned FDP extensions (OM-A 7.6.5)',
-  standby: 'Standby (OM-A 7.11)',
+  min_rest: 'Minimum rest (ORO.FTL.235)',
+  reduced_rest: 'Reduced rest (ORO.FTL.235(c))',
+  recovery_rest: 'Recovery rest (ORO.FTL.235(d))',
+  time_zone_rest: 'Rest after time-zone rotations (CS FTL.1.235(b))',
+  disruptive: 'Disruptive schedules (CS FTL.1.235(a))',
+  fdp_max: 'Maximum FDP (ORO.FTL.205)',
+  fdp_extension: 'Planned FDP extensions (ORO.FTL.205(d))',
+  standby: 'Standby (ORO.FTL.225)',
 };
 
 export const FTL_STATUS_LABELS: Record<string, string> = {

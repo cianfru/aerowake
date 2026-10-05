@@ -711,7 +711,7 @@ class SleepStrategyMixin:
                 f"AUGMENTED_4 pre-duty: 2 nights {location_desc} sleep + "
                 f"{'pre-departure nap' if len(blocks) > 2 else 'no nap'} "
                 f"({total_effective:.1f}h effective). "
-                f"48h duty-free per Qatar FTL 7.18.4.3"
+                f"48h duty-free before a ULR departure (ULR approval)"
             ),
             quality_analysis=quality_analyses
         )

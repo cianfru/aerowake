@@ -81,10 +81,11 @@ def build_payload(body, now):
 
 @router.post('/observations')
 async def record(body: Observation, user=Depends(get_current_user), db=Depends(get_db)):
-    from study.debriefs import is_enrolled
+    from study.debriefs import has_opted_out, record_participation
     throttle(user.id, 'study-write', config.WRITES_PER_MINUTE)
-    if not is_enrolled(user):
-        raise HTTPException(403, 'Join the pilot study before saving observations.')
+    if has_opted_out(user):
+        raise HTTPException(403, 'You have stopped contributing ratings. Turn it back on in your account to save observations.')
+    record_participation(user)
     # Idempotent retry preserves the original rating/prediction snapshot.
     query = select(PilotObservation).where(PilotObservation.user_id == user.id,
                                            PilotObservation.client_id == body.client_id)

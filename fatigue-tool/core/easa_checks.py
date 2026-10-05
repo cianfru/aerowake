@@ -178,7 +178,7 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
         minimum = 12.0 if at_home else 10.0
         if rest < minimum:
             findings.append(_finding(
-                'min_rest', 'OM-A 7.13.1 / 7.13.2', 'warning', 'Rest shorter than the minimum',
+                'min_rest', 'ORO.FTL.235(a)/(b)', 'warning', 'Rest shorter than the minimum',
                 f'{_h(rest)} between release {_fmt(prev.release_time_utc, tz)} and report '
                 f'{_fmt(nxt.report_time_utc, tz)}; the minimum {"at home base" if at_home else "away from base"} '
                 f'is {_h(max(prev.duty_hours, minimum))}, and never below {_h(minimum)} even with reduced rest.',
@@ -228,19 +228,19 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
         if d.duty_type != DutyType.FLIGHT or not d.segments or not d.max_fdp_hours:
             continue
         fdp = d.fdp_hours
-        ref = getattr(d, 'fdp_limit_reference', None) or 'OM-A 7.6.3'
+        ref = getattr(d, 'fdp_limit_reference', None) or 'ORO.FTL.205(b)'
         ext = getattr(d, 'planned_extension_fdp_hours', None)
         crew_note = (' The roster does not show the crew: if this flight has 3 or 4 pilots, '
                      'set the crew in the duty details.' if augmentation_likely(d) else '')
         when = _fmt(d.report_time_utc, tz)
         if d.extended_fdp_hours and fdp > d.extended_fdp_hours + 1e-6:
-            findings.append(_finding('fdp_max', 'OM-A 7.7.1.2', 'warning', 'FDP exceeds the maximum with discretion',
+            findings.append(_finding('fdp_max', 'ORO.FTL.205(f)', 'warning', 'FDP exceeds the maximum with discretion',
                                      f'{when}: FDP {_h(fdp)}, maximum {_h(d.extended_fdp_hours)} '
                                      'including commander’s discretion.' + crew_note,
                                      d.report_time_utc, d.release_time_utc, fdp, d.extended_fdp_hours))
         elif fdp > d.max_fdp_hours + 1e-6 and ext and fdp <= ext + 1e-6:
             extensions.append(d)
-            findings.append(_finding('fdp_max', 'OM-A 7.6.5 Table 7-8', 'info', 'FDP uses a planned extension',
+            findings.append(_finding('fdp_max', 'ORO.FTL.205(d), CS FTL.1.205(a)', 'info', 'FDP uses a planned extension',
                                      f'{when}: FDP {_h(fdp)} vs basic maximum {_h(d.max_fdp_hours)} ({ref}); within '
                                      f'the planned extension of {_h(ext)}. Allowed at most twice in 7 days, with '
                                      'pre- and post-flight rest each 2 h longer, or post-flight rest 4 h longer.' + crew_note,
@@ -250,7 +250,7 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
             findings.append(_finding('fdp_max', ref, 'warning', 'FDP above the planned maximum',
                                      f'{when}: FDP {_h(fdp)} vs basic maximum {_h(d.max_fdp_hours)} ({limit}). '
                                      'Beyond this only commander’s discretion for unforeseen circumstances '
-                                     '(OM-A 7.7.1) applies.' + crew_note,
+                                     '(ORO.FTL.205(f)) applies.' + crew_note,
                                      d.report_time_utc, d.release_time_utc, fdp, ext or d.max_fdp_hours))
     # 7.6.5(1): an extension at most twice in any 7 consecutive days.
     from core.qatar_ftl import EXTENSIONS_PER_7_DAYS
@@ -258,7 +258,7 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
     for i in range(EXTENSIONS_PER_7_DAYS, len(extensions)):
         first, last = extensions[i - EXTENSIONS_PER_7_DAYS], extensions[i]
         if last.report_time_utc - first.report_time_utc < timedelta(days=7):
-            findings.append(_finding('fdp_extension', 'OM-A 7.6.5', 'warning',
+            findings.append(_finding('fdp_extension', 'ORO.FTL.205(d)', 'warning',
                                      'More than two planned extensions in 7 days',
                                      f'{_fmt(first.report_time_utc, tz)} to {_fmt(last.report_time_utc, tz)}: '
                                      f'{EXTENSIONS_PER_7_DAYS + 1} FDPs use a planned extension.',
@@ -279,8 +279,9 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
                          ('failed' if any(f['rule'] in ('fdp_max', 'fdp_extension') and f['severity'] == 'warning'
                                           for f in findings) else 'passed'),
                          'assessed': assessed, 'eligible': len(flights),
-                         'reason': ('Qatar OM-A 7.6.3 Tables 7-6/7-7, 7.6.5 Table 7-8, 7.6.6 Tables 7-9/7-10 '
-                                    'and 7.18. Acclimatisation is derived from the supplied duties (OM-A 7.6.1, '
+                         'reason': ('QCAA / EASA flight time limitations: ORO.FTL.205 Tables 2 and 4, '
+                                    'CS FTL.1.205 (extension, in-flight rest) and the ULR approval. Acclimatisation '
+                                    'is derived from the supplied duties (ORO.FTL.105(1), '
                                     'assuming acclimatised to the home base before the first duty); duties '
                                     'where it cannot be determined are not assessed. Split duty and standby '
                                     'before the FDP are outside this check.')}
