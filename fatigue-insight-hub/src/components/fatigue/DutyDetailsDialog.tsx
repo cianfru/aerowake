@@ -8,6 +8,7 @@ import { DutyAnalysis } from '@/types/fatigue';
 import { getDutyDetail } from '@/lib/api-client';
 import { zoneOffsetLabel } from '@/lib/home-time';
 import { DutyDetailsHeader } from './DutyDetailsHeader';
+import { InflightLogger } from './inflight/InflightLogger';
 import { DutyInfoColumn } from './DutyInfoColumn';
 import { DutySectors } from './DutySectors';
 import { PerformanceColumn } from './PerformanceColumn';
@@ -146,6 +147,9 @@ export function DutyDetailsDialog({
                 </div>
               </div>
               <div className="contents md:flex md:flex-col md:gap-4">
+                <div className="order-first empty:hidden md:order-none">
+                  <InflightLogger duty={displayDuty} analysisId={analysisId} homeTz={homeTz} />
+                </div>
                 <div className="order-2 md:order-none">
                   <DutySectors duty={displayDuty} homeLabel={homeBase} />
                 </div>

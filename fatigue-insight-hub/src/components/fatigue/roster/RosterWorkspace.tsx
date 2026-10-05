@@ -6,6 +6,8 @@ import type { AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { DEFAULT_WATCH_KSS } from '@/lib/roster-forecast';
 import { KSS_LABELS, RISK_LEVEL_KSS_RANGE, RISK_LEVEL_LABELS, riskClasses, type RiskLevel } from '@/lib/risk-scale';
 import { cn } from '@/lib/utils';
+import { InflightLogger, canLogNow } from '../inflight/InflightLogger';
+import { OfflineBanner } from '../inflight/OfflineBanner';
 import { Chronogram } from '../Chronogram';
 import { ExportOptions } from '../ExportOptions';
 import { RosterForecast, RosterRecovery } from './RosterForecast';
@@ -14,7 +16,7 @@ import { DebriefQueue } from '@/components/fatigue/debrief/DebriefQueue';
 import { EasaChecksCard } from './EasaChecksCard';
 import { TimelineSection } from './TimelineSection';
 import { RouteNetwork } from './RouteNetwork';
-import { groupDutiesToWatch, selectDutiesToWatch } from './roster-utils';
+import { dutyRoute, groupDutiesToWatch, selectDutiesToWatch } from './roster-utils';
 import { SectionHeading } from './primitives';
 
 const views = [
@@ -74,6 +76,9 @@ export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDu
   const watch = useMemo(() => selectDutiesToWatch(results), [results]);
   const groups = useMemo(() => groupDutiesToWatch(watch), [watch]);
   const index = views.findIndex(item => item.id === view);
+  // A duty in its logging window now (report − 3 h to report + 24 h), the latest report first.
+  const onDutyNow = useMemo(() => [...results.duties].filter(d => d.flightSegments.length > 0 && canLogNow(d))
+    .sort((a, b) => Date.parse(b.reportTimeUtc ?? '') - Date.parse(a.reportTimeUtc ?? ''))[0], [results.duties]);
 
   /**
    * Show a view from its top. When the rail is stuck the page is scrolled to
@@ -114,6 +119,9 @@ export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDu
 
     <div ref={panels}>
       <TabsContent value="outlook" data-view="outlook" forceMount hidden={view !== 'outlook'} className="mt-5 space-y-8">
+        <OfflineBanner />
+        {onDutyNow && <InflightLogger duty={onDutyNow} analysisId={results.analysisId} homeTz={results.homeBaseTimezone}
+          title={`On duty now: ${dutyRoute(onDutyNow)}. How sleepy do you feel?`} />}
         <DebriefQueue />
         <RosterForecast results={results} reference={reference} onReferenceChange={setReference} onDetails={onDutySelect} onConcern={onConcern} />
         <section aria-labelledby="watch-heading" className="space-y-4">

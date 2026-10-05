@@ -14,6 +14,8 @@ Use [launch hardening](docs/LAUNCH_HARDENING.md) and [roster reference](docs/ROS
 
 ## Pilot-facing workflow
 
+Every modelled sleep shows why it is there (basis, confidence, sources) and can be removed, retimed or supplemented by the pilot; edits are planned sleep, never reported sleep. Pilots may state a usual night and nap habit (account or device). The app is installable and works offline: a service worker caches the app shell only (never API responses); the last roster is kept per owner in IndexedDB (`src/lib/offline-store.ts`, cleared on sign-out) and in-flight KSS ratings are logged on the device and synced to `/api/inflight-log` when online. Sign-out never deletes unsynced ratings.
+
 Roster outlook compares existing model outputs in chronological order; personal KSS watch references never modify model bands. Reports distinguish `roster_concern` scenarios from experienced fatigue. Roster duties remain planned until the pilot confirms operations, and sleep estimates become reported only through explicit confirmation. See `docs/FATIGUE_REPORT.md` for report 1.2 / input schema 2.
 
 ## Project Overview

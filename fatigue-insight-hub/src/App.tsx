@@ -36,7 +36,7 @@ function ThemeSync() {
 function SessionBoundary({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
   if (isLoading) return <div className="p-8 text-sm text-muted-foreground" role="status">Loading your session…</div>;
-  return <AnalysisProvider key={user?.id ?? 'guest'} initialSettings={fromPayload(user?.sleep_preferences)}>{children}</AnalysisProvider>;
+  return <AnalysisProvider key={user?.id ?? 'guest'} owner={user?.id ?? 'guest'} initialSettings={fromPayload(user?.sleep_preferences)}>{children}</AnalysisProvider>;
 }
 
 function Welcome() {

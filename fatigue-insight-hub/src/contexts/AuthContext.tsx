@@ -1,6 +1,7 @@
 import { getStoredToken, getStoredRefreshToken, storeTokens, clearTokens, getAuthHeaders, apiFetch, sessionChanged, sessionGeneration } from '@/lib/auth-session';
 export { getAuthHeaders } from '@/lib/auth-session';
 import type { SleepPreferencesPayload } from '@/lib/sleep-preferences';
+import { offlineStore } from '@/lib/offline-store';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 
@@ -49,6 +50,24 @@ interface AuthContextValue extends AuthState {
 
 // ── Token Helpers ────────────────────────────────────────────
 
+// ── Last known profile (offline sign-in) ─────────────────────
+
+const PROFILE_KEY = 'aerowake-profile';
+
+function readCachedProfile(): UserProfile | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    const p = raw ? JSON.parse(raw) as UserProfile : null;
+    return p && typeof p.id === 'string' ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedProfile(user: UserProfile) {
+  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(user)); } catch { /* storage unavailable */ }
+}
+
 // ── Context ──────────────────────────────────────────────────
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -60,6 +79,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.clear();
     sessionStorage.removeItem('aerowake-guest');
     localStorage.removeItem('aerowake-pilot-settings');
+    localStorage.removeItem(PROFILE_KEY);
+    // The offline roster copy goes too; unsynced in-flight ratings stay until they reach the account.
+    void offlineStore.clearPrivate();
     for (const key of Object.keys(sessionStorage)) if (key.startsWith('aerowake-report-')) sessionStorage.removeItem(key);
   }, [queryClient]);
   const [state, setState] = useState<AuthState>({
@@ -72,14 +94,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const started = sessionGeneration();
     const token = getStoredToken();
     if (!token) { setState({ user: null, isAuthenticated: false, isLoading: false }); return; }
+    // Offline (in flight) or a server outage keeps the session: the last profile
+    // is used until the server answers. Only a refused token signs the pilot out.
+    const keepCached = () => {
+      const cached = readCachedProfile();
+      if (cached) { setState({ user: cached, isAuthenticated: true, isLoading: false }); return true; }
+      return false;
+    };
     try {
       const res = await apiFetch(`${API_BASE_URL}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
-      const user = res.ok ? await res.json() as UserProfile : null;
       if (started !== sessionGeneration()) return;
-      if (!res.ok) clearPrivateData();
-      setState({ user, isAuthenticated: !!user, isLoading: false });
+      if (res.ok) {
+        const user = await res.json() as UserProfile;
+        writeCachedProfile(user);
+        setState({ user, isAuthenticated: true, isLoading: false });
+        return;
+      }
+      if (res.status !== 401 && res.status !== 403 && keepCached()) return;
+      clearPrivateData();
+      setState({ user: null, isAuthenticated: false, isLoading: false });
     } catch {
-      if (started === sessionGeneration()) { clearPrivateData(); setState({ user: null, isAuthenticated: false, isLoading: false }); }
+      if (started !== sessionGeneration()) return;
+      if (getStoredToken() && keepCached()) return;
+      clearPrivateData();
+      setState({ user: null, isAuthenticated: false, isLoading: false });
     }
   }, [clearPrivateData]);
   useEffect(() => {
@@ -226,7 +264,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const user: UserProfile = await res.json();
-    if (started === sessionGeneration()) setState((prev) => ({ ...prev, user }));
+    if (started === sessionGeneration()) { writeCachedProfile(user); setState((prev) => ({ ...prev, user })); }
   };
 
   return (

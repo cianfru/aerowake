@@ -1,5 +1,6 @@
 import type { CrewCompositionValue } from '@/lib/api-client';
-import { createContext, useContext, useReducer, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useReducer, useEffect, useRef, useState, type ReactNode } from 'react';
+import { offlineStore } from '@/lib/offline-store';
 import { DEFAULT_NAP_HABIT, PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { loadPersistedSettings, savePersistedSettings } from '@/hooks/usePersistedSettings';
 import { applyTab, type HubId, type SubTab } from '@/lib/navigation';
@@ -205,17 +206,55 @@ interface AnalysisContextValue {
   setShowLanding: (show: boolean) => void;
   loadAnalysis: (r: AnalysisResults) => void;
   loadAnalysisToSummary: (r: AnalysisResults) => void;
+  /** When the roster on screen was reopened from this device (offline copy), its save time. */
+  restoredFromDeviceAt: string | null;
+  /** Remove the offline copy of the roster from this device. */
+  forgetDeviceCopy: () => void;
 }
 
 const AnalysisContext = createContext<AnalysisContextValue | null>(null);
 
-export function AnalysisProvider({ children, initialSettings }: { children: ReactNode; initialSettings?: Partial<PilotSettings> }) {
+export function AnalysisProvider({ children, initialSettings, owner = 'guest' }: {
+  children: ReactNode; initialSettings?: Partial<PilotSettings>;
+  /** Whose device copy to keep and reopen: the user id, or 'guest'. */
+  owner?: string;
+}) {
   const [state, dispatch] = useReducer(analysisReducer, initialSettings, buildInitialState);
+  const [restoredFromDeviceAt, setRestoredAt] = useState<string | null>(null);
+  const restored = useRef<AnalysisResults | null>(null);
+  const loaded = useRef(false);
+  const latest = useRef(state.analysisResults);
+  latest.current = state.analysisResults;
 
   // Persist settings to localStorage whenever they change
   useEffect(() => {
     savePersistedSettings(state.settings);
   }, [state.settings]);
+
+  // Offline use: reopen the last roster saved on this device, then keep the copy current.
+  useEffect(() => {
+    let live = true;
+    void offlineStore.loadAnalysis(owner).then((saved) => {
+      if (!live) return;
+      loaded.current = true;
+      if (saved?.results && !latest.current) {
+        restored.current = saved.results;
+        setRestoredAt(saved.savedAt);
+        dispatch({ type: 'SET_ANALYSIS_RESULTS', payload: saved.results });
+      } else if (latest.current) {
+        void offlineStore.saveAnalysis(owner, latest.current);
+      }
+    });
+    return () => { live = false; };
+  }, [owner]);
+
+  useEffect(() => {
+    if (!state.analysisResults || !loaded.current) return;
+    if (state.analysisResults !== restored.current) {
+      setRestoredAt(null);
+      void offlineStore.saveAnalysis(owner, state.analysisResults);
+    }
+  }, [state.analysisResults, owner]);
 
   const value: AnalysisContextValue = {
     state,
@@ -240,10 +279,12 @@ export function AnalysisProvider({ children, initialSettings }: { children: Reac
       dispatch({ type: 'CLEAR_CREW_OVERRIDE', payload: { dutyId } }),
     setCrewComposition: (dutyId, composition) =>
       dispatch({ type: 'SET_CREW_COMPOSITION', payload: { dutyId, composition } }),
-    removeFile: () => dispatch({ type: 'REMOVE_FILE' }),
+    removeFile: () => { dispatch({ type: 'REMOVE_FILE' }); setRestoredAt(null); void offlineStore.removeAnalysis(owner); },
     setShowLanding: (show) => dispatch({ type: 'SET_SHOW_LANDING', payload: show }),
     loadAnalysis: (r) => dispatch({ type: 'LOAD_ANALYSIS', payload: r }),
     loadAnalysisToSummary: (r) => dispatch({ type: 'LOAD_ANALYSIS_TO_SUMMARY', payload: r }),
+    restoredFromDeviceAt,
+    forgetDeviceCopy: () => { setRestoredAt(null); void offlineStore.removeAnalysis(owner); },
   };
 
   return <AnalysisContext.Provider value={value}>{children}</AnalysisContext.Provider>;
