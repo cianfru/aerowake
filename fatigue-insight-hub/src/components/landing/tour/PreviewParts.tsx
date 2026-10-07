@@ -4,9 +4,9 @@ import { cn } from '@/lib/utils';
 /** Labelled figure, as in the workspace's outlook facts. */
 export function PreviewFact({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
   return <div className="min-w-0">
-    <p className="text-xs text-[#526579]">{label}</p>
-    <p className="mt-1 text-2xl font-semibold leading-tight text-[#142e45]">{value}</p>
-    {sub && <p className="mt-1 text-xs text-[#425d73]">{sub}</p>}
+    <p className="text-xs text-[color:var(--lp-526579)]">{label}</p>
+    <p className="mt-1 text-2xl font-semibold leading-tight text-[color:var(--lp-142e45)]">{value}</p>
+    {sub && <p className="mt-1 text-xs text-[color:var(--lp-425d73)]">{sub}</p>}
   </div>;
 }
 

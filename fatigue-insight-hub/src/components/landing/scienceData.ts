@@ -43,8 +43,8 @@ export const SCIENCE_CITATIONS: Citation[] = [
 export const N = SCIENCE_SCENARIO.noNap.length;
 export const HOURS = (N - 1) * SCIENCE_SCENARIO.stepHours;
 export const SERIES = [
-  { key: 'noNap', label: 'No nap, awake from 07:00', color: '#94a3b0', values: SCIENCE_SCENARIO.noNap },
-  { key: 'nap', label: 'Two-hour nap, 15:00–17:00', color: '#0e6f86', values: SCIENCE_SCENARIO.nap2h },
+  { key: 'noNap', label: 'No nap, awake from 07:00', color: 'var(--lp-94a3b0)', values: SCIENCE_SCENARIO.noNap },
+  { key: 'nap', label: 'Two-hour nap, 15:00–17:00', color: 'var(--lp-0e6f86)', values: SCIENCE_SCENARIO.nap2h },
 ] as const;
 export const BAND_LINES = [
   { kss: 5.5, label: 'Moderate' },

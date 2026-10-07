@@ -36,38 +36,38 @@ export function ScienceChart() {
   };
 
   return <div>
-    <ul className="mb-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-[#425d73]" aria-label="Legend">
+    <ul className="mb-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-[color:var(--lp-425d73)]" aria-label="Legend">
       {SERIES.map((s) => <li key={s.key} className="flex items-center gap-2"><span aria-hidden="true" className="h-0.5 w-5 rounded-full" style={{ background: s.color }} />{s.label}</li>)}
     </ul>
     <div ref={ref} className="relative">
       <svg width={width} height={height} role="img" aria-label="Predicted KSS for the same overnight duty with and without a two-hour afternoon nap" className="block max-w-full overflow-visible">
-        <rect x={x(S.wocl[0])} y={m.top} width={x(S.wocl[1]) - x(S.wocl[0])} height={ih} fill="#eee8f6" />
-        <text x={x(S.wocl[0]) + 5} y={m.top + 12} className="fill-[#5f4d78] text-[10px] font-semibold uppercase tracking-[0.08em]">WOCL</text>
-        <line x1={m.left} x2={m.left + iw} y1={y(1)} y2={y(1)} stroke="#c9d7df" />
+        <rect x={x(S.wocl[0])} y={m.top} width={x(S.wocl[1]) - x(S.wocl[0])} height={ih} fill="var(--lp-eee8f6)" />
+        <text x={x(S.wocl[0]) + 5} y={m.top + 12} className="fill-[color:var(--lp-5f4d78)] text-[10px] font-semibold uppercase tracking-[0.08em]">WOCL</text>
+        <line x1={m.left} x2={m.left + iw} y1={y(1)} y2={y(1)} stroke="var(--lp-c9d7df)" />
         {BAND_LINES.map((b) => <g key={b.kss}>
-          <line x1={m.left} x2={m.left + iw} y1={y(b.kss)} y2={y(b.kss)} stroke="#dbe5eb" />
-          {!compact && <text x={m.left + iw + 6} y={y(b.kss) + 3.5} className="fill-[#526579] text-[10px]">{b.kss} {b.label}</text>}
+          <line x1={m.left} x2={m.left + iw} y1={y(b.kss)} y2={y(b.kss)} stroke="var(--lp-dbe5eb)" />
+          {!compact && <text x={m.left + iw + 6} y={y(b.kss) + 3.5} className="fill-[color:var(--lp-526579)] text-[10px]">{b.kss} {b.label}</text>}
         </g>)}
-        {[1, 3, 5, 7, 9].map((k) => <text key={k} x={m.left - 8} y={y(k) + 3.5} textAnchor="end" className="fill-[#526579] font-mono text-[10px]">{k}</text>)}
+        {[1, 3, 5, 7, 9].map((k) => <text key={k} x={m.left - 8} y={y(k) + 3.5} textAnchor="end" className="fill-[color:var(--lp-526579)] font-mono text-[10px]">{k}</text>)}
         {SERIES.map((s, i) => <path key={s.key} d={paths[i]} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />)}
         {SCIENCE_PEAKS.map((p, i) => <g key={p.key}>
-          <circle cx={x(p.index * S.stepHours)} cy={y(p.kss)} r={4.5} fill={SERIES[i].color} stroke="#fcfdfe" strokeWidth={2} />
-          <text x={x(p.index * S.stepHours) + 8} y={y(p.kss) + (i === 0 ? -6 : 14)} className="fill-[#142e45] font-mono text-[11px] font-semibold">{formatKssValue(p.kss)}</text>
+          <circle cx={x(p.index * S.stepHours)} cy={y(p.kss)} r={4.5} fill={SERIES[i].color} stroke="var(--lp-fcfdfe)" strokeWidth={2} />
+          <text x={x(p.index * S.stepHours) + 8} y={y(p.kss) + (i === 0 ? -6 : 14)} className="fill-[color:var(--lp-142e45)] font-mono text-[11px] font-semibold">{formatKssValue(p.kss)}</text>
         </g>)}
-        <rect x={x(S.duty[0])} y={strip} width={x(S.duty[1]) - x(S.duty[0])} height={6} rx={3} fill="#17384f" />
-        <text x={x(S.duty[0])} y={strip + 18} className="fill-[#304a5f] text-[10px] font-medium">Duty {clockAt(S.duty[0])}–{clockAt(S.duty[1])}</text>
-        <rect x={x(S.nap[0])} y={strip} width={x(S.nap[1]) - x(S.nap[0])} height={6} rx={3} fill="#0e6f86" />
-        <text x={x(S.nap[0])} y={strip + 18} className="fill-[#304a5f] text-[10px] font-medium">Nap</text>
-        {ticks.map((h) => <text key={h} x={x(h)} y={height - 6} textAnchor={h === 0 ? 'start' : h === 24 && compact ? 'end' : 'middle'} className="fill-[#526579] font-mono text-[10px]">{clockAt(h)}</text>)}
-        {hover != null && <line x1={x(hover * S.stepHours)} x2={x(hover * S.stepHours)} y1={m.top} y2={m.top + ih} stroke="#304a5f" strokeWidth={1} />}
+        <rect x={x(S.duty[0])} y={strip} width={x(S.duty[1]) - x(S.duty[0])} height={6} rx={3} fill="var(--lp-17384f)" />
+        <text x={x(S.duty[0])} y={strip + 18} className="fill-[color:var(--lp-304a5f)] text-[10px] font-medium">Duty {clockAt(S.duty[0])}–{clockAt(S.duty[1])}</text>
+        <rect x={x(S.nap[0])} y={strip} width={x(S.nap[1]) - x(S.nap[0])} height={6} rx={3} fill="var(--lp-0e6f86)" />
+        <text x={x(S.nap[0])} y={strip + 18} className="fill-[color:var(--lp-304a5f)] text-[10px] font-medium">Nap</text>
+        {ticks.map((h) => <text key={h} x={x(h)} y={height - 6} textAnchor={h === 0 ? 'start' : h === 24 && compact ? 'end' : 'middle'} className="fill-[color:var(--lp-526579)] font-mono text-[10px]">{clockAt(h)}</text>)}
+        {hover != null && <line x1={x(hover * S.stepHours)} x2={x(hover * S.stepHours)} y1={m.top} y2={m.top + ih} stroke="var(--lp-304a5f)" strokeWidth={1} />}
         <rect x={m.left} y={m.top} width={iw} height={ih} fill="transparent" onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHover(null)} />
       </svg>
-      {hover != null && <div className="pointer-events-none absolute top-2 z-10 min-w-[10.5rem] rounded-lg border border-[#c9dbe4] bg-[#fcfdfe] px-3 py-2 text-xs text-[#304a5f] shadow-[0_8px_20px_-10px_#17384f66]"
+      {hover != null && <div className="pointer-events-none absolute top-2 z-10 min-w-[10.5rem] rounded-lg border border-[color:var(--lp-c9dbe4)] bg-[color:var(--lp-fcfdfe)] px-3 py-2 text-xs text-[color:var(--lp-304a5f)] shadow-[0_8px_20px_-10px_var(--lp-17384f66)]"
         style={{ left: Math.min(Math.max(x(hover * S.stepHours) + 10, 0), width - 176) }}>
-        <p className="mb-1 font-mono font-semibold text-[#142e45]">{clockAt(hover * S.stepHours)}</p>
+        <p className="mb-1 font-mono font-semibold text-[color:var(--lp-142e45)]">{clockAt(hover * S.stepHours)}</p>
         {SERIES.map((s) => {
           const v = s.values[hover];
-          return <p key={s.key} className="flex items-center justify-between gap-3"><span className="flex items-center gap-1.5"><span aria-hidden="true" className="h-0.5 w-3 rounded-full" style={{ background: s.color }} />{s.key === 'nap' ? 'With nap' : 'No nap'}</span><span className="font-mono text-[#142e45]">{v == null ? 'asleep or just woken' : formatKssValue(v)}</span></p>;
+          return <p key={s.key} className="flex items-center justify-between gap-3"><span className="flex items-center gap-1.5"><span aria-hidden="true" className="h-0.5 w-3 rounded-full" style={{ background: s.color }} />{s.key === 'nap' ? 'With nap' : 'No nap'}</span><span className="font-mono text-[color:var(--lp-142e45)]">{v == null ? 'asleep or just woken' : formatKssValue(v)}</span></p>;
         })}
       </div>}
     </div>

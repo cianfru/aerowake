@@ -32,7 +32,7 @@ const DEFAULT_SETTINGS: PilotSettings = {
   napHabit: DEFAULT_NAP_HABIT,
   analysisType: 'single',
   selectedMonth: new Date(2026, 1, 1),
-  theme: 'light',
+  theme: 'dark',
 };
 
 function buildInitialState(initial: Partial<PilotSettings> = {}): AnalysisState {
@@ -41,7 +41,7 @@ function buildInitialState(initial: Partial<PilotSettings> = {}): AnalysisState 
   // Once the user has dismissed the landing page, remember it
   const landingDismissed = localStorage.getItem('aerowake_landing_dismissed') === 'true';
   return {
-    settings: { ...DEFAULT_SETTINGS, ...persisted, theme: localStorage.getItem('fatigue-theme') === 'dark' ? 'dark' : 'light' },
+    settings: { ...DEFAULT_SETTINGS, ...persisted, theme: localStorage.getItem('fatigue-theme') === 'light' ? 'light' : 'dark' },
     uploadedFile: null,
     actualFileObject: null,
     analysisResults: null,

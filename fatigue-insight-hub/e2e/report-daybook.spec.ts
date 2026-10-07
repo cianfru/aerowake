@@ -4,7 +4,7 @@ test('manual recent days produce a reviewable SMS export without a roster', asyn
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/report');
-  await expect(page.locator('html')).toHaveClass(/light/);
+  await expect(page.locator('html')).toHaveClass(/dark/);
   await page.getByLabel('Home base (IATA)').fill('LGW');
   await expect(page.getByText(/^Europe\/London · UTC\+\d$/)).toBeVisible();
   await page.getByRole('button', { name: 'UTC (Z)', exact: true }).click();
@@ -82,16 +82,22 @@ test('manual recent days produce a reviewable SMS export without a roster', asyn
   expect(errors).toEqual([]);
 });
 
-test('daylight landing stays readable with a saved dark workspace preference', async ({ page }, testInfo) => {
-  await page.addInitScript(() => localStorage.setItem('fatigue-theme', 'dark'));
+test('landing follows the saved theme: night by default, paper in daylight', async ({ page }, testInfo) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /Know your roster/ })).toBeVisible();
+  await expect(page.locator('.landing-night')).toHaveCSS('color', 'rgb(232, 238, 245)');
+  await page.screenshot({ path: testInfo.outputPath('landing-night.png'), fullPage: true });
+  await page.evaluate(() => localStorage.setItem('fatigue-theme', 'light'));
+  await page.reload();
   await expect(page.locator('.landing-daylight')).toHaveCSS('background-color', 'rgb(245, 245, 239)');
+  await page.evaluate(() => localStorage.setItem('fatigue-theme', 'dark'));
+  await page.reload();
+  await expect(page.locator('.landing-night')).toBeVisible();
   // Scroll reveals are captured in their visible state, including reduced motion.
   await page.getByRole('link', { name: 'Explore a sample roster' }).click();
   await page.getByRole('heading', { name: 'Record how it went.' }).scrollIntoViewIfNeeded();
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: testInfo.outputPath('landing-daylight.png'), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('landing-night-tour.png'), fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('link', { name: 'Log how a duty went', exact: true }).click();
   await expect(page).toHaveURL(/\/report$/);

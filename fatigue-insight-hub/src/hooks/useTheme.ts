@@ -5,7 +5,7 @@ type Theme = 'dark' | 'light';
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(() => {
     const stored = localStorage.getItem('fatigue-theme');
-    return (stored as Theme) || 'light';
+    return stored === 'light' ? 'light' : 'dark';
   });
 
   useEffect(() => {

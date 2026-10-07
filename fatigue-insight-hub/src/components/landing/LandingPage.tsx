@@ -6,11 +6,14 @@ import { PrinciplesSection } from './PrinciplesSection';
 import { FinalCta } from './FinalCta';
 import { LandingFooter } from './LandingFooter';
 import { useLandingHead } from './useLandingHead';
+import { useTheme } from '@/hooks/useTheme';
 import './landing.css';
 
 export function LandingPage({ onEnter }: { onEnter: () => void }) {
   useLandingHead();
-  return <div className="light landing-daylight landing-editorial">
+  // Night by default, like the workspace; a saved daylight preference keeps the paper edition.
+  const { theme } = useTheme();
+  return <div className={theme === 'light' ? 'light landing-daylight landing-editorial' : 'dark landing-night landing-editorial'}>
     <LandingHeader onEnter={onEnter} />
     <main>
       <HeroSection onEnter={onEnter} />

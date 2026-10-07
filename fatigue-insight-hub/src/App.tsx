@@ -25,7 +25,7 @@ const queryClient = new QueryClient();
 function ThemeSync() {
   useEffect(() => {
     const stored = localStorage.getItem('fatigue-theme') as 'dark' | 'light' | null;
-    const theme = stored || 'light';
+    const theme = stored === 'light' ? 'light' : 'dark';
     const root = document.documentElement;
     root.classList.remove('dark', 'light');
     root.classList.add(theme);

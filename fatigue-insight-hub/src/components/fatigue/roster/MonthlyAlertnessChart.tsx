@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import {
-  ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid,
+  Area, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
 import { KSS_BAND_BOUNDARIES, classifyKss, kssLabel, riskCssColor, riskInkColor } from '@/lib/risk-scale';
 import { localInputToUtcIso } from '@/lib/fatigue-report-api';
@@ -125,8 +125,17 @@ export function MonthlyAlertnessChart({ samples, duties, month, homeTz }: Props)
                 <ReferenceLine x={dataEnd} stroke="hsl(var(--muted-foreground))" strokeDasharray="1 3"
                   label={{ value: `No roster data after ${fmt(dataEnd, homeTz, { day: 'numeric', month: 'short' })}`, position: 'insideTopLeft', fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
               )}
-              <Line dataKey="kss" stroke="hsl(var(--primary))" strokeWidth={1.5} dot={false}
-                connectNulls={false} isAnimationActive={false} />
+              <defs>
+                <linearGradient id="kss-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.32} />
+                  <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              {/* A soft wash under the curve: shape only, the bands stay on the dotted limits. */}
+              <Area dataKey="kss" baseValue={0.3} fill="url(#kss-fill)" stroke="none" connectNulls={false}
+                isAnimationActive={false} activeDot={false} tooltipType="none" />
+              <Line dataKey="kss" stroke="hsl(var(--primary))" strokeWidth={1.75} dot={false}
+                connectNulls={false} isAnimationActive={false} className="chart-glow" />
               <Tooltip
                 cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeOpacity: 0.4 }}
                 content={({ active, payload }) => {

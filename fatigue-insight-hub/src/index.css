@@ -5,27 +5,27 @@
 @layer base {
   :root {
     /* Dark theme is the base token set; `.light` overrides it. */
-    --background: 214 38% 10%;
+    --background: 224 47% 5%;
     --foreground: 214 32% 96%;
 
-    --card: 214 30% 17%;
+    --card: 222 42% 9%;
     --card-foreground: 214 32% 96%;
 
-    --popover: 214 30% 19%;
+    --popover: 222 40% 11%;
     --popover-foreground: 214 32% 96%;
 
-    /* Desaturated teal: the same identity as light mode's deep teal, not neon. */
-    --primary: 196 60% 62%;
-    --primary-foreground: 214 45% 10%;
+    /* Night sector: a bright sky-cyan signal on a near-black navy canvas. */
+    --primary: 199 89% 60%;
+    --primary-foreground: 224 50% 6%;
 
-    --secondary: 214 28% 20%;
+    --secondary: 222 34% 14%;
     --secondary-foreground: 240 5% 96%;
 
-    --muted: 214 26% 21%;
-    --muted-foreground: 214 18% 70%;
+    --muted: 222 32% 13%;
+    --muted-foreground: 216 22% 70%;
 
-    --accent: 196 60% 62%;
-    --accent-foreground: 214 45% 10%;
+    --accent: 199 89% 60%;
+    --accent-foreground: 224 50% 6%;
 
     --destructive: 346 72% 60%;
     --destructive-foreground: 210 40% 98%;
@@ -68,26 +68,26 @@
     --ground-training: 215 30% 55%;
     --ground-training-foreground: 210 40% 98%;
 
-    --border: 214 22% 27%;
-    --input: 214 22% 30%;
-    --ring: 196 60% 62%;
+    --border: 218 28% 23%;
+    --input: 220 30% 21%;
+    --ring: 199 89% 60%;
 
     --radius: 0.625rem;
 
-    --chart-1: 196 60% 62%;
+    --chart-1: 199 89% 60%;
     --chart-2: 147 55% 50%;
     --chart-3: 42 90% 65%;
     --chart-4: 344 74% 56%;
     --chart-5: 280 65% 60%;
 
-    --sidebar-background: 214 36% 8%;
+    --sidebar-background: 224 47% 6%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 196 60% 62%;
+    --sidebar-primary: 199 89% 60%;
     --sidebar-primary-foreground: 222 47% 6%;
-    --sidebar-accent: 214 28% 16%;
+    --sidebar-accent: 222 34% 13%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 214 22% 22%;
-    --sidebar-ring: 196 60% 62%;
+    --sidebar-border: 220 34% 15%;
+    --sidebar-ring: 199 89% 60%;
 
     /* Brand and roster hero: the hero keeps its deep-teal gradient in both themes. */
     --brand-ink: 208 53% 18%;
@@ -99,15 +99,15 @@
     --on-hero-muted: 195 42% 84%;
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(196 60% 62%), hsl(198 55% 50%));
-    --gradient-card: linear-gradient(180deg, hsl(214 32% 12%), hsl(214 36% 9%));
-    --gradient-glow: radial-gradient(ellipse at center, hsl(196 60% 62% / 0.12), transparent 70%);
+    --gradient-primary: linear-gradient(135deg, hsl(195 92% 64%), hsl(205 90% 52%));
+    --gradient-card: linear-gradient(180deg, hsl(222 40% 10% / 0.8), hsl(224 44% 7% / 0.8));
+    --gradient-glow: radial-gradient(ellipse at center, hsl(199 89% 60% / 0.16), transparent 70%);
 
     /* Shadows: a top highlight and a faint outer ring give dark cards visible depth. */
-    --shadow-glow: 0 0 0 1px hsl(196 60% 62% / 0.25);
-    --shadow-card: 0 0 0 1px hsl(214 30% 30% / 0.35), 0 2px 4px hsl(215 50% 3% / 0.35), 0 16px 32px -18px hsl(215 50% 3% / 0.8), inset 0 1px 0 hsl(210 40% 90% / 0.06);
-    --shadow-elevated: 0 0 0 1px hsl(214 30% 32% / 0.4), 0 8px 14px -6px hsl(215 50% 3% / 0.5), 0 24px 56px -24px hsl(215 50% 3% / 0.9), inset 0 1px 0 hsl(210 40% 90% / 0.07);
-    --surface-recessed: 214 32% 13%;
+    --shadow-glow: 0 0 0 1px hsl(199 89% 60% / 0.35), 0 0 28px -6px hsl(199 89% 60% / 0.55);
+    --shadow-card: 0 1px 2px hsl(224 60% 2% / 0.5), 0 24px 48px -28px hsl(224 60% 2% / 0.95), inset 0 1px 0 hsl(210 60% 92% / 0.06);
+    --shadow-elevated: 0 8px 14px -6px hsl(224 60% 2% / 0.6), 0 32px 64px -28px hsl(224 60% 2% / 1), inset 0 1px 0 hsl(210 60% 92% / 0.08);
+    --surface-recessed: 224 44% 6%;
   }
 
   .light {
@@ -238,6 +238,65 @@
   .workspace-shell {
     background: hsl(var(--background));
   }
+  /* Night sector: a fixed aurora behind the workspace (cyan, teal, violet), never behind text alone. */
+  .dark .workspace-shell::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(42% 46% at 12% 6%, hsl(199 89% 52% / 0.22), transparent 70%),
+      radial-gradient(34% 44% at 94% 28%, hsl(268 70% 58% / 0.17), transparent 70%),
+      radial-gradient(44% 40% at 30% 100%, hsl(168 72% 42% / 0.13), transparent 72%),
+      radial-gradient(60% 50% at 70% 110%, hsl(214 80% 45% / 0.08), transparent 70%);
+  }
+  /* Frosted surfaces let the aurora through; text sits on >= 85 % opaque glass. */
+  .dark .instrument-surface,
+  .dark .duty-watch-surface {
+    background: hsl(var(--card) / 0.72);
+    border-color: hsl(210 60% 90% / 0.07);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    backdrop-filter: blur(18px) saturate(140%);
+  }
+  .dark .instrument-surface:hover,
+  .dark .duty-watch-surface:hover {
+    border-color: hsl(210 60% 90% / 0.11);
+  }
+  .dark .instrument-inset,
+  .dark .forecast-facts {
+    background: hsl(var(--surface-recessed) / 0.7);
+    border-color: hsl(210 60% 90% / 0.06);
+  }
+  .dark .calendar-grid {
+    background: hsl(var(--surface-recessed) / 0.75);
+    border-color: hsl(210 60% 90% / 0.07);
+  }
+  /* The slim roster header: identity on the left, the month in numbers beside it. */
+  .roster-bridge {
+    @apply relative isolate overflow-hidden rounded-3xl border border-border bg-card p-5 md:p-7;
+    box-shadow: var(--shadow-card);
+  }
+  .dark .roster-bridge {
+    background:
+      radial-gradient(60% 120% at 0% 0%, hsl(199 89% 55% / 0.14), transparent 60%),
+      radial-gradient(50% 120% at 100% 100%, hsl(268 70% 58% / 0.10), transparent 60%),
+      hsl(var(--card) / 0.7);
+    border-color: hsl(210 60% 90% / 0.08);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    backdrop-filter: blur(18px) saturate(140%);
+  }
+  .roster-kpi {
+    @apply min-w-0 rounded-2xl border border-border/70 px-4 py-3;
+    background: hsl(var(--surface-recessed));
+  }
+  .dark .roster-kpi {
+    background: hsl(var(--surface-recessed) / 0.6);
+    border-color: hsl(210 60% 90% / 0.06);
+  }
+  .dark .action-glow {
+    box-shadow: 0 0 0 1px hsl(199 89% 60% / 0.4), 0 6px 24px -6px hsl(199 89% 60% / 0.6);
+  }
   /* Surfaces: canvas (background) → surface (card + shadow) → inset (recessed). No card in card. */
   .instrument-surface {
     @apply rounded-2xl border border-border bg-card p-5 md:p-8;
@@ -259,6 +318,12 @@
      The strip paints edge to edge with a clipped spread shadow, so it never adds layout width. */
   .roster-rail-strip {
     @apply sticky top-14 z-20;
+  }
+  .dark .roster-rail-strip[data-stuck] {
+    background: hsl(var(--background) / 0.8);
+    box-shadow: 0 0 0 100vmax hsl(var(--background) / 0.8), 0 1px 0 100vmax hsl(210 60% 90% / 0.07);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
   }
   .roster-rail-strip[data-stuck] {
     background: hsl(var(--card) / 0.96);
@@ -286,6 +351,13 @@
   /* Dark: tinted active state with a ring (no neon fill). Light: solid deep teal. */
   .roster-view-rail .roster-view-tab[data-state='active'] {
     @apply bg-primary/15 text-primary shadow-none ring-1 ring-inset ring-primary/40;
+    box-shadow: 0 0 22px -8px hsl(var(--primary) / 0.7);
+  }
+  .dark .roster-rail-strip .roster-view-rail {
+    background: hsl(var(--card) / 0.6);
+    border-color: hsl(210 60% 90% / 0.08);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
   }
   .light .roster-view-rail .roster-view-tab[data-state='active'] {
     @apply bg-primary text-primary-foreground ring-0;
@@ -326,6 +398,15 @@
   }
   .action-raised:hover {
     box-shadow: 0 5px 10px -4px hsl(205 65% 20% / 0.4), inset 0 1px 0 hsl(0 0% 100% / 0.15);
+  }
+  .dark .chart-glow path {
+    filter: drop-shadow(0 0 4px hsl(var(--primary) / 0.65));
+  }
+  .dark .action-raised {
+    box-shadow: 0 0 0 1px hsl(199 89% 70% / 0.35), 0 8px 24px -10px hsl(199 89% 60% / 0.75), inset 0 1px 0 hsl(0 0% 100% / 0.25);
+  }
+  .dark .action-raised:hover {
+    box-shadow: 0 0 0 1px hsl(199 89% 70% / 0.5), 0 10px 32px -10px hsl(199 89% 60% / 0.95), inset 0 1px 0 hsl(0 0% 100% / 0.25);
   }
   /* Landing (always daylight): hero, surfaces and type rhythm. */
   .landing-hero {
@@ -796,6 +877,103 @@
   background: hsl(var(--background));
 }
 .fatigue-report .text-muted-foreground { opacity: 1; }
+/* Paper is always daylight: printed and exported reports use the light palette whatever the screen theme. */
+@media print {
+  :root, .dark {
+    --background: 208 28% 93%;
+    --foreground: 209 43% 19%;
+
+    --card: 200 33% 99%;
+    --card-foreground: 209 43% 19%;
+
+    --popover: 200 33% 99%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 199 64% 29%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 214 32% 94%;
+    --secondary-foreground: 240 10% 7%;
+
+    --muted: 214 30% 93%;
+    --muted-foreground: 215 20% 38%;
+
+    --accent: 183 83% 26%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 342 70% 38%;
+    --destructive-foreground: 210 40% 98%;
+
+    --success: 148 67% 30%;
+    --success-foreground: 210 40% 98%;
+
+    /* Semantic tokens tuned so small text still reaches 4.5:1 on cards. */
+    --high: 19 80% 40%;
+    --high-foreground: 0 0% 100%;
+
+    --warning: 36 92% 33%;
+    --warning-foreground: 0 0% 100%;
+
+    --critical: 342 70% 38%;
+    --critical-foreground: 210 40% 98%;
+
+    --risk-low: 213 13% 56%;
+    --risk-low-ink: 215 20% 38%;
+    --risk-low-on: 214 45% 10%;
+    --risk-moderate: 38 92% 38%;
+    --risk-moderate-ink: 36 95% 29%;
+    --risk-moderate-on: 214 45% 8%;
+    --risk-high: 19 84% 48%;
+    --risk-high-ink: 19 80% 37%;
+    --risk-high-on: 214 45% 8%;
+    --risk-critical: 342 66% 40%;
+    --risk-critical-ink: 342 70% 36%;
+    --risk-critical-on: 0 0% 100%;
+    --risk-extreme: 322 58% 30%;
+    --risk-extreme-ink: 322 58% 30%;
+    --risk-extreme-on: 0 0% 100%;
+
+    --wocl: 280 60% 70%;
+    --wocl-foreground: 222 47% 11%;
+
+    --simulator: 185 60% 35%;
+    --simulator-foreground: 0 0% 100%;
+    --ground-training: 215 30% 40%;
+    --ground-training-foreground: 0 0% 100%;
+
+    --border: 214 26% 81%;
+    --input: 214 24% 76%;
+    --ring: 199 64% 36%;
+
+    --chart-1: 199 64% 29%;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 199 64% 29%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 214 32% 94%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 214 28% 88%;
+    --sidebar-ring: 199 64% 36%;
+
+    /* Light-mode shadows */
+    --shadow-glow: 0 0 0 1px hsl(199 64% 29% / 0.25);
+    --shadow-card: 0 1px 2px hsl(208 40% 24% / 0.06), 0 12px 28px -16px hsl(208 40% 24% / 0.24), inset 0 1px 0 hsl(200 33% 99% / 0.8);
+    --shadow-elevated: 0 4px 8px -4px hsl(208 40% 24% / 0.14), 0 24px 52px -24px hsl(208 40% 24% / 0.3);
+    --surface-recessed: 207 28% 95%;
+
+    /* Light-mode gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(199 64% 34%), hsl(199 64% 27%));
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(240 10% 99%));
+    --gradient-glow: radial-gradient(ellipse at center, hsl(199 64% 29% / 0.08), transparent 70%);
+  }
+  .dark .workspace-shell::before { display: none; }
+  .dark .instrument-surface, .dark .duty-watch-surface, .dark .roster-bridge, .dark .roster-kpi,
+  .dark .instrument-inset, .dark .forecast-facts, .dark .calendar-grid {
+    background: hsl(var(--card)); -webkit-backdrop-filter: none; backdrop-filter: none; border-color: hsl(var(--border));
+  }
+}
+
 @media print {
   details.report-appendix:not([open]) { display: none; }
 }
@@ -804,7 +982,7 @@
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
 
-/* Landing remains daylight even when a pilot prefers dark mode in the workspace. */
+/* Daylight landing (saved light preference): focus rings on paper. Night uses landing.css. */
 .landing-daylight :is(a, button, [role="tab"]):focus-visible {
   outline: 3px solid #087478;
   outline-offset: 5px;
