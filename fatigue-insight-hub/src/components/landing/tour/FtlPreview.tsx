@@ -14,7 +14,7 @@ export function FtlPreview() {
       {TOUR_FTL.map((row) => <li key={row.label} className="rounded-xl border border-[color:var(--lp-dbe7ed)] bg-[color:var(--lp-f3f8fa)] p-3.5">
         <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--lp-526579)]">{row.label}</p>
         <p className="mt-1.5 font-mono text-lg text-[color:var(--lp-142e45)]">{hours(row.hours)}<span className="text-sm text-[color:var(--lp-526579)]">/{row.limit} h</span></p>
-        <div aria-hidden="true" className="mt-2 h-1.5 overflow-hidden rounded-full bg-[color:var(--lp-dde8ee)]"><div className="h-full rounded-full bg-[color:var(--lp-5d7385)]" style={{ width: `${(row.hours / row.limit) * 100}%` }} /></div>
+        <div aria-hidden="true" className="mt-2 h-1.5 overflow-hidden rounded-[2px] bg-[color:var(--lp-dde8ee)]"><div className="h-full rounded-[2px] bg-[color:var(--lp-5d7385)]" style={{ width: `${(row.hours / row.limit) * 100}%` }} /></div>
       </li>)}
     </ul>
     <p className="text-sm leading-6 text-[color:var(--lp-425d73)]">Maximum daily FDP checked for {TOUR_TOTALS.duties} of {TOUR_TOTALS.duties} duties against the basic table; crew and acclimatisation context is needed to confirm each one.</p>

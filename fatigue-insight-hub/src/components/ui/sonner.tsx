@@ -11,6 +11,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
+      // Phones: stay clear of the roster view bar docked at the bottom.
+      mobileOffset={{ bottom: 88 }}
       toastOptions={{
         classNames: {
           toast:

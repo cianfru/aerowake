@@ -22,8 +22,8 @@ interface DayCell {
   sleepHours: number | null;
 }
 
-const PLOT_H = 64;
-const SLEEP_H = 14;
+const PLOT_H = 128;
+const SLEEP_H = 20;
 /** KSS 1–9 → bar height; KSS 1 still shows a stub so a duty day is never invisible. */
 const barHeight = (kss: number) => Math.max(4, ((Math.min(9, Math.max(1, kss)) - 1) / 8) * PLOT_H);
 const SLEEP_MAX = 10;
@@ -115,14 +115,14 @@ export function MonthStrip({ results, reference, onDetails }: MonthStripProps) {
                   {day.duty && (
                     <span
                       aria-hidden="true"
-                      className={cn('absolute inset-x-[15%] bottom-0 rounded-t-[2px] transition-[filter] group-hover:brightness-110', level === 'extreme' && 'risk-extreme-hatch')}
+                      className={cn('absolute inset-x-[10%] bottom-0 rounded-t-[2px] transition-[filter] group-hover:brightness-110', level === 'extreme' && 'risk-extreme-hatch')}
                       style={{ height: day.peak != null ? barHeight(day.peak) : 6, background: level ? riskCssColor(level) : 'hsl(var(--muted-foreground) / 0.5)' }}
                     />
                   )}
                 </span>
                 <span aria-hidden="true" className="relative block w-full" style={{ height: SLEEP_H }}>
                   {day.sleepHours != null && day.sleepHours > 0 && (
-                    <span className="absolute inset-x-[15%] top-px rounded-b-[2px] bg-primary/35" style={{ height: Math.max(2, (Math.min(SLEEP_MAX, day.sleepHours) / SLEEP_MAX) * (SLEEP_H - 1)) }} />
+                    <span className="absolute inset-x-[10%] top-px rounded-b-[2px] bg-primary/35" style={{ height: Math.max(2, (Math.min(SLEEP_MAX, day.sleepHours) / SLEEP_MAX) * (SLEEP_H - 1)) }} />
                   )}
                 </span>
                 <span aria-hidden="true" className={cn('block pt-1 text-center font-mono text-[10px] leading-none tabular', day.duty ? 'text-foreground' : 'text-muted-foreground', (day.date.getDate() - 1) % 7 !== 0 && 'max-sm:invisible')}>

@@ -48,8 +48,8 @@ export function FDPUtilizationBar({ actualFdpHours, maxFdpHours, extendedFdpHour
           {hhmm(actualFdpHours)} <span className="text-muted-foreground">of {hhmm(maxFdpHours)} · {Math.round(ratio * 100)}%</span>
         </p>
       </div>
-      <div className="relative mt-3 h-2 rounded-full bg-muted" role="img" aria-label={`FDP ${hhmm(actualFdpHours)} of ${hhmm(maxFdpHours)} maximum`}>
-        <div className={cn('absolute inset-y-0 left-0 rounded-full', tone)} style={{ width: pct(actualFdpHours) }} />
+      <div className="relative mt-3 h-2 rounded-[2px] bg-muted" role="img" aria-label={`FDP ${hhmm(actualFdpHours)} of ${hhmm(maxFdpHours)} maximum`}>
+        <div className={cn('absolute inset-y-0 left-0 rounded-[2px]', tone)} style={{ width: pct(actualFdpHours) }} />
         <span aria-hidden="true" className="absolute -bottom-1 -top-1 w-[2px] bg-foreground" style={{ left: pct(maxFdpHours) }} />
         {extension && <span aria-hidden="true" className="absolute -bottom-1 -top-1 w-px border-l border-dotted border-foreground/70" style={{ left: pct(extension) }} />}
         {discretion && <span aria-hidden="true" className="absolute -bottom-1 -top-1 w-px border-l border-dashed border-foreground/50" style={{ left: pct(discretion) }} />}

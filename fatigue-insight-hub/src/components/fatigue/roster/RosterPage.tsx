@@ -52,10 +52,10 @@ function RosterHeader({ results, onNewRoster }: { results: AnalysisResults; onNe
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0 space-y-1">
         <p className="text-xs font-medium uppercase tracking-[0.14em] text-primary">Your roster</p>
-        <h1 data-analysis-heading tabIndex={-1} className="font-serif text-4xl font-normal tracking-[-0.01em] focus:outline-none md:text-[3.1rem] md:leading-[1.05]">{monthLabel(results)}</h1>
+        <h1 data-analysis-heading tabIndex={-1} className="text-3xl font-semibold tracking-tight focus:outline-none md:text-[2.5rem] md:leading-tight">{monthLabel(results)}</h1>
         {facts && <p className="text-sm text-muted-foreground">{facts}</p>}
       </div>
-      <button type="button" onClick={onNewRoster} className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-secondary/60 px-4 py-2 text-sm text-foreground transition-[background-color,transform] hover:bg-secondary active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <button type="button" onClick={onNewRoster} className="flex shrink-0 items-center gap-2 rounded-[4px] border border-border bg-secondary/60 px-4 py-2 text-sm text-foreground transition-[background-color,transform] hover:bg-secondary active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <RotateCcw className="h-4 w-4" aria-hidden="true" />New roster
       </button>
     </div>
@@ -65,7 +65,7 @@ function RosterHeader({ results, onNewRoster }: { results: AnalysisResults; onNe
         <dd className={cn('mt-1 font-mono text-2xl font-semibold tabular text-foreground', k.tone)}>
           {k.value}{k.unit && <span className="ml-1 text-xs font-normal text-muted-foreground">{k.unit}</span>}
         </dd>
-        {k.note && <dd className="mt-0.5 truncate text-xs text-muted-foreground">{k.note}</dd>}
+        {k.note && <dd className="mt-0.5 text-xs leading-snug text-muted-foreground">{k.note}</dd>}
       </div>)}
     </dl>
   </header>;

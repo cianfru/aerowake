@@ -1,11 +1,14 @@
 /**
  * DutyBarTooltip — one duty bar in the roster calendar plus a short tooltip.
  *
- * Bar colour is model output only: each sector in its own band when the
- * backend reports segments[].kss_peak, otherwise the whole duty in its peak
- * band. Check-in, turnaround and post-flight time are neutral duty time.
+ * Bar colour is model output only. Each sector changes colour where the
+ * predicted KSS crosses a band (the month's 30-min samples, duty peaks
+ * included); without samples, the sector's peak band (segments[].kss_peak),
+ * else the duty peak band. Check-in, turnaround and post-flight time are
+ * neutral duty time.
  */
 
+import { useContext } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -28,6 +31,19 @@ import {
 import type { TimelineDutyBar, TimelinePeakMarker, TimelineSegment } from '@/lib/timeline-types';
 import type { DutyAnalysis } from '@/types/fatigue';
 import { format } from 'date-fns';
+import { AlertnessSamplesContext, bandAt, bandGradient, bandRuns, type BandRun } from '@/lib/kss-band-gradient';
+
+const HOUR = 3600000;
+
+/** The instants a bar covers: the duty, or its part before / after midnight. */
+function barSpan(bar: TimelineDutyBar): [number, number] | null {
+  const report = Date.parse(bar.duty.reportTimeUtc ?? '');
+  const release = Date.parse(bar.duty.releaseTimeUtc ?? '');
+  const hours = (bar.endHour - bar.startHour) * HOUR;
+  if (bar.isOvernightContinuation) return Number.isFinite(release) ? [release - hours, release] : null;
+  if (!Number.isFinite(report)) return null;
+  return [report, bar.isOvernightStart || !Number.isFinite(release) ? report + hours : release];
+}
 
 interface DutyBarTooltipProps {
   bar: TimelineDutyBar;
@@ -85,6 +101,19 @@ export function DutyBarTooltip({ bar, widthPercent, leftPercent, selectedDuty, o
   const fdp = duty.actualFdpHours ?? duty.dutyHours;
   const isSelected = selectedDuty?.date.getTime() === duty.date.getTime();
 
+  const samples = useContext(AlertnessSamplesContext);
+  const widths = bar.segments.map((segment) => variant === 'elapsed' && segment.widthPercent != null
+    ? segment.widthPercent
+    : ((segment.endHour - segment.startHour) / (bar.endHour - bar.startHour)) * 100);
+  const span = samples.length ? barSpan(bar) : null;
+  /** Band runs along sector i, from the model samples inside it. */
+  const runsFor = (i: number): BandRun[] | null => {
+    if (!span) return null;
+    const before = widths.slice(0, i).reduce((a, w) => a + w, 0) / 100;
+    const dur = span[1] - span[0];
+    return bandRuns(samples, span[0] + before * dur, span[0] + (before + widths[i] / 100) * dur);
+  };
+
   const borderRadius = bar.isOvernightStart ? '3px 0 0 3px' : bar.isOvernightContinuation ? '0 3px 3px 0' : '3px';
   const label = `Open duty on ${format(duty.date, 'EEE d MMM')}: ${duty.flightSegments.map((s) => s.flightNumber).join(', ') || duty.trainingCode || 'Duty'}${bar.isOvernightContinuation ? ' (continued)' : ''}`;
 
@@ -104,10 +133,10 @@ export function DutyBarTooltip({ bar, widthPercent, leftPercent, selectedDuty, o
             style={{ top: 5, bottom: 5, left: `${leftPercent}%`, width: `${Math.max(widthPercent, 1.5)}%`, borderRadius }}
           >
             {bar.segments.map((segment, i) => {
-              const width = variant === 'elapsed' && segment.widthPercent != null
-                ? segment.widthPercent
-                : ((segment.endHour - segment.startHour) / (bar.endHour - bar.startHour)) * 100;
+              const width = widths[i];
               const isFlight = segment.type === 'flight';
+              const runs = isFlight ? runsFor(i) : null;
+              const labelLevel = runs ? bandAt(runs, 0.5) : segment.level;
               return (
                 <div
                   key={i}
@@ -115,11 +144,11 @@ export function DutyBarTooltip({ bar, widthPercent, leftPercent, selectedDuty, o
                     'calendar-seg relative flex h-full items-center justify-center',
                     isFlight && segment.level === 'extreme' && 'risk-extreme-hatch',
                   )}
-                  style={{ width: `${width}%`, ...segmentStyle(segment, duty) }}
+                  style={{ width: `${width}%`, ...segmentStyle(segment, duty), ...(runs ? { background: bandGradient(runs) } : {}) }}
                 >
                   {i > 0 && <span aria-hidden="true" className="absolute inset-y-0 left-0 w-px bg-card/80" />}
                   {isFlight && segment.flightNumber && (
-                    <span className="calendar-seg-label truncate px-1 font-mono text-[11px] font-semibold leading-none" style={{ color: riskOnColor(segment.level) }}>
+                    <span className="calendar-seg-label truncate px-1 font-mono text-[11px] font-semibold leading-none" style={{ color: riskOnColor(labelLevel) }}>
                       {segment.flightNumber}
                     </span>
                   )}

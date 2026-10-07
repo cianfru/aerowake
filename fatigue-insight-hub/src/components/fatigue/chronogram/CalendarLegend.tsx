@@ -16,9 +16,10 @@ export function CalendarLegend({ showDiscretion, showStandby }: { showDiscretion
         <li className="flex items-center gap-2">
           <span aria-hidden="true" className="flex h-3 w-9 overflow-hidden rounded-[3px]">
             <span className="w-2" style={{ background: 'hsl(var(--muted-foreground) / 0.3)' }} />
+            <span className="flex-1" style={{ background: riskCssColor('low') }} />
             <span className="flex-1" style={{ background: riskCssColor('high') }} />
           </span>
-          Flight, coloured by predicted KSS band
+          Flight, coloured by its predicted KSS band as it changes
         </li>
         <li className="flex items-center gap-2">
           <span aria-hidden="true" className="relative h-3 w-2">

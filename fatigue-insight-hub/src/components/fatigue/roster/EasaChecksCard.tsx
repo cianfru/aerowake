@@ -54,7 +54,7 @@ function Gauge({ label, value, limit }: { label: string; value: number; limit: n
     <div className="instrument-inset min-w-0 space-y-3 p-4">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p className="font-mono text-lg font-medium leading-none tabular">{formatLimit(value, limit)}</p>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label={`${label}: highest rolling total ${Math.round(value)} of ${Math.round(limit)} hours`}>
+      <div className="h-1.5 w-full overflow-hidden rounded-[2px] bg-muted" role="img" aria-label={`${label}: highest rolling total ${Math.round(value)} of ${Math.round(limit)} hours`}>
         <div className={cn('h-full', tone)} style={{ width: `${Math.min(100, ratio * 100)}%` }} />
       </div>
     </div>

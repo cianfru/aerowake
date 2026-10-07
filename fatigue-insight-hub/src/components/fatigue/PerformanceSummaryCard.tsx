@@ -54,8 +54,8 @@ function Driver({ label, detail, value, max, colour }: { label: string; detail: 
         <p className="text-sm font-medium">{label}</p>
         <p className="font-mono text-sm tabular">+{value.toFixed(1)} <span className="text-xs text-muted-foreground">KSS</span></p>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-        <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, (value / max) * 100))}%`, background: colour }} />
+      <div className="h-1.5 overflow-hidden rounded-[2px] bg-muted">
+        <div className="h-full rounded-[2px]" style={{ width: `${Math.max(0, Math.min(100, (value / max) * 100))}%`, background: colour }} />
       </div>
       <p className="text-xs text-muted-foreground">{detail}</p>
     </div>

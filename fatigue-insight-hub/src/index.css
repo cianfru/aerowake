@@ -274,7 +274,7 @@
   }
   /* The slim roster header: identity on the left, the month in numbers beside it. */
   .roster-bridge {
-    @apply relative isolate overflow-hidden rounded-3xl border border-border bg-card p-5 md:p-7;
+    @apply relative isolate overflow-hidden rounded-2xl border border-border bg-card p-5 md:p-7;
     box-shadow: var(--shadow-card);
   }
   .dark .roster-bridge {
@@ -314,54 +314,34 @@
     border-color: hsl(var(--hero-line));
     box-shadow: 0 16px 30px -20px hsl(var(--hero-from)), inset 0 1px 0 hsl(0 0% 100% / 0.11);
   }
-  /* The view rail: one compact full-bleed strip under the header, calm until it sticks.
-     The strip paints edge to edge with a clipped spread shadow, so it never adds layout width. */
+  /* The view rail. Desktop: one full-width solid bar that sticks under the header.
+     Phone: the same tab list docks to the bottom of the screen (icons + short labels). */
   .roster-rail-strip {
-    @apply sticky top-14 z-20;
+    @apply md:sticky md:top-14 md:z-20;
   }
-  .dark .roster-rail-strip[data-stuck] {
-    background: hsl(var(--background) / 0.8);
-    box-shadow: 0 0 0 100vmax hsl(var(--background) / 0.8), 0 1px 0 100vmax hsl(210 60% 90% / 0.07);
-    -webkit-backdrop-filter: blur(16px);
-    backdrop-filter: blur(16px);
-  }
-  .roster-rail-strip[data-stuck] {
-    background: hsl(var(--card) / 0.96);
-    box-shadow: 0 0 0 100vmax hsl(var(--card) / 0.96), 0 1px 0 100vmax hsl(var(--border));
-    clip-path: inset(0 -100vmax -1px);
-  }
-  /* Selectors carry a parent class so they outrank the shadcn Tabs utilities. */
   .roster-rail-strip .roster-view-rail {
-    @apply inline-flex h-auto max-w-full items-center justify-start gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1 text-muted-foreground;
+    @apply grid h-auto w-full grid-cols-5 gap-1 rounded-[6px] border border-border bg-card p-1 text-muted-foreground;
     box-shadow: var(--shadow-card);
-    scrollbar-width: none;
-    transition: background-color 200ms, box-shadow 200ms, border-color 200ms;
   }
   .roster-rail-strip[data-stuck] .roster-view-rail {
-    @apply border-transparent bg-transparent;
-    box-shadow: none;
+    box-shadow: 0 10px 24px -12px hsl(224 60% 2% / 0.6), var(--shadow-card);
   }
-  .roster-view-rail::-webkit-scrollbar { display: none; }
   .roster-view-rail .roster-view-tab {
-    @apply inline-flex min-h-[44px] shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-0 text-[13px] font-medium text-muted-foreground shadow-none transition-colors hover:bg-secondary hover:text-foreground;
+    @apply inline-flex min-h-[52px] min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-[4px] px-3 py-0 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:bg-secondary hover:text-foreground;
   }
-  .roster-rail-strip[data-stuck] .roster-view-rail .roster-view-tab {
-    @apply min-h-[40px];
-  }
-  /* Dark: tinted active state with a ring (no neon fill). Light: solid deep teal. */
+  /* Selected: a solid fill, never a tint, so the current view is unmistakable. */
   .roster-view-rail .roster-view-tab[data-state='active'] {
-    @apply bg-primary/15 text-primary shadow-none ring-1 ring-inset ring-primary/40;
-    box-shadow: 0 0 22px -8px hsl(var(--primary) / 0.7);
+    @apply bg-primary font-semibold text-primary-foreground shadow-none ring-0 hover:bg-primary hover:text-primary-foreground;
   }
-  .dark .roster-rail-strip .roster-view-rail {
-    background: hsl(var(--card) / 0.6);
-    border-color: hsl(210 60% 90% / 0.08);
-    -webkit-backdrop-filter: blur(16px);
-    backdrop-filter: blur(16px);
-  }
-  .light .roster-view-rail .roster-view-tab[data-state='active'] {
-    @apply bg-primary text-primary-foreground ring-0;
-    box-shadow: 0 3px 8px -3px hsl(204 70% 20% / 0.45), inset 0 1px 0 hsl(200 40% 95% / 0.18);
+  @media (max-width: 767px) {
+    .roster-rail-strip .roster-view-rail {
+      @apply fixed inset-x-0 bottom-0 z-40 rounded-none border-x-0 border-b-0 px-1.5 pt-1.5;
+      padding-bottom: max(0.375rem, env(safe-area-inset-bottom));
+      box-shadow: 0 -8px 24px -12px hsl(224 60% 2% / 0.55);
+    }
+    .roster-view-rail .roster-view-tab {
+      @apply min-h-[56px] flex-col gap-1 px-1 text-[11px] leading-none;
+    }
   }
   .forecast-facts {
     @apply grid gap-6 rounded-xl border border-border/80 p-5 sm:grid-cols-[1.15fr_1fr] md:p-6;
@@ -533,8 +513,9 @@
     animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
 
+  /* backwards, not forwards: once played nothing is held, so no leftover transform traps fixed bars. */
   .animate-fade-in {
-    animation: fadeIn 0.5s ease-out forwards;
+    animation: fadeIn 0.5s ease-out backwards;
   }
 
   @keyframes fadeIn {
@@ -544,7 +525,7 @@
     }
     to {
       opacity: 1;
-      transform: translateY(0);
+      transform: none;
     }
   }
 

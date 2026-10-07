@@ -106,13 +106,14 @@ export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDu
     });
   };
 
-  return <Tabs value={view} onValueChange={v => navigate(v)} className="min-w-0">
+  // Phones: the view bar docks to the bottom of the screen, so leave room for it.
+  return <Tabs value={view} onValueChange={v => navigate(v)} className="min-w-0 max-md:pb-20">
     <div ref={sentinel} aria-hidden="true" className="h-0" />
-    <div className="roster-rail-strip py-2" data-stuck={stuck ? '' : undefined}>
+    <div className="roster-rail-strip md:py-2" data-stuck={stuck ? '' : undefined}>
       <TabsList aria-label="Roster views" className="roster-view-rail">
         {views.map(({ id, label, short, icon: Icon }) => <TabsTrigger key={id} value={id} aria-label={label} className="roster-view-tab">
-          <Icon className="hidden h-4 w-4 shrink-0 sm:block" aria-hidden="true" />
-          <span className="sm:hidden">{short}</span><span className="hidden sm:inline">{label}</span>
+          <Icon className="h-5 w-5 shrink-0 md:h-4 md:w-4" aria-hidden="true" />
+          <span className="md:hidden">{short}</span><span className="hidden truncate md:inline">{label}</span>
         </TabsTrigger>)}
       </TabsList>
     </div>
@@ -155,7 +156,7 @@ export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDu
         <Chronogram duties={results.duties} statistics={results.statistics} month={results.month} pilotId={pilotId}
           pilotName={results.pilotName} pilotBase={results.pilotBase} pilotAircraft={results.pilotAircraft}
           onDutySelect={onDutySelect} selectedDuty={selectedDuty} restDaysSleep={results.restDaysSleep}
-          analysisId={results.analysisId} standbyPeriods={results.standbyPeriods} />
+          analysisId={results.analysisId} standbyPeriods={results.standbyPeriods} alertnessTimeline={results.alertnessTimeline} />
         <ExportOptions duties={results.duties} />
       </TabsContent>}
 
