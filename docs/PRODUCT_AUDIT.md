@@ -64,7 +64,7 @@ A small set of unblinded debriefs is not enough for validation. The ordinary int
 
 ## Verification
 
-Final local validation: **558 backend tests** with disposable PostgreSQL, **347 frontend tests**, **16 desktop/mobile API-backed browser scenarios**, and **6 dependency-policy tests** passed. Node 22 clean installation, type checking, lint (zero errors; 30 existing warnings), production build and Python dependency audit passed. The frontend audit isolates five transitive findings from one unpatched development-only `braces` advisory; no production advisories were found. Existing bundle-size warnings remain.
+Final local validation: **558 backend tests** with disposable PostgreSQL, **347 frontend tests**, **16 desktop/mobile API-backed browser scenarios**, and **10 dependency-policy tests** passed. Node 22 clean installation, type checking, lint (zero errors; 30 existing warnings), production build and Python dependency audit passed. The frontend audit isolates one unpatched development-only `braces` advisory, reported across five packages locally and seven in GitHub CI because npm also propagates it through two Tailwind peer plugins; no production advisories were found. The exception checks the exact advisory and development-only lockfile provenance, including those peer plugins. Existing bundle-size warnings remain.
 
 Production-preview checks at 390 and 1440 px covered outlook, calendar, recovery, FTL, routes and contextual evidence navigation with no horizontal overflow or page errors. Focused mobile checks also covered 320 and 768 px, keyboard/touch activation and 44 px information controls. Screenshots use synthetic inputs:
 

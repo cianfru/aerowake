@@ -6,7 +6,12 @@ import { pathToFileURL } from 'node:url';
 // while building trusted source files. Keep this exception narrow: unrelated
 // advisories, production dependencies and failures to run the audit must fail CI.
 const BUILD_ADVISORY = 'https://github.com/advisories/GHSA-vfj7-8cjw-p6xm';
-const BUILD_CHAIN = new Set(['braces', 'chokidar', 'micromatch', 'fast-glob', 'tailwindcss']);
+// npm may also report Tailwind's two build-plugin peer dependants. These are
+// checked against the lock's dev flag below; a production or shared path fails.
+const BUILD_CHAIN = new Set([
+  'braces', 'chokidar', 'micromatch', 'fast-glob', 'tailwindcss',
+  '@tailwindcss/typography', 'tailwindcss-animate',
+]);
 
 export function assessAudit(report, lock) {
   if (report?.error || !report?.metadata?.vulnerabilities || !report?.vulnerabilities || !lock?.packages) {
