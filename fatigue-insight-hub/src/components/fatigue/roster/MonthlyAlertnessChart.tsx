@@ -4,7 +4,7 @@ import {
   Area, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
 import { KSS_BAND_BOUNDARIES, classifyKss, kssLabel, riskCssColor, riskInkColor } from '@/lib/risk-scale';
-import { localInputToUtcIso } from '@/lib/fatigue-report-api';
+import { buildMonthAxis } from '@/lib/calendar-axis';
 import type { AlertnessSample, DutyAnalysis } from '@/types/fatigue';
 import { dutyRiskLevel, dutyRoute } from './roster-utils';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -37,7 +37,8 @@ export function MonthlyAlertnessChart({ samples, duties, month, homeTz }: Props)
   const [week, setWeek] = useState(0);
   const weekly = (view ?? (mobile ? 'week' : 'month')) === 'week';
   const gradientId = useId();
-  const { data, sleeps, dutyAreas, ticks, domain, midnights, weekends, dataEnd } = useMemo(() => {
+  const axis = useMemo(() => buildMonthAxis(month, homeTz), [month, homeTz]);
+  const { data, sleeps, dutyAreas } = useMemo(() => {
     const data = samples.map((s) => ({ t: s.t, kss: s.asleep || s.kss == null || !Number.isFinite(s.kss) || s.kss < 1 || s.kss > 9 ? null : s.kss, onDuty: s.onDuty, asleep: s.asleep }));
     // Contiguous asleep runs -> shaded areas
     const sleeps: Array<[number, number]> = [];
@@ -58,45 +59,27 @@ export function MonthlyAlertnessChart({ samples, duties, month, homeTz }: Props)
         label: dutyRoute(d),
       }))
       .filter((a) => Number.isFinite(a.x1) && Number.isFinite(a.x2));
-    // Local midnights bound the month; ticks sit at local noon so a label names the day it is under.
-    const y = month.getFullYear();
-    const m = month.getMonth();
-    const days = new Date(y, m + 1, 0).getDate();
-    const localIso = (d: Date, hhmm: string) => localInputToUtcIso(
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${hhmm}`,
-      homeTz,
-    );
-    const midnights: number[] = [];
-    const ticks: number[] = [];
-    const weekends: Array<[number, number]> = [];
-    for (let d = 1; d <= days + 1; d++) {
-      const date = new Date(y, m, d);
-      const mid = localIso(date, '00:00');
-      if (mid) midnights.push(Date.parse(mid));
-      if (d <= days) {
-        const noon = localIso(date, '12:00');
-        if (noon) ticks.push(Date.parse(noon));
-      }
-    }
-    for (let d = 1; d <= days; d++) {
-      const dow = new Date(y, m, d).getDay();
-      if ((dow === 0 || dow === 6) && midnights[d]) weekends.push([midnights[d - 1], midnights[d]]);
-    }
-    const domain: [number, number] = [midnights[0] ?? samples[0]?.t ?? 0, midnights[midnights.length - 1] ?? samples[samples.length - 1]?.t ?? 1];
-    const lastSample = samples.length ? samples[samples.length - 1].t : null;
-    const dataEnd = lastSample != null && lastSample < domain[1] - 36 * 3600000 ? lastSample : null;
-    return { data, sleeps, dutyAreas, ticks, domain, midnights, weekends, dataEnd };
-  }, [samples, duties, month, homeTz]);
-
-  const startDay = Math.min(week * 7, Math.max(0, Math.floor((ticks.length - 1) / 7) * 7));
-  const endDay = Math.min(startDay + 7, ticks.length);
-  const visibleDomain: [number, number] = weekly ? [midnights[startDay] ?? domain[0], midnights[endDay] ?? domain[1]] : domain;
-  const visibleData = data.filter(s => s.t >= visibleDomain[0] && s.t <= visibleDomain[1]);
-  const summaries = dailyAlertnessSummaries(samples.filter(s => s.t >= visibleDomain[0] && s.t < visibleDomain[1]), homeTz);
+    return { data, sleeps, dutyAreas };
+  }, [samples, duties]);
 
   if (!samples.length) {
     return <p className="text-sm text-muted-foreground">The monthly curve is available after re-analysing this roster.</p>;
   }
+  if (!axis) {
+    return <p className="text-sm text-muted-foreground">Calendar dates are unavailable without a valid home-base timezone.</p>;
+  }
+
+  const { domain, boundaries, weekends } = axis;
+  const dayCount = axis.days.length;
+  const startDay = Math.min(week * 7, Math.max(0, Math.floor((dayCount - 1) / 7) * 7));
+  const endDay = Math.min(startDay + 7, dayCount);
+  const visibleDays = weekly ? axis.days.slice(startDay, endDay) : axis.days;
+  const ticks = visibleDays.map(day => day.tick).filter((tick): tick is number => tick != null);
+  const visibleDomain: [number, number] = weekly ? [boundaries[startDay], boundaries[endDay]] : domain;
+  const visibleData = data.filter(s => s.t >= visibleDomain[0] && s.t <= visibleDomain[1]);
+  const summaries = dailyAlertnessSummaries(samples.filter(s => s.t >= visibleDomain[0] && s.t < visibleDomain[1]), homeTz);
+  const lastSample = samples[samples.length - 1].t;
+  const dataEnd = lastSample < domain[1] - 36 * 3600000 ? lastSample : null;
 
   const axisTick = { fontSize: 11, fill: 'hsl(var(--muted-foreground))', fontFamily: 'JetBrains Mono, monospace' };
 
@@ -119,8 +102,8 @@ export function MonthlyAlertnessChart({ samples, duties, month, homeTz }: Props)
         </div>
         {weekly && <div className="flex items-center gap-2">
           <button type="button" aria-label="Previous 7 days of sleepiness" disabled={startDay === 0} onClick={() => setWeek(Math.max(0, week - 1))} className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"><ChevronLeft className="h-4 w-4" aria-hidden="true" /></button>
-          <p className="min-w-[6rem] text-center text-xs tabular" aria-live="polite">{fmt(visibleDomain[0], homeTz, { day: 'numeric' })}–{fmt(visibleDomain[1] - 1, homeTz, { day: 'numeric', month: 'short' })}</p>
-          <button type="button" aria-label="Next 7 days of sleepiness" disabled={endDay >= ticks.length} onClick={() => setWeek(week + 1)} className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"><ChevronRight className="h-4 w-4" aria-hidden="true" /></button>
+          <p className="min-w-[6rem] text-center text-xs tabular" aria-live="polite">{startDay + 1}–{endDay} {new Intl.DateTimeFormat('en-GB', { month: 'short' }).format(month)}</p>
+          <button type="button" aria-label="Next 7 days of sleepiness" disabled={endDay >= dayCount} onClick={() => setWeek(week + 1)} className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"><ChevronRight className="h-4 w-4" aria-hidden="true" /></button>
         </div>}
       </div>
       <div className="h-64 sm:h-72">
@@ -131,7 +114,7 @@ export function MonthlyAlertnessChart({ samples, duties, month, homeTz }: Props)
                 <ReferenceArea key={`w${i}`} x1={a} x2={b} y1={0.3} y2={9} fill="hsl(var(--foreground))" fillOpacity={0.03} ifOverflow="hidden" />
               ))}
               <XAxis
-                dataKey="t" type="number" scale="time" domain={visibleDomain} ticks={weekly ? ticks.slice(startDay, endDay) : ticks} allowDataOverflow
+                dataKey="t" type="number" scale="time" domain={visibleDomain} ticks={ticks} allowDataOverflow
                 tickFormatter={(t: number) => fmt(t, homeTz, { day: 'numeric' })}
                 tickLine={false} axisLine={{ stroke: 'hsl(var(--border))' }} tick={axisTick} interval="preserveStartEnd" minTickGap={4}
               />
