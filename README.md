@@ -1,10 +1,12 @@
 # AeroWake
 
-Roster review and fatigue reporting for pilots. Predictions use `aerowake-4.0-kss`; they are estimates, not fitness-for-duty decisions or compliance certification.
+Roster review and fatigue reporting for pilots. Predictions use `aerowake-4.2-kss`; they are estimates, not fitness-for-duty decisions or compliance certification.
 
 - `fatigue-tool`: Python 3.12 / FastAPI, parsers, model, reports and PostgreSQL persistence.
 - `fatigue-insight-hub`: Node 22 / React / TypeScript / Vite.
 - [Launch hardening and deployment](docs/LAUNCH_HARDENING.md): changes, schema migration and remaining release gates.
+- [Product and mobile audit](docs/PRODUCT_AUDIT.md): implemented improvements, cited BAM/SAFTE comparison and remaining validation work.
+- [Scientific source audit](docs/SCIENCE_SOURCE_AUDIT.md): identified publications, corrected citations and unresolved records.
 - [Roster reference format](docs/ROSTER_REFERENCE.md): UTC CrewLink interpretation, reviewed totals and validation boundaries.
 
 ## Local development
@@ -44,7 +46,7 @@ npm run typecheck
 npm run lint
 npm test
 npm run build
-npm audit --audit-level=moderate
+npm run audit:dependencies
 ```
 
 The PostgreSQL tests require `TEST_DATABASE_URL` pointing to a **disposable database whose name contains `test`**. They delete its public schema. CI provisions that database and exercises migrations, ownership, deletion, refresh races and account recovery. Never point these tests at live data.

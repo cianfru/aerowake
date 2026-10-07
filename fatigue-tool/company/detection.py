@@ -4,7 +4,7 @@ Airline detection from roster signals.
 Uses a combination of parser format, home base, flight prefixes, and
 PDF text keywords to guess which airline a pilot belongs to.
 Returns a confidence score so the frontend can decide whether to
-auto-assign silently (high confidence) or ask for confirmation.
+present a suggestion for explicit pilot confirmation. No confidence score authorises membership.
 
 Usage:
     from company.detection import detect_airline
@@ -14,7 +14,7 @@ Usage:
         raw_pdf_text='...',
         flight_numbers=['QR101', 'QR102'],
     )
-    # result = {'name': 'Qatar Airways', 'icao': 'QTR', 'confidence': 0.95}
+    # result.to_dict() uses neutral operator labels and always requests confirmation.
 """
 
 import re
@@ -30,10 +30,10 @@ class AirlineGuess:
 
     def to_dict(self) -> Dict:
         return {
-            'suggested_name': self.name,
+            'suggested_name': f'Operator {self.icao}' if self.icao == 'QTR' else self.name,
             'suggested_icao': self.icao,
             'confidence': self.confidence,
-            'needs_confirmation': self.confidence < 0.9,
+            'needs_confirmation': True,  # A heuristic must never assign company membership.
         }
 
 
@@ -50,7 +50,7 @@ _AIRLINE_SIGNATURES = [
         'keywords': ['easyjet', 'eju'],
     },
     {
-        'name': 'Qatar Airways',
+        'name': 'Operator QTR',
         'icao': 'QTR',
         'format': 'crewlink',
         'bases': {'DOH'},
@@ -156,7 +156,7 @@ def extract_fleet_and_role(pilot_info: Dict) -> Dict[str, Optional[str]]:
     """
     Extract fleet (aircraft type) and pilot role from parsed pilot info.
 
-    Handles both Qatar CrewLink format:
+    Handles both CrewLink format:
         pilot_aircraft = "A320", role parsed from "ID :134614 (DOH CP-A320)"
     And easyJet format:
         aircraft = "319", role = "CP"

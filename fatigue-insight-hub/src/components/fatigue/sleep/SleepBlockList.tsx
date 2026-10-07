@@ -23,7 +23,7 @@ export interface ListedSleepBlock {
 
 /** What each quality factor means, with its source (shown in the "why" panel). */
 const FACTORS: Partial<Record<keyof SleepQualityFactors, { label: string; text: string }>> = {
-  base_efficiency: { label: 'Place', text: 'Sleep efficiency at home or in a hotel (Signal et al. 2013).' },
+  base_efficiency: { label: 'Place', text: 'Assumed sleep efficiency for the environment; this is not a measured home or hotel value. Signal et al. (2013) studied in-flight rest.' },
   wocl_boost: { label: 'Body-clock timing', text: 'Sleep out of step with the body clock is less efficient (Dijk & Czeisler 1994).' },
   late_onset_penalty: { label: 'Late start', text: 'A late bedtime shortens the sleep opportunity.' },
   recovery_boost: { label: 'Recovery', text: 'Sleep after a short night is deeper (Borbély 1982).' },
@@ -54,7 +54,8 @@ function WhyPanel({ block, rationale, confidence, confidenceBasis, references, o
       </p>
       {!pilot && confidence != null && (
         <div className="space-y-1 border-t border-border pt-2 text-xs">
-          <p><span className="text-muted-foreground">Model confidence </span><span className="font-mono tabular">{Math.round(confidence * 100)} %</span></p>
+          <p><span className="text-muted-foreground">Assumption rating </span><span className="font-mono tabular">{Math.round(confidence * 100)}/100</span></p>
+          <p className="leading-relaxed text-muted-foreground">A heuristic rating of the sleep assumptions, not a calibrated probability or a measure of actual sleep.</p>
           {confidenceBasis && !/^Confidence: \d+%$/.test(confidenceBasis) && <p className="leading-relaxed text-muted-foreground">{confidenceBasis}</p>}
         </div>
       )}

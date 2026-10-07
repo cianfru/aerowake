@@ -19,12 +19,13 @@ test('the pilot sees why a nap is assumed and can remove it, then undo', async (
   const sleep = dialog.getByRole('list', { name: 'Estimated sleep before this duty' });
   await expect(sleep).toContainText('Nap · assumed');
 
-  // Why the nap is there, with its published basis and confidence.
+  // Why the nap is there, with its published basis and assumption rating.
   await sleep.getByRole('button', { name: /^Why this nap/ }).click();
   const why = page.getByRole('dialog').filter({ hasText: 'Why this nap' });
   await expect(why).toContainText('54 % of 52 long-haul pilots');
   await expect(why).toContainText('Signal et al. 2014');
-  await expect(why).toContainText('Model confidence');
+  await expect(why).toContainText('Assumption rating');
+  await expect(why).toContainText('not a calibrated probability');
   await page.screenshot({ path: testInfo.outputPath('why-nap.png'), fullPage: false });
 
   // "I don't nap here" removes it and recalculates; Undo restores it.

@@ -48,7 +48,7 @@ function guessPhase(duty: DutyAnalysis, at: number): InflightPhase {
 export function InflightLogger({ duty, analysisId, homeTz, title = 'How sleepy do you feel?' }: {
   duty: DutyAnalysis; analysisId?: string | null; homeTz?: string; title?: string;
 }) {
-  const { entries, add, remove, syncing, syncError, isAuthenticated } = useInflightLog();
+  const { entries, add, remove, syncing, syncError, loadError, isAuthenticated } = useInflightLog();
   const online = useOnline();
   const [kss, setKss] = useState<number | null>(null);
   const [phase, setPhase] = useState<InflightPhase>(() => guessPhase(duty, Date.now()));
@@ -68,7 +68,7 @@ export function InflightLogger({ duty, analysisId, homeTz, title = 'How sleepy d
       analysisId: analysisId ?? null, dutyId: duty.dutyId ?? null,
       dutyReportUtc: isIso(duty.reportTimeUtc) ? duty.reportTimeUtc! : null,
     });
-    setSaved(!isAuthenticated ? 'Saved on this device. Sign in to keep your ratings with your account.'
+    setSaved(!isAuthenticated ? 'Saved on this device as a guest. Sign in before logging future ratings to save those with your account.'
       : online ? 'Saved. Sending to your account…' : 'Saved on this device. It goes to your account when you are back online.');
     setKss(null);
     setNote('');
@@ -143,11 +143,12 @@ export function InflightLogger({ duty, analysisId, homeTz, title = 'How sleepy d
           ))}
         </ul>
       )}
+      {loadError && <p role="status" className="text-xs text-muted-foreground">{loadError}</p>}
       <p className="text-[11px] leading-relaxed text-muted-foreground">
         {syncing ? 'Sending your ratings… ' : syncError ? `${syncError} They stay on this device. ` : ''}
         {isAuthenticated
-          ? 'Your ratings are pooled, pseudonymised, with every pilot’s to calibrate the model against what pilots actually feel. Delete them here or stop contributing in your account. '
-          : 'Sign in so your ratings reach your account and help calibrate the model for every pilot. '}
+          ? 'Ratings are private unless you separately choose to contribute to the model study. Delete them here or manage your choice in your account. '
+          : 'Guest ratings stay on this device. Sign in before logging future ratings to save those with your account. '}
         This log does not replace your operator’s fatigue reporting.
       </p>
     </section>

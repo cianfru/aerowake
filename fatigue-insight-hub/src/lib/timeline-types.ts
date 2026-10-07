@@ -4,9 +4,6 @@
  * HomeBase, UTC, and HPT (Elapsed) views all share these types.
  * Each view provides a thin "transform" function that converts
  * DutyAnalysis[] → TimelineData using these types.
- *
- * ContinuousPerformanceTimeline (SAFTE view) is a Recharts chart
- * with a fundamentally different architecture and does NOT use these types.
  */
 
 import type { DutyAnalysis, SleepQualityFactors, SleepReference, StandbyPeriod } from '@/types/fatigue';

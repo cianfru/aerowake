@@ -15,7 +15,7 @@ export type RestFacilityClass = 'class_1' | 'class_2' | 'class_3';
 export type ULRCrewSet = 'crew_a' | 'crew_b';
 export type CrewCompositionValue = 'standard' | 'augmented_3' | 'augmented_4';
 /** Per-duty crew override sent with an analysis: a crew set, or composition + optional set. */
-export type CrewOverride = ULRCrewSet | { composition?: CrewCompositionValue; crew_set?: ULRCrewSet };
+export type CrewOverride = ULRCrewSet | { composition?: CrewCompositionValue; crew_set?: ULRCrewSet; rest_facility_class?: RestFacilityClass };
 export type AcclimatizationState = 'acclimatized' | 'unknown' | 'departed';
 
 export interface InFlightRestBlock {
@@ -279,6 +279,7 @@ export interface Duty {
   augmentation_suggested?: boolean;
   crew_source?: 'roster_ir' | 'fdp' | 'pilot' | null;
   rest_facility_class?: RestFacilityClass | null;
+  rest_facility_source?: 'pilot' | null;
   is_ulr?: boolean;
   acclimatization_state?: AcclimatizationState;
   ulr_compliance?: ULRCompliance | null;

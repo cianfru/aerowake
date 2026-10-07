@@ -156,7 +156,7 @@ export function FatigueReport({ duty, analysisId, onBack }: FatigueReportProps) 
 
           <div className="border-b border-border pb-4 text-sm space-y-1">
             <p><strong>{whatIfDuty ? 'Hypothetical scenario' : 'Roster-based prediction'}</strong> · {activeDuty.modelVersion ?? 'Legacy model version unknown'}</p>
-            <p>Review estimated sleep and crew rest before interpreting this report. Values are group-average KSS predictions from the Three Process Model (Ingre et al. 2014; typical error ±1.4 KSS), not a fitness-to-fly determination.</p>
+            <p>Review estimated sleep and crew rest before interpreting this report. Values are group-average KSS predictions from the Three Process Model (Ingre et al. 2014; Aerowake requires independent validation), not a fitness-to-fly determination.</p>
           </div>
           {whatIfDuty?.reportScenario && <div className="text-xs space-y-2">
             <p>Scenario ID: {whatIfDuty.reportScenario.analysisId ?? 'unavailable'} · Baseline ID: {analysisId ?? 'unavailable'}</p>

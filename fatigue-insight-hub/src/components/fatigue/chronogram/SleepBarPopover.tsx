@@ -4,7 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { cn } from '@/lib/utils';
 import { decimalToHHmm, QUALITY_FACTOR_LABELS } from '@/lib/fatigue-utils';
 import { EditableSleepBar } from './EditableSleepBar';
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
+import { evidenceHref, getReferenceByKey } from '@/data/references';
 import { ChevronDown, BedDouble, Moon, Microscope, BookOpen } from 'lucide-react';
 import type { TimelineSleepBar } from '@/lib/timeline-types';
 import type { SleepEdit } from '@/hooks/useSleepEdits';
@@ -157,7 +157,7 @@ export function SleepBarPopover({
           </span>
         )}
       </button>
-      <PopoverContent align="start" side="top" className="w-80 max-w-[calc(100vw-2rem)] p-4">
+      <PopoverContent align="start" side="top" className="max-h-[min(80vh,var(--radix-popover-content-available-height))] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto p-4">
         <div className="space-y-3 text-xs">
           <div className="flex items-start justify-between gap-3">
             <p className="flex items-center gap-1.5 text-sm font-semibold">
@@ -189,9 +189,11 @@ export function SleepBarPopover({
             <dt className="text-muted-foreground">Pattern</dt>
             <dd>{strategyLabel(bar.sleepStrategy)}</dd>
             {bar.confidence != null && (
-              <><dt className="text-muted-foreground">Confidence</dt><dd className="font-mono tabular">{Math.round(bar.confidence * 100)}%</dd></>
+              <><dt className="text-muted-foreground">Assumption rating</dt><dd className="font-mono tabular">{Math.round(bar.confidence * 100)} / 100</dd></>
             )}
           </dl>
+
+          {bar.confidence != null && <p className="text-muted-foreground">A heuristic rating of the sleep assumptions, not statistical confidence or the probability that you slept.</p>}
 
           {(bar.explanation || bar.confidenceBasis) && (
             <div className="space-y-1 rounded-lg border border-border bg-muted/40 p-2.5 leading-relaxed text-muted-foreground">
@@ -202,11 +204,11 @@ export function SleepBarPopover({
 
           {canEdit && (
             <div className="flex flex-wrap gap-2">
-              <button type="button" className="rounded-md border border-border px-3 py-2 text-xs font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setPopoverOpen(false); onActivateEdit?.(bar.blockKey!); }}>
+              <button type="button" className="min-h-11 rounded-md border border-border px-3 py-2 text-xs font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setPopoverOpen(false); onActivateEdit?.(bar.blockKey!); }}>
                 Adjust sleep times
               </button>
               {onRemoveBlock && (
-                <button type="button" className="rounded-md border border-border px-3 py-2 text-xs font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setPopoverOpen(false); onRemoveBlock(bar); }}>
+                <button type="button" className="min-h-11 rounded-md border border-border px-3 py-2 text-xs font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setPopoverOpen(false); onRemoveBlock(bar); }}>
                   {isNap && !pilot ? 'I don’t nap here' : 'Remove'}
                 </button>
               )}
@@ -215,7 +217,7 @@ export function SleepBarPopover({
 
           {bar.qualityFactors && (
             <Collapsible>
-              <CollapsibleTrigger className="group flex w-full items-center gap-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground">
+              <CollapsibleTrigger className="group flex min-h-11 w-full items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
                 <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
                 <Microscope className="h-3 w-3" aria-hidden="true" /> Sleep quality factors
               </CollapsibleTrigger>
@@ -238,25 +240,23 @@ export function SleepBarPopover({
 
           {bar.references?.length ? (
             <Collapsible>
-              <CollapsibleTrigger className="group flex w-full items-center gap-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground">
+              <CollapsibleTrigger className="group flex min-h-11 w-full items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
                 <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
                 <BookOpen className="h-3 w-3" aria-hidden="true" /> References ({bar.references.length})
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <TooltipProvider delayDuration={200}>
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {bar.references.map((ref, i) => (
-                      <Tooltip key={i}>
-                        <TooltipTrigger asChild>
-                          <span className="inline-flex cursor-help items-center rounded-[4px] border border-border px-1.5 py-0.5 text-[11px] font-medium">
-                            {ref.short}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" className="max-w-[280px] text-[11px] leading-snug">{ref.full}</TooltipContent>
-                      </Tooltip>
-                    ))}
-                  </div>
-                </TooltipProvider>
+                <ul className="mt-1.5 space-y-2">
+                  {bar.references.map((ref) => {
+                    const source = getReferenceByKey(ref.key);
+                    return <li key={ref.key}>
+                      <a href={evidenceHref(ref.key)} className="flex min-h-11 flex-col justify-center rounded-md border border-border px-2 py-2 text-xs leading-relaxed hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <span className="font-medium">{source?.short ?? ref.short}</span>
+                        <span className="text-muted-foreground">{source?.full ?? ref.full}</span>
+                        <span className="mt-1 text-primary">View evidence &amp; limitations →</span>
+                      </a>
+                    </li>;
+                  })}
+                </ul>
               </CollapsibleContent>
             </Collapsible>
           ) : null}

@@ -90,20 +90,20 @@ export function PilotStudyPage() {
       {!isAuthenticated ? (
         <div className="space-y-3 rounded-xl border bg-card p-6">
           <p className="font-medium">Sign in to keep a sleep diary</p>
-          <p className="text-sm text-muted-foreground">Entries are saved to your account so you can export or delete them, and are pooled, pseudonymised, to calibrate the model for every pilot. They are never sent to your operator.</p>
+          <p className="text-sm text-muted-foreground">After signing in, you can choose whether to join the study. Your consent is required before diary entries are saved for model evaluation. Entries are never sent to your operator.</p>
           <Button onClick={() => setAuthOpen(true)}><LogIn className="mr-2 h-4 w-4" aria-hidden="true" />Sign in to keep a diary</Button>
           <AuthSheet open={authOpen} onOpenChange={setAuthOpen} />
         </div>
       ) : enrolment.isLoading ? (
         <p role="status" className="text-sm text-muted-foreground">Loading…</p>
-      ) : enrolment.data?.enrolled || (enrolment.data && !enrolment.data.withdrawn_at) ? (
+      ) : enrolment.data?.enrolled ? (
         <DiaryForm key={user?.id} userId={user?.id ?? ''} />
       ) : (
         <div className="space-y-3 rounded-xl border bg-card p-6">
-          <p className="font-medium">You stopped contributing</p>
-          <p className="text-sm text-muted-foreground">Turn it back on to keep this diary and debrief duties.</p>
-          <Button onClick={() => setJoinOpen(true)}>Contribute again</Button>
-          <StudyEnrolmentDialog open={joinOpen} onOpenChange={setJoinOpen} />
+          <p className="font-medium">{enrolment.data?.withdrawn_at ? 'You stopped contributing' : 'Choose whether to contribute'}</p>
+          <p className="text-sm text-muted-foreground">Read the study information and choose whether to contribute before keeping a study diary or debriefing duties. Your roster tools and private in-flight log work without joining.</p>
+          <Button onClick={() => setJoinOpen(true)}>{enrolment.data?.withdrawn_at ? 'Contribute again' : 'Read study information'}</Button>
+          <StudyEnrolmentDialog open={joinOpen} onOpenChange={setJoinOpen} rejoining={!!enrolment.data?.withdrawn_at} />
           {enrolment.isError && <p role="alert" className="text-sm text-destructive">{enrolment.error.message}</p>}
         </div>
       )}

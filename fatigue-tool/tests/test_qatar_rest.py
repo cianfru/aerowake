@@ -63,7 +63,7 @@ def test_rest_between_floor_and_duty_length_is_possible_reduced_rest():
     d = leg(LHR, DOH, a2.release_time_utc + timedelta(hours=11), 6.5, 'D')
     res = run_checks(roster([a, b, c, a2, d]))
     assert not found(res, 'min_rest')
-    assert found(res, 'reduced_rest', 'info')
+    assert found(res, 'reduced_rest', 'warning')
 
 
 def test_table_7_12_local_nights_after_a_far_rotation():
@@ -118,9 +118,28 @@ def test_two_local_days_twice_a_month():
     # Duties every 2nd day: each break is a recovery rest (36 h, 2 local nights) with 1 whole local day.
     duties = [leg(DOH, LHR, at(day, 8), 3.0, f'D{day}') for day in range(1, 32, 2)]
     res = run_checks(roster(duties))
-    assert any(f['reference'] == 'ORO.FTL.235(d)' and 'twice' in f['detail'] for f in found(res, 'recovery_rest'))
+    assert any('ORO.FTL.235(d)' in f['reference'] and 'twice' in f['detail'] for f in found(res, 'recovery_rest'))
     # Two breaks of 3 days give 2 whole local days twice.
     days = [1, 2, 6, 7, 8, 9, 13, 14, 15, 16, 17, 22, 23, 24, 25, 30]
     duties = [leg(DOH, LHR, at(day, 8), 3.0, f'E{day}') for day in days]
     res = run_checks(roster(duties))
-    assert not any(f['reference'] == 'ORO.FTL.235(d)' and 'twice' in f['detail'] for f in found(res, 'recovery_rest'))
+    assert not any('ORO.FTL.235(d)' in f['reference'] and 'twice' in f['detail'] for f in found(res, 'recovery_rest'))
+
+
+@pytest.mark.parametrize('utc,expected', [
+    ('2026-10-25T00:30:00+00:00', 1.0),
+    ('2026-10-25T01:30:00+00:00', 0.0),
+    ('2026-03-29T00:30:00+00:00', 0.0),
+    ('2026-03-29T01:30:00+00:00', 1.0),
+])
+def test_time_zone_rest_uses_offset_at_the_actual_utc_instant(utc, expected):
+    from core.qatar_rest import _offset_hours
+    assert _offset_hours('Europe/London', datetime.fromisoformat(utc)) == expected
+
+
+def test_post_augmented_rest_applies_before_a_ground_duty_too():
+    out = leg(DOH, LHR, at(1, 8), 7.0, 'OUT')
+    out.crew_composition = CrewComposition.AUGMENTED_3
+    ground = Duty('GROUND', datetime(2026, 10, 2), out.release_time_utc + timedelta(hours=11),
+                  out.release_time_utc + timedelta(hours=15), [], 'Asia/Qatar', duty_type=DutyType.GROUND_TRAINING)
+    assert found(run_checks(roster([out, ground])), 'min_rest')

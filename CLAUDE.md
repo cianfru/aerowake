@@ -2,7 +2,7 @@
 
 ## Current launch contracts (September 2026)
 
-Use [launch hardening](docs/LAUNCH_HARDENING.md) and [roster reference](docs/ROSTER_REFERENCE.md) for current deployment and input contracts. Qatar Airways FTL rules (OM-A Chapter 7: FDP tables 7-6 to 7-10, rest 7.13, ULR 7.18, augmented crew) and what is not yet modelled: [Qatar FTL](docs/QATAR_FTL.md) — never invent a regulatory value. Older explanatory notes below must not override these contracts.
+Use [launch hardening](docs/LAUNCH_HARDENING.md) and [roster reference](docs/ROSTER_REFERENCE.md) for current deployment and input contracts. Configured operator FTL rules (OM-A Chapter 7: FDP tables 7-6 to 7-10, rest 7.13, ULR 7.18, augmented crew) and what is not yet modelled: [Operator FTL provenance](docs/OPERATOR_FTL.md) — never invent a regulatory value. Older explanatory notes below must not override these contracts.
 
 - Store aware UTC instants; resolve home zones from verified airport codes. Distinguish reported sleep from inferred opportunities.
 - Current KSS is 1–9; index = 110 − 10 × KSS. Higher bands begin at KSS 5.5/6.5/7.5/8.5. Duty headline risk uses peak KSS, not landing alone. Never convert an unidentified legacy model index into KSS.
@@ -254,10 +254,10 @@ npm run preview
 ## Regulatory Context (EASA FTL)
 
 When implementing features, reference these regulations:
-- **ORO.FTL.120** - Rest requirements (12h minimum, 8h sleep opportunity)
-- **ORO.FTL.235** - Cumulative duty hours, standby periods
-- **AMC1 ORO.FTL.105(10)** - WOCL definition (02:00-05:59 home base time)
-- **AMC1 ORO.FTL.105(1)** - Acclimatization (±2h timezone band, 3 local nights)
+- **ORO.FTL.235** - Rest periods (home/away context and applicable scheme)
+- **ORO.FTL.210 / .225** - Cumulative duty hours / standby
+- **ORO.FTL.105(28)** - WOCL definition; the UI shades a fixed home-base reference
+- **ORO.FTL.105(1)** - Acclimatisation (reference time, difference and elapsed time)
 
 ## Project-Specific Instructions
 

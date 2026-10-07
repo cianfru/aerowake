@@ -435,6 +435,7 @@ class DutyResponse(BaseModel):
     # Augmented crew / ULR data
     crew_composition: str = "standard"
     rest_facility_class: Optional[str] = None
+    rest_facility_source: Optional[str] = None
     is_ulr: bool = False
     ulr_crew_set: Optional[str] = None  # "crew_a" | "crew_b" — parser-detected or overridden
     # 2-pilot duty above the basic FDP maximum with a long sector, crew not stated:
@@ -727,6 +728,11 @@ def _build_ulr_data(duty_timeline, duty) -> tuple:
         ulr_compliance_dict = {
             'is_ulr': uc.is_ulr,
             'pre_rest_compliant': uc.pre_ulr_rest_compliant,
+            'pre_ulr_rest_compliant': uc.pre_ulr_rest_compliant,
+            'post_ulr_rest_compliant': uc.post_ulr_rest_compliant,
+            'monthly_ulr_count': uc.monthly_ulr_count,
+            'monthly_limit': uc.monthly_limit,
+            'max_planned_fdp': uc.max_planned_fdp,
             'post_rest_compliant': uc.post_ulr_rest_compliant,
             'monthly_count': uc.monthly_ulr_count,
             'monthly_compliant': uc.monthly_ulr_compliant,
@@ -913,7 +919,9 @@ def _apply_crew_overrides(roster, overrides: dict) -> None:
     """Per-duty crew overrides from the pilot, applied before simulation.
 
     A value is either a crew set ('crew_a' | 'crew_b') or an object
-    {'composition': 'standard' | 'augmented_3' | 'augmented_4', 'crew_set': ...}.
+    {'composition': 'standard' | 'augmented_3' | 'augmented_4', 'crew_set': ...,
+     'rest_facility_class': 'class_1' | 'class_2' | 'class_3'}. Omitted facility retains
+    the parser/model default. These inputs are retained in the replay snapshot.
     Crew A/B exist only with 4 pilots, so choosing a crew set without a composition
     makes the duty a 4-pilot crew of that set, whatever the roster or the FDP estimate
     said (a last-minute crew change). A composition other than 4 pilots ignores the set.
@@ -922,6 +930,7 @@ def _apply_crew_overrides(roster, overrides: dict) -> None:
     sets = {'crew_a': ULRCrewSet.CREW_A, 'crew_b': ULRCrewSet.CREW_B}
     comps = {'standard': CrewComposition.STANDARD, 'augmented_3': CrewComposition.AUGMENTED_3,
              'augmented_4': CrewComposition.AUGMENTED_4}
+    facilities = {item.value: item for item in RestFacilityClass}
     for d in roster.duties:
         value = overrides.get(d.duty_id) if isinstance(overrides, dict) else None
         if value is None:
@@ -936,6 +945,7 @@ def _apply_crew_overrides(roster, overrides: dict) -> None:
             d.crew_stated, d.crew_source = True, 'pilot'
             if comp == CrewComposition.STANDARD:
                 d.is_ulr, d.ulr_crew_set, d.rest_facility_class = False, None, None
+                d.rest_facility_source = None
             elif d.rest_facility_class is None:
                 d.rest_facility_class = RestFacilityClass.CLASS_1  # long-haul bunk, as the planner assumes
         crew_set = sets.get(value.get('crew_set'))
@@ -946,6 +956,12 @@ def _apply_crew_overrides(roster, overrides: dict) -> None:
                 d.rest_facility_class = d.rest_facility_class or RestFacilityClass.CLASS_1
             if d.crew_composition == CrewComposition.AUGMENTED_4:
                 d.ulr_crew_set = crew_set
+        facility_value = value.get('rest_facility_class')
+        if facility_value is not None and (not isinstance(facility_value, str) or facility_value not in facilities):
+            raise HTTPException(422, 'Rest facility must be class_1, class_2 or class_3.')
+        if facility_value is not None and d.duty_type == DutyType.FLIGHT and d.segments and comp != CrewComposition.STANDARD:
+            d.rest_facility_class = facilities[facility_value]
+            d.rest_facility_source = 'pilot'
 
 
 def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
@@ -1099,6 +1115,7 @@ def _build_duty_response(duty_timeline, duty, roster) -> DutyResponse:
         # Augmented crew / ULR
         crew_composition=duty.crew_composition.value if hasattr(duty.crew_composition, 'value') else str(getattr(duty, 'crew_composition', 'standard')),
         rest_facility_class=duty.rest_facility_class.value if getattr(duty, 'rest_facility_class', None) else None,
+        rest_facility_source=getattr(duty, 'rest_facility_source', None),
         is_ulr=getattr(duty_timeline, 'is_ulr', False),
         ulr_crew_set=duty.ulr_crew_set.value if getattr(duty, 'ulr_crew_set', None) else None,
         augmentation_suggested=augmentation_likely(duty),

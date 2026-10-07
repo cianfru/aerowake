@@ -98,7 +98,7 @@ export function kssToIndex(kss: number): number {
 }
 
 /** Engines whose index is a linear re-expression of KSS (backend core/alertness.py). */
-export const KSS_ENGINE_VERSIONS = ['aerowake-4.0-kss', 'aerowake-4.1-kss'] as const;
+export const KSS_ENGINE_VERSIONS = ['aerowake-4.0-kss', 'aerowake-4.1-kss', 'aerowake-4.2-kss'] as const;
 
 export function isKssEngine(modelVersion: string | null | undefined): boolean {
   return (KSS_ENGINE_VERSIONS as readonly string[]).includes(modelVersion ?? '');

@@ -35,6 +35,7 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   const calendar=page.getByRole('region',{name:'Roster calendar',exact:true});
   await expect(calendar.getByRole('heading',{name:'Roster calendar',exact:true})).toBeVisible();
   await expect(calendar.getByRole('tab',{name:'Home base',exact:true})).toHaveAttribute('aria-selected','true');
+  if(testInfo.project.name==='mobile') await expect(calendar.getByRole('button',{name:'7 days',exact:true})).toHaveAttribute('aria-pressed','true');
   await expect(page.getByText('Analysis complete!',{exact:true})).toBeHidden();
   await page.evaluate(()=>window.scrollTo(0,0));
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -49,6 +50,7 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   await dutyDialog.getByRole('button',{name:'Close',exact:true}).click();
   await calendar.getByRole('tab',{name:'UTC',exact:true}).click();
   await expect(calendar.getByRole('tab',{name:'UTC',exact:true})).toHaveAttribute('aria-selected','true');
+  if(testInfo.project.name==='mobile') await calendar.getByRole('button',{name:'Next 7 days',exact:true}).click();
   await calendar.getByRole('button',{name:'Open duty on Tue 8 Sep: TEST2',exact:true}).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('dialog',{name:'Duty details, Tue 8 Sep 2026',exact:true})).toBeVisible();
@@ -113,7 +115,7 @@ test('guest import review, map recovery, report draft, print and navigation',asy
   await page.goto('/learn');
   await expect(page.getByRole('tab',{name:'How the model works'})).toBeVisible();
   await page.getByRole('tab',{name:'How the model works'}).click();
-  await expect(page.getByRole('heading',{name:'How AeroWake estimates sleepiness'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'How Aerowake estimates sleepiness',exact:true})).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/report$/);
   await expect(page.getByLabel(/Keep a draft in this browser tab/)).toBeChecked();

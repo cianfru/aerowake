@@ -195,13 +195,14 @@ def test_only_a_pilot_who_opted_out_cannot_save():
         assert client.post('/api/debriefs', json=body().model_dump(mode='json')).status_code == 403
 
 
-def test_every_pilot_contributes_from_the_first_rating():
-    # Not yet recorded, or recorded under an older notice: the first save records participation.
+def test_new_and_old_implicit_consent_cannot_save_study_records():
+    # A rating cannot create or upgrade consent.
     for user in (enrolled(study_consent_version=None, study_enrolled_at=None),
-                 enrolled(study_consent_version='older-version')):
+                 enrolled(study_consent_version='calibration-v2')):
+        before = (user.study_consent_version, user.study_enrolled_at)
         with client_for(user, FakeDB()) as client:
-            assert client.post('/api/debriefs', json=body().model_dump(mode='json')).status_code != 403
-        assert user.study_consent_version == config.CONSENT_VERSION and user.study_enrolled_at is not None
+            assert client.post('/api/debriefs', json=body().model_dump(mode='json')).status_code == 403
+        assert (user.study_consent_version, user.study_enrolled_at) == before
 
 
 def test_other_owner_analysis_is_404_before_any_json_read(monkeypatch):
@@ -311,7 +312,7 @@ def test_export_is_pseudonymised():
 
 def test_enrolment_lifecycle():
     user = SimpleNamespace(id=uuid.uuid4(), study_consent_version=None, study_enrolled_at=None, study_withdrawn_at=None)
-    db = FakeDB([[1, 2], []])
+    db = FakeDB([[], [], [1, 2, 3], [1, 2], [1]])
     with client_for(user, db) as client:
         state = client.get('/api/study/enrolment').json()
         assert state['enrolled'] is False and state['current']['retention'] == config.RETENTION
@@ -321,7 +322,11 @@ def test_enrolment_lifecycle():
         assert joined['enrolled'] is True and user.study_enrolled_at == NOW
         left = client.delete('/api/study/enrolment?delete_data=true').json()
     assert left['enrolled'] is False and user.study_withdrawn_at == NOW
-    assert left['deleted']['debriefs'] == 2
+    assert left['deleted'] == {'debriefs': 2, 'observations': 1, 'inflight': 3}
+    assert all(user.id in q.compile().params.values() for q in db.queries)
+    updates = [q for q in db.queries if str(q).startswith('UPDATE inflight_logs')]
+    assert len(updates) == 2
+    assert all(q.compile().params['study_enrolled'] is False for q in updates)
 
 
 def test_serialize_round_trip_keeps_snapshot():

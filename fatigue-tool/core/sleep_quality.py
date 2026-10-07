@@ -2,16 +2,16 @@
 Sleep Quality Analysis Engine
 =============================
 
-Calculates realistic sleep quality using multiplicative efficiency factors
+Estimates sleep quality using assumed multiplicative efficiency factors
 based on location, circadian alignment, sleep pressure, and schedule
 constraints.
 
 Extracted from UnifiedSleepCalculator for maintainability.
 
 References:
-    Signal et al. (2013) J Sleep Res — hotel PSG 88%, bunk 70%
+    Signal et al. (2013) Sleep 36:109-115 — in-flight rest; not universal hotel/bunk efficiencies
     Dijk & Czeisler (1995) J Neurosci — circadian consolidation
-    Kecklund & Åkerstedt (2004) J Sleep Res — anticipatory stress
+    Kecklund & Åkerstedt (2004) Biol Psychol 66:169-176 — anticipatory stress
 """
 
 from datetime import datetime, timedelta
@@ -253,7 +253,7 @@ class SleepQualityEngine:
         if next_report_hour is not None and next_report_hour < sq_params.early_report_hour:
             alarm_anxiety = sq_params.alarm_anxiety_penalty
 
-        # 8d. Split sleep quality differential (Jackson 2014, Kosmadopoulos 2017)
+        # 8d. Split sleep quality differential (Jackson 2014, Kosmadopoulos 2014)
         # Split sleep fragments lose quality depending on shortest block length.
         split_modifier = 1.0
         if is_split_sleep and not is_nap:
@@ -435,8 +435,8 @@ class SleepQualityEngine:
         if wocl_overlap > 2.5 and effective_sleep < 6:
             warnings.append({
                 'severity': 'info',
-                'message': f'{wocl_overlap:.1f}h sleep during WOCL may reduce quality',
-                'recommendation': 'Circadian misalignment detected'
+                'message': f'{wocl_overlap:.1f}h estimated sleep overlaps the WOCL window',
+                'recommendation': 'Body-clock alignment does not remove the need to review the short sleep opportunity'
             })
 
         if hours_until_duty and hours_until_duty < 2 and actual_duration < 5:

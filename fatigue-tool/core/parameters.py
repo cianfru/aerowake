@@ -23,7 +23,7 @@ from typing import Any, Dict, Optional, Tuple
 class EASAFatigueFramework:
     """EASA FTL regulatory definitions (EU Regulation 965/2012)"""
 
-    # WOCL definition - AMC1 ORO.FTL.105(10)
+    # WOCL definition - ORO.FTL.105(28)
     wocl_start_hour: int = 2
     wocl_end_hour: int = 5
     wocl_end_minute: int = 59
@@ -50,8 +50,12 @@ class EASAFatigueFramework:
 @dataclass
 class BorbelyParameters:
     """
-    Two-process sleep regulation model parameters
-    References: Borbély (1982, 1999), Jewett & Kronauer (1999), Van Dongen (2003)
+    Legacy two-process parameters retained for compatibility and sleep estimation.
+
+    Historical research: Borbély (1982, 1999), Jewett & Kronauer (1999),
+    Van Dongen (2003). These application coefficients are not all published
+    values. Current KSS scoring uses core/published_tpm.py; workload, resilience,
+    hypoxia, PVT and time-on-task terms below do not modify that score.
     """
 
     # Process S bounds
@@ -69,37 +73,21 @@ class BorbelyParameters:
     circadian_period_hours: float = 24.0
     circadian_acrophase_hours: float = 17.0  # Peak alertness time
 
-    # Second harmonic — Wake Maintenance Zone (WMZ)
-    # Dijk & Czeisler (1994) J Sleep Res 3:73-82 showed the circadian
-    # alertness signal is NOT a pure sinusoid.  A second harmonic with
-    # 12-h period creates the "forbidden zone for sleep" (Lavie 1986)
-    # between ~18:00-21:00 — a paradoxical alertness plateau in the
-    # evening despite rising homeostatic pressure.  The amplitude of the
-    # second harmonic is approximately 30% of the fundamental (A2/A1≈0.3),
-    # and its phase peaks around 20:00 local time.
-    # Strogatz et al. (1987) Am J Physiol 253:R173 confirmed the
-    # bimodal structure of the sleep propensity curve.
+    # Legacy wake-maintenance approximation. Dijk & Czeisler (1994),
+    # Neurosci Lett 166:63-68, and Lavie (1986), Electroencephalogr Clin
+    # Neurophysiol 63:414-425, describe timing mechanisms. The amplitude,
+    # phase and numerical ratio here are application assumptions.
     circadian_second_harmonic_amplitude: float = 0.08  # A2 ≈ 0.3 × A1
     circadian_second_harmonic_phase: float = 20.0      # Peak at ~20:00
 
-    # Performance integration — operational weighting choice.
-    # The Åkerstedt-Folkard three-process model uses additive S+C
-    # combination; these explicit weights are an operational adaptation,
-    # not directly from the literature. Homeostatic component weighted
-    # slightly higher (55%) because sleep recovery should dominate over
-    # circadian phase for well-rested pilots — Gander et al. (2013)
-    # showed trained pilots maintain performance better than predicted
-    # during moderate circadian lows. Research config retains 50/50.
+    # Legacy integration weights: application choices, not published
+    # coefficients or an established trained-pilot advantage.
     weight_circadian: float = 0.45
     weight_homeostatic: float = 0.55
     interaction_exponent: float = 1.5
 
-    # Pilot resilience factor — Gander et al. (2013) operational fatigue
-    # management: trained airline crew maintain performance better than
-    # lab subjects under equivalent sleep pressure. Modelled as a Gaussian
-    # boost centred on moderate S (just-woke to moderately fatigued).
-    # Formula: boost = magnitude × exp(-0.5×((S-peak)/sigma)²)
-    # Applied when S ∈ [0.05, 0.70].
+    # Legacy resilience heuristic, not established by Gander et al. (2013).
+    # Excluded from the current KSS score.
     resilience_boost_magnitude: float = 0.07   # 7% max boost (default/research)
     resilience_boost_peak_s: float = 0.20      # Peak at S=0.20 (recently woken)
     resilience_boost_sigma: float = 0.18       # Gaussian width
@@ -167,72 +155,34 @@ class BorbelyParameters:
     sleep_rebound_coeff: float = 0.15  # Extra hours per hour of debt
     sleep_rebound_max_debt: float = 20.0  # Debt cap for rebound formula
 
-    # Non-linear S recovery (SWA diminishing returns)
-    # Borbély & Achermann (1999) Pharmacopsychiatry 32:56-67 — SWA
-    # (slow-wave activity) power declines exponentially during sleep,
-    # making the FIRST hours of sleep the most restorative. After ~5-6h,
-    # recovery becomes increasingly dominated by lighter stages (Stage 2,
-    # REM), which contribute less to S recovery.
-    # Formula: tau_d_effective = tau_d × (1 + swa_coeff × t_sleep / 8.0)
-    # After 8h of sleep: effective tau_d is 15% longer (slower recovery).
-    # After 4h: only ~7.5% longer. This makes the first 4h of sleep
-    # substantially more valuable than hours 5-8.
+    # Legacy nonlinear recovery heuristic. Borbély & Achermann (1999),
+    # J Biol Rhythms 14:557-568, reviews homeostasis; it does not validate
+    # this coefficient or a fixed comparative value of successive sleep hours.
     swa_diminishing_coeff: float = 0.15
 
-    # Cabin altitude hypoxia
-    # Nesthus et al. (2007) DOT/FAA/AM-07/21 — mild hypoxia at cabin
-    # altitude reduces cognitive performance 1-3% depending on altitude.
-    # Muhm et al. (2007) Aviat Space Environ Med 78:B13-B18 — cabin
-    # altitudes of 6,000-8,000 ft equivalent pressure produce measurable
-    # SpO2 reduction and subtle cognitive impairment.
-    # Formula: hypoxia_factor = 1.0 - coeff × max(0, cabin_alt - 5000) / 1000
-    # At 7000 ft: −2%, at 8000 ft: −3%. Below 5000 ft: no effect.
+    # Legacy cabin-altitude multiplier; excluded from current KSS.
+    # Muhm et al. (2007), N Engl J Med 357:18-27, studied passenger discomfort.
+    # It does not validate a 1-3% cognitive penalty. The old Nesthus citation
+    # could not be established (see SCIENCE_SOURCE_AUDIT.md).
     hypoxia_coeff: float = 0.01
     default_cabin_altitude_ft: float = 7000.0
 
-    # Circadian amplitude dampening under chronic sleep debt
-    # McCauley et al. (2013) Proc Natl Acad Sci 110:E2380-E2389 —
-    # demonstrated that chronic sleep restriction dampens the amplitude
-    # of the circadian performance rhythm: well-rested subjects show
-    # large day-night alertness differences, while sleep-deprived subjects
-    # show a flattened rhythm (less circadian variation).
-    # Formula: effective_amplitude = base × (1 - dampening_coeff × min(debt, max_debt) / max_debt)
-    # At 10h debt: amplitude reduced by ~12.5%, at 20h: by 25%.
+    # Legacy circadian-dampening heuristic, excluded from current KSS.
+    # McCauley et al. (2009), J Theor Biol 256:227-239, describes a different
+    # model. It does not validate the coefficients retained here.
     circadian_dampening_coeff: float = 0.25
     circadian_dampening_max_debt: float = 20.0
 
-    # Sleep debt vulnerability — diminishing-returns model
-    # Van Dongen et al. (2003) Sleep 26(2):117-126 showed that chronic
-    # sleep restriction produces cumulative cognitive deficits, but the
-    # marginal impact of each additional hour of debt decreases — deficits
-    # plateau under sustained restriction.
-    # Banks & Dinges (2007) Prog Brain Res 185:41-53 confirmed a
-    # dose-response relationship with ceiling effect.
-    # Gander et al. (2013): trained airline crew maintain operational
-    # performance better than lab subjects under equivalent restriction.
-    #
-    # Exponential model: penalty = floor + (1 - floor) × exp(-k × debt)
-    # k = 0.08 calibrated so that:
-    #   5h debt  → ~5% penalty     (one bad night)
-    #   10h debt → ~8% penalty     (several short nights)
-    #   20h debt → ~12% penalty    (chronic mild restriction)
-    #   50h debt → ~15% penalty    (severe chronic restriction)
-    #   90h debt → ~15% penalty    (extreme — near asymptote)
-    # No artificial cap on debt — the curve naturally asymptotes.
-    # Floor of 0.85 means debt alone cannot reduce alertness below 85%.
+    # Legacy sleep-debt penalty, excluded from current KSS. Van Dongen
+    # et al. (2003) distinguishes subjective adaptation from cumulative
+    # performance decline; it does not justify this saturating penalty.
     sleep_debt_vulnerability_coeff: float = 0.08
     sleep_debt_vulnerability_floor: float = 0.85
 
-    # Chronotype offset and individual vulnerability
-    # Roenneberg et al. (2007) Curr Biol 17:R44-R45 — chronotype (morningness-
-    # eveningness) shifts the circadian acrophase by ±2h. Morning types
-    # ("larks") peak ~15:00, evening types ("owls") peak ~19:00.
-    # Van Dongen et al. (2004) Sleep 27(3):423-433 — inter-individual
-    # differences in vulnerability to sleep deprivation are trait-like and
-    # stable: some individuals show 3× greater impairment under identical
-    # restriction. The vulnerability factor scales the performance deficit
-    # (not the S/C processes themselves) to capture this variability.
-    # Default: 0.0 offset (average chronotype), 1.0 vulnerability (average).
+    # Legacy individual-difference settings, not personal calibration.
+    # Background: Roenneberg et al. (2007), Sleep Med Rev 11:429-438;
+    # Van Dongen et al. (2004), Sleep 27:423-433. These do not validate
+    # the fixed offsets or vulnerability multipliers below.
     chronotype_offset_hours: float = 0.0   # Shifts acrophase ±2h
     individual_vulnerability: float = 1.0  # 0.7 = resilient, 1.3 = sensitive
 
@@ -252,50 +202,35 @@ class SleepQualityParameters:
     """
     Sleep quality multipliers by environment
 
-    Primary reference: Signal et al. (2013) Sleep 36(1):109-118
-    — PSG-measured hotel efficiency 88%, inflight bunk 70%.
-    Values below are operational estimates calibrated to Signal (2013).
-    Note: Åkerstedt (2003) Occup Med 53:89-94 covers shift-work sleep
-    disruption but does not provide hotel-specific efficiency values.
+    Application assumptions, not measured efficiencies for the current pilot.
+    Signal et al. (2013), Sleep 36:109-115, doi:10.5665/sleep.2312, studied
+    in-flight rest; it does not establish the hotel values below. Environment,
+    nap, split-sleep and timing coefficients require independent calibration.
     """
 
     # Environment quality factors (aligned with LOCATION_EFFICIENCY in
     # UnifiedSleepCalculator to avoid duplicate definitions)
     quality_home: float = 1.0
-    quality_hotel_quiet: float = 0.88   # Signal et al. (2013) PSG: 88%
+    quality_hotel_quiet: float = 0.88   # Application assumption
     quality_hotel_typical: float = 0.85
     quality_hotel_airport: float = 0.82
-    quality_crew_rest_facility: float = 0.70  # Signal et al. (2013) PSG: 70%
+    quality_crew_rest_facility: float = 0.70  # Application assumption
 
     # Circadian timing penalties
     max_circadian_quality_penalty: float = 0.25
     early_wake_penalty_per_hour: float = 0.05
     late_sleep_start_penalty_per_hour: float = 0.03
 
-    # Sleep onset latency (SOL) model
-    # Åkerstedt et al. (2008) J Sleep Res 17:295-304 — SOL varies with
-    # circadian phase and homeostatic pressure.  Sleep initiation is
-    # hardest during the Wake Maintenance Zone (~18:00-21:00) when the
-    # circadian signal opposes sleep ("forbidden zone for sleep").
-    # Lavie (1986) Sleep 9:355-366 — circadian gates for sleep onset.
-    # Formula: SOL = base × circadian_gate / max(0.3, S_pressure)
-    #   - Higher S (more sleep pressure) → shorter SOL
-    #   - WMZ timing → longer SOL (circadian gate closes)
-    # Clamped to 5-60 minutes (physiological bounds).
+    # Assumed sleep-onset latency function and bounds. Mechanistic context:
+    # Lavie (1986), Electroencephalogr Clin Neurophysiol 63:414-425;
+    # Dijk & Czeisler (1994), Neurosci Lett 166:63-68. The former
+    # Akerstedt (2008) citation was unresolved; it does not validate this curve.
     sol_base_minutes: float = 15.0
     sol_wmz_amplitude: float = 0.8  # How much WMZ extends SOL (0-1 scale)
 
-    # Nap recovery efficiency by duration
-    # Brooks & Lack (2006) J Sleep Res 15:378-385 — 10-min nap optimal
-    # for alertness restoration; 30+ min naps risk sleep inertia.
-    # Tietzel & Lack (2002) Psychophysiology 39:17-24 — brief naps
-    # (<20 min) show rapid improvement without SWS inertia.
-    # Replaces the flat 0.88 nap penalty with duration-dependent lookup:
-    #   ≤10 min → 0.75 (mostly Stage 1, limited restoration)
-    #   10-20 min → 0.90 (optimal: Stage 2 without SWS)
-    #   20-30 min → 0.92 (some SWS entry, slight inertia risk)
-    #   30-60 min → 0.88 (SWS → inertia reduces net benefit)
-    #   >60 min → 0.85 (full cycle but high inertia risk on wake)
+    # Duration-dependent nap factors are application choices. Brooks & Lack
+    # (2006), Sleep 29:831-840, and Tietzel & Lack (2002), J Sleep Res
+    # 11:213-218, provide experimental context, not these exact coefficients.
     nap_efficiency_under_10: float = 0.75
     nap_efficiency_10_20: float = 0.90
     nap_efficiency_20_30: float = 0.92
@@ -303,32 +238,25 @@ class SleepQualityParameters:
     nap_efficiency_over_60: float = 0.85
 
     # First-night effect
-    # Agnew et al. (1966) Psychophysiology 3:263-266 — first night in a
+    # Agnew et al. (1966) Psychophysiology 2:263-266 — first night in a
     # novel environment shows increased SOL, reduced SWS%, and more WASO.
     # Tamaki et al. (2016) Curr Biol 26:1190-1194 — unihemispheric slow
     # wave activity on first night (brain remains vigilant in new space).
-    # Effect attenuates on second night, negligible by third.
+    # The extra minutes below are assumptions, not individual predictions.
     first_night_sol_extra_minutes: float = 12.0
     second_night_sol_extra_minutes: float = 5.0
 
-    # Split sleep quality differential
-    # Jackson et al. (2014) Sleep Med Rev 18:425-440 — split sleep
-    # maintains cognitive performance better than equivalent total sleep
-    # in a single block ONLY when each fragment is ≥4h (allowing at least
-    # one full SWS cycle per fragment).
-    # Kosmadopoulos et al. (2017) Chronobiol Int 34:885-896 — confirmed
-    # that 4+4h split provided ~92% of consolidated 8h effectiveness.
-    # Fragments <3h are too short for meaningful SWS entry.
+    # Split-sleep quality factors are assumptions, not published percentages.
+    # Jackson et al. (2014), Chronobiol Int 31:1218-1230, and
+    # Kosmadopoulos et al. (2014), Chronobiol Int 31:1209-1217, examine
+    # sleep/performance but do not validate this exact lookup table.
     split_efficiency_4h_plus: float = 0.92   # Each block ≥4h
     split_efficiency_3h_plus: float = 0.85   # Each block ≥3h, <4h
     split_efficiency_under_3h: float = 0.78  # Any block <3h
 
-    # Anticipatory arousal (pre-duty alarm anxiety)
-    # Kecklund & Åkerstedt (2004) J Sleep Res 13:1-6 — early morning
-    # report times (<06:00) truncate sleep via anticipatory arousal:
-    # pilots set earlier alarms and sleep is lighter due to anxiety
-    # about oversleeping.  The 0.97 multiplier (−3%) reflects the
-    # measured sleep efficiency reduction for early-start workers.
+    # Anticipatory arousal: Kecklund & Akerstedt (2004), Biol Psychol
+    # 66:169-176, relates next-day apprehension to slow-wave sleep.
+    # The report-time cut-off and 0.97 multiplier are application assumptions.
     early_report_hour: float = 6.0    # Report before this hour triggers penalty
     alarm_anxiety_penalty: float = 0.97  # −3% sleep quality
 
@@ -485,9 +413,8 @@ def clock_label(hours: float) -> str:
 class SleepHabits:
     """The pilot's usual night at home, stated per analysis (a preference).
 
-    Default 23:00–07:00: alarm-constrained workday timing consistent with pilot
-    actigraphy (Signal et al. 2009, Aviat Space Environ Med 80:1012-1017; Gander
-    et al. 2013, Aviat Space Environ Med 84:105-115). Chronotypes differ widely
+    Default 23:00–07:00 is an editable application assumption, not a measured
+    population norm. Chronotypes differ widely
     (Roenneberg et al. 2007, Sleep Med Rev 11:429-438), so a pilot can state their
     own times. They set the habitual night (home, rest days, the night before a
     duty), the bedtime from which early-report advances are counted, the body-clock
@@ -671,7 +598,7 @@ class ModelConfig:
     def aerowake(cls, nap_habit: str = None, headline_risk_window: str = None,
                  usual_bedtime: str = None, usual_wake_time: str = None):
         """
-        The single AeroWake model configuration (engine aerowake-4.1-kss).
+        The single AeroWake model configuration (engine aerowake-4.2-kss).
 
         ``nap_habit`` ('usually' | 'sometimes' | 'rarely') and
         ``headline_risk_window`` ('fdp' | 'duty') are stated assumptions, not
@@ -683,64 +610,29 @@ class ModelConfig:
         comparable across pilots, months and research. The legacy notes below
         describe BorbelyParameters that now only affect sleep estimation.
 
-        Legacy notes (3.x "operational" preset):
-
-        Adjusts time constants, debt sensitivity, and sleep inertia based on
-        operational data from trained flight crew. Core science (circadian model,
-        S/C weights, hypoxia, PVT, time-on-task) unchanged from literature values.
-
-        Calibration choices (transparent deviations from EASA defaults):
-        - tau_i: 18.2h → 21.0h — trained crew stamina (Gander et al. 2013)
-        - tau_d: 4.2h → 3.8h — faster recovery during consolidated sleep
-        - baseline_sleep_need: 8.0h → 7.5h — matches airline planning standard
-        - sleep_debt_vuln_coeff: 0.025 → 0.018 — less aggressive debt curve
-        - inertia_duration: 30 → 22 min — trained arousal protocols
-        - inertia_magnitude: 0.30 → 0.25 — reduced post-wake grogginess
-        - S/C weights: 55/45 → 60/40 — trained crew handle circadian lows
-          better than pure model predicts (Gander et al. 2013)
-        - circadian_amplitude: 0.25 → 0.22 — within Dijk & Czeisler (1994)
-          range (0.20-0.30), softens WOCL cliff by ~1pp
-        - second_harmonic: 0.08 → 0.06 — softer evening circadian cliff
-        - resilience: 7%→12% peak, sigma 0.18→0.25 — wider Gaussian covers
-          more of the S range, stronger trained-pilot boost (Gander 2013)
-        - tot_inflection: 8.0h → 10.5h — ULR buffer, shifts fatigue cliff
-        - tot_quadratic: 0.0005 → 0.00025 — halved non-linear degradation
-        - pinch_sleep_pressure: 0.70 → 0.78 — genuine impairment only (>17h awake)
-        - PVT: baseline 1.5→1.0, debt 0.4→0.25, wake 1.2→0.8, threshold
-          16→17h — trained crew ~30% fewer lapses (Gander et al. 2013)
-        - Risk thresholds: relaxed (operational judgment)
-        - Hotel quality: 0.85 → 0.87 (airline-contracted hotels, QR standard)
+        The values below preserve the legacy preset for reproducibility and
+        sleep estimation. They are application assumptions; claims of a fixed
+        trained-pilot resilience advantage, EASA-mandated scientific parameters,
+        or universal hotel quality are unsupported. Current KSS scoring uses
+        the published model-5c parameter set instead.
         """
         return cls(
             easa_framework=EASAFatigueFramework(),
             borbely_params=BorbelyParameters(
-                tau_i=21.0,   # Stamina: Gander et al. (2013), trained crew
+                tau_i=21.0,   # Legacy application assumption
                 tau_d=3.8,    # Faster recovery during consolidated sleep
                 baseline_sleep_need_hours=7.5,
                 sleep_debt_vulnerability_coeff=0.018,
                 inertia_duration_minutes=22.0,
                 inertia_max_magnitude=0.25,
-                # S/C weights: shift toward homeostatic (60/40). Trained crew
-                # manage circadian lows better than the model predicts — "how
-                # well you slept" matters more than "what time it is" for
-                # experienced pilots (Gander et al. 2013). +2-3pp at WOCL,
-                # near-neutral during daytime.
+                # Legacy application assumption; not a current KSS coefficient.
                 weight_homeostatic=0.60,
                 weight_circadian=0.40,
-                # Circadian amplitude: 0.25 → 0.22. Dijk & Czeisler (1994)
-                # range is 0.20-0.30. Softens the WOCL nadir by ~1pp without
-                # eliminating the circadian signal. Combined with reduced 2nd
-                # harmonic, this reduces the evening→night cliff.
+                # Legacy application assumption; not a current KSS coefficient.
                 circadian_amplitude=0.22,
-                # Soften the WMZ → nadir cliff: Dijk & Czeisler (1994) range
-                # for A2/A1 is 0.20-0.35; 0.06/0.25 = 0.24 (low end).
-                # Reduces evening-to-night performance drop by ~3-4pp while
-                # preserving the bimodal circadian structure.
+                # Legacy application assumption; not a current KSS coefficient.
                 circadian_second_harmonic_amplitude=0.06,
-                # Pilot resilience: 12% peak (was 7%), sigma 0.25 (was 0.18).
-                # Wider Gaussian covers S ∈ [0.05, 0.70] — from just-woke to
-                # significantly fatigued. Gander et al. (2013): trained crew
-                # consistently outperform lab subjects. +2pp across scenarios.
+                # Legacy application assumption; not a current KSS coefficient.
                 resilience_boost_magnitude=0.12,
                 resilience_boost_sigma=0.25,
                 # ULR buffer: shift fatigue cliff past mid-point of 14h FDP
@@ -749,9 +641,7 @@ class ModelConfig:
                 tot_quadratic_coeff=0.00025,
                 # Pinch events only at genuine impairment (>17h awake)
                 pinch_sleep_pressure_threshold=0.78,
-                # PVT: trained crew show ~30% fewer lapses than lab subjects
-                # (Gander et al. 2013). Reduces "Severe" false positives
-                # for duties the model scores as mildly impaired.
+                # Legacy application assumption; not a current KSS coefficient.
                 pvt_baseline_lapses=1.0,       # Was 1.5 (trained crew, less variability)
                 pvt_debt_coefficient=0.25,     # Was 0.4 (manage moderate debt better)
                 pvt_wake_coefficient=0.8,      # Was 1.2 (less wakefulness sensitivity)

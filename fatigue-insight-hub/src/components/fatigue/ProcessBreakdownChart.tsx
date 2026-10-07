@@ -13,7 +13,7 @@ import {
 } from 'recharts';
 import { InfoTooltip, FATIGUE_INFO } from '@/components/ui/InfoTooltip';
 import { DutyAnalysis } from '@/types/fatigue';
-import { DutyDetailTimeline } from '@/hooks/useContinuousTimelineData';
+import type { DutyDetailTimeline } from '@/types/duty-timeline';
 import { decomposePerformance } from '@/lib/fatigue-calculations';
 import { KSS_BAND_BOUNDARIES, classifyKss, kssLabel, riskInkColor } from '@/lib/risk-scale';
 import { formatHomeTime } from '@/lib/home-time';
@@ -142,7 +142,7 @@ export function ProcessBreakdownChart({ timeline, duty, homeTz, zoneLabel, heigh
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">Group-average prediction; typical error about ±1.4 KSS. {duty.dutyType === 'flight' || !duty.dutyType ? 'Crew rest periods are left blank.' : ''}</p>
+      <p className="mt-2 text-xs text-muted-foreground">Group-average prediction; individual accuracy has not been established for Aerowake. {duty.dutyType === 'flight' || !duty.dutyType ? 'Crew rest periods are left blank.' : ''}</p>
     </section>
   );
 }

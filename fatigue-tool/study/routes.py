@@ -12,6 +12,7 @@ from db.session import get_db
 from db.models import PilotObservation
 from core.published_tpm import predict
 from study import config
+from study.debriefs import require_enrolled
 from study.limits import enforce_daily_cap, participant_id, throttle
 
 router = APIRouter(prefix='/api/pilot-study', tags=['Pilot study'])
@@ -52,7 +53,7 @@ class Observation(BaseModel):
 
 def home_offset(body):
     if body.home_timezone:
-        return ZoneInfo(body.home_timezone).utcoffset(body.observed_at).total_seconds() / 3600
+        return body.observed_at.astimezone(ZoneInfo(body.home_timezone)).utcoffset().total_seconds() / 3600
     return body.home_utc_offset
 
 
@@ -80,12 +81,8 @@ def build_payload(body, now):
 
 
 @router.post('/observations')
-async def record(body: Observation, user=Depends(get_current_user), db=Depends(get_db)):
-    from study.debriefs import has_opted_out, record_participation
+async def record(body: Observation, user=Depends(require_enrolled), db=Depends(get_db)):
     throttle(user.id, 'study-write', config.WRITES_PER_MINUTE)
-    if has_opted_out(user):
-        raise HTTPException(403, 'You have stopped contributing ratings. Turn it back on in your account to save observations.')
-    record_participation(user)
     # Idempotent retry preserves the original rating/prediction snapshot.
     query = select(PilotObservation).where(PilotObservation.user_id == user.id,
                                            PilotObservation.client_id == body.client_id)

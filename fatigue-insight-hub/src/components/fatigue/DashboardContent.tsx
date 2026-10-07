@@ -180,6 +180,7 @@ export function DashboardContent() {
               pilotId={settings.pilotId}
               pilotName={analysisResults.pilotName}
               pilotBase={analysisResults.pilotBase}
+              homeBaseTimezone={analysisResults.homeBaseTimezone}
               pilotAircraft={analysisResults.pilotAircraft}
               onDutySelect={selectDuty}
               selectedDuty={selectedDuty}

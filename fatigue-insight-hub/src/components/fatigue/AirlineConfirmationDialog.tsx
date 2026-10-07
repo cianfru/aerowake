@@ -1,19 +1,7 @@
-/**
- * AirlineConfirmationDialog
- *
- * Shown after a pilot's first roster upload when the backend detects
- * a probable airline with confidence < 0.9.
- *
- * Flow:
- *   1. "We think you fly for **Qatar Airways**. Is that correct?"
- *   2. [Confirm] → POST /api/companies/confirm → done
- *   3. [Change] → text field for manual airline entry
- *
- * High-confidence detections (>= 0.9) are auto-confirmed silently
- * and a toast is shown instead (handled by the parent).
- */
+/** Company membership always requires the pilot’s explicit confirmation. */
 
 import { useState } from 'react';
+import { operatorLabel } from '@/lib/operator-label';
 import { Plane, Check, Edit2, Loader2 } from 'lucide-react';
 import {
   Dialog,
@@ -75,7 +63,6 @@ export function AirlineConfirmationDialog({
     }
   };
 
-  const confidencePercent = Math.round(detection.confidence * 100);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -83,11 +70,10 @@ export function AirlineConfirmationDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plane className="h-5 w-5 text-primary" />
-            Airline Detection
+            Confirm your operator
           </DialogTitle>
           <DialogDescription>
-            We detected your airline from your roster. Please confirm so we can
-            group your data with your company peers.
+            Your roster suggests an operator. Confirm or change this suggestion to associate your account. Sharing anonymised metrics remains a separate choice in your privacy settings.
           </DialogDescription>
         </DialogHeader>
 
@@ -97,9 +83,9 @@ export function AirlineConfirmationDialog({
               {/* Detected airline card */}
               <div className="rounded-lg border bg-muted/50 p-4">
                 <p className="text-sm text-muted-foreground mb-1">
-                  Detected airline ({confidencePercent}% confidence)
+                  Suggested operator · inferred from roster
                 </p>
-                <p className="text-lg font-semibold">{detection.suggestedName}</p>
+                <p className="text-lg font-semibold">{operatorLabel(detection.suggestedName, detection.suggestedIcao)}</p>
                 {detection.suggestedIcao && (
                   <p className="text-sm text-muted-foreground">
                     ICAO: {detection.suggestedIcao}
@@ -111,6 +97,7 @@ export function AirlineConfirmationDialog({
                 <p className="text-sm text-destructive">{error}</p>
               )}
 
+              <Button variant="ghost" className="w-full" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Not now</Button>
               <div className="flex gap-2">
                 <Button
                   onClick={handleConfirm}

@@ -44,3 +44,22 @@ export async function deleteInflightEntry(serverId: string): Promise<void> {
   });
   if (!res.ok && res.status !== 404) throw new Error('Could not delete the rating from your account.');
 }
+
+/** Restore the account's most recent saved ratings after device data was cleared. */
+export async function loadInflightLog(owner: string): Promise<InflightEntry[]> {
+  const res = await apiFetch(`${API}/api/inflight-log`, { headers: { ...getAuthHeaders() } });
+  if (!res.ok) throw new Error('Could not load your account ratings. Device ratings remain available.');
+  const rows = await res.json() as Array<{
+    id: string; client_id: string; recorded_at_utc: string; kss: number;
+    phase: InflightEntry['phase']; note: string | null; analysis_id: string | null;
+    duty_id: string | null; duty_report_utc: string | null; recorded_offline: boolean;
+    predicted_kss: number | null;
+  }>;
+  return rows.map((row) => ({
+    clientId: row.client_id, owner, recordedAtUtc: row.recorded_at_utc, kss: row.kss,
+    phase: row.phase, note: row.note, analysisId: row.analysis_id,
+    dutyId: row.duty_id, dutyReportUtc: row.duty_report_utc,
+    recordedOffline: row.recorded_offline, status: 'synced', serverId: row.id,
+    predictedKss: row.predicted_kss,
+  }));
+}

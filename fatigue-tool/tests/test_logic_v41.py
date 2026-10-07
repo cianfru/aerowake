@@ -276,7 +276,7 @@ def test_acclimatisation_unknown_state_uses_qatar_table_7_7():
     back = res.roster.duties[1]
     assert back.acclimatization_state == AcclimatizationState.UNKNOWN
     assert back.max_fdp_hours == 12.0
-    assert back.fdp_limit_reference == 'ORO.FTL.205(b) Table 4, unknown acclimatisation (FRM)'
+    assert back.fdp_limit_reference == 'Configured scheme Table 7-7, unknown acclimatisation (FRM approval unverified)'
     assert back.planned_extension_fdp_hours is None  # 7.6.5 is for acclimatised crew only
     tl = res.duty_timelines[1]
     assert tl.acclimatization_basis == 'determined'
@@ -342,9 +342,9 @@ def test_analyze_echoes_assumptions_and_new_duty_fields(client):
     body = r.json()
     assert body['assumptions'] == {'nap_habit': 'usually', 'headline_risk_window': 'fdp',
                                    'usual_bedtime': '23:00', 'usual_wake_time': '07:00'}
-    assert body['engine_version'] == 'aerowake-4.1-kss'
+    assert body['engine_version'] == aw.ENGINE_VERSION
     for d in body['duties']:
-        assert d['model_version'] == 'aerowake-4.1-kss'
+        assert d['model_version'] == aw.ENGINE_VERSION
         assert d['headline_window'] == 'fdp' and d['kss_peak_fdp'] == d['max_kss']
         assert d['risk_level'] == aw.classify_kss(d['max_kss'])
         assert d['peak_time_utc']

@@ -7,12 +7,12 @@ import type { CompanyDetection } from '@/types/fatigue';
 
 /**
  * After the first upload the backend may suggest the pilot's airline.
- * High confidence → confirmed silently with a toast; otherwise ask.
+ * Company membership always requires explicit confirmation, including cached detections.
  * Handles each analysis once.
  */
 export function AirlineDetectionPrompt() {
   const { state } = useAnalysis();
-  const { isAuthenticated, user, confirmCompany } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<CompanyDetection | null>(null);
   const handled = useRef<string | null>(null);
@@ -26,18 +26,8 @@ export function AirlineDetectionPrompt() {
     if (handled.current === key) return;
     handled.current = key;
 
-    if (!detection.needsConfirmation) {
-      confirmCompany(detection.suggestedName, detection.suggestedIcao)
-        .then(() => toast.success(`Added to ${detection.suggestedName}`))
-        .catch(() => {
-          setPending(detection);
-          setOpen(true);
-        });
-    } else {
-      setPending(detection);
-      setOpen(true);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    setPending(detection);
+    setOpen(true);
   }, [detection, isAuthenticated, user?.company_id, analysisKey]);
 
   if (!pending) return null;

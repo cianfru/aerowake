@@ -136,7 +136,7 @@ def test_planned_extension_is_noted_and_limited_to_two_in_7_days():
     res = run_checks(roster(ext[:2]))
     notes = [f for f in res['findings'] if f['rule'] == 'fdp_max']
     assert len(notes) == 2 and all(f['severity'] == 'info' and 'planned extension' in f['detail'] for f in notes)
-    assert res['summary']['coverage']['fdp_max']['status'] == 'passed'
+    assert res['summary']['coverage']['fdp_max']['status'] == 'incomplete_history'
     res = run_checks(roster(ext))
     assert 'fdp_extension' in rules(res)
 
@@ -147,3 +147,23 @@ def test_fdp_beyond_the_planned_maximum_is_a_warning():
     res = run_checks(roster([late]))
     finding = next(f for f in res['findings'] if f['rule'] == 'fdp_max')
     assert finding['severity'] == 'warning' and 'no planned extension' in finding['detail']
+
+
+def test_home_standby_interrupts_rest_before_next_flight():
+    standby = Duty('SB', datetime(2026, 9, 2), at(2, 8), at(2, 20), [], 'Asia/Qatar',
+                   duty_type=DutyType.HOME_STANDBY)
+    next_flight = flight_duty(3, 4, 8)
+    res = run_checks(roster([flight_duty(1, 8, 8), next_flight], [standby]))
+    rests = [f for f in res['findings'] if f['rule'] == 'standby']
+    assert any(f['limit'] is None and 'not assessed' in f['detail'] and f['value'] == 8 and f['window_start_utc'] == standby.release_time_utc.isoformat()
+               for f in rests)
+
+
+def test_legal_applicability_is_never_inferred_from_a_roster():
+    res = run_checks(roster([_limits(flight_duty(1, 8, 8))]))
+    coverage = res['summary']['coverage']
+    assert coverage['operator_approval']['status'] == 'not_assessed'
+    assert 'private OM-A' in coverage['operator_approval']['reason']
+    assert 'unverified' in coverage['fdp_max']['reason']
+    assert coverage['fdp_max']['status'] == 'incomplete_history'
+    assert coverage['reduced_rest']['status'] == 'not_assessed'

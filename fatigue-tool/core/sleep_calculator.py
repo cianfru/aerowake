@@ -8,7 +8,7 @@ Strategy dispatch, inter-duty recovery, validation, and circadian gating
 live here. Individual strategy implementations are in sleep_strategies.py;
 quality calculations are in sleep_quality.py.
 
-References: Signal et al. (2009), Gander et al. (2013), Roach et al. (2012)
+References: Ingre et al. (2014), Gander et al. (2013), Roach et al. (2012)
 """
 
 from datetime import datetime, timedelta, time
@@ -56,7 +56,7 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
     Individual strategy implementations inherited from SleepStrategyMixin.
     Quality calculations delegated to SleepQualityEngine.
 
-    References: Signal et al. (2009), Gander et al. (2013), Roach et al. (2012)
+    References: Ingre et al. (2014), Gander et al. (2013), Roach et al. (2012)
     """
 
     def __init__(self, config: ModelConfig = None):
@@ -64,8 +64,7 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         self._quality_engine = SleepQualityEngine(self.config)
         
         # Sleep timing: the pilot's usual night (core/parameters.py SleepHabits;
-        # default 23:00–07:00, alarm-constrained workday timing consistent with
-        # pilot actigraphy in Signal et al. (2009) and Gander et al. (2013);
+        # default 23:00–07:00 is an editable application assumption;
         # chronotypes differ, Roenneberg et al. (2007)). Bedtime may be ≥ 24
         # (after midnight of the evening before).
         habits = self.config.sleep_habits
@@ -94,12 +93,12 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         self.WOCL_END = self.config.easa_framework.wocl_end_hour + 1  # 6 (exclusive upper bound)
         
         # Base efficiency by location — aligned with SleepQualityParameters.
-        # Values updated per Signal et al. (2013) PSG data and sleep research.
+        # Values are application assumptions, not universal measured efficiencies.
         # These represent sleep quality multipliers, not TST/TIB ratios.
         self.LOCATION_EFFICIENCY = {
             'home': 0.95,            # Near-optimal: Åkerstedt (2003), Van Dongen (2003)
-            'hotel': 0.88,           # Signal et al. (2013) PSG: 88% measured
-            'crew_rest': 0.70,       # Signal et al. (2013) PSG: 70% inflight bunk
+            'hotel': 0.88,           # Application assumption
+            'crew_rest': 0.70,       # Application assumption
             'airport_hotel': 0.85,   # Slightly below regular hotel due to noise
             'crew_house': 0.90       # Similar to home environment
         }
@@ -338,7 +337,7 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         cumulative_sleep_debt: float = 0.0
     ) -> SleepStrategy:
         """
-        Generate a single, scientifically grounded recovery sleep block for the
+        Generate a single estimated recovery sleep block for the
         rest period between two duties.
 
         This replaces the previous dual-generation approach (post-duty sleep +
@@ -346,7 +345,7 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         a single block is produced per inter-duty gap, with:
 
         1. **Onset** anchored to duty release + arrival-window delay
-           (Roach et al. 2025; Signal et al. 2013)
+           (Rempe et al. 2025; application timing assumptions)
         2. **Duration** scaled by prior wakefulness / homeostatic load
            (Banks et al. 2010; Kitamura et al. 2016)
         3. **Wake time** gated by the circadian morning signal (07:00
@@ -355,8 +354,7 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
            (Dijk & Czeisler 1995; Borbély 1982)
 
         References:
-            Signal et al. (2013) J Sleep Res 22(6):697-706
-            Roach et al. (2025) PMC11879054
+            Rempe et al. (2025) Sleep Advances 6:zpaf002
             Banks et al. (2010) Sleep 33(8):1013-1026
             Kitamura et al. (2016) Sci Rep 6:35812
             Dijk & Czeisler (1995) J Neurosci 15:3526
@@ -397,7 +395,7 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         bio_tz = pytz.timezone(bio_tz_str)
 
         # --- 1. Sleep onset: release time + arrival-window delay ---
-        # Roach et al. (2025): layover sleep onset predicted by layover start
+        # Rempe et al. (2025): layover sleep onset predicted by layover start
         # Signal et al. (2013): ~1-2h wind-down after duty release
         #
         # IMPORTANT: Use biological time (not local) for un-acclimated pilots.
@@ -811,7 +809,7 @@ class UnifiedSleepCalculator(SleepStrategyMixin):
         References:
             Dijk & Czeisler (1995) J Neurosci 15:3526
             Borbély (1982) Human Neurobiol 1:195-204
-            Åkerstedt & Gillberg (1986) J Sleep Res — WMZ limits early bedtime
+            Dijk & Czeisler (1994) Neurosci Lett 166:63-68 — wake-maintenance context; timing bounds are assumptions
         """
         duration_wake = sleep_start + timedelta(hours=base_duration)
 

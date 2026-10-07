@@ -1,5 +1,6 @@
 import { BookOpen } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { evidenceHref, getReferenceByKey } from '@/data/references';
 
 export function ReportMethodology() {
   return (
@@ -24,19 +25,19 @@ export function ReportMethodology() {
             <ProcessCard
               process="S"
               name="Homeostatic Sleep Pressure"
-              description="Builds during wakefulness and recovers during sleep, with a 'brake' that slows recovery near full restoration. Up to ~5.5 KSS points between fully rested and depleted."
+              description="Builds during wakefulness and recovers during sleep, with a 'brake' that slows recovery near full restoration. This contribution depends on the sleep and wake history supplied."
               reference="Ingre et al., 2014; Åkerstedt & Folkard, 1997"
             />
             <ProcessCard
               process="C"
               name="Circadian Rhythm"
-              description="~24h body clock, lowest in the early-morning body-clock hours (WOCL). Worth ~2.3 KSS points peak to trough. Re-adapts to a new time zone at ~30% of the remaining difference per day."
+              description="~24h body clock, lowest in the early-morning body-clock hours (WOCL). The implementation assumes adaptation closes about 30% of the remaining time-zone gap per day; this is not a measured rate for the individual pilot."
               reference="Ingre et al., 2014"
             />
             <ProcessCard
               process="U"
               name="Ultradian Rhythm"
-              description="A small 12-hour component (≤0.5 KSS) that captures the post-lunch dip."
+              description="A smaller 12-hour component that adds variation within the circadian cycle."
               reference="Ingre et al., 2014"
             />
           </div>
@@ -49,7 +50,7 @@ export function ReportMethodology() {
             90th-percentile KSS and P(KSS ≥ 7) come from the published individual-difference and ordinal
             models. Sleep inertia, time-on-task, workload and cabin hypoxia are not part of the score; the
             7-day sleep deficit is reported separately. Predictions describe a group-average pilot
-            (typical error ±1.4 KSS) and are not a fitness-to-fly determination.
+            and are not a fitness-to-fly determination. The source study reports a residual standard deviation of 1.42 KSS; this is not a personal error bound. The assembled Aerowake product has not been independently validated.
           </p>
 
           {/* References */}
@@ -57,26 +58,14 @@ export function ReportMethodology() {
             <h4 className="text-xs font-medium text-muted-foreground mb-2 print:text-gray-600">
               REFERENCES
             </h4>
-            <div className="space-y-1.5 text-[10px] text-muted-foreground print:text-gray-600 leading-relaxed">
-              <Reference text="Åkerstedt, T. & Folkard, S. (1997). The three-process model of alertness and its extension to performance. Sleep, 20(4), 282-292." />
-              <Reference text="Åkerstedt, T., Anund, A., Axelsson, J. & Kecklund, G. (2014). Subjective sleepiness is a sensitive indicator of insufficient sleep and impaired waking function. J Sleep Res, 23(3), 240-252." />
-              <Reference text="Åkerstedt, T. & Gillberg, M. (1990). Subjective and objective sleepiness in the active individual. Int J Neurosci, 52(1-2), 29-37." />
-              <Reference text="Belenky, G. et al. (2003). Patterns of performance degradation and restoration during sleep restriction and subsequent recovery. J Sleep Res, 12(1), 1-12." />
-              <Reference text="Caldwell, J.A. et al. (2009). Fatigue countermeasures in aviation. Aviation, Space, and Environmental Medicine, 80(1), 29-59." />
-              <Reference text="Ingre, M., Van Leeuwen, W., Klemets, T. et al. (2014). Validating and extending the three process model of alertness in airline operations. PLoS ONE, 9(10), e108679." />
-              <Reference text="ICAO (2016). Doc 9966: Manual for the Oversight of Fatigue Management Approaches (2nd ed.)." />
-              <Reference text="Kamimori, G.H. et al. (2015). Caffeine improves reaction time, vigilance and logical reasoning. Aviation, Space, and Environmental Medicine, 86(8), 700-706." />
-              <Reference text="Ker, K. et al. (2010). Caffeine for the prevention of injuries and errors in shift workers. Cochrane Database of Systematic Reviews, 5." />
-              <Reference text="Kitamura, S. et al. (2016). Estimating individual optimal sleep duration and potential sleep debt. Scientific Reports, 6, 35812." />
-              <Reference text="Rosekind, M.R. et al. (1994). Alertness management in long-haul flight operations. SAE Technical Paper 942130." />
-              <Reference text="Signal, T.L. et al. (2013). In-flight sleep of flight crew during a 7-hour rest break. Aviation, Space, and Environmental Medicine, 84(5), 471-476." />
-              <Reference text="Van Dongen, H.P.A. et al. (2003). The cumulative cost of additional wakefulness. Sleep, 26(2), 117-126." />
+            <div className="space-y-1.5 text-xs text-muted-foreground print:text-gray-600 leading-relaxed">
+              {['akerstedt_2014', 'akerstedt_folkard_1997', 'akerstedt_sleepiness_2014', 'akerstedt_gillberg_1990', 'belenky_2003', 'caldwell_2009', 'icao_9966', 'kamimori_2015', 'ker_2010', 'kitamura_2016', 'rosekind_1994', 'rosekind_1996', 'signal_2013', 'van_dongen_2003'].map(key => <Reference key={key} sourceKey={key} />)}
             </div>
           </div>
 
           {/* Disclaimer */}
           <div className="border-t border-border/30 pt-3">
-            <p className="text-[10px] text-muted-foreground/70 italic print:text-gray-500">
+            <p className="text-xs text-muted-foreground/70 italic print:text-gray-500">
               Disclaimer: This report is generated by a biomathematical fatigue model and provides
               predictions based on mathematical modeling of human sleep-wake physiology. Predictions
               are estimates and may not reflect the actual fatigue state of any individual pilot.
@@ -108,14 +97,19 @@ function ProcessCard({ process, name, description, reference }: {
     <div className={`rounded-lg border px-3 py-2.5 ${colorClass} print:bg-gray-50 print:border-gray-200`}>
       <div className="flex items-center gap-2 mb-1">
         <span className="text-sm font-bold font-mono">{process}</span>
-        <span className="text-[10px] font-medium">{name}</span>
+        <span className="text-xs font-medium">{name}</span>
       </div>
-      <p className="text-[10px] leading-relaxed opacity-80 print:text-gray-700">{description}</p>
-      <p className="text-[9px] opacity-60 mt-1 print:text-gray-500">{reference}</p>
+      <p className="text-xs leading-relaxed opacity-80 print:text-gray-700">{description}</p>
+      <p className="text-xs opacity-60 mt-1 print:text-gray-500">{reference}</p>
     </div>
   );
 }
 
-function Reference({ text }: { text: string }) {
-  return <p className="pl-4 -indent-4">{text}</p>;
+function Reference({ sourceKey }: { sourceKey: string }) {
+  const source = getReferenceByKey(sourceKey);
+  if (!source || source.verification !== 'identified') return null;
+  return <p className="pl-4 -indent-4 break-words">{source.full}{' '}
+    <a href={source.url} target="_blank" rel="noreferrer" className="text-primary underline print:text-black">{source.doi ? `doi:${source.doi}` : 'Publication'}</a>{' '}
+    <a href={evidenceHref(sourceKey)} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-primary underline print:hidden">Evidence and scope</a>
+  </p>;
 }

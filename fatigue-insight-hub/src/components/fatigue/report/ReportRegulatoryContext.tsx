@@ -15,14 +15,14 @@ export function ReportRegulatoryContext({ duty }: Props) {
   return (
     <section>
       <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 print:text-black">
-        8. EASA Regulatory Context
+        8. Flight-time limitation context
       </h2>
       <Card variant="glass" className="print:bg-white print:border-gray-300">
         <CardContent className="py-4 px-5 space-y-4">
           <div className="flex items-center gap-2 mb-1">
             <Scale className="h-4 w-4 text-primary" />
             <p className="text-xs text-muted-foreground print:text-gray-600">
-              Compliance assessment against EASA ORO.FTL (EU 83/2014)
+              Scoped comparison with public EASA references and the configured operator scheme. Approval, applicability and complete history are unverified.
             </p>
           </div>
 
@@ -46,14 +46,14 @@ export function ReportRegulatoryContext({ duty }: Props) {
               regulation="ORO.FTL.205(f)"
               compliant={null}
               detail={duty.usedDiscretion
-                ? `Used — extended to ${duty.extendedFdpHours?.toFixed(1) ?? '—'}h`
-                : 'Not used'}
+                ? `Above basic limit; operational discretion is unconfirmed (scheme ceiling ${duty.extendedFdpHours?.toFixed(1) ?? '—'}h)`
+                : 'Operational use is not established from the roster'}
             />
 
             {/* WOCL */}
             <ComplianceRow
               label="WOCL Exposure"
-              regulation="AMC1 ORO.FTL.105(10)"
+              regulation="ORO.FTL.105(28)"
               compliant={true}
               detail={`${(duty.woclExposure ?? 0).toFixed(1)}h in 02:00–05:59 window`}
               isInfo
@@ -73,40 +73,41 @@ export function ReportRegulatoryContext({ duty }: Props) {
           {ulr && ulr.isUlr && (
             <div className="border-t border-border/30 pt-3">
               <h4 className="text-xs font-medium text-muted-foreground mb-2 print:text-gray-600">
-                Ultra Long Range (ULR) Compliance
+                Ultra-long-range scheme comparison
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <ComplianceRow
                   label="ULR FDP"
-                  regulation="ORO.FTL.205(e)"
-                  compliant={ulr.fdpWithinLimit}
-                  detail={`Max planned: ${ulr.maxPlannedFdp.toFixed(1)}h`}
+                  regulation="Configured ULR scheme"
+                  compliant={duty.maxFdpHours == null ? null : ulr.fdpWithinLimit}
+                  detail={duty.maxFdpHours == null ? "FDP not assessed for this facility or missing context" : `Scheme reference: ${ulr.maxPlannedFdp?.toFixed(1) ?? "—"}h; approval unverified`}
                 />
                 <ComplianceRow
                   label="Rest Periods"
-                  regulation="ORO.FTL.235"
-                  compliant={ulr.restPeriodsValid}
+                  regulation="Configured ULR scheme"
+                  compliant={ulr.restPeriodsValid === false ? false : null}
                   detail="In-flight rest block validation"
                 />
                 <ComplianceRow
                   label="Pre-ULR Rest"
-                  regulation="ORO.FTL.235"
-                  compliant={ulr.preUlrRestCompliant}
+                  regulation="Configured ULR scheme"
+                  compliant={ulr.preUlrRestCompliant === false ? false : null}
                   detail="Minimum rest before ULR duty"
                 />
                 <ComplianceRow
                   label="Monthly ULR Count"
-                  regulation="ORO.FTL.235"
-                  compliant={ulr.monthlyUlrCount <= ulr.monthlyLimit}
-                  detail={`${ulr.monthlyUlrCount} / ${ulr.monthlyLimit} max`}
+                  regulation="Configured ULR scheme"
+                  compliant={ulr.monthlyUlrCount > ulr.monthlyLimit ? false : null}
+                  detail={`${ulr.monthlyUlrCount ?? "—"} / ${ulr.monthlyLimit ?? "—"} in supplied activities`}
                 />
               </div>
 
+              {(ulr.warnings?.length ?? 0) > 0 && <ul className="mt-3 space-y-1 text-xs text-muted-foreground" aria-label="ULR comparison limitations">{ulr.warnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul>}
               {/* Violations */}
               {ulr.violations && ulr.violations.length > 0 && (
                 <div className="mt-3 rounded-lg border border-critical/30 bg-critical/10 px-3 py-2 print:bg-red-50 print:border-red-200">
                   <p className="text-xs font-medium text-critical print:text-red-700 mb-1">
-                    ULR Violations Detected:
+                    Configured ULR scheme findings:
                   </p>
                   <ul className="text-[11px] text-muted-foreground print:text-gray-700 space-y-0.5">
                     {ulr.violations.map((v, i) => (
@@ -131,7 +132,7 @@ function ComplianceRow({ label, regulation, compliant, detail, isInfo }: {
   isInfo?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg bg-secondary/15 border border-border/20 px-3 py-2.5 print:bg-gray-50">
+    <div className="flex flex-wrap items-center gap-3 rounded-lg bg-secondary/15 border border-border/20 px-3 py-2.5 print:bg-gray-50">
       {isInfo || compliant == null ? (
         <div className="w-4 h-4 flex-shrink-0" />
       ) : compliant ? (
@@ -140,15 +141,15 @@ function ComplianceRow({ label, regulation, compliant, detail, isInfo }: {
         <XCircle className="h-4 w-4 text-critical flex-shrink-0" />
       )}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium print:text-black truncate">{label}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium print:text-black">{label}</span>
           <Badge variant="secondary" className="text-[8px] flex-shrink-0">{regulation}</Badge>
         </div>
-        <p className="text-[10px] text-muted-foreground print:text-gray-500 truncate">{detail}</p>
+        <p className="text-xs text-muted-foreground print:text-gray-500">{detail}</p>
       </div>
       {!isInfo && (
         <Badge variant={compliant == null ? 'secondary' : compliant ? 'success' : 'critical'} className="text-[9px] flex-shrink-0">
-          {compliant == null ? 'NOT ASSESSED' : compliant ? 'WITHIN LIMIT' : 'EXCEEDS LIMIT'}
+          {compliant == null ? 'NOT ASSESSED' : compliant ? 'WITHIN LIMIT' : 'REVIEW REQUIRED'}
         </Badge>
       )}
     </div>

@@ -22,6 +22,7 @@ export const EASA_RULE_LABELS: Record<string, string> = {
   standby: 'Standby (ORO.FTL.225)',
   fdp_max: 'Maximum daily FDP (ORO.FTL.205)',
   fdp_extension: 'Planned FDP extensions (ORO.FTL.205(d))',
+  operator_approval: 'Operator scheme and approval',
 };
 
 const ruleLabel = (rule: string) => EASA_RULE_LABELS[rule] ?? rule.replace(/_/g, ' ');
@@ -71,13 +72,18 @@ export function EasaChecksCard({ findings, summary }: EasaChecksCardProps) {
     <section aria-labelledby="easa-checks-heading" className="instrument-surface space-y-6">
       <div className="space-y-1">
         <h2 id="easa-checks-heading" className="text-title font-semibold">FTL checks</h2>
-        <p className="text-sm text-muted-foreground">Flight-time limitations (QCAA / EASA ORO.FTL) checked on the activities in this roster.</p>
+        <p className="text-sm text-muted-foreground">Supplied activities compared with public EASA limits and the configured operator scheme.</p>
+      </div>
+
+      <div className="rounded-xl border border-border bg-secondary/40 p-4 text-sm">
+        <p className="font-medium">Operator approval is not verified</p>
+        <p className="mt-1 text-muted-foreground">Rest and ULR rules include an owner-supplied operator scheme. Confirm its current applicability, crew and rest facility. Unknown-state FRM and city-pair approval cannot be established from a roster.</p>
       </div>
 
       {warnings.length === 0 ? (
         <p className="flex items-center gap-2 text-sm">
           <Check className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-          {!summary || summary.status === 'unavailable' ? 'FTL checks unavailable' : 'No exceedances found in the supplied activities'}
+          {!summary || summary.status === 'unavailable' ? 'FTL checks unavailable' : 'No threshold exceedances found in the supplied activities'}
         </p>
       ) : (
         <ul className="space-y-3">
@@ -96,8 +102,8 @@ export function EasaChecksCard({ findings, summary }: EasaChecksCardProps) {
 
       {summary && summary.status !== 'unavailable' && (
         <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">Highest rolling total in this roster, against the limit</p>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Highest rolling totals versus EASA limits">
+          <p className="text-xs text-muted-foreground">Highest rolling total in this roster, against the configured comparison limit</p>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Highest rolling totals versus configured comparison limits">
             <Gauge label="Duty · 7 days" value={summary.duty7dMax} limit={summary.limits.duty7d} />
             <Gauge label="Duty · 14 days" value={summary.duty14dMax} limit={summary.limits.duty14d} />
             <Gauge label="Duty · 28 days" value={summary.duty28dMax} limit={summary.limits.duty28d} />
@@ -119,7 +125,8 @@ export function EasaChecksCard({ findings, summary }: EasaChecksCardProps) {
       )}
 
       <div className="space-y-2 border-t border-border pt-4 text-sm text-muted-foreground">
-        <p>A scoped check of the supplied roster, not a compliance certificate: history before the roster and operator approvals are not known here.</p>
+        <p>A scoped check of the supplied roster, not a compliance certificate: earlier history, operator approvals, standby call-outs and reduced-rest compensation are not established here.</p>
+        <a href="https://www.easa.europa.eu/en/document-library/easy-access-rules/easy-access-rules-air-operations-regulation-eu-no-9652012" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-primary underline underline-offset-4">Read the public EASA Air Operations rules ↗</a>
         {coverage.length > 0 && (
           <details>
             <summary className="cursor-pointer py-1 font-medium text-foreground/80">What was and was not assessed</summary>

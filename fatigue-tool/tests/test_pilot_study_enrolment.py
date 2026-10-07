@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from auth.dependencies import get_current_user
 from db.session import get_db
 from study import config, limits
-from study.routes import Observation, build_payload, router
+from study.routes import Observation, build_payload, home_offset, router
 
 NOW = datetime(2026, 9, 3, 16, tzinfo=timezone.utc)
 
@@ -75,3 +75,23 @@ def test_single_observation_delete_is_owner_scoped():
         assert client.delete(f'/api/pilot-study/observations/{uuid4()}').status_code == 204
         assert client.delete(f'/api/pilot-study/observations/{uuid4()}').status_code == 404
     assert all(user.id in q.compile().params.values() for q in queries)
+
+
+@pytest.mark.parametrize('zone,stamp,offset', [
+    ('Europe/London', '2026-03-29T01:30:00+00:00', 1),
+    ('Europe/London', '2026-10-25T01:30:00+00:00', 0),
+    ('America/New_York', '2026-03-08T03:30:00+00:00', -5),
+    ('America/New_York', '2026-11-01T05:30:00+00:00', -4),
+])
+def test_home_offset_resolves_the_utc_instant_across_dst(zone, stamp, offset):
+    assert home_offset(body(home_timezone=zone, observed_at=stamp)) == offset
+
+
+@pytest.mark.parametrize('version', [None, 'calibration-v2'])
+def test_diary_requires_explicit_current_enrolment(version):
+    limits.reset()
+    user = SimpleNamespace(id=uuid4(), study_consent_version=version,
+                           study_enrolled_at=NOW if version else None, study_withdrawn_at=None)
+    with client_for(user, SimpleNamespace()) as client:
+        assert client.post('/api/pilot-study/observations', json=body().model_dump(mode='json')).status_code == 403
+    assert user.study_consent_version == version

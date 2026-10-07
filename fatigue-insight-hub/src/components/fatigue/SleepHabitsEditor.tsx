@@ -72,10 +72,10 @@ export function SleepHabitsEditor({ value, onSave, busy = false, saveLabel = 'Sa
         </div>
         {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Sets the night before each duty and on days off, the bedtime early starts are counted back from
-          (up to 1.5h earlier, not before 21:30, because sleep is hard to start in the evening: Arsintescu et al. 2022;
-          Dijk &amp; Czeisler 1994), and the morning a night’s sleep ends. The default 23:00–07:00 comes from pilot
-          sleep studies (Signal et al. 2009; Gander et al. 2013); people differ, so use your own.
+          Sets the main sleep before duties and on days off. The default 23:00–07:00 is an editable
+          modelling assumption. For early reports the model may advance bedtime by up to 1.5h,
+          no earlier than 21:30; these bounds are assumptions informed by the evening wake-maintenance
+          zone (Dijk &amp; Czeisler 1994). Use your own usual night and review each estimated sleep block.
         </p>
       </fieldset>
 

@@ -18,9 +18,9 @@ function readHidden(): boolean {
 }
 
 /**
- * Flown duties from the current analysis that have no debrief yet, most
- * recent first. Neither the order nor the card reveals the forecast, so
- * ratings stay blind and unflagged duties (false alarms) are sampled fairly.
+ * Past roster duties with no debrief yet, most recent first. Being in the
+ * past does not confirm that a duty was operated. Queue ordering does not
+ * depend on the forecast; pilots may already have seen it elsewhere.
  */
 export function DebriefQueue({ now, className }: { now?: number; className?: string }) {
   const { state } = useAnalysis();
@@ -52,10 +52,10 @@ export function DebriefQueue({ now, className }: { now?: number; className?: str
         <ClipboardCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0 flex-1 space-y-1">
           <h2 id="debrief-queue-title" className="text-base font-semibold">
-            {queue.length === 1 ? '1 flown duty to debrief' : `${queue.length} flown duties to debrief`}
+            {queue.length === 1 ? '1 past duty to debrief' : `${queue.length} past duties to debrief`}
           </h2>
           <p className="text-sm text-muted-foreground">
-            About 20 seconds each: rate how sleepy you were, then see the forecast. Optional and private; never sent to your operator.
+            If you operated the duty, rate how sleepy you were, then compare the forecast. Optional and private; never sent to your operator.
           </p>
         </div>
       </div>

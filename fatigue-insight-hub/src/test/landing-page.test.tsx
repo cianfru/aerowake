@@ -35,7 +35,7 @@ describe('landing page', () => {
     renderLanding();
     expect(screen.getAllByText(NON_AFFILIATION_NOTE, { exact: false }).length).toBeGreaterThan(0);
     expect(document.body.textContent).toContain('Built by a line pilot');
-    expect(document.body.textContent).toContain('Independent scientific and FTL evaluation in progress');
+    expect(document.body.textContent).toContain('Independent scientific and FTL evaluation required');
     expect(screen.getByRole('link', { name: /PLoS ONE 9\(10\): e108679/ })).toHaveAttribute('href', 'https://doi.org/10.1371/journal.pone.0108679');
   });
 

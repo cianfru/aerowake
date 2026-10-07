@@ -25,7 +25,8 @@ test('a rating logged offline is kept on the device and the roster reopens from 
   await expect(card.getByText('Offline')).toBeVisible();
   await card.getByRole('radio', { name: /^6, / }).click();
   await card.getByRole('button', { name: 'Log rating' }).click();
-  await expect(card.getByRole('status')).toContainText('Sign in to keep your ratings');
+  await expect(card.getByRole('status')).toContainText('Saved on this device as a guest.');
+  await expect(card.getByRole('status')).toContainText('Sign in before logging future ratings');
   await expect(card.getByRole('list', { name: 'Your ratings on this duty' })).toContainText('KSS 6');
   await expect(page.getByRole('status').filter({ hasText: 'Offline. Showing the roster saved on this device' })).toBeVisible();
 

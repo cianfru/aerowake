@@ -1,3 +1,4 @@
+import { evidenceHref, getReferenceByKey } from '@/data/references';
 import { Lightbulb, Moon, Coffee, Users, Radio, Calendar, Shield } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -30,8 +31,8 @@ export function ReportMitigations({ data }: Props) {
           <div className="flex items-center gap-2 mb-1">
             <Lightbulb className="h-4 w-4 text-primary" />
             <p className="text-xs text-muted-foreground print:text-gray-600">
-              Recommended countermeasures based on the identified risk factors.
-              Each recommendation is supported by peer-reviewed fatigue science literature.
+              Suggestions draw on fatigue research and the identified risk factors.
+              Review the source, your circumstances and applicable operating procedures; a model cannot confirm a countermeasure’s effectiveness for you.
             </p>
           </div>
 
@@ -65,9 +66,10 @@ function MitigationItem({ mitigation, index }: { mitigation: Mitigation; index: 
           <p className="text-xs leading-relaxed text-muted-foreground print:text-gray-700">
             {mitigation.text}
           </p>
-          <p className="text-[10px] text-muted-foreground/70 italic print:text-gray-500">
-            Reference: {mitigation.reference}
-          </p>
+          <p className="text-xs text-muted-foreground print:text-gray-500">Reference: {mitigation.reference}</p>
+          {mitigation.sourceKeys && <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            {mitigation.sourceKeys.map(key => <a key={key} href={evidenceHref(key)} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-primary underline print:hidden">{getReferenceByKey(key)?.short ?? key} · evidence and scope</a>)}
+          </div>}
         </div>
       </div>
     </div>

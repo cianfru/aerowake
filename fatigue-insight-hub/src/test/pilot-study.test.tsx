@@ -100,9 +100,10 @@ describe('pilot study diary', () => {
     expect(screen.queryByText(/How sleepy are you right now/)).toBeNull();
   });
 
-  it('shows the diary to a pilot who never opted out', async () => {
+  it('requires an explicit choice before showing a new pilot the diary', async () => {
     vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(json(url.endsWith('/api/study/enrolment') ? { ...ENROLLED, enrolled: false } : { observations: [] }))));
     render(wrap(<PilotStudyPage />));
-    expect(await screen.findByText(/How sleepy are you right now/)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /read study information/i })).toBeInTheDocument();
+    expect(screen.queryByText(/How sleepy are you right now/)).not.toBeInTheDocument();
   });
 });

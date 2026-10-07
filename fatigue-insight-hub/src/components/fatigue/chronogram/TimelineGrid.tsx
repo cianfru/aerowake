@@ -9,7 +9,6 @@ import { cn } from '@/lib/utils';
 import { SleepBarPopover } from './SleepBarPopover';
 import { DutyBarTooltip } from './DutyBarTooltip';
 import { DayLabel } from './DayLabel';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
 import type { TimelineData, TimelinePeakMarker, TimelineSleepBar } from '@/lib/timeline-types';
@@ -104,7 +103,7 @@ export function TimelineGrid({
         {/* X-axis header */}
         <div className="flex border-b border-border" style={{ height: `${rowHeight}px` }} aria-hidden="true">
           {hours.map((hour) => (
-            <div key={hour} className="flex items-end justify-start pb-1 pl-0.5 font-mono text-[10px] text-muted-foreground" style={{ width: `${100 / 8}%` }}>
+            <div key={hour} className="flex items-end justify-start pb-1 pl-0.5 font-mono text-[11px] text-muted-foreground" style={{ width: `${100 / 8}%` }}>
               {String(hour).padStart(2, '0')}
             </div>
           ))}
@@ -112,14 +111,14 @@ export function TimelineGrid({
 
         <div className="relative">
           {/* WOCL band (static bands span all rows; per-row bands follow their row) */}
-          {data.woclBands.map((band, i) => (
+          {data.woclBands.filter((band) => band.rowIndex === -1 || data.rowLabels.some((row) => row.rowIndex === band.rowIndex)).map((band, i) => (
             <div
               key={`wocl-${i}`}
               className={cn('wocl-hatch pointer-events-none absolute', band.rowIndex === -1 && 'bottom-0 top-0')}
               style={{
                 left: pct(band.startHour),
                 width: pct(band.endHour - band.startHour),
-                ...(band.rowIndex >= 0 ? { top: `${band.rowIndex * rowHeight}px`, height: `${rowHeight}px` } : {}),
+                ...(band.rowIndex >= 0 ? { top: `${data.rowLabels.findIndex((row) => row.rowIndex === band.rowIndex) * rowHeight}px`, height: `${rowHeight}px` } : {}),
               }}
             />
           ))}
@@ -218,22 +217,23 @@ export function TimelineGrid({
               {data.inflightRestBars
                 .filter((bar) => bar.rowIndex === label.rowIndex)
                 .map((bar, i) => (
-                  <TooltipProvider key={`ifr-${i}`} delayDuration={100}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div
-                          className="pointer-events-auto absolute cursor-help rounded-[2px]"
+                  <Popover key={`ifr-${i}`}>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={`Inspect in-flight rest: ${bar.durationHours.toFixed(1)} hours`}
+                          className="pointer-events-auto absolute cursor-pointer rounded-[2px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           style={{
-                            top: 14,
-                            height: 12,
+                            top: 10,
+                            bottom: 10,
                             left: pct(bar.startHour),
                             width: `${Math.max(((bar.endHour - bar.startHour) / 24) * 100, 0.5)}%`,
                             background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, hsl(var(--wocl) / 0.6) 2px, hsl(var(--wocl) / 0.6) 4px)',
                             zIndex: 25,
                           }}
                         />
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-xs p-3">
+                      </PopoverTrigger>
+                      <PopoverContent side="top" className="max-w-[calc(100vw-2rem)] space-y-2 p-3">
                         <div className="space-y-1 text-xs">
                           <p className="border-b border-border pb-1 font-semibold">
                             In-flight rest{bar.crewSet ? ` · ${bar.crewSet.replace('_', ' ')}` : ''}
@@ -246,9 +246,9 @@ export function TimelineGrid({
                             {bar.isDuringWocl && <><dt className="text-muted-foreground">During WOCL</dt><dd>Yes</dd></>}
                           </dl>
                         </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                        <p className="text-xs text-muted-foreground">A modelled rest allocation, not recorded sleep. Effective sleep includes the estimated reduction for the rest facility and timing.</p>
+                      </PopoverContent>
+                  </Popover>
                 ))}
 
               {/* FDP limit markers (dashed lines) */}

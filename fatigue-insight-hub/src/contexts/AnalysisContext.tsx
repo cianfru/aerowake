@@ -1,4 +1,4 @@
-import type { CrewCompositionValue } from '@/lib/api-client';
+import type { CrewCompositionValue, RestFacilityClass } from '@/lib/api-client';
 import { createContext, useContext, useReducer, useEffect, useRef, useState, type ReactNode } from 'react';
 import { offlineStore } from '@/lib/offline-store';
 import { DEFAULT_NAP_HABIT, PilotSettings, UploadedFile, AnalysisResults, DutyAnalysis } from '@/types/fatigue';
@@ -23,6 +23,7 @@ export interface AnalysisState {
   dutyCrewOverrides: Map<string, 'crew_a' | 'crew_b'>;
   /** Pilot-stated crew per duty (the roster only marks 4-pilot crews reliably). */
   dutyCrewComposition: Map<string, CrewCompositionValue>;
+  dutyRestFacilities: Map<string, RestFacilityClass>;
   showLanding: boolean;
 }
 
@@ -52,6 +53,7 @@ function buildInitialState(initial: Partial<PilotSettings> = {}): AnalysisState 
     fatigueReportPrefill: null,
     dutyCrewOverrides: new Map(),
     dutyCrewComposition: new Map(),
+    dutyRestFacilities: new Map(),
     showLanding: !landingDismissed,
   };
 }
@@ -71,6 +73,7 @@ type AnalysisAction =
   | { type: 'SET_CREW_OVERRIDE'; payload: { dutyId: string; crewSet: 'crew_a' | 'crew_b' } }
   | { type: 'CLEAR_CREW_OVERRIDE'; payload: { dutyId: string } }
   | { type: 'SET_CREW_COMPOSITION'; payload: { dutyId: string; composition: CrewCompositionValue | null } }
+  | { type: 'SET_REST_FACILITY'; payload: { dutyId: string; facility: RestFacilityClass | null } }
   | { type: 'REMOVE_FILE' }
   | { type: 'SET_SHOW_LANDING'; payload: boolean }
   | { type: 'LOAD_ANALYSIS'; payload: AnalysisResults }
@@ -89,6 +92,9 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
         ...state,
         uploadedFile: action.payload.meta,
         actualFileObject: action.payload.file,
+        dutyCrewOverrides: new Map(),
+        dutyCrewComposition: new Map(),
+        dutyRestFacilities: new Map(),
         analysisResults: null,
         selectedDuty: null,
       };
@@ -127,6 +133,13 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
       return { ...state, dutyCrewComposition: updated };
     }
 
+    case 'SET_REST_FACILITY': {
+      const updated = new Map(state.dutyRestFacilities);
+      if (action.payload.facility) updated.set(action.payload.dutyId, action.payload.facility);
+      else updated.delete(action.payload.dutyId);
+      return { ...state, dutyRestFacilities: updated };
+    }
+
     case 'CLEAR_CREW_OVERRIDE': {
       const updated = new Map(state.dutyCrewOverrides);
       updated.delete(action.payload.dutyId);
@@ -142,6 +155,7 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
         selectedDuty: null,
         dutyCrewOverrides: new Map(),
         dutyCrewComposition: new Map(),
+        dutyRestFacilities: new Map(),
       };
 
     case 'SET_SHOW_LANDING':
@@ -155,6 +169,11 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
       return {
         ...state,
         analysisResults: action.payload,
+        uploadedFile: null,
+        actualFileObject: null,
+        dutyCrewOverrides: new Map(),
+        dutyCrewComposition: new Map(),
+        dutyRestFacilities: new Map(),
         selectedDuty: null,
         drawerOpen: false,
         activeTab: 'roster',
@@ -166,6 +185,11 @@ function analysisReducer(state: AnalysisState, action: AnalysisAction): Analysis
       return {
         ...state,
         analysisResults: action.payload,
+        uploadedFile: null,
+        actualFileObject: null,
+        dutyCrewOverrides: new Map(),
+        dutyCrewComposition: new Map(),
+        dutyRestFacilities: new Map(),
         selectedDuty: null,
         drawerOpen: false,
         activeTab: 'roster',
@@ -202,6 +226,7 @@ interface AnalysisContextValue {
   clearCrewOverride: (dutyId: string) => void;
   /** null returns the duty to the crew read from the roster. */
   setCrewComposition: (dutyId: string, composition: CrewCompositionValue | null) => void;
+  setRestFacility: (dutyId: string, facility: RestFacilityClass | null) => void;
   removeFile: () => void;
   setShowLanding: (show: boolean) => void;
   loadAnalysis: (r: AnalysisResults) => void;
@@ -279,6 +304,7 @@ export function AnalysisProvider({ children, initialSettings, owner = 'guest' }:
       dispatch({ type: 'CLEAR_CREW_OVERRIDE', payload: { dutyId } }),
     setCrewComposition: (dutyId, composition) =>
       dispatch({ type: 'SET_CREW_COMPOSITION', payload: { dutyId, composition } }),
+    setRestFacility: (dutyId, facility) => dispatch({ type: 'SET_REST_FACILITY', payload: { dutyId, facility } }),
     removeFile: () => { dispatch({ type: 'REMOVE_FILE' }); setRestoredAt(null); void offlineStore.removeAnalysis(owner); },
     setShowLanding: (show) => dispatch({ type: 'SET_SHOW_LANDING', payload: show }),
     loadAnalysis: (r) => dispatch({ type: 'LOAD_ANALYSIS', payload: r }),

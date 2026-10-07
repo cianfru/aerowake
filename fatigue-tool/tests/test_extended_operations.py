@@ -978,3 +978,109 @@ class TestCrewSetOverrideAlwaysWins:
         roster = self._roster()
         _apply_crew_overrides(roster, {roster.duties[0].duty_id: {'composition': 'augmented_3', 'crew_set': 'crew_a'}})
         assert roster.duties[0].crew_composition == CrewComposition.AUGMENTED_3
+
+
+def test_ulr_comparison_exposes_unverified_approval_and_boundary_history():
+    duty = make_ulr_duty(fdp_hours=17.5)
+    result = ULRComplianceValidator().validate_ulr_duty(duty)
+    assert any('approvals are unverified' in warning for warning in result.warnings)
+    assert any('earlier history is missing' in warning for warning in result.warnings)
+    assert any('later activities are missing' in warning for warning in result.warnings)
+
+
+@pytest.mark.parametrize('facility,expected_max,efficiency', [
+    ('class_1', 17.0, 0.70), ('class_2', 16.0, 0.55), ('class_3', 15.0, 0.45),
+])
+def test_selected_rest_facility_survives_replay_and_changes_fdp_and_sleep(facility, expected_max, efficiency):
+    from api.api_server import _apply_crew_overrides, _build_duty_response
+    from api.replay import snapshot, restore
+    duty = make_long_haul_duty()
+    roster = Roster('facility', 'synthetic', '2025-06', [duty], HOME_TZ, pilot_base='DOH')
+    _apply_crew_overrides(roster, {duty.duty_id: {
+        'composition': 'augmented_3', 'rest_facility_class': facility,
+    }})
+    replayed = restore(snapshot(roster))
+    restored_duty = replayed.duties[0]
+    assert restored_duty.crew_stated and restored_duty.crew_source == 'pilot'
+    assert restored_duty.rest_facility_source == 'pilot'
+    model = BorbelyFatigueModel(ModelConfig.aerowake())
+    analysis = model.simulate_roster(replayed)
+    assert restored_duty.rest_facility_class.value == facility
+    assert restored_duty.max_fdp_hours == expected_max
+    assert restored_duty.inflight_rest_plan.rest_facility_quality == efficiency
+    timeline = analysis.duty_timelines[0]
+    assert timeline.inflight_rest_blocks
+    assert all(block.quality_factor == efficiency for block in timeline.inflight_rest_blocks)
+    response = _build_duty_response(timeline, restored_duty, replayed)
+    assert response.rest_facility_source == 'pilot'
+    assert response.rest_facility_class == facility
+
+
+def test_ulr_seat_facility_changes_rest_scenario_without_inventing_an_approval():
+    from api.api_server import _apply_crew_overrides
+    from core.compliance import EASAComplianceValidator
+    duty = make_ulr_duty()
+    roster = Roster('facility', 'synthetic', '2025-06', [duty], HOME_TZ, pilot_base='DOH')
+    _apply_crew_overrides(roster, {duty.duty_id: {'rest_facility_class': 'class_3'}})
+    plan = ULRRestPlanner().generate_rest_plan(duty)
+    assert plan.rest_facility_class == RestFacilityClass.CLASS_3
+    assert plan.rest_facility_quality == 0.45
+    limit = EASAComplianceValidator().calculate_fdp_limits(duty)
+    assert limit['max_fdp'] is None and limit['extended_fdp'] is None
+    comparison = ULRComplianceValidator().validate_ulr_duty(duty)
+    assert not comparison.fdp_within_limit
+    assert any('ULR FDP is not assessed' in warning for warning in comparison.warnings)
+
+
+def test_rest_facility_override_validates_and_respects_standard_crew():
+    from fastapi import HTTPException
+    from api.api_server import _apply_crew_overrides
+    duty = make_long_haul_duty()
+    roster = Roster('facility', 'synthetic', '2025-06', [duty], HOME_TZ, pilot_base='DOH')
+    with pytest.raises(HTTPException) as error:
+        _apply_crew_overrides(roster, {duty.duty_id: {'rest_facility_class': 'luxury'}})
+    assert error.value.status_code == 422
+    _apply_crew_overrides(roster, {duty.duty_id: {'composition': 'standard', 'rest_facility_class': 'class_3'}})
+    assert duty.rest_facility_class is None
+    assert duty.rest_facility_source is None
+
+
+def test_ulr_serialization_supplies_the_fields_consumed_by_duty_and_report_views():
+    from types import SimpleNamespace
+    from api.api_server import _build_ulr_data
+    duty = make_ulr_duty()
+    comparison = ULRComplianceValidator().validate_ulr_duty(duty)
+    payload, _ = _build_ulr_data(SimpleNamespace(ulr_compliance=comparison), duty)
+    assert payload['max_planned_fdp'] == 20.0
+    assert payload['monthly_limit'] == 2
+    assert payload['monthly_ulr_count'] == comparison.monthly_ulr_count
+    assert payload['pre_ulr_rest_compliant'] == payload['pre_rest_compliant']
+    assert payload['post_ulr_rest_compliant'] == payload['post_rest_compliant']
+
+
+def test_facility_only_change_informs_inferred_crew_without_creating_ulr():
+    from api.api_server import _apply_crew_overrides
+    duty = make_long_haul_duty(block_hours=15.0)
+    duty.crew_composition = CrewComposition.STANDARD
+    roster = Roster('facility', 'synthetic', '2025-06', [duty], HOME_TZ, pilot_base='DOH')
+    _apply_crew_overrides(roster, {duty.duty_id: {'rest_facility_class': 'class_3'}})
+    analysis = BorbelyFatigueModel(ModelConfig.aerowake()).simulate_roster(roster)
+    assert duty.crew_composition == CrewComposition.AUGMENTED_4
+    assert not duty.is_ulr
+    assert duty.max_fdp_hours == 16.0
+    assert analysis.duty_timelines[0].ulr_compliance is None
+
+
+def test_augmented_fdp_does_not_grant_an_allowance_above_three_operating_sectors():
+    from core.compliance import EASAComplianceValidator
+    duty = make_short_haul_duty()
+    duty.segments = duty.segments * 2
+    duty.crew_composition = CrewComposition.AUGMENTED_3
+    limits = EASAComplianceValidator().calculate_fdp_limits(duty, augmented_params=AugmentedFDPParameters())
+    assert limits['max_fdp'] is None and limits['extended_fdp'] is None
+    assert 'at most 3 operating sectors' in limits['reference']
+    # Positioning sectors do not increase the count of operating sectors.
+    import copy
+    duty.segments = [copy.copy(seg) for seg in duty.segments]
+    duty.segments[-1].activity_code = 'DH'
+    assert EASAComplianceValidator().calculate_fdp_limits(duty, augmented_params=AugmentedFDPParameters())['max_fdp'] == 16.0

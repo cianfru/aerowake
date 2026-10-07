@@ -1,3 +1,4 @@
+import { operatorLabel } from '@/lib/operator-label';
 import { useState } from 'react';
 import {
   Users, LogIn, TrendingUp, TrendingDown, Minus, AlertTriangle,
@@ -128,7 +129,7 @@ export function ComparativeMetricsPage() {
     return (
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="mx-auto max-w-5xl space-y-6 animate-fade-in">
-          <PageHeader companyName={user?.company_name} />
+          <PageHeader companyName={operatorLabel(user?.company_name)} />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3, 4, 5, 6].map(i => (
               <Card key={i} variant="glass" className="animate-pulse">
@@ -151,7 +152,7 @@ export function ComparativeMetricsPage() {
     return (
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="mx-auto max-w-5xl space-y-6">
-          <PageHeader companyName={user?.company_name} />
+          <PageHeader companyName={operatorLabel(user?.company_name)} />
           <Card variant="glass" className="p-8 text-center">
             <p className="text-sm text-critical">
               Failed to load comparative metrics. Please try again later.
@@ -175,7 +176,7 @@ export function ComparativeMetricsPage() {
       <div className="mx-auto max-w-5xl space-y-6 animate-fade-in">
         {/* Header + month selector */}
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <PageHeader companyName={user?.company_name} />
+          <PageHeader companyName={operatorLabel(user?.company_name)} />
 
           {availableMonths.length > 0 && (
             <Select

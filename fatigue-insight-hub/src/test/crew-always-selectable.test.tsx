@@ -33,3 +33,30 @@ describe('crew choice on every flight duty', () => {
     expect(out.get('D1')).toEqual({ composition: 'augmented_4', crew_set: 'crew_b' });
   });
 });
+
+describe('rest facility choice', () => {
+  it('exposes class 1/2/3 on an augmented duty and reruns with the selected class', () => {
+    const onRestFacilityChange = vi.fn();
+    const duty = { ...twoPilotDuty, crewComposition: 'augmented_3', restFacilityClass: 'class_1' } as DutyAnalysis;
+    render(<DutyInfoColumn duty={duty} hasCrewContent onRestFacilityChange={onRestFacilityChange} />, { wrapper: Providers });
+    const selector = screen.getByRole('combobox', { name: 'Rest facility for this duty' });
+    fireEvent.change(selector, { target: { value: 'class_3' } });
+    expect(onRestFacilityChange).toHaveBeenCalledWith('D1', 'class_3');
+    expect(screen.getByText(/modelling assumptions, not measured sleep/)).toBeInTheDocument();
+  });
+
+  it('keeps saved estimates read-only when the original roster is unavailable', () => {
+    const duty = { ...twoPilotDuty, crewComposition: 'augmented_3', restFacilityClass: 'class_2', restFacilitySource: 'pilot' } as DutyAnalysis;
+    render(<DutyInfoColumn duty={duty} hasCrewContent />, { wrapper: Providers });
+    expect(screen.getByRole('combobox', { name: 'Rest facility for this duty' })).toBeDisabled();
+    expect(screen.getByText(/You selected this facility/)).toBeInTheDocument();
+  });
+
+  it('merges a new facility with existing crew choices and retains it on later reruns', () => {
+    const out = mergeCrewOverrides(new Map([['D1', 'crew_b' as const]]), new Map([['D1', 'augmented_4' as const]]),
+      { dutyId: 'D1', restFacility: 'class_2' });
+    expect(out.get('D1')).toEqual({ composition: 'augmented_4', crew_set: 'crew_b', rest_facility_class: 'class_2' });
+    const later = mergeCrewOverrides(new Map(), new Map([['D1', 'augmented_3' as const]]), undefined, new Map([['D1', 'class_3' as const]]));
+    expect(later.get('D1')).toEqual({ composition: 'augmented_3', rest_facility_class: 'class_3' });
+  });
+});

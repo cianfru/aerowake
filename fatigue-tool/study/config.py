@@ -4,12 +4,12 @@ The owner confirms these before recruitment; change both files together and
 bump CONSENT_VERSION whenever the meaning of the consent text changes.
 """
 
-CONSENT_VERSION = 'calibration-v2'
+CONSENT_VERSION = 'calibration-v3-opt-in'
 CONTROLLER = 'the Aerowake project owner (a private individual)'
 CONTACT = 'the in-app Support link'
 PURPOSE = ('calibrating the Aerowake sleepiness model against what pilots actually feel, pooled and '
-           'pseudonymised across all pilots; results will not be published')
-RETENTION = 'until you stop contributing and delete it, or 24 months after your last activity'
+           'pseudonymised across participating pilots; results will not be published')
+RETENTION = 'until you delete the entries or your account; automatic expiry is not currently implemented'
 
 # Abuse and storage bounds (per signed-in pilot).
 DAILY_ROW_CAP = 100          # new study rows in any rolling 24 hours

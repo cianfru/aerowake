@@ -1,5 +1,5 @@
 """
-AeroWake alertness core (engine ``aerowake-4.1-kss``)
+AeroWake alertness core (engine ``aerowake-4.2-kss``)
 =====================================================
 
 Replaces the legacy weighted S/C "performance" index, whose output range was
@@ -62,12 +62,12 @@ import pytz
 
 from core import published_tpm as tpm
 
-ENGINE_VERSION = "aerowake-4.1-kss"
+ENGINE_VERSION = "aerowake-4.2-kss"
 # Engines whose outputs are on the same KSS scale. 4.1 changed sleep
 # estimation (continuous pre-duty nap, debt ledger, bounded daytime sleep) and
 # the headline window; the KSS core and bands are unchanged, so stored state
 # and analyses from 4.0 remain KSS-valued.
-KSS_ENGINE_VERSIONS = ("aerowake-4.0-kss", "aerowake-4.1-kss")
+KSS_ENGINE_VERSIONS = ("aerowake-4.0-kss", "aerowake-4.1-kss", "aerowake-4.2-kss")
 
 
 def is_kss_engine(version) -> bool:

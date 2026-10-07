@@ -2,7 +2,7 @@
 
 ## Status
 
-Engine version: `aerowake-4.1-kss` (September 2026; the KSS core and bands are unchanged from 4.0, sleep estimation and the headline window changed — see below). Independent operational validation of AeroWake as assembled software has not been established. The scoring core is the open, peer-reviewed Three Process Model as validated on airline crew (Ingre et al. 2014, https://doi.org/10.1371/journal.pone.0108679); AeroWake's roster-based sleep inference, band policy and report rules are our own and still need prospective evaluation (see the pilot study). The index is not a measured percentage of cognitive ability, accident probability or alcohol-equivalent impairment.
+Engine version: `aerowake-4.2-kss` (October 2026; the published KSS equations and band policy are unchanged; timezone handling and explicit rest-facility inputs changed — see below). Independent operational validation of AeroWake as assembled software has not been established. The scoring core is the open, peer-reviewed Three Process Model as validated on airline crew (Ingre et al. 2014, https://doi.org/10.1371/journal.pone.0108679); AeroWake's roster-based sleep inference, band policy and report rules are our own and still need prospective evaluation (see the pilot study). The index is not a measured percentage of cognitive ability, accident probability or alcohol-equivalent impairment.
 
 ## Why 3.x was replaced (audit, September 2026)
 
@@ -27,8 +27,8 @@ The audit also found a sign error: an east-adapted body clock was read backwards
 * Acclimatization, process A (eq. 1.10): each day the body clock closes 30% of the remaining gap to local time. This is the empirically optimal rate reported by Ingre et al.
 * The 20–100 index is kept for API compatibility and is linear in KSS: `index = 110 − 10·KSS`.
 * Bands sit at the midpoints between KSS verbal anchors: low < 5.5 ≤ moderate < 6.5 ≤ high < 7.5 ≤ critical < 8.5 ≤ extreme. On the index these are 55 / 45 / 35 / 25. Since 4.1 the band is decided on predicted KSS rounded to one decimal (half up, from the two-decimal value the API sends), lower bound inclusive, in every backend path and in the client — a displayed 6.5 is always High.
-* Sleep efficiency is the block's quality factor bounded to 0.6–1.0; bunk rest defaults to 0.70 (Signal et al. 2013).
-* Removed from the score because this model family has not validated them: workload acceleration of `S`, the "resilience" boost, cabin hypoxia, time-on-task, and sleep inertia (the paper found the default inertia function worsened fit). The first hour after waking is therefore not modelled.
+* Sleep efficiency is the block's quality factor bounded to 0.6–1.0; bunk rest defaults to 0.70. These coefficients are application assumptions. Signal et al. (2013) studied in-flight sleep, but does not validate these universal coefficients. See [source audit](SCIENCE_SOURCE_AUDIT.md).
+* Removed from the score because this model family has not validated them: workload acceleration of `S`, the "resilience" boost, cabin hypoxia, time-on-task, and sleep inertia (the paper found the default inertia function worsened fit). The prediction does not account for sleep inertia during the first waking hour.
 * Reported separately, never folded into KSS:
   * a 7-day rolling sleep deficit against 8 h/day. Subjective sleepiness plateaus under chronic restriction while performance keeps declining (Van Dongen 2003; Belenky 2003).
   * the Dawson & McCulloch (2005) prior sleep/wake check.
@@ -44,10 +44,17 @@ A logic audit of three real rosters (September 2026) found errors in the sleep-e
 * **Daytime sleep.** After an afternoon release before a night report, the fallback no longer places one 9–10 h block from the afternoon; it models an afternoon nap of at most 2.5 h ending by 18:00 body time plus evening sleep from 21:00 (`DaytimeSleepBounds`).
 * **Sleep shown = sleep used.** Every modelled block, including gap-fill pre-duty naps and overlap-resolved times, is returned exactly once (a duty's `sleep_quality` holds its last main sleep before report and any later nap; other blocks are rest-day or post-duty entries).
 * **Headline window.** The duty headline (`max_kss`, `risk_level`) is the peak from report to the last operating on-blocks (`HEADLINE_RISK_WINDOW = 'fdp'`), because the post-flight period is inferred by the parser. The report-to-release peak (`kss_peak_duty`) and KSS at release stay available. Per-sector peak and on-blocks KSS come from the same duty timeline; nothing is interpolated.
-* **Acclimatisation.** Determined per duty from the supplied duties with ORO.FTL.105(1) Table 1 (time-zone difference to the reference and time since reporting there). Table 2 uses reference time; state X uses Table 3; the FDP check is not assessed where the state cannot be determined (e.g. a roster that starts at an outstation). The home base is assumed to be the reference before the first duty.
+* **Acclimatisation.** Determined per duty from the supplied duties with ORO.FTL.105(1) Table 1 (time-zone difference to the reference and time since reporting there). The configured operator scheme uses reference time; state X uses the owner-supplied FRM table with its approval explicitly unverified; the FDP check is not assessed where the state cannot be determined (e.g. a roster that starts at an outstation). The home base is assumed to be the reference before the first duty.
 * **Averages and curve.** Average sleep per night covers only the days with sleep estimates; prior 24 h sleep counts all modelled sleep; the monthly curve includes each duty's peak instant.
 
 Effect on the audited rosters (peak KSS, band): late turns after days off move from Moderate (6.44–6.47) to High on the report-to-release peak; with the FDP headline, 17:15–00:45 turns score 6.3–6.5 because the peak after on-blocks no longer counts; night duties with the default 'sometimes' nap score about 0.4 KSS higher than with the former 2.5 h nap assumption.
+
+## Temporal corrections and rest-facility inputs (4.2)
+
+- Body-clock adaptation reads timezone offsets at the actual UTC instant, fixing one-hour errors around daylight-saving transitions. Study observations use the same correct instant-to-zone conversion.
+- Per-duty rest-facility selection is preserved with crew overrides and applied to the rest plan. Class 2/3 facilities do not establish approval under the configured ULR Class 1 scheme; unsupported limits remain unassessed.
+- The interface explains the headline peak's own timestamp, uses backend-only body-clock samples, labels heuristic sleep confidence as an assumption rating, and distinguishes missing forecasts from sleep.
+- Existing 4.0/4.1 KSS snapshots remain interpretable using their stored version. A re-analysis is a new 4.2 calculation; historical snapshots are not relabelled. No published biological coefficient or KSS band was tuned in this audit.
 
 ## Accounting and traceability
 
@@ -67,11 +74,11 @@ Operating averages exclude bunk-rest samples. The underlying legacy timeline sti
 6. Predefine tolerances and evaluate both ordinary-duty false alarms and missed high-fatigue episodes. Include nights, naps, time-zone transitions, recovery periods and augmented crews.
 7. Publish the dataset provenance, exclusions, uncertainty, comparison method and limitations. BAM comparisons are optional additional evidence when authorized reference outputs become available.
 
-Relevant foundation: Ingre et al. (2014), https://doi.org/10.1371/journal.pone.0108679. Its empirical validation does not transfer automatically to AeroWake's custom index.
+Relevant foundation: Ingre et al. (2014), https://doi.org/10.1371/journal.pone.0108679. Its empirical validation does not transfer automatically to Aerowake's complete roster-to-sleep forecast.
 
 ## Regression checks
 
 Backend: `python -m pytest tests -q` (engine anchors: `tests/test_alertness_engine.py`; 4.1 sleep, headline and API contract: `tests/test_logic_v41.py`; report rules: `tests/test_fatigue_report.py`).
 Frontend: `npm test` and `npm run build`.
 
-Regression checks establish implementation consistency, not biological predictive validity. Existing crew-detection tests based on duration-only inference conflict with the current parser policy and remain a separate issue.
+Regression checks establish implementation consistency, not biological predictive validity. Crew inference remains an operator-scheme assumption which pilots can correct; engineering tests do not establish that an operational crew or rest plan is approved.

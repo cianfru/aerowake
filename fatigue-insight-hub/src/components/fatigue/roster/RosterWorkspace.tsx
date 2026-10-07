@@ -16,7 +16,7 @@ import { DebriefQueue } from '@/components/fatigue/debrief/DebriefQueue';
 import { EasaChecksCard } from './EasaChecksCard';
 import { TimelineSection } from './TimelineSection';
 import { RouteNetwork } from './RouteNetwork';
-import { dutyRoute, groupDutiesToWatch, selectDutiesToWatch } from './roster-utils';
+import { dutyPeakKss, dutyRoute, groupDutiesToWatch, selectDutiesToWatch } from './roster-utils';
 import { SectionHeading } from './primitives';
 
 const views = [
@@ -73,8 +73,9 @@ export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDu
   const sentinel = useRef<HTMLDivElement>(null);
   const panels = useRef<HTMLDivElement>(null);
   const stuck = useStuck(sentinel);
-  const watch = useMemo(() => selectDutiesToWatch(results), [results]);
+  const watch = useMemo(() => results.legacyModel ? [] : selectDutiesToWatch(results), [results]);
   const groups = useMemo(() => groupDutiesToWatch(watch), [watch]);
+  const unassessed = results.legacyModel ? results.duties.length : results.duties.filter(d => dutyPeakKss(d) == null).length;
   const index = views.findIndex(item => item.id === view);
   // A duty in its logging window now (report − 3 h to report + 24 h), the latest report first.
   const onDutyNow = useMemo(() => [...results.duties].filter(d => d.flightSegments.length > 0 && canLogNow(d))
@@ -123,13 +124,13 @@ export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDu
         <OfflineBanner />
         {onDutyNow && <InflightLogger duty={onDutyNow} analysisId={results.analysisId} homeTz={results.homeBaseTimezone}
           title={`On duty now: ${dutyRoute(onDutyNow)}. How sleepy do you feel?`} />}
-        <DebriefQueue />
-        <RosterForecast results={results} reference={reference} onReferenceChange={setReference} onDetails={onDutySelect} onConcern={onConcern} />
+        <RosterForecast results={results} reference={reference} onReferenceChange={setReference} onDetails={onDutySelect} onConcern={onConcern} onView={next => navigate(next, true)} />
         <section aria-labelledby="watch-heading" className="space-y-4">
           <SectionHeading id="watch-heading" title="Duties to watch" />
           <p className="-mt-3 text-xs text-muted-foreground" data-testid="watch-criterion">
             {watch.length ? `${watch.length} ${watch.length === 1 ? 'duty' : 'duties'} with a predicted peak of KSS 6.5 or higher, most demanding first.` : 'Duties with a predicted peak of KSS 6.5 or higher appear here.'}
           </p>
+          {unassessed > 0 && <p className="text-xs text-muted-foreground">{unassessed} {unassessed === 1 ? 'duty has' : 'duties have'} no current-model prediction. Re-analyse to include them in this outlook.</p>}
           {watch.length ? <div className="space-y-6" data-testid="duties-to-watch">
             {groups.map(group => {
               const rc = riskClasses(group.level);
@@ -145,18 +146,19 @@ export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDu
                   </p>
                   {group.shared.size > 0 && <p className="text-xs text-muted-foreground">All of these: {[...group.shared].join('; ')}.</p>}
                 </div>
-                {group.duties.map((duty, i) => <DutyWatchCard key={duty.dutyId ?? i} duty={duty} sharedReasons={group.shared} onDetails={onDutySelect} onReportFatigue={onReportFatigue} />)}
+                {group.duties.map((duty, i) => <DutyWatchCard key={duty.dutyId ?? i} duty={duty} sharedReasons={group.shared} onDetails={onDutySelect} onReportFatigue={onReportFatigue} onConcern={!results.legacyModel ? d => onConcern(d, reference) : undefined} />)}
               </div>;
             })}
-          </div> : <p className="instrument-surface text-sm text-muted-foreground" data-testid="duties-to-watch-empty">No duty reaches the watch band. Keep planning your rest as usual, and report fatigue whenever you feel it.</p>}
+          </div> : <p className="instrument-surface text-sm text-muted-foreground" data-testid="duties-to-watch-empty">{unassessed === results.duties.length ? 'No current-model duty predictions are available.' : 'No assessed duty reaches the watch band.'} Keep planning your rest as usual, and report fatigue whenever you feel it.</p>}
         </section>
+        <DebriefQueue />
       </TabsContent>
 
       {visited.has('calendar') && <TabsContent value="calendar" data-view="calendar" forceMount hidden={view !== 'calendar'} className="mt-5 space-y-8">
         <Chronogram duties={results.duties} statistics={results.statistics} month={results.month} pilotId={pilotId}
           pilotName={results.pilotName} pilotBase={results.pilotBase} pilotAircraft={results.pilotAircraft}
           onDutySelect={onDutySelect} selectedDuty={selectedDuty} restDaysSleep={results.restDaysSleep}
-          analysisId={results.analysisId} standbyPeriods={results.standbyPeriods} alertnessTimeline={results.alertnessTimeline} />
+          analysisId={results.analysisId} standbyPeriods={results.standbyPeriods} alertnessTimeline={results.alertnessTimeline} homeBaseTimezone={results.homeBaseTimezone} />
         <ExportOptions duties={results.duties} />
       </TabsContent>}
 
@@ -174,9 +176,9 @@ export function RosterWorkspace({ results, pilotId, homeBase, selectedDuty, onDu
       </TabsContent>}
     </div>
 
-    <nav aria-label="Continue through your roster" className="mt-8 flex items-center justify-between gap-3 border-t border-border pt-5">
-      <div>{index > 0 && <Button variant="ghost" onClick={() => navigate(views[index - 1].id, true)}><ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />{views[index - 1].label}</Button>}</div>
-      {index < views.length - 1 && <Button onClick={() => navigate(views[index + 1].id, true)}>Next: {views[index + 1].label}<ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" /></Button>}
+    <nav aria-label="Continue through your roster" className="mt-8 grid grid-cols-2 items-stretch gap-2 border-t border-border pt-5 sm:flex sm:items-center sm:justify-between sm:gap-3">
+      <div className="min-w-0">{index > 0 && <Button className="h-auto min-h-11 w-full whitespace-normal px-2 text-left sm:w-auto sm:px-4" variant="ghost" onClick={() => navigate(views[index - 1].id, true)}><ArrowLeft className="mr-1 h-4 w-4 shrink-0" aria-hidden="true" /><span>{views[index - 1].label}</span></Button>}</div>
+      {index < views.length - 1 && <Button className="h-auto min-h-11 min-w-0 whitespace-normal px-2 text-left sm:px-4" onClick={() => navigate(views[index + 1].id, true)}><span>Next: {views[index + 1].label}</span><ArrowRight className="ml-1 h-4 w-4 shrink-0" aria-hidden="true" /></Button>}
     </nav>
   </Tabs>;
 }

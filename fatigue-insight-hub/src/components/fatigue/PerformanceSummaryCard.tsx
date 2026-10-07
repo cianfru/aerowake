@@ -66,7 +66,7 @@ function Stat({ label, value, info }: { label: string; value: string; info?: key
   const entry = info ? FATIGUE_INFO[info] : undefined;
   return (
     <div className="min-w-0 space-y-1">
-      <p className="flex items-center gap-1 text-xs text-muted-foreground">{label}{entry && <InfoTooltip entry={entry} size="sm" />}</p>
+      <p className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">{label}{entry && <InfoTooltip entry={entry} size="sm" />}</p>
       <p className="font-mono text-[15px] font-medium tabular">{value}</p>
     </div>
   );
@@ -78,14 +78,22 @@ function Stat({ label, value, info }: { label: string; value: string; info?: key
  * clock, Three Process Model). Neutral ink everywhere except the band.
  */
 export function PerformanceSummaryCard({ duty, homeTz, homeLabel }: PerformanceSummaryCardProps) {
-  // Worst on-deck point in the timeline (bunk rest excluded)
+  // Explain the headline's sample, not a higher post-FDP sample elsewhere in the duty.
   const worstPoint = useMemo<TimelinePoint | null>(() => {
     const pts = (duty.timelinePoints ?? []).filter(
-      (pt) => !pt.is_in_rest && pt.performance != null && Number.isFinite(pt.performance),
+      pt => !pt.is_in_rest && pt.performance != null && Number.isFinite(pt.performance),
     );
-    if (pts.length === 0) return null;
-    return pts.reduce((min, pt) => ((pt.performance ?? 100) < (min.performance ?? 100) ? pt : min), pts[0]);
-  }, [duty.timelinePoints]);
+    if (!pts.length) return null;
+    if (duty.peakTimeUtc) {
+      return pts.find(pt => Date.parse(pt.timestamp) === Date.parse(duty.peakTimeUtc!)) ?? null;
+    }
+    const peak = resolveKss(duty.maxKss, duty.minPerformance, duty.modelVersion);
+    const matching = peak == null ? [] : pts.filter(pt => {
+      const kss = resolveKss(pt.kss, pt.performance, duty.modelVersion);
+      return kss != null && roundKss(kss) === roundKss(peak);
+    });
+    return matching[0] ?? null;
+  }, [duty.timelinePoints, duty.peakTimeUtc, duty.maxKss, duty.minPerformance, duty.modelVersion]);
 
   const decomp = useMemo(() => worstPoint ? decomposePerformance({
     performance: worstPoint.performance ?? 0,
@@ -131,7 +139,7 @@ export function PerformanceSummaryCard({ duty, homeTz, homeLabel }: PerformanceS
     <section className="space-y-5 rounded-2xl border border-border bg-card p-5 md:p-6" style={{ boxShadow: 'var(--shadow-card)' }} aria-labelledby="peak-heading">
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-3">
-          <p id="peak-heading" className="eyebrow">Peak predicted sleepiness</p>
+          <p id="peak-heading" className="eyebrow flex items-center gap-1">Peak predicted sleepiness<InfoTooltip entry={FATIGUE_INFO.kss} /></p>
           <RiskLabel level={level} />
         </div>
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">

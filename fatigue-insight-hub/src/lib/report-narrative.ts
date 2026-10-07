@@ -2,8 +2,8 @@
  * Narrative text generation engine for the Fatigue Report Generator.
  *
  * Converts biomathematical model data into professional, SMS-investigator-grade
- * narrative paragraphs. All text is evidence-based and references peer-reviewed
- * sources where claims are made about impairment levels.
+ * narrative paragraphs. Research provides context; model estimates and suggested
+ * countermeasures require individual review and applicable operating procedures.
  */
 
 import type { DutyAnalysis, TimelinePoint } from '@/types/fatigue';
@@ -52,6 +52,7 @@ export interface Mitigation {
   title: string;
   text: string;
   reference: string;
+  sourceKeys?: string[];
 }
 
 export interface CriticalPhaseData {
@@ -121,10 +122,10 @@ export function generateExecutiveSummary(
   const landingKss = landing != null && Number.isFinite(landing) ? resolveKss(duty.landingKss, landing) : null;
   return `Highest predicted sleepiness while operating: ${formatKssWithLabel(worstKss)} (index ${perf.toFixed(0)}). ` +
     (landingKss != null ? `At landing: ${formatKssWithLabel(landingKss)}. ` : '') +
-    (duty.maxKss90 != null ? `90th-percentile pilot: KSS ${duty.maxKss90.toFixed(1)}. ` : '') +
+    (duty.maxKss90 != null ? `90th-percentile model reference: KSS ${duty.maxKss90.toFixed(1)}. ` : '') +
     (decomp ? `Main driver at the worst point: ${DECOMPOSITION_FACTOR_LABELS[decomp.dominantFactor].toLowerCase()}. ` : '') +
-    `Duty classification: ${(duty.overallRisk ?? 'unknown').toLowerCase()}, based on landing where available, otherwise the duty minimum. ` +
-    `This is a group-average model prediction (typical error ±1.4 KSS), not a measured fatigue state, a probability of error or a fitness-to-fly determination. Sleep inputs must be reviewed. ` +
+    `Duty classification: ${(duty.overallRisk ?? 'unknown').toLowerCase()}, for the duty headline window; the landing prediction is reported separately. ` +
+    `This is a group-average model prediction, not a measured fatigue state, a probability of error or a fitness-to-fly determination. The source study’s residual standard deviation is 1.42 KSS, not a personal error bound. Sleep inputs must be reviewed. ` +
     (duty.modelVersion ? `Model: ${duty.modelVersion} (Three Process Model, Ingre et al. 2014). Independent validation of this implementation is pending.` :
       'Legacy result: model version and thresholds may be unavailable. Recalculate before comparison.');
 }
@@ -366,19 +367,21 @@ export function generateMitigations(
       priority: priority++,
       category: 'SLEEP',
       title: 'Prioritize Pre-Duty Sleep',
-      text: `Prior sleep of ${duty.priorSleep.toFixed(1)}h is below the 6h minimum recommended for sustained performance. ` +
-        `For future duties with similar timing, plan for a minimum 8h sleep opportunity in a dark, quiet environment. ` +
+      text: `Modelled prior sleep is ${duty.priorSleep.toFixed(1)}h. Check this estimate against the sleep actually obtained. ` +
+        `For future duties, protect sufficient time for your usual sleep need in a dark, quiet environment, including time to settle and wake up. ` +
         `If the sleep environment is suboptimal (hotel, layover), consider using earplugs and an eye mask to improve sleep quality.`,
       reference: 'Belenky et al., 2003; Rosekind et al., 1996',
+      sourceKeys: ['belenky_2003', 'rosekind_1996'],
     });
   } else if (duty.priorSleep != null && duty.priorSleep < 7) {
     mitigations.push({
       priority: priority++,
       category: 'SLEEP',
       title: 'Extend Pre-Duty Sleep',
-      text: `Prior sleep of ${duty.priorSleep.toFixed(1)}h provides marginal protection against fatigue accumulation. ` +
-        `An additional ${(8 - duty.priorSleep).toFixed(1)}h would substantially improve cognitive reserves during later duty hours.`,
+      text: `Modelled prior sleep is ${duty.priorSleep.toFixed(1)}h; confirm the duration and whether it meets your usual need. ` +
+        `Consider whether the schedule allows a longer sleep opportunity. The model cannot guarantee a particular personal performance benefit.`,
       reference: 'Van Dongen et al., 2003',
+      sourceKeys: ['van_dongen_2003'],
     });
   }
 
@@ -389,8 +392,9 @@ export function generateMitigations(
       category: 'SLEEP',
       title: 'Address Cumulative Sleep Debt',
       text: `The model estimates ${duty.sleepDebt.toFixed(1)}h of sleep deficit. Verify sleep history and plan adequate recovery. ` +
-        `Subjective alertness often fails to reflect the true magnitude of cumulative debt — the pilot may feel "fine" while performance is objectively impaired.`,
+        `Research shows that subjective sleepiness and measured performance can diverge during repeated sleep restriction; the ledger itself is an estimate.`,
       reference: 'Kitamura et al., 2016; Van Dongen et al., 2003',
+      sourceKeys: ['kitamura_2016', 'van_dongen_2003'],
     });
   }
 
@@ -400,10 +404,11 @@ export function generateMitigations(
       priority: priority++,
       category: 'NAPPING',
       title: 'Strategic Napping for WOCL Protection',
-      text: `With ${duty.woclExposure.toFixed(1)}h of WOCL exposure, the circadian system strongly opposes alertness. ` +
-        `If operationally feasible, a 20-40 minute controlled rest period before entering the WOCL window ` +
-        `can partially offset circadian-driven performance decline. Allow 15-20 minutes post-nap for sleep inertia to dissipate before critical tasks.`,
+      text: `The duty includes ${duty.woclExposure.toFixed(1)}h in the modelled WOCL window, when maintaining alertness may be more difficult. ` +
+        `Consider planned sleep or a nap before duty. In-flight controlled rest is appropriate only when explicitly permitted by your operator’s procedures. ` +
+        `Follow the approved wake-up and task-resumption procedure. Sleep inertia varies and is not included in the KSS forecast; no fixed interval guarantees recovery.`,
       reference: 'Rosekind et al., 1994; Caldwell et al., 2009',
+      sourceKeys: ['rosekind_1994', 'caldwell_2009'],
     });
   }
 
@@ -415,12 +420,13 @@ export function generateMitigations(
       category: 'CREW_REST',
       title: 'Optimize In-Flight Rest Timing',
       text: hasIFR
-        ? `Augmented crew allows for in-flight rest. Prioritize rest periods during 01:00-05:00 body clock time ` +
-          `to coincide with the circadian trough. Rest in the bunk during WOCL provides maximum restorative benefit. ` +
-          `Ensure 20+ minutes of wakefulness after returning to the flight deck before assuming critical duties.`
-        : `Augmented crew composition provides rest opportunity. Coordinate rest rotation to ensure the operating crew ` +
-          `has maximum sleep opportunity during the circadian low window.`,
-      reference: 'Signal et al., 2013; Spencer & Robertson, 2002',
+        ? `Review the selected in-flight rest plan against the actual facility, crew allocation and approved operating procedures. ` +
+          `Body-clock timing can influence sleep, but allocated rest is not necessarily sleep obtained. ` +
+          `Allow for sleep inertia and follow the approved return-to-duty procedure before critical tasks.`
+        : `Confirm whether a usable rest opportunity and approved allocation are available for this augmented crew. Coordinate with the crew and ` +
+          `review the model’s sleep assumptions before relying on the prediction.`,
+      reference: 'Signal et al., 2013; Gander et al., 2013',
+      sourceKeys: ['signal_2013', 'gander_2013'],
     });
   }
 
@@ -436,9 +442,10 @@ export function generateMitigations(
       title: 'Enhanced Crew Monitoring During Approach',
       text: `Predicted sleepiness at landing is ${formatKssWithLabel(landingKss)} (${classifyPerformance(duty.landingPerformance, thresholds)} band). ` +
         `Enhanced crew cross-checking is recommended during approach and landing. The Pilot Monitoring should ` +
-        `maintain heightened vigilance for deviations from standard operating parameters. Consider a PF/PM role ` +
-        `swap if the Pilot Flying reports subjective fatigue.`,
+        `maintain heightened vigilance for deviations from standard operating parameters. Any change of roles ` +
+        `must follow the operator’s approved procedures; communicate fatigue concerns promptly.`,
       reference: 'ICAO Doc 9966 (FRMS Manual), 2016',
+      sourceKeys: ['icao_9966'],
     });
   }
 
@@ -448,11 +455,12 @@ export function generateMitigations(
       priority: priority++,
       category: 'CAFFEINE',
       title: 'Strategic Caffeine Use',
-      text: `Consider 200mg caffeine (approximately one strong coffee) 30-45 minutes before the anticipated ` +
-        `performance decline. Caffeine reaches peak blood levels within 30-60 minutes and can temporarily ` +
-        `improve alertness by 1-2 KSS points. Avoid caffeine within 6 hours of planned sleep to protect ` +
+      text: `Caffeine can temporarily improve alertness in some circumstances. Consider your usual response, ` +
+        `applicable aeromedical advice and the timing of your next planned sleep. It can also interfere with ` +
+        `recovery sleep. Aerowake does not model a caffeine dose or predict an individual KSS benefit. Protect ` +
         `recovery sleep quality.`,
       reference: 'Ker et al., 2010; Kamimori et al., 2015',
+      sourceKeys: ['ker_2010', 'kamimori_2015'],
     });
   }
 
@@ -463,11 +471,12 @@ export function generateMitigations(
       priority: priority++,
       category: 'SCHEDULING',
       title: 'Time-Awake Risk Management',
-      text: `By duty end, the pilot will have been awake for approximately ${totalAwake.toFixed(1)} hours. ` +
+      text: `Without intervening sleep, the schedule spans approximately ${totalAwake.toFixed(1)} hours from the estimated pre-duty wake time to release. Check actual sleep and in-flight rest before treating this as continuous wakefulness. ` +
         `Sleep pressure keeps building with continuous wakefulness, and long periods awake that end in the ` +
-        `circadian low are a recognised fatigue hazard. For future rostering, consider earlier report times ` +
-        `or scheduling rest opportunities to limit continuous wakefulness during critical phases.`,
+        `circadian low are a recognised fatigue hazard. For future rostering, review duty timing ` +
+        `and feasible rest opportunities to limit continuous wakefulness during critical phases.`,
       reference: 'Ingre et al., 2014; Åkerstedt et al., 2014',
+      sourceKeys: ['akerstedt_2014', 'akerstedt_sleepiness_2014'],
     });
   }
 
@@ -482,6 +491,7 @@ export function generateMitigations(
         `Management System (FRMS) and reviewing whether systemic scheduling changes could reduce recurrence ` +
         `of this risk pattern.`,
       reference: 'ICAO Doc 9966; EASA AMC1 ORO.FTL.120',
+      sourceKeys: ['icao_9966', 'easa_amc1_105'],
     });
   } else if (duty.riskAdvisory === 'consider_reporting') {
     mitigations.push({
@@ -491,6 +501,7 @@ export function generateMitigations(
       text: `This duty pattern reaches a predicted ${formatKssWithLabel(worstKss)}. This is a model reference, not an operational limit; review the assumptions and appropriate mitigations. If you experience ` +
         `symptoms of significant fatigue, consider documenting through your operator's FRMS.`,
       reference: 'ICAO Doc 9966',
+      sourceKeys: ['icao_9966'],
     });
   }
 
@@ -504,6 +515,7 @@ export function generateMitigations(
         `awareness practices: monitor subjective sleepiness using the KSS or Samn-Perelli scale, ` +
         `communicate openly about fatigue within the crew, and prioritize recovery sleep after duty.`,
       reference: 'ICAO Doc 9966 (FRMS Manual), 2016',
+      sourceKeys: ['icao_9966'],
     });
   }
 

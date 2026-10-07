@@ -202,6 +202,9 @@ class Duty:
     # Augmented crew / ULR fields
     crew_composition: CrewComposition = CrewComposition.STANDARD
     rest_facility_class: Optional[RestFacilityClass] = None
+    rest_facility_source: Optional[str] = None  # pilot when explicitly selected; otherwise inferred
+    crew_stated: bool = False
+    crew_source: Optional[str] = None
     inflight_rest_plan: Optional['InFlightRestPlan'] = None
     is_ulr: bool = False
     ulr_crew_set: Optional[ULRCrewSet] = None  # Crew A or B for ULR operations
@@ -641,6 +644,8 @@ class ULRComplianceResult:
     post_ulr_rest_compliant: bool = True      # 4 local nights (base) or 48h + 2 nights (away)
     monthly_ulr_count: int = 0                # Count this month
     monthly_ulr_compliant: bool = True        # Max 2 per calendar month
+    max_planned_fdp: float = 20.0
+    monthly_limit: int = 2
     crew_acclimatized: bool = True
     fdp_within_limit: bool = True             # FDP <= 20h (or 23h with discretion)
     rest_periods_valid: bool = True           # At least 2 rest periods, one >= 4h

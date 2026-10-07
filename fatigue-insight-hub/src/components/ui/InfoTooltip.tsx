@@ -1,114 +1,76 @@
-import { Info } from 'lucide-react';
+import { ArrowUpRight, Info } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { riskClasses, RISK_LEVELS } from '@/lib/risk-scale';
 import { cn } from '@/lib/utils';
 
 export interface InfoTooltipEntry {
-  /** Short human-readable description (1-2 sentences). */
+  title?: string;
   description: string;
-  /** Optional scientific reference, e.g. "Borbely, 1982". */
   reference?: string;
-  /** Optional EASA regulation, e.g. "ORO.FTL.120". */
   regulation?: string;
-  /** Optional formula or equation string. */
   formula?: string;
-  /** Threshold description, e.g. "KSS <5.5 low, ≥8.5 extreme". */
   threshold?: string;
-  /** Practical action tip for the pilot. */
   actionTip?: string;
+  /** Stable key in the evidence library. */
+  sourceId?: string;
+  /** Schematic explanation, never a second prediction or a measured value. */
+  visual?: 'sleepiness' | 'sleep' | 'body-clock' | 'fdp' | 'provenance';
 }
 
 interface InfoTooltipProps {
-  /** Primary content displayed in the popover. */
   entry: InfoTooltipEntry;
-  /** Additional className for the trigger icon. */
   className?: string;
-  /** Icon size variant. */
   size?: 'sm' | 'md';
-  /** Popover alignment. */
   align?: 'start' | 'center' | 'end';
-  /** Popover side. */
   side?: 'top' | 'bottom' | 'left' | 'right';
 }
 
-/**
- * Reusable information tooltip that shows scientific context on hover/click.
- *
- * Usage:
- * ```tsx
- * <InfoTooltip entry={{
- *   description: "The homeostatic sleep drive accumulates during wakefulness.",
- *   reference: "Borbely, 1982",
- *   regulation: "ORO.FTL.120",
- * }} />
- * ```
- */
-export function InfoTooltip({
-  entry,
-  className,
-  size = 'sm',
-  align = 'center',
-  side = 'top',
-}: InfoTooltipProps) {
-  const iconSize = size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5';
+function ExplanationGraphic({ kind }: { kind: NonNullable<InfoTooltipEntry['visual']> }) {
+  if (kind === 'sleepiness') return <figure className="space-y-2 rounded-lg bg-secondary/50 p-3">
+    <div className="flex h-2 gap-0.5 overflow-hidden rounded-full" aria-hidden="true">
+      {RISK_LEVELS.map((level, i) => <span key={level} className={riskClasses(level).fill} style={{ flex: i === 0 ? 4.5 : i === 4 ? 0.5 : 1 }} />)}
+    </div>
+    <div className="flex justify-between text-xs"><span>1 · Alert</span><span>9 · Fighting sleep</span></div>
+    <figcaption className="text-xs text-muted-foreground">KSS describes sleepiness. Colour bands are Aerowake planning thresholds.</figcaption>
+  </figure>;
+  if (kind === 'body-clock') return <figure className="space-y-2 rounded-lg bg-secondary/50 p-3">
+    <div className="relative h-3 rounded-full bg-muted" aria-hidden="true"><span className="absolute inset-y-0 rounded-sm bg-wocl" style={{ left: '8.333%', width: '16.667%' }} /></div>
+    <div className="flex justify-between text-xs"><span>00:00</span><span>02:00–05:59 WOCL</span><span>24:00</span></div>
+    <figcaption className="text-xs text-muted-foreground">The calendar shades a home-base reference window. An adapting body clock can differ.</figcaption>
+  </figure>;
+  const steps = kind === 'sleep' ? ['Sleep opportunity', 'Sleep estimate', 'Forecast']
+    : kind === 'fdp' ? ['Roster times', 'Scheme + approvals', 'Scoped check']
+    : ['Roster', 'Assumptions', 'Model estimate'];
+  return <figure className="rounded-lg bg-secondary/50 p-3">
+    <ol className="grid grid-cols-3 gap-3 text-xs">
+      {steps.map((step, i) => <li key={step}><span className="mb-1 block font-mono text-primary" aria-hidden="true">0{i + 1}</span>{step}</li>)}
+    </ol>
+    <figcaption className="mt-2 text-xs text-muted-foreground">{kind === 'fdp' ? 'Incomplete inputs or unconfirmed approvals limit the result.' : 'Changing the inputs can change the forecast.'}</figcaption>
+  </figure>;
+}
 
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            'inline-flex items-center justify-center rounded-full text-muted-foreground/80 hover:text-muted-foreground transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-            className,
-          )}
-          aria-label="More information"
-        >
-          <Info className={iconSize} />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        align={align}
-        side={side}
-        className="w-72 rounded-lg border border-border bg-background/95 backdrop-blur-sm p-3 shadow-lg text-sm space-y-2"
-      >
-        <p className="text-foreground leading-relaxed">{entry.description}</p>
-
-        {entry.threshold && (
-          <div className="flex items-start gap-1.5 text-[11px]">
-            <span className="text-muted-foreground font-medium shrink-0">Threshold:</span>
-            <span className="text-foreground/80">{entry.threshold}</span>
-          </div>
-        )}
-
-        {entry.formula && (
-          <div className="rounded bg-secondary/50 px-2.5 py-1.5 font-mono text-xs text-muted-foreground">
-            {entry.formula}
-          </div>
-        )}
-
-        {entry.actionTip && (
-          <div className="flex items-start gap-1.5 text-[11px] border-t border-border/50 pt-1.5">
-            <span className="text-primary font-medium shrink-0">Tip:</span>
-            <span className="text-muted-foreground">{entry.actionTip}</span>
-          </div>
-        )}
-
-        {(entry.reference || entry.regulation) && (
-          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-            {entry.reference && (
-              <span className="inline-flex items-center rounded-[4px] border border-primary/30 bg-primary/[0.04] px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.06em] text-primary">
-                {entry.reference}
-              </span>
-            )}
-            {entry.regulation && (
-              <span className="inline-flex items-center rounded-[4px] border border-warning/30 bg-warning/[0.04] px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.06em] text-warning">
-                {entry.regulation}
-              </span>
-            )}
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
+/** Tap or keyboard-open explanation; stays open while its sources are inspected. */
+export function InfoTooltip({ entry, className, size = 'sm', align = 'center', side = 'top' }: InfoTooltipProps) {
+  return <Popover>
+    <PopoverTrigger asChild>
+      <button type="button"
+        className={cn('inline-flex min-h-9 min-w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11', className)}
+        aria-label={entry.title ? `About ${entry.title.toLowerCase()}` : 'More information'}>
+        <Info aria-hidden="true" className={size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+      </button>
+    </PopoverTrigger>
+    <PopoverContent aria-label={entry.title ?? 'Metric explanation'} align={align} side={side} collisionPadding={16}
+      className="w-80 max-w-[calc(100vw-2rem)] max-h-[min(80dvh,var(--radix-popover-content-available-height))] overflow-y-auto space-y-3 rounded-xl border border-border bg-popover p-4 text-sm leading-relaxed shadow-xl">
+      {entry.title && <h3 className="font-semibold">{entry.title}</h3>}
+      {entry.visual && <ExplanationGraphic kind={entry.visual} />}
+      <p>{entry.description}</p>
+      {entry.threshold && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Interpretation: </span>{entry.threshold}</p>}
+      {entry.formula && <p className="break-words rounded bg-secondary/50 px-2.5 py-2 font-mono text-xs text-muted-foreground">{entry.formula}</p>}
+      {entry.actionTip && <p className="border-t border-border pt-3 text-xs text-muted-foreground"><span className="font-medium text-foreground">For your review: </span>{entry.actionTip}</p>}
+      {(entry.reference || entry.regulation) && <p className="text-xs text-muted-foreground">{[entry.reference, entry.regulation].filter(Boolean).join(' · ')}</p>}
+      {entry.sourceId && <a className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-primary underline underline-offset-4" href={`/learn?section=references&source=${encodeURIComponent(entry.sourceId)}`} target="_blank" rel="noreferrer">Evidence & limitations <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span></a>}
+    </PopoverContent>
+  </Popover>;
 }
 
 /**
@@ -117,56 +79,56 @@ export function InfoTooltip({
  */
 export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
   performance: {
-    description:
-      'Predicted sleepiness on the Karolinska Sleepiness Scale (KSS 1\u20139) from the Three Process Model (sleep pressure S, circadian C, ultradian U), validated on airline crew. The 20\u2013100 index is a linear re-expression of KSS; it is not a percentage.',
-    reference: 'Ingre et al., 2014 (PLoS ONE e108679)',
-    formula: 'KSS = 9.68 \u2212 0.46\u00b7(S + C + U);  index = 110 \u2212 10\u00b7KSS',
-    threshold: 'KSS <5.5 low \u00b7 5.5\u20136.5 moderate \u00b7 6.5\u20137.5 high \u00b7 7.5\u20138.5 critical \u00b7 \u22658.5 extreme',
-    actionTip: 'Group-average prediction (typical error \u00b11.4 KSS). Your own assessment of fitness to fly always takes precedence.',
+    title: "Predicted sleepiness",
+    sourceId: "akerstedt_2014",
+    visual: "sleepiness",
+    description: "The Three Process Model combines sleep pressure and body-clock rhythms to estimate group-average KSS (1–9). The published model was evaluated on airline crew; the complete Aerowake forecast still requires independent validation. Its 20–100 index is a linear re-expression of KSS, never a cognitive performance percentage.",
+    formula: 'KSS = 9.68 − 0.46 × (S_B + C + U); index = 110 − 10 × KSS',
+    actionTip: 'The source study’s residual error is about 1.42 KSS units; it is not an accuracy claim for Aerowake. Your assessment takes precedence.',
   },
   sleepPressure: {
-    description:
-      'Process S \u2014 homeostatic sleep pressure. Builds during wakefulness and recovers during sleep (with a "brake" near full recovery). Shown normalised 0\u20131 (1 = depleted). Up to ~5.5 KSS points at full depletion.',
-    reference: 'Ingre et al., 2014; \u00c5kerstedt & Folkard, 1997',
-    actionTip: 'Prioritize 7-8h sleep before duty. A nap before a late or night duty reduces sleep pressure.',
+    title: "Sleep pressure",
+    sourceId: "akerstedt_2014",
+    visual: "sleep",
+    description: "Time awake increases sleep pressure; sleep reduces it. Process S is shown normalised from 0 to 1 (1 means most depleted). Its contribution depends on the sleep inputs, which are estimated from the roster unless you change them.",
   },
   circadian: {
-    description:
-      'Process C \u2014 the body clock. Shown normalised 0\u20131 (1 = circadian peak). Worth up to ~2.3 KSS points between peak and trough; lowest in the early morning body-clock hours (WOCL). The body clock re-adapts to a new time zone at ~30% of the remaining difference per day.',
-    reference: 'Ingre et al., 2014',
-    regulation: 'AMC1 ORO.FTL.105(10)',
-    threshold: 'Body clock low: 02:00-05:59 home base time',
-    actionTip: 'Use strategic light exposure and meal timing to support circadian alignment on layovers.',
+    title: "Body clock",
+    sourceId: "akerstedt_2014",
+    visual: "body-clock",
+    description: "The body clock changes sleepiness across the day. This model closes 30% of the remaining timezone gap per day, an adaptation assumption rather than a measurement of your body clock. The fixed home-base WOCL overlay is a separate reference.",
   },
   hoursAwake: {
-    description:
-      'Continuous hours awake at this point, from the model\u2019s sleep inputs. Sleep pressure (S) rises with time awake; the KSS prediction already accounts for it.',
-    reference: 'Ingre et al., 2014',
-    actionTip: 'Verify the assumed sleep and naps \u2014 hours awake are only as good as the sleep inputs.',
+    title: "Time awake",
+    sourceId: "akerstedt_2014",
+    visual: "sleep",
+    description: "Continuous time awake calculated from the model’s sleep inputs. A planned sleep block or nap resets this estimate even if you have not actually slept. Check the inputs before interpreting the number.",
   },
   kss90: {
-    description:
-      'Predicted KSS for a more fatigue-sensitive pilot (90th percentile of individual differences in the validation data). Nine in ten pilots are expected to rate at or below this value.',
-    reference: 'Ingre et al., 2014 (eq. 1.16)',
+    title: "Sleepier pilots",
+    sourceId: "akerstedt_2014",
+    visual: "sleepiness",
+    description: "A 90th-percentile reference from individual differences in the published model’s study sample. It illustrates variability; it is not a confidence bound for this forecast or a guarantee that nine in ten pilots in a new population fall below it.",
   },
   pSevere: {
-    description:
-      'Model probability that a pilot rates KSS 7 or higher ("sleepy") at this point, from the published ordinal model. KSS \u2265 7 is associated with physiological signs of sleepiness.',
-    reference: 'Ingre et al., 2014 (eq. 1.17); \u00c5kerstedt et al., 2014',
-    threshold: '<10% low, 10\u201330% elevated, >30% high',
+    title: "Probability of KSS 7 or higher",
+    sourceId: "akerstedt_2014",
+    visual: "sleepiness",
+    description: "The published ordinal model estimates the probability of a KSS rating of 7 or higher. This describes subjective sleepiness in the source model, not accident probability or your personal likelihood of falling asleep.",
   },
   sleepDeficit7d: {
-    description:
-      'Rolling 7-day sleep ledger against an 8 h/day need. Reported separately because subjective sleepiness (KSS) plateaus under chronic restriction while objective performance keeps worsening.',
-    reference: 'Van Dongen et al., 2003; Belenky et al., 2003',
-    threshold: '<5h none \u00b7 5\u201310h mild \u00b7 10\u201315h moderate \u00b7 \u226515h severe',
-    actionTip: 'Recovery usually needs more than one long sleep; plan several nights of full sleep.',
+    title: "Seven-day sleep shortfall",
+    sourceId: "van_dongen_2003",
+    visual: "sleep",
+    description: "Estimated sleep over a rolling seven-day window compared with the model’s 8-hour daily baseline. Actual sleep need varies and missing history limits this estimate. The ledger is shown separately from KSS because sleepiness ratings do not fully capture impairment under repeated restriction.",
   },
   sleepInertia: {
-    description:
-      'Grogginess just after waking. Not included in the alertness score: the default inertia function worsened fit in the airline validation study. Allow time after waking before critical tasks.',
-    reference: 'Ingre et al., 2014; Tassi & Muzet, 2000',
-    actionTip: 'Allow 15-30 min after waking before critical tasks. Bright light and caffeine help.',
+    title: "Sleep inertia",
+    reference: 'Ingre et al. (2014), model 5c; Tassi & Muzet (2000), sleep inertia review',
+    sourceId: "akerstedt_2014",
+    visual: "sleep",
+    description: "Grogginess after waking can affect performance. It is not included in the current KSS score: the tested inertia term did not improve the airline study’s model fit. The duration and severity vary with prior sleep loss and timing.",
+    actionTip: 'Allow recovery after waking and follow your operator’s procedures before safety-critical tasks.',
   },
   timeOnTask: {
     description:
@@ -175,55 +137,51 @@ export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
     actionTip: 'Take micro-breaks during cruise. Verbal crosschecks help maintain vigilance.',
   },
   sleepDebt: {
-    description:
-      'Cumulative deficit between sleep obtained and the 8h baseline need (model estimate). Not added to the KSS score; see the 7-day sleep deficit for the restriction ledger.',
-    reference: 'Van Dongen et al., 2003',
-    threshold: '\u22642h low risk, 2-4h moderate, >4h high risk',
-    actionTip: 'Recovery requires 2-3 nights of extended sleep. One long sleep cannot fully repay large debt.',
+    title: "Accumulated sleep shortfall",
+    sourceId: "van_dongen_2003",
+    visual: "sleep",
+    description: "A running estimate of missed sleep against an 8-hour daily baseline, based on available sleep inputs. It is a separate contextual ledger, not an additional penalty in the KSS score. It cannot measure your personal sleep need.",
   },
   wocl: {
-    description:
-      'Window of Circadian Low — the period of lowest alertness between 02:00-05:59 in home base time. Duties during WOCL carry elevated fatigue risk.',
-    regulation: 'AMC1 ORO.FTL.105(10)',
-    threshold: '02:00-05:59 home base time',
-    actionTip: 'Request controlled rest if operating during WOCL with augmented crew.',
+    title: "Window of circadian low",
+    sourceId: "easa_oro_ftl",
+    visual: "body-clock",
+    description: "The calendar shades 02:00–05:59 in home-base time as a reference for the window of circadian low. Biological low points can shift after timezone travel. Formal FTL acclimatisation and your actual body-clock phase must be considered separately.",
+    regulation: 'ORO.FTL.105(28)',
+    actionTip: 'Review the sleep plan and your operator’s permitted fatigue mitigations before duties in this window.',
   },
   priorSleep: {
-    description:
-      'Total sleep obtained in the 48 hours before duty report. Less than 12h of prior sleep indicates elevated risk of in-duty fatigue.',
-    reference: 'Belenky et al., 2003',
-    regulation: 'ORO.FTL.120',
-    threshold: '\u226512h adequate, <12h elevated risk',
-    actionTip: 'Plan sleep strategically in the 48h before early-morning or long-haul duties.',
+    title: "Sleep before report",
+    sourceId: "dawson_mcculloch_2005",
+    visual: "sleep",
+    description: "Total modelled sleep in the 24 hours before duty report. This includes naps and is an estimate of sleep, not a record of actual sleep obtained. The separate prior sleep/wake check also considers a 48-hour window and time awake.",
   },
   avgSleep: {
-    description:
-      'Average nightly sleep across the roster period. Adults need 7-9h for full cognitive recovery. Below 6h indicates chronic sleep restriction.',
-    reference: 'Banks & Dinges, 2007',
-    threshold: '\u22657h good, 6-7h marginal, <6h chronic restriction',
-    actionTip: 'Maintain consistent sleep schedule on days off to build reserves for demanding periods.',
+    title: "Average modelled sleep",
+    sourceId: "banks_dinges_2007",
+    visual: "sleep",
+    description: "Mean daily sleep over the days covered by the model’s sleep estimates. Uncovered days are not treated as zero sleep or as full nights. Sleep opportunity, planned sleep and reported actual sleep are different inputs.",
   },
   pinchEvent: {
-    description:
-      'A moment during a critical flight phase (takeoff, approach, landing) where predicted sleepiness enters an elevated risk band. Each event warrants mitigation.',
-    reference: 'Ingre et al., 2014',
-    threshold: 'Any occurrence during takeoff, approach, or landing',
-    actionTip: 'Consider enhanced crew monitoring and verbal callouts during critical phases.',
+    title: "Critical-phase exposure",
+    sourceId: "akerstedt_2014",
+    visual: "provenance",
+    description: "A takeoff, approach or landing sample where predicted sleepiness enters an elevated Aerowake band. The threshold and phase flag are product review rules; the source model predicts KSS rather than an operational event or accident.",
   },
   fha: {
-    description:
-      'Fatigue Hazard Area \u2014 cumulative time spent above the low-risk boundary (KSS 5.5), weighted by how far above. Integrates depth and duration of predicted sleepiness.',
-    reference: 'Dawson & McCulloch, 2005 (concept)',
-    formula: 'FHA = \u03A3 max(0, KSS(t) \u2212 5.5) \u00D7 \u0394t',
-    threshold: '\u22640.5 low, 0.5\u20132 moderate, >2 high (KSS-hours)',
-    actionTip: 'High FHA may warrant fatigue report filing under EASA ORO.FTL.120.',
+    title: "Cumulative sleepiness exposure",
+    sourceId: "akerstedt_2014",
+    visual: "provenance",
+    description: "Aerowake’s summary of time above KSS 5.5, weighted by how far above it. This combines depth and duration of predicted sleepiness. The metric and its display bands are product assumptions, not validated accident or reporting thresholds.",
+    formula: 'Σ max(0, KSS(t) − 5.5) × elapsed hours',
   },
   kss: {
-    description:
-      'Karolinska Sleepiness Scale \u2014 1 (extremely alert) to 9 (very sleepy, fighting sleep). Predicted directly by the Three Process Model for a group-average pilot.',
-    reference: '\u00c5kerstedt & Gillberg, 1990; Ingre et al., 2014',
-    threshold: '<5.5 low \u00b7 5.5\u20136.5 moderate \u00b7 6.5\u20137.5 high \u00b7 7.5\u20138.5 critical \u00b7 \u22658.5 extreme',
-    actionTip: 'KSS \u2265 7 is associated with physiological signs of sleepiness; 8\u20139 with sharply more lapses.',
+    title: "Karolinska Sleepiness Scale",
+    sourceId: "akerstedt_gillberg_1990",
+    visual: "sleepiness",
+    description: "The KSS is a subjective scale from 1 (extremely alert) to 9 (very sleepy, fighting sleep). Aerowake predicts a group-average rating from sleep and timing inputs. A pilot’s own reported rating is a separate observation.",
+    threshold: 'Aerowake bands: <5.5 low · 5.5–<6.5 moderate · 6.5–<7.5 high · 7.5–<8.5 critical · ≥8.5 extreme.',
+    actionTip: 'These bands organise review; they are not regulatory limits or a fitness decision.',
   },
   samnPerelli: {
     description:
@@ -236,11 +194,13 @@ export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
     reference: 'Ingre et al., 2014',
   },
   fdpUtilization: {
-    description:
-      'The FDP against the maximum for this duty under the QCAA / EASA flight time limitations: the daily FDP table (ORO.FTL.205), the in-flight rest limits with an augmented crew (CS FTL.1.205(c)), or the ULR approval. A 2-pilot FDP may be planned beyond it only with an extension (CS FTL.1.205(a)); beyond that, only commander\u2019s discretion for unforeseen circumstances (ORO.FTL.205(f)).',
-    regulation: 'ORO.FTL.205',
-    threshold: '\u226490% normal, 90-100% close to the maximum, >100% extension or discretion',
-    actionTip: 'Monitor for delays that could push the FDP beyond limits. Discretion of more than 1 h is reported to the QCAA.',
+    title: "Flight duty period",
+    sourceId: "easa_oro_ftl",
+    visual: "fdp",
+    description: "Planned FDP divided by the configured maximum for this duty. The applicable limit depends on the approved operator scheme, acclimatisation, sectors, crew and rest facilities. Confirm these assumptions and any FRM, extension or ULR approval before interpreting the result.",
+    regulation: 'ORO.FTL.205 and the approved operator scheme',
+    threshold: 'Above 100% means the configured basic limit is exceeded; it does not establish that an extension is available.',
+    actionTip: 'Commander’s discretion addresses unforeseen circumstances and must never be treated as a planning allowance.',
   },
   workloadPhase: {
     description:
@@ -251,26 +211,24 @@ export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
     description:
       'Display-only view of the cumulative sleep debt estimate (100% = no debt, 50% = 16h debt). Not an input to the KSS prediction.',
     reference: 'Display transform of the model sleep ledger',
-    threshold: '>80% good, 65-80% moderate, <65% depleted',
-    actionTip: 'Sleep reservoir replenishes slowly. Multiple nights of good sleep are needed to rebuild.',
+    threshold: 'Display bands only; no independently validated safety threshold.',
+    actionTip: 'Review the actual sleep assumptions behind the ledger.',
   },
   wmz: {
-    description:
-      'Wake Maintenance Zone — a paradoxical period of elevated alertness from ~18:00-21:00 home base time, driven by the second harmonic of the circadian rhythm.',
-    reference: 'Dijk & Czeisler, 1994',
-    threshold: '~18:00-21:00 home base time',
+    title: "Wake maintenance zone",
+    sourceId: "dijk_czeisler_1994",
+    description: "An evening interval of stronger circadian wake drive can make sleep difficult despite earlier time awake. Timing depends on your body clock. The model’s home-time evening window is an assumption, not a measured individual phase.",
   },
   pvtLapses: {
     description:
-      'Legacy heuristic estimate of Psychomotor Vigilance Task lapses per 10-minute trial from sleep debt and time awake. Not part of the validated KSS model; indicative only.',
-    reference: 'Van Dongen et al., 2003 (heuristic)',
+      'This legacy heuristic is not a measured PVT result. There is no validated conversion from Aerowake’s predicted KSS to reaction-time lapses; it must not be interpreted as a performance forecast.',
+    reference: 'Legacy application heuristic; no validated KSS-to-PVT conversion',
   },
   microsleepProbability: {
-    description:
-      'Model probability of a KSS 9 rating ("very sleepy, fighting sleep") at this point, from the published ordinal model. A marker of severe sleepiness, not a measured microsleep rate.',
-    reference: 'Ingre et al., 2014 (eq. 1.17)',
-    threshold: '<2% low, 2-5% moderate, >5% high',
-    actionTip: 'Any meaningful probability of KSS 9 warrants enhanced crew monitoring.',
+    title: "Probability of KSS 9",
+    sourceId: "akerstedt_2014",
+    visual: "sleepiness",
+    description: "The published ordinal model’s probability of a KSS 9 rating (very sleepy, fighting sleep). It does not measure microsleeps or predict their frequency.",
   },
   cabinAltitude: {
     description:

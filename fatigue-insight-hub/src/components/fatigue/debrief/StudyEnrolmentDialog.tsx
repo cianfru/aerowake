@@ -6,9 +6,9 @@ import { STUDY_CONSENT_VERSION } from '@/lib/study-config';
 import { StudyInformation } from './StudyInformation';
 import { useRefreshStudy } from './useStudy';
 
-/** Versioned opt-back-in for a pilot who stopped contributing. Calls onEnrolled (before closing) once the server confirms. */
-export function StudyEnrolmentDialog({ open, onOpenChange, onEnrolled }: {
-  open: boolean; onOpenChange: (open: boolean) => void; onEnrolled?: () => void;
+/** Explicit, versioned opt-in. No study entry is saved until the pilot agrees. */
+export function StudyEnrolmentDialog({ open, onOpenChange, onEnrolled, rejoining = false }: {
+  open: boolean; onOpenChange: (open: boolean) => void; onEnrolled?: () => void; rejoining?: boolean;
 }) {
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -23,7 +23,7 @@ export function StudyEnrolmentDialog({ open, onOpenChange, onEnrolled }: {
       onEnrolled?.();
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not turn contributing back on.');
+      setError(e instanceof Error ? e.message : 'Could not save your choice.');
     } finally {
       setBusy(false);
     }
@@ -33,8 +33,8 @@ export function StudyEnrolmentDialog({ open, onOpenChange, onEnrolled }: {
     <Dialog open={open} onOpenChange={(next) => { if (!busy) { onOpenChange(next); if (!next) { setAgreed(false); setError(''); } } }}>
       <DialogContent className="flex max-h-[92vh] max-w-xl flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-5 pb-4 pt-5 text-left">
-          <DialogTitle>Contribute again</DialogTitle>
-          <DialogDescription>You stopped contributing. Please read this before turning it back on. It takes about two minutes.</DialogDescription>
+          <DialogTitle>{rejoining ? 'Contribute again' : 'Help improve the model'}</DialogTitle>
+          <DialogDescription>Contributing is optional. Read how your sleep and sleepiness information would be used before choosing. Your roster tools and private in-flight log work without joining.</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           <StudyInformation />
@@ -49,7 +49,7 @@ export function StudyEnrolmentDialog({ open, onOpenChange, onEnrolled }: {
             <p className="self-center text-xs text-muted-foreground">Consent version {STUDY_CONSENT_VERSION}</p>
             <div className="flex flex-col-reverse gap-2 sm:flex-row">
               <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>Not now</Button>
-              <Button onClick={join} disabled={!agreed || busy}>{busy ? 'Saving…' : 'Contribute again'}</Button>
+              <Button onClick={join} disabled={!agreed || busy}>{busy ? 'Saving…' : rejoining ? 'Contribute again' : 'Agree and contribute'}</Button>
             </div>
           </DialogFooter>
         </div>
