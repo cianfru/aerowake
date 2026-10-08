@@ -177,7 +177,7 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
             # standby as rest nor invent a mandatory new 12 h rest after it.
             if rest < 12.0:
                 findings.append(_finding(
-                    'standby', 'Configured scheme §7.11.3 · compare CS FTL.1.225(b)', 'warning',
+                    'standby', 'CS FTL.1.225 · ORO.FTL.235', 'warning',  # OM-A 7.11.3
                     'Standby before flight needs a call-out check',
                     f'{_h(rest)} between standby end {_fmt(prev.release_time_utc, tz)} and '
                     f'report {_fmt(nxt.report_time_utc, tz)}. Standby is not uninterrupted rest. '
@@ -294,23 +294,24 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
                          ('failed' if any(f['rule'] in ('fdp_max', 'fdp_extension') and f['severity'] == 'warning'
                                           for f in findings) else 'incomplete_history'),
                          'assessed': assessed, 'eligible': len(flights),
-                         'reason': ('FDP values compare the configured scheme with supplied duties. Basic '
-                                    'acclimatised limits follow ORO.FTL.205(b) Table 2. Unknown-state FRM '
-                                    'limits and ULR limits come from an owner-supplied operator scheme; '
-                                    'their approval and applicability to this pilot are unverified. '
+                         # Operator OM-A 7.6 / 7.18 values back these limits (docs/OPERATOR_FTL.md).
+                         'reason': ('FDP limits follow the QCAA / EASA flight time limitations: '
+                                    'ORO.FTL.205(b) Table 2 when acclimatised, Table 4 (FRM) when the '
+                                    'state is unknown, and CS FTL.1.205 for extensions and in-flight rest. '
+                                    'ULR limits depend on your operator\'s approval, which this upload cannot verify. '
                                     'Acclimatisation is inferred from the roster, assuming the pilot was '
-                                    'acclimatised at home before the first duty. Crew and class-1 rest '
+                                    'acclimatised at home before the first duty. Crew and Class 1 rest '
                                     'facilities may be inferred. Split duty, delayed reporting and '
                                     'standby call-out reductions are outside this check. Augmented duties with '
-                                    'more than three operating sectors and ULR duties without a class-1 '
+                                    'more than three operating sectors and ULR duties without a Class 1 '
                                     'rest facility are not assessed.')}
     coverage['operator_approval'] = {
         'status': 'not_assessed',
-        'reason': ('No operator approval or current manual revision is verified by this upload. '
-                   'The configured scheme includes private OM-A Chapter 7 rest/ULR rules. '
-                   'Public EASA references are comparisons, not proof of legal applicability. '
-                   'Confirm the applicable scheme, FRM approval, ULR city-pair approval, crew '
-                   'and rest facility with your operator before using these limits.')}
+        # The configured values include operator OM-A Chapter 7 rest and ULR rules.
+        'reason': ('This upload cannot verify your operator\'s approvals: FRM, ULR city pairs, '
+                   'augmented crew and rest facility. The checks follow the QCAA / EASA flight '
+                   'time limitations; your operator\'s approved scheme and procedures take '
+                   'precedence. Confirm them with your operator before relying on these limits.')}
     coverage['reduced_rest'] = {
         'status': 'failed' if any(f['rule'] == 'reduced_rest' and f['severity'] == 'warning'
                                   for f in findings) else 'not_assessed',

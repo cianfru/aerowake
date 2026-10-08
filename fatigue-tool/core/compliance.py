@@ -117,7 +117,7 @@ class EASAComplianceValidator:
                     'max_fdp': None, 'extended_fdp': None, 'actual_fdp': actual_fdp,
                     'used_discretion': False, 'exceeds_discretion': False,
                     'planned_extension_fdp': None,
-                    'reference': 'ULR FDP not assessed: configured scheme requires class-1 rest facility',
+                    'reference': 'ULR FDP not assessed: ULR limits assume a Class 1 rest facility',  # OM-A 7.18
                     'is_ulr': True, 'crew_composition': duty.crew_composition.value,
                 }
             if ulr_params:
@@ -133,7 +133,7 @@ class EASAComplianceValidator:
                 'used_discretion': actual_fdp > max_fdp,
                 'exceeds_discretion': actual_fdp > max_fdp + discretion,
                 'planned_extension_fdp': None,
-                'reference': 'Configured ULR scheme (approval unverified)',
+                'reference': 'ULR (operator approval, not verified)',  # OM-A 7.18
                 'is_ulr': True,
                 'crew_composition': getattr(duty, 'crew_composition', CrewComposition.STANDARD).value
                     if hasattr(getattr(duty, 'crew_composition', None), 'value') else 'standard',
@@ -180,7 +180,8 @@ class EASAComplianceValidator:
             'used_discretion': used_discretion,
             'exceeds_discretion': actual_fdp > extended_fdp,
             'planned_extension_fdp': planned_extension,
-            'reference': 'Configured scheme Table 7-7, unknown acclimatisation (FRM approval unverified)' if unknown else 'ORO.FTL.205(b) Table 2',
+            # OM-A 7.6.3 Tables 7-6 / 7-7 carry the same values as ORO.FTL.205(b) Tables 2 / 4.
+            'reference': 'ORO.FTL.205(b) Table 4, unknown acclimatisation (FRM, approval not verified)' if unknown else 'ORO.FTL.205(b) Table 2',
             'is_ulr': False,
             'crew_composition': getattr(duty, 'crew_composition', CrewComposition.STANDARD).value
                 if hasattr(getattr(duty, 'crew_composition', None), 'value') else 'standard',

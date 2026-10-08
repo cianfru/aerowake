@@ -22,7 +22,7 @@ export const EASA_RULE_LABELS: Record<string, string> = {
   standby: 'Standby (ORO.FTL.225)',
   fdp_max: 'Maximum daily FDP (ORO.FTL.205)',
   fdp_extension: 'Planned FDP extensions (ORO.FTL.205(d))',
-  operator_approval: 'Operator scheme and approval',
+  operator_approval: 'Operator approvals',
 };
 
 const ruleLabel = (rule: string) => EASA_RULE_LABELS[rule] ?? rule.replace(/_/g, ' ');
@@ -72,12 +72,12 @@ export function EasaChecksCard({ findings, summary }: EasaChecksCardProps) {
     <section aria-labelledby="easa-checks-heading" className="instrument-surface space-y-6">
       <div className="space-y-1">
         <h2 id="easa-checks-heading" className="text-title font-semibold">FTL checks</h2>
-        <p className="text-sm text-muted-foreground">Supplied activities compared with public EASA limits and the configured operator scheme.</p>
+        <p className="text-sm text-muted-foreground">Supplied activities compared with the QCAA / EASA flight time limitations.</p>
       </div>
 
       <div className="rounded-xl border border-border bg-secondary/40 p-4 text-sm">
         <p className="font-medium">Operator approval is not verified</p>
-        <p className="mt-1 text-muted-foreground">Rest and ULR rules include an owner-supplied operator scheme. Confirm its current applicability, crew and rest facility. Unknown-state FRM and city-pair approval cannot be established from a roster.</p>
+        <p className="mt-1 text-muted-foreground">Checks follow the QCAA / EASA flight time limitations; your operator’s approved scheme takes precedence. Confirm crew, rest facility, FRM and ULR city-pair approval with your operator: they cannot be established from a roster.</p>
       </div>
 
       {warnings.length === 0 ? (
@@ -102,8 +102,8 @@ export function EasaChecksCard({ findings, summary }: EasaChecksCardProps) {
 
       {summary && summary.status !== 'unavailable' && (
         <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">Highest rolling total in this roster, against the configured comparison limit</p>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Highest rolling totals versus configured comparison limits">
+          <p className="text-xs text-muted-foreground">Highest rolling total in this roster, against the limit</p>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Highest rolling totals versus limits">
             <Gauge label="Duty · 7 days" value={summary.duty7dMax} limit={summary.limits.duty7d} />
             <Gauge label="Duty · 14 days" value={summary.duty14dMax} limit={summary.limits.duty14d} />
             <Gauge label="Duty · 28 days" value={summary.duty28dMax} limit={summary.limits.duty28d} />

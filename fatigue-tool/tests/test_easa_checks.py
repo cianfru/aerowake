@@ -163,7 +163,10 @@ def test_legal_applicability_is_never_inferred_from_a_roster():
     res = run_checks(roster([_limits(flight_duty(1, 8, 8))]))
     coverage = res['summary']['coverage']
     assert coverage['operator_approval']['status'] == 'not_assessed'
-    assert 'private OM-A' in coverage['operator_approval']['reason']
-    assert 'unverified' in coverage['fdp_max']['reason']
+    assert "cannot verify your operator's approvals" in coverage['operator_approval']['reason']
+    assert 'cannot verify' in coverage['fdp_max']['reason']
+    # Pilot-facing text cites QCAA / EASA only; operator manual numbers stay in code comments.
+    for item in coverage.values():
+        assert 'OM-A' not in item.get('reason', '') and 'scheme Table 7' not in item.get('reason', '')
     assert coverage['fdp_max']['status'] == 'incomplete_history'
     assert coverage['reduced_rest']['status'] == 'not_assessed'

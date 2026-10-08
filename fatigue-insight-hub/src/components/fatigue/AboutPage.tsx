@@ -53,7 +53,7 @@ export function AboutPage() {
           <PillarCard
             icon={<Shield className="h-4 w-4" />}
             title="Scoped FTL checks"
-            description="Review limits, supplied history and operator-scheme assumptions. These checks cannot certify operational compliance."
+            description="Review limits, supplied history and operator approvals. These checks cannot certify operational compliance."
           />
         </div>
       </div>

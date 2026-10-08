@@ -27,14 +27,14 @@ interface InfoTooltipProps {
 
 function ExplanationGraphic({ kind }: { kind: NonNullable<InfoTooltipEntry['visual']> }) {
   if (kind === 'sleepiness') return <figure className="space-y-2 rounded-lg bg-secondary/50 p-3">
-    <div className="flex h-2 gap-0.5 overflow-hidden rounded-full" aria-hidden="true">
+    <div className="flex h-2 gap-0.5 overflow-hidden rounded-[2px]" aria-hidden="true">
       {RISK_LEVELS.map((level, i) => <span key={level} className={riskClasses(level).fill} style={{ flex: i === 0 ? 4.5 : i === 4 ? 0.5 : 1 }} />)}
     </div>
     <div className="flex justify-between text-xs"><span>1 · Alert</span><span>9 · Fighting sleep</span></div>
     <figcaption className="text-xs text-muted-foreground">KSS describes sleepiness. Colour bands are Aerowake planning thresholds.</figcaption>
   </figure>;
   if (kind === 'body-clock') return <figure className="space-y-2 rounded-lg bg-secondary/50 p-3">
-    <div className="relative h-3 rounded-full bg-muted" aria-hidden="true"><span className="absolute inset-y-0 rounded-sm bg-wocl" style={{ left: '8.333%', width: '16.667%' }} /></div>
+    <div className="relative h-3 rounded-[2px] bg-muted" aria-hidden="true"><span className="absolute inset-y-0 rounded-sm bg-wocl" style={{ left: '8.333%', width: '16.667%' }} /></div>
     <div className="flex justify-between text-xs"><span>00:00</span><span>02:00–05:59 WOCL</span><span>24:00</span></div>
     <figcaption className="text-xs text-muted-foreground">The calendar shades a home-base reference window. An adapting body clock can differ.</figcaption>
   </figure>;
@@ -197,9 +197,9 @@ export const FATIGUE_INFO: Record<string, InfoTooltipEntry> = {
     title: "Flight duty period",
     sourceId: "easa_oro_ftl",
     visual: "fdp",
-    description: "Planned FDP divided by the configured maximum for this duty. The applicable limit depends on the approved operator scheme, acclimatisation, sectors, crew and rest facilities. Confirm these assumptions and any FRM, extension or ULR approval before interpreting the result.",
-    regulation: 'ORO.FTL.205 and the approved operator scheme',
-    threshold: 'Above 100% means the configured basic limit is exceeded; it does not establish that an extension is available.',
+    description: "Planned FDP divided by the maximum for this duty under the QCAA / EASA flight time limitations. The limit depends on acclimatisation, sectors, crew and rest facilities, and your operator’s approved scheme takes precedence. Confirm any FRM, extension or ULR approval before interpreting the result.",
+    regulation: 'ORO.FTL.205 (QCAA / EASA)',
+    threshold: 'Above 100% means the basic limit is exceeded; it does not establish that an extension is available.',
     actionTip: 'Commander’s discretion addresses unforeseen circumstances and must never be treated as a planning allowance.',
   },
   workloadPhase: {

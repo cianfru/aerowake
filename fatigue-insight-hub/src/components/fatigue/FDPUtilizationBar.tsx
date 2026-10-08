@@ -16,10 +16,11 @@ interface FDPUtilizationBarProps {
 /**
  * Flight duty period against the operator's limits, in the order they apply:
  * the maximum (ORO.FTL.205, CS FTL.1.205(c) or the ULR approval), a planned extension (CS FTL.1.205(a), 2-pilot crews
- * only) and commander's discretion (7.7.1, unforeseen circumstances only).
+ * only) and commander's discretion (ORO.FTL.205(f); operator OM-A 7.7.1), unforeseen circumstances only.
  */
 export function FDPUtilizationBar({ actualFdpHours, maxFdpHours, extendedFdpHours, plannedExtensionFdpHours, fdpLimitReference, usedDiscretion }: FDPUtilizationBarProps) {
   const discretion = extendedFdpHours && extendedFdpHours > maxFdpHours ? extendedFdpHours : undefined;
+  // 'Table 7-7': analyses saved before the QCAA / EASA wording (same values as Table 4).
   const basicTable = !fdpLimitReference || fdpLimitReference.startsWith('ORO.FTL.205') || fdpLimitReference.includes('Table 7-7');
   const extension = basicTable && plannedExtensionFdpHours && plannedExtensionFdpHours > maxFdpHours ? plannedExtensionFdpHours : undefined;
   const planned = extension ?? maxFdpHours;
@@ -63,9 +64,9 @@ export function FDPUtilizationBar({ actualFdpHours, maxFdpHours, extendedFdpHour
           </div>
         ))}
       </dl>
-      <p className="mt-3 text-xs text-muted-foreground">Comparison with the configured scheme. Operator approval and use of discretion are not verified from the roster.</p>
+      <p className="mt-3 text-xs text-muted-foreground">QCAA / EASA flight time limitations. Operator approvals and use of discretion are not verified from the roster.</p>
       {discretion && actualFdpHours > discretion + 1e-6 && (
-        <p className="mt-2 text-xs font-medium text-risk-critical-ink">Above the maximum even with discretion in this scheme.</p>
+        <p className="mt-2 text-xs font-medium text-risk-critical-ink">Above the maximum even with commander’s discretion.</p>
       )}
       {overBasic && extension && actualFdpHours <= extension + 1e-6 && (
         <p className="mt-2 text-xs font-medium text-risk-moderate-ink">Uses a planned extension: pre- and post-flight rest each 2 h longer, or post-flight rest 4 h longer.</p>

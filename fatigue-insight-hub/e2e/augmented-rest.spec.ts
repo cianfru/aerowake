@@ -40,7 +40,7 @@ test('ULR assumptions render and a different rest facility updates the assessmen
   await expect(dialog.getByText(/You selected this facility/)).toBeVisible();
   await expect(dialog.getByRole('heading', { name: 'Flight duty period · not assessed', exact: true })).toBeVisible();
   await expect(dialog.getByText(/^FDP not assessed ·/)).toBeVisible();
-  await expect(dialog.getByRole('list', { name: 'ULR assumptions and coverage' })).toContainText('class-1 bunk');
+  await expect(dialog.getByRole('list', { name: 'ULR assumptions and coverage' })).toContainText('Class 1 bunk');
   await expect(page.locator('body')).not.toContainText('Qatar Airways');
   await page.screenshot({ path: testInfo.outputPath('ulr-rest-facility.png'), fullPage: true });
   expect(errors).toEqual([]);

@@ -227,7 +227,7 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                 )}
                 <p className="text-xs text-muted-foreground">
                   {duty.crewSource === 'fdp' && !crewCompositionOverride
-                    ? 'No IR (in-flight rest) on this duty, so the crew is estimated from the planned FDP: the smallest augmented crew the in-flight rest limit (CS FTL.1.205(c)) allows for a bunk (the configured ULR route rules and an FDP over 18 h assume 4 pilots). Confirm it or choose the crew you flew. '
+                    ? 'No IR (in-flight rest) on this duty, so the crew is estimated from the planned FDP: the smallest augmented crew the in-flight rest limit (CS FTL.1.205(c)) allows for a bunk (ULR city pairs and an FDP over 18 h assume 4 pilots, subject to operator approval). Confirm it or choose the crew you flew. '
                     : 'IR (in-flight rest) on the roster marks an augmented crew, whatever your rank. Without IR the crew is estimated from the planned FDP and you can choose it here. '}
                   Changing the crew re-runs the analysis with the matching in-flight rest and FDP limits.
                 </p>
@@ -266,7 +266,7 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
               <div className="space-y-2 rounded-xl border border-border bg-card p-3 text-sm">
                 <p className="font-medium">Ultra-long range: {duty.ulrCompliance.violations.length > 0 ? 'issues found' : duty.maxFdpHours == null ? 'partly assessed' : 'no threshold exceedances found'}</p>
                 <p className="font-mono text-xs text-muted-foreground tabular">{duty.maxFdpHours == null ? 'FDP not assessed' : `Reference FDP ${duty.ulrCompliance.maxPlannedFdp?.toFixed(1) ?? '—'}h`} · {duty.ulrCompliance.monthlyUlrCount ?? '—'}/{duty.ulrCompliance.monthlyLimit ?? '—'} this month</p>
-                <p className="text-xs text-muted-foreground">Configured scheme comparison. A route match does not establish operator approval or complete rest history.</p>
+                <p className="text-xs text-muted-foreground">ULR limits depend on your operator’s approval for this city pair. A route match does not establish that approval or complete rest history.</p>
                 {duty.ulrCompliance.warnings.length > 0 && (
                   <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground" aria-label="ULR assumptions and coverage">
                     {duty.ulrCompliance.warnings.map((warning, i) => <li key={i}>{warning}</li>)}
@@ -286,7 +286,7 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                 <p className="text-xs text-muted-foreground">
                   Estimated in-flight sleep: <span className="font-mono tabular text-foreground">{inflightSleepHours(duty).toFixed(1)}h</span>
                   {duty.inflightRestBlocks[0]?.approvedPlan
-                    ? ` · times from the configured ULR rest plan for this city pair; confirm current operator approval, Crew ${duty.ulrCrewSet === 'crew_a' ? 'A' : 'B'}`
+                    ? ` · times from the operator’s ULR rest plan for this city pair (approval not verified), Crew ${duty.ulrCrewSet === 'crew_a' ? 'A' : 'B'}`
                     : duty.inflightRestBlocks.some((b) => b.source === 'planned') ? ' · from the standard rest rotation (the roster shows no IR sector) — adjust the crew above if yours differs' : ' · estimated from IR sectors on your roster; confirm the rest plan'}
                 </p>
                 <ul className="space-y-1 rounded-xl border border-border bg-card p-3 text-xs" aria-label="In-flight rest">

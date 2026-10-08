@@ -628,7 +628,7 @@ class QatarFTL718Validator:
         """Validate all ULR-specific compliance requirements."""
         violations = []
         warnings = [
-            "Configured ULR scheme comparison: current operator and city-pair approvals are unverified.",
+            "ULR limits depend on your operator's approval for this city pair, which is not verified here.",  # OM-A 7.18
             "Crew size, rest facility and the planned rest pattern must match the actual operation.",
         ]
         if roster is None or duty_index is None or duty_index == 0:
@@ -638,7 +638,7 @@ class QatarFTL718Validator:
 
         facility_supported = duty.rest_facility_class in (None, RestFacilityClass.CLASS_1)
         if not facility_supported:
-            warnings.append("ULR FDP is not assessed for the selected rest facility: the configured ULR scheme assumes a class-1 bunk. Rest remains a modelling scenario, not an approved plan.")
+            warnings.append("ULR FDP is not assessed for the selected rest facility: ULR limits assume a Class 1 bunk. Rest remains a modelling scenario, not an approved plan.")
 
         # 1. FDP limit check
         fdp = duty.fdp_hours
@@ -652,7 +652,7 @@ class QatarFTL718Validator:
                 if fdp > self.params.ulr_max_planned_fdp_hours + self.params.ulr_discretion_report_threshold:
                     warnings.append(
                         f"ULR discretion >{self.params.ulr_discretion_report_threshold}h — "
-                        "reporting is required under the configured operator scheme; confirm the applicable process"
+                        "discretion must be reported to your operator; confirm the applicable process"
                     )
                 fdp_ok = True  # Within discretion
             else:

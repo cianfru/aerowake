@@ -983,7 +983,7 @@ class TestCrewSetOverrideAlwaysWins:
 def test_ulr_comparison_exposes_unverified_approval_and_boundary_history():
     duty = make_ulr_duty(fdp_hours=17.5)
     result = ULRComplianceValidator().validate_ulr_duty(duty)
-    assert any('approvals are unverified' in warning for warning in result.warnings)
+    assert any("operator's approval" in warning and 'not verified' in warning for warning in result.warnings)
     assert any('earlier history is missing' in warning for warning in result.warnings)
     assert any('later activities are missing' in warning for warning in result.warnings)
 

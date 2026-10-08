@@ -12,12 +12,17 @@ repository. Its currency and the applicability of FRM, reduced-rest and ULR
 approvals have not been independently established. No regulatory values were
 changed during the product audit. Tests pin the transcription, not legal validity.
 
-**Presentation contract.** Basic acclimatised FDP comparisons cite
-ORO.FTL.205(b) Table 2. Rules transcribed from the operator manual retain neutral
-“configured scheme” references and their OM-A paragraph/table provenance. Public
-ORO.FTL / CS FTL references are explicitly comparisons. Unknown-state FRM limits
-and ULR limits say that approval is unverified. The roster FTL view always exposes
-that scope; no operator brand or inferred airline is treated as approval.
+**Presentation contract.** Pilot-facing text cites the QCAA / EASA flight time
+limitations only (ORO.FTL / CS FTL); operator OM-A paragraph and table numbers stay
+in code comments and this note, never in the UI or API reference strings. Values
+are unchanged: Table 7-6 → ORO.FTL.205(b) Table 2, Table 7-7 → Table 4 (FRM, same
+values), Table 7-8 → CS FTL.1.205(a), Tables 7-9/7-10 → CS FTL.1.205(c), rest
+7.13.4 → CS FTL.1.235(a), 7.13.5 → CS FTL.1.235(b), 7.13.6 → ORO.FTL.235(c), 7.13.7 →
+ORO.FTL.235(d), standby 7.11.3 → CS FTL.1.225. The only operator-specific items
+shown are the ULR city pairs with their rest plans and augmented-crew handling,
+labelled "operator approval, not verified". Unknown-state FRM limits and ULR
+limits say that approval is not verified; the roster FTL view always exposes that
+scope, and no operator brand or inferred airline is treated as approval.
 
 Public source: [EASA Easy Access Rules for Air Operations, Regulation (EU)
 965/2012](https://www.easa.europa.eu/en/document-library/easy-access-rules/easy-access-rules-air-operations-regulation-eu-no-9652012).

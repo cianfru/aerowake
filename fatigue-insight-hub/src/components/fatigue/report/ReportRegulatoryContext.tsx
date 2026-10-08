@@ -22,7 +22,7 @@ export function ReportRegulatoryContext({ duty }: Props) {
           <div className="flex items-center gap-2 mb-1">
             <Scale className="h-4 w-4 text-primary" />
             <p className="text-xs text-muted-foreground print:text-gray-600">
-              Scoped comparison with public EASA references and the configured operator scheme. Approval, applicability and complete history are unverified.
+              Scoped comparison with the QCAA / EASA flight time limitations. Operator approvals, applicability and complete history are not verified.
             </p>
           </div>
 
@@ -46,7 +46,7 @@ export function ReportRegulatoryContext({ duty }: Props) {
               regulation="ORO.FTL.205(f)"
               compliant={null}
               detail={duty.usedDiscretion
-                ? `Above basic limit; operational discretion is unconfirmed (scheme ceiling ${duty.extendedFdpHours?.toFixed(1) ?? '—'}h)`
+                ? `Above basic limit; operational discretion is unconfirmed (ceiling with discretion ${duty.extendedFdpHours?.toFixed(1) ?? '—'}h)`
                 : 'Operational use is not established from the roster'}
             />
 
@@ -73,30 +73,30 @@ export function ReportRegulatoryContext({ duty }: Props) {
           {ulr && ulr.isUlr && (
             <div className="border-t border-border/30 pt-3">
               <h4 className="text-xs font-medium text-muted-foreground mb-2 print:text-gray-600">
-                Ultra-long-range scheme comparison
+                Ultra-long-range (operator approval)
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <ComplianceRow
                   label="ULR FDP"
-                  regulation="Configured ULR scheme"
+                  regulation="ULR (operator approval)"
                   compliant={duty.maxFdpHours == null ? null : ulr.fdpWithinLimit}
-                  detail={duty.maxFdpHours == null ? "FDP not assessed for this facility or missing context" : `Scheme reference: ${ulr.maxPlannedFdp?.toFixed(1) ?? "—"}h; approval unverified`}
+                  detail={duty.maxFdpHours == null ? "FDP not assessed for this facility or missing context" : `ULR reference: ${ulr.maxPlannedFdp?.toFixed(1) ?? "—"}h; approval unverified`}
                 />
                 <ComplianceRow
                   label="Rest Periods"
-                  regulation="Configured ULR scheme"
+                  regulation="ULR (operator approval)"
                   compliant={ulr.restPeriodsValid === false ? false : null}
                   detail="In-flight rest block validation"
                 />
                 <ComplianceRow
                   label="Pre-ULR Rest"
-                  regulation="Configured ULR scheme"
+                  regulation="ULR (operator approval)"
                   compliant={ulr.preUlrRestCompliant === false ? false : null}
                   detail="Minimum rest before ULR duty"
                 />
                 <ComplianceRow
                   label="Monthly ULR Count"
-                  regulation="Configured ULR scheme"
+                  regulation="ULR (operator approval)"
                   compliant={ulr.monthlyUlrCount > ulr.monthlyLimit ? false : null}
                   detail={`${ulr.monthlyUlrCount ?? "—"} / ${ulr.monthlyLimit ?? "—"} in supplied activities`}
                 />
@@ -107,7 +107,7 @@ export function ReportRegulatoryContext({ duty }: Props) {
               {ulr.violations && ulr.violations.length > 0 && (
                 <div className="mt-3 rounded-lg border border-critical/30 bg-critical/10 px-3 py-2 print:bg-red-50 print:border-red-200">
                   <p className="text-xs font-medium text-critical print:text-red-700 mb-1">
-                    Configured ULR scheme findings:
+                    ULR findings:
                   </p>
                   <ul className="text-[11px] text-muted-foreground print:text-gray-700 space-y-0.5">
                     {ulr.violations.map((v, i) => (
