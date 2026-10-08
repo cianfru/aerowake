@@ -4,7 +4,7 @@
 Roster Parser - Extract duty data from airline PDF/CSV rosters
 
 Supports:
-- Qatar Airways CrewLink (Grid & Text formats)
+- CrewLink (Grid & Text formats)
 - Generic CSV exports
 - Robust Pilot ID and Report Time extraction
 
@@ -45,10 +45,10 @@ def auto_detect_crew_augmentation(roster: Roster) -> None:
 
     IR is treated as IR whatever the pilot's rank, and it does not say 3 or 4 pilots. This
     pass marks IR pairings; core/crew_inference.py then sizes them from the planned FDP and
-    estimates the crew of every other long-haul duty the same way (Qatar OM-A 7.6.6, ULR
+    estimates the crew of every other long-haul duty the same way (Operator OM-A 7.6.6, ULR
     7.18), before simulation. The pilot can set the crew on any duty.
 
-    Crew A / Crew B (Qatar FTL 7.18.4.1, 7.18.9.3): a pilot belongs to ONE crew for the
+    Crew A / Crew B (Operator OM-A 7.18.4.1, 7.18.9.3): a pilot belongs to ONE crew for the
     whole pairing. Crew A operates the outbound sector from base and is the relief crew on
     the return; Crew B is the relief crew outbound and operates the return (Figures 7-3 to
     7-8). `IR` (In-flight Rest) marks the sector on which the pilot is the augmenting crew
@@ -212,7 +212,7 @@ class PDFRosterParser:
     Parse PDF rosters from airline crew management systems
     
     Supports multiple formats:
-    - Qatar Airways CrewLink
+    - CrewLink
     - Generic tabular PDF
     - Text-based duty listings
     """
@@ -471,7 +471,7 @@ class PDFRosterParser:
 
         Detection priority:
           1. easyJet  — checked first (no CrewLink/Qatar keywords to clash)
-          2. Qatar Airways CrewLink
+          2. CrewLink
           3. Generic CrewLink-style grid (DDMon date headers)
           4. Generic fallback
 
@@ -493,7 +493,7 @@ class PDFRosterParser:
         if has_eju_flight or (has_local_station and ezy_dd_mm_count >= 5) or has_ezy_header:
             return 'easyjet'
 
-        # ── Qatar Airways CrewLink ─────────────────────────────────────────────
+        # ── CrewLink ─────────────────────────────────────────────
         if 'crewlink' in text_lower or 'qatar airways' in text_lower or 'qatar' in text_lower:
             return 'crewlink'
 
@@ -506,7 +506,7 @@ class PDFRosterParser:
     
     def _parse_crewlink_format(self, text: str) -> List[Duty]:
         """
-        Parse Qatar Airways CrewLink PDF format (Stateful "Soup" Parser)
+        Parse CrewLink PDF format (Stateful "Soup" Parser)
         
         Handles fragmented text where RPT (Report/Sign-in) appears 
         before the flight details, distinct from the flight row.

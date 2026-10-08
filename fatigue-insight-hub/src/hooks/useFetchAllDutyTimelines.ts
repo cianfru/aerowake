@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { DutyAnalysis } from '@/types/fatigue';
 import { getDutyDetail } from '@/lib/api-client';
-import { DutyDetailTimeline } from '@/hooks/useContinuousTimelineData';
+import type { DutyDetailTimeline } from '@/types/duty-timeline';
 
 interface UseFetchAllDutyTimelinesProps {
   analysisId?: string;

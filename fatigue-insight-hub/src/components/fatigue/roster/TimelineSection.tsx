@@ -4,7 +4,7 @@ import { SleepShortfallChart } from '../SleepDebtTrendChart';
 import { BodyClockDriftChart } from '../BodyClockDriftChart';
 import type { AnalysisResults } from '@/types/fatigue';
 
-const chartTab = 'rounded-lg border border-transparent px-3 py-1.5 text-[13px] text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm';
+const chartTab = 'min-h-11 rounded-lg border border-transparent px-3 py-1.5 text-[13px] text-muted-foreground data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm';
 
 /** The month-long sleepiness chart and recovery trends have one dedicated view. */
 export function TimelineSection({ results, homeBase }: { results: AnalysisResults; homeBase: string }) {
@@ -21,7 +21,7 @@ export function TimelineSection({ results, homeBase }: { results: AnalysisResult
       </TabsList>
       <TabsContent value="month" className="mt-5"><MonthlyAlertnessChart samples={results.alertnessTimeline ?? []} duties={results.duties} month={results.month} homeTz={results.homeBaseTimezone || 'UTC'} /></TabsContent>
       <TabsContent value="shortfall" className="mt-5"><SleepShortfallChart duties={results.duties} month={results.month} /></TabsContent>
-      <TabsContent value="bodyclock" className="mt-5"><BodyClockDriftChart duties={results.duties} month={results.month} homeBase={results.pilotBase || homeBase} bodyClockTimeline={results.bodyClockTimeline} /></TabsContent>
+      <TabsContent value="bodyclock" className="mt-5"><BodyClockDriftChart homeBaseTimezone={results.homeBaseTimezone} duties={results.duties} month={results.month} homeBase={results.pilotBase || homeBase} bodyClockTimeline={results.bodyClockTimeline} /></TabsContent>
     </Tabs>
   </section>;
 }

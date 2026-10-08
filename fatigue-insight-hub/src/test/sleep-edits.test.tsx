@@ -85,7 +85,7 @@ describe('SleepBlockList', () => {
     expect(list).toHaveTextContent('Nap · assumed');
     fireEvent.click(screen.getByRole('button', { name: /^Why this nap/ }));
     expect(await screen.findByText(basis)).toBeInTheDocument();
-    expect(screen.getByText('60 %')).toBeInTheDocument();
+    expect(screen.getByText('60/100')).toBeInTheDocument();
     expect(screen.getByText(/Sources \(1\)/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'I don’t nap here' }));
     await waitFor(() => expect(saveSleepEdits).toHaveBeenCalledTimes(1));

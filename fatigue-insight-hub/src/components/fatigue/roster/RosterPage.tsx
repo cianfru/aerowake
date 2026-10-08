@@ -10,7 +10,8 @@ import { AirlineDetectionPrompt } from './AirlineDetectionPrompt';
 import { DEFAULT_WATCH_KSS } from '@/lib/roster-forecast';
 import { RISK_LEVEL_LABELS, classifyKss, riskClasses } from '@/lib/risk-scale';
 import { cn } from '@/lib/utils';
-import { selectDutiesToWatch } from './roster-utils';
+import { dutyPeakKss, selectDutiesToWatch } from './roster-utils';
+import { rosterContext } from './overview-context';
 
 function monthLabel(results: AnalysisResults): string {
   try {
@@ -32,21 +33,23 @@ function RosterHeader({ results, onNewRoster }: { results: AnalysisResults; onNe
     results.pilotAircraft || null,
     'times in home-base time',
   ].filter(Boolean).join(' · ');
-  const peaks = results.duties.map((d) => d.maxKss).filter((k): k is number => typeof k === 'number' && Number.isFinite(k));
+  const peaks = results.legacyModel ? [] : results.duties.map(dutyPeakKss).filter((k): k is number => k != null);
   const peak = peaks.length ? Math.max(...peaks) : null;
   const peakLevel = peak != null ? classifyKss(peak) : null;
-  const watch = selectDutiesToWatch(results).length;
-  const sectors = results.duties.reduce((n, d) => n + d.flightSegments.length, 0);
+  const watch = results.legacyModel ? 0 : selectDutiesToWatch(results).length;
+  const sectors = results.duties.reduce((n, d) => n + d.sectors, 0);
   const block = results.statistics?.totalBlockHours ?? results.duties.reduce((h, d) => h + (d.blockHours || 0), 0);
-  const ftlWarnings = (results.easaFindings ?? []).filter((f) => f.severity === 'warning').length;
-  const ftlKnown = !!results.easaSummary && results.easaSummary.status !== 'unavailable';
+  const context = rosterContext(results);
+  const ftlWarnings = context.warnings.length;
   const rc = peakLevel ? riskClasses(peakLevel) : null;
   const kpis: Array<{ label: string; value: string; unit?: string; tone?: string; note?: string }> = [
     { label: 'Duties', value: String(results.duties.length), note: `${sectors} ${sectors === 1 ? 'sector' : 'sectors'}` },
     { label: 'Block time', value: formatHours(block) },
     { label: 'Highest peak', value: peak != null ? peak.toFixed(1) : '–', unit: peak != null ? 'KSS' : undefined, tone: rc?.text, note: peakLevel ? RISK_LEVEL_LABELS[peakLevel] : 'No prediction' },
-    { label: 'Duties to watch', value: String(watch), tone: watch ? 'text-risk-high-ink' : undefined, note: `peak KSS ${DEFAULT_WATCH_KSS} or higher` },
-    { label: 'FTL checks', value: !ftlKnown ? '–' : ftlWarnings ? String(ftlWarnings) : 'Clear', tone: ftlKnown ? (ftlWarnings ? 'text-risk-critical-ink' : 'text-success') : undefined, note: !ftlKnown ? 'Unavailable' : ftlWarnings ? (ftlWarnings === 1 ? 'exceedance' : 'exceedances') : 'in the supplied activities' },
+    { label: 'Duties to watch', value: peaks.length ? String(watch) : '–', tone: watch ? 'text-risk-high-ink' : undefined, note: peaks.length < results.duties.length ? `${peaks.length} of ${results.duties.length} duties assessed` : `peak KSS ${DEFAULT_WATCH_KSS} or higher` },
+    { label: 'FTL checks', value: ftlWarnings ? String(ftlWarnings) : context.unavailable ? '–' : !context.coverageKnown ? 'Unknown' : context.incompleteChecks ? 'Partial' : '0',
+      tone: ftlWarnings ? 'text-risk-critical-ink' : undefined,
+      note: ftlWarnings ? `${ftlWarnings === 1 ? 'finding' : 'findings'} · review coverage` : context.unavailable ? 'Unavailable' : !context.coverageKnown ? 'Coverage not supplied' : context.incompleteChecks ? `${context.incompleteChecks} checks not fully assessed` : 'findings in supplied activities' },
   ];
   return <header className="roster-bridge">
     <div className="flex flex-wrap items-start justify-between gap-4">
@@ -82,11 +85,11 @@ function formatHours(hours: number): string {
  */
 export function RosterPage() {
   const {
-    state, selectDuty, setDrawerOpen, setCrewOverride, clearCrewOverride, setCrewComposition,
+    state, selectDuty, setDrawerOpen, setCrewOverride, clearCrewOverride, setCrewComposition, setRestFacility,
     removeFile, openFatigueReportForDuty,
   } = useAnalysis();
   const { analysisResults: results, selectedDuty, drawerOpen, dutyCrewOverrides, dutyCrewComposition, settings } = state;
-  const { runAnalysis, canReanalyse } = useAnalyzeRoster();
+  const { runAnalysis, canReanalyse, isAnalyzing } = useAnalyzeRoster();
   // Crew changes re-run the analysis in place when the roster file is loaded.
   const rerun = (crew: RunAnalysisOptions['crew']) => { if (canReanalyse) runAnalysis({ crew, reveal: false }); };
   // After a re-run, show the same duty from the new results.
@@ -132,16 +135,20 @@ export function RosterPage() {
         homeTz={results.homeBaseTimezone}
         homeBase={results.pilotBase || settings.homeBase}
         dutyCrewOverride={dutyCrewOverrides.get(selectedDuty?.dutyId || '')}
-        onCrewChange={(id, crewSet) => {
+        onCrewChange={canReanalyse ? (id, crewSet) => {
           setCrewComposition(id, 'augmented_4'); setCrewOverride(id, crewSet);
           rerun({ dutyId: id, composition: 'augmented_4', crewSet });
-        }}
-        onCrewReset={(id) => {
+        } : undefined}
+        onCrewReset={canReanalyse ? (id) => {
           clearCrewOverride(id); setCrewComposition(id, null);
           rerun({ dutyId: id, composition: null, crewSet: null });
-        }}
+        } : undefined}
         crewCompositionOverride={dutyCrewComposition.get(selectedDuty?.dutyId || '') ?? null}
-        onCrewCompositionChange={(id, composition) => { setCrewComposition(id, composition); rerun({ dutyId: id, composition }); }}
+        onCrewCompositionChange={canReanalyse ? (id, composition) => { setCrewComposition(id, composition); rerun({ dutyId: id, composition }); } : undefined}
+        onRestFacilityChange={canReanalyse ? (id, facility) => {
+          setRestFacility(id, facility); rerun({ dutyId: id, restFacility: facility });
+        } : undefined}
+        restFacilityBusy={isAnalyzing}
         onReportFatigue={reportFatigue}
       />
       <AirlineDetectionPrompt />

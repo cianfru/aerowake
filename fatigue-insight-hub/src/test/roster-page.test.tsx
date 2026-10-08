@@ -84,8 +84,10 @@ describe('RosterPage', () => {
     render(<AnalysisProvider><Loaded results={{ ...results, duties: results.duties.filter(d => (d.maxKss ?? 9) < 6.5), dutiesToWatch: [], easaFindings: [] }} /></AnalysisProvider>);
     await screen.findByText('September 2026');
     expect(screen.getByTestId('duties-to-watch-empty')).toBeInTheDocument();
+    expect(screen.getByText('Coverage not supplied')).toBeInTheDocument();
+    expect(screen.queryByText('Clear')).toBeNull();
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'FTL checks' }), { button: 0, ctrlKey: false });
-    expect(screen.getByText('No exceedances found in the supplied activities')).toBeInTheDocument();
+    expect(screen.getByText('No threshold exceedances found in the supplied activities')).toBeInTheDocument();
   });
 
   it('starts with the roster picker, not a base to type, when no roster is loaded', () => {
@@ -93,6 +95,14 @@ describe('RosterPage', () => {
     expect(screen.getByLabelText('Choose roster file (PDF or CSV)')).toBeInTheDocument();
     expect(screen.queryByLabelText(/Home base/)).toBeNull();
     expect(screen.getByRole('link', { name: /Download CSV template/ })).toBeInTheDocument();
+  });
+
+  it('does not describe a legacy analysis as having no demanding duties', async () => {
+    render(<AnalysisProvider><Loaded results={{ ...results, legacyModel: true }} /></AnalysisProvider>);
+    await screen.findByText('September 2026');
+    expect(screen.queryByTestId('duties-to-watch')).toBeNull();
+    expect(screen.getByTestId('duties-to-watch-empty')).toHaveTextContent('No current-model duty predictions are available.');
+    expect(screen.getByText('0 of 4 duties assessed')).toBeInTheDocument();
   });
 
   it('preserves model warnings when a pilot raises their personal watch level and carries it to a concern', async () => {

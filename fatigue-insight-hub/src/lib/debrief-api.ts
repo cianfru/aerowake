@@ -151,7 +151,7 @@ export async function studyRequest<T>(path: string, init: { method?: string; bod
 export const getEnrolment = () => studyRequest<StudyEnrolment>('/api/study/enrolment');
 export const enrol = () => studyRequest<StudyEnrolment>('/api/study/enrolment', { method: 'PUT', body: { consent_version: STUDY_CONSENT_VERSION, accepted: true } });
 export const withdraw = (deleteData: boolean) =>
-  studyRequest<StudyEnrolment & { deleted: { debriefs: number; observations: number } }>(`/api/study/enrolment?delete_data=${deleteData}`, { method: 'DELETE' });
+  studyRequest<StudyEnrolment & { deleted: { debriefs: number; observations: number; inflight?: number } }>(`/api/study/enrolment?delete_data=${deleteData}`, { method: 'DELETE' });
 export const listDebriefs = () => studyRequest<{ debriefs: Debrief[] }>('/api/debriefs').then((r) => r.debriefs);
 export const createDebrief = (body: DebriefRequest) => studyRequest<Debrief>('/api/debriefs', { method: 'POST', body });
 export const setFelt = (id: string, felt: FeltVsPrediction | null) =>

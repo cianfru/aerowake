@@ -167,10 +167,24 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
     summary['limits'] = {'duty_7d': 60, 'duty_14d': 110, 'duty_28d': 190, 'block_28d': 100}
 
     # ---- ORO.FTL.235 minimum rest before each duty -------------------------
-    for prev, nxt in zip(duties, duties[1:]):
-        if not roster.pilot_base:
+    for prev, nxt in zip(activities, activities[1:]):
+        if not roster.pilot_base or nxt.duty_type != DutyType.FLIGHT:
             continue
         rest = (nxt.report_time_utc - prev.release_time_utc).total_seconds() / 3600
+        if prev.duty_type == DutyType.HOME_STANDBY:
+            # A standby call-out can form the same assignment as the FDP. The
+            # roster does not establish that relationship, so neither credit
+            # standby as rest nor invent a mandatory new 12 h rest after it.
+            if rest < 12.0:
+                findings.append(_finding(
+                    'standby', 'Configured scheme §7.11.3 · compare CS FTL.1.225(b)', 'warning',
+                    'Standby before flight needs a call-out check',
+                    f'{_h(rest)} between standby end {_fmt(prev.release_time_utc, tz)} and '
+                    f'report {_fmt(nxt.report_time_utc, tz)}. Standby is not uninterrupted rest. '
+                    'The roster does not establish whether this was a call-out or a new assignment; '
+                    'the required rest and any FDP reduction are not assessed.',
+                    prev.release_time_utc, nxt.report_time_utc, rest, None))
+            continue
         at_home = bool(roster.pilot_base) and (not prev.segments or prev.segments[-1].arrival_airport.code == roster.pilot_base)
         # OM-A 7.13.1/7.13.2: at least the preceding duty, or 12 h at base / 10 h away. Under
         # reduced rest (7.13.6) the floor is 12 h / 10 h; between the floor and the preceding
@@ -249,8 +263,9 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
             limit = f'planned extension {_h(ext)}' if ext else 'no planned extension is allowed at this report time'
             findings.append(_finding('fdp_max', ref, 'warning', 'FDP above the planned maximum',
                                      f'{when}: FDP {_h(fdp)} vs basic maximum {_h(d.max_fdp_hours)} ({limit}). '
-                                     'Beyond this only commander’s discretion for unforeseen circumstances '
-                                     '(ORO.FTL.205(f)) applies.' + crew_note,
+                                     'This is not a planning allowance. Commander’s discretion applies only to '
+                                     'unforeseen circumstances during operations and requires an operational decision '
+                                     '(ORO.FTL.205(f)); its use is not confirmed by the roster.' + crew_note,
                                      d.report_time_utc, d.release_time_utc, fdp, ext or d.max_fdp_hours))
     # 7.6.5(1): an extension at most twice in any 7 consecutive days.
     from core.qatar_ftl import EXTENSIONS_PER_7_DAYS
@@ -277,14 +292,31 @@ def run_checks(roster: Roster, home_base_timezone: Optional[str] = None) -> Dict
     assessed = sum(d.max_fdp_hours is not None for d in flights)
     coverage['fdp_max'] = {'status': 'not_assessed' if assessed < len(flights) or not flights else
                          ('failed' if any(f['rule'] in ('fdp_max', 'fdp_extension') and f['severity'] == 'warning'
-                                          for f in findings) else 'passed'),
+                                          for f in findings) else 'incomplete_history'),
                          'assessed': assessed, 'eligible': len(flights),
-                         'reason': ('QCAA / EASA flight time limitations: ORO.FTL.205 Tables 2 and 4, '
-                                    'CS FTL.1.205 (extension, in-flight rest) and the ULR approval. Acclimatisation '
-                                    'is derived from the supplied duties (ORO.FTL.105(1), '
-                                    'assuming acclimatised to the home base before the first duty); duties '
-                                    'where it cannot be determined are not assessed. Split duty and standby '
-                                    'before the FDP are outside this check.')}
+                         'reason': ('FDP values compare the configured scheme with supplied duties. Basic '
+                                    'acclimatised limits follow ORO.FTL.205(b) Table 2. Unknown-state FRM '
+                                    'limits and ULR limits come from an owner-supplied operator scheme; '
+                                    'their approval and applicability to this pilot are unverified. '
+                                    'Acclimatisation is inferred from the roster, assuming the pilot was '
+                                    'acclimatised at home before the first duty. Crew and class-1 rest '
+                                    'facilities may be inferred. Split duty, delayed reporting and '
+                                    'standby call-out reductions are outside this check. Augmented duties with '
+                                    'more than three operating sectors and ULR duties without a class-1 '
+                                    'rest facility are not assessed.')}
+    coverage['operator_approval'] = {
+        'status': 'not_assessed',
+        'reason': ('No operator approval or current manual revision is verified by this upload. '
+                   'The configured scheme includes private OM-A Chapter 7 rest/ULR rules. '
+                   'Public EASA references are comparisons, not proof of legal applicability. '
+                   'Confirm the applicable scheme, FRM approval, ULR city-pair approval, crew '
+                   'and rest facility with your operator before using these limits.')}
+    coverage['reduced_rest'] = {
+        'status': 'failed' if any(f['rule'] == 'reduced_rest' and f['severity'] == 'warning'
+                                  for f in findings) else 'not_assessed',
+        'reason': ('Reduced-rest approval, compensatory rest and the following FDP reduction '
+                   'are not established from the roster. Rest below the preceding duty is '
+                   'flagged for review, even when above the absolute floor.')}
     if not roster.pilot_base:
         coverage['min_rest'] = {'status': 'not_assessed', 'reason': 'Home base identity is missing.'}
     summary['coverage'] = coverage

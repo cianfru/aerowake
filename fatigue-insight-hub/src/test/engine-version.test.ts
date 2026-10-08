@@ -4,12 +4,14 @@ import { transformAnalysisResult } from '@/lib/transform-analysis';
 import { rosterFixture } from './fixtures/roster-analysis';
 
 describe('KSS engine versions', () => {
-  it('treats 4.0 and 4.1 as the same KSS scale', () => {
+  it('recognises all retained KSS engine versions', () => {
     expect(isKssEngine('aerowake-4.0-kss')).toBe(true);
     expect(isKssEngine('aerowake-4.1-kss')).toBe(true);
+    expect(isKssEngine('aerowake-4.2-kss')).toBe(true);
     expect(isKssEngine('aerowake-3')).toBe(false);
     expect(isKssEngine(undefined)).toBe(false);
     expect(resolveKss(undefined, 70, 'aerowake-4.1-kss')).toBe(4);
+    expect(resolveKss(undefined, 70, 'aerowake-4.2-kss')).toBe(4);
   });
 
   it('does not mark a 4.1 analysis as a legacy model', () => {

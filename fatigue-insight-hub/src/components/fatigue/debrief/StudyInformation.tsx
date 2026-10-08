@@ -13,7 +13,7 @@ export function StudyInformation({ className, headingLevel = 3 }: { className?: 
     <div className={cn('space-y-4 text-sm leading-relaxed text-foreground', className)}>
       <section className="space-y-1">
         <H className={heading}>What it is</H>
-        <p>Aerowake learns from every pilot: in-flight ratings, debriefs and diary entries are pooled to check and calibrate its sleepiness forecasts against what pilots actually feel. The more pilots log, the better the average. Every signed-in pilot contributes; you can stop at any time and Aerowake works fully without it.</p>
+        <p>Contributing is your choice. If you join, new in-flight ratings, debriefs and diary entries may be pooled to evaluate and calibrate sleepiness forecasts. Logging or signing in never enrols you automatically. Your roster tools and private in-flight ratings work without joining.</p>
       </section>
       <section className="space-y-1">
         <H className={heading}>Not a report to your operator</H>
@@ -33,7 +33,7 @@ export function StudyInformation({ className, headingLevel = 3 }: { className?: 
       </section>
       <section className="space-y-1">
         <H className={heading}>Your choices</H>
-        <p>You can skip any optional question. You can export your entries, delete a single entry or all of them, and stop contributing at any time from History or Account. When you stop you choose whether to delete what you have already given.</p>
+        <p>You can skip any optional question. You can export your entries, delete a single entry or all of them, and stop contributing at any time from History or Account. When you stop, existing in-flight ratings are excluded from calibration and you choose whether to delete your saved study data and ratings. Private in-flight logging remains available.</p>
       </section>
       <section className="space-y-1">
         <H className={heading}>Who can see it</H>
@@ -41,7 +41,7 @@ export function StudyInformation({ className, headingLevel = 3 }: { className?: 
       </section>
       <section className="space-y-1">
         <H className={heading}>How long it is kept</H>
-        <p>Retention: {STUDY_RETENTION}. Deleting removes the live records straight away; backups expire on the hosting provider's schedule. Exports you have already shared cannot be recalled.</p>
+        <p>Retention: {STUDY_RETENTION}. Deleting removes the live records straight away; backup retention depends on the service operator's published policy. Exports you have already shared cannot be recalled.</p>
       </section>
       <section className="space-y-1">
         <H className={heading}>Exports</H>

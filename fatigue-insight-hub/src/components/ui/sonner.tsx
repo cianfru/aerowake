@@ -10,9 +10,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
-      className="toaster group"
+      className="toaster group !max-w-[calc(100vw-2rem)]"
       // Phones: stay clear of the roster view bar docked at the bottom.
-      mobileOffset={{ bottom: 88 }}
+      mobileOffset={{ bottom: 88, left: 16, right: 16 }}
       toastOptions={{
         classNames: {
           toast:

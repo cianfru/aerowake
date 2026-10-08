@@ -154,7 +154,7 @@ export function DebriefSheet({ open, onOpenChange, duty, analysisId, homeTimezon
           <SheetTitle className="text-lg">{title}</SheetTitle>
           <SheetDescription>
             {times && <span className="font-mono tabular">{times}. </span>}
-            {saved ? 'Saved. It is pooled, pseudonymised, with every pilot’s ratings to calibrate the model.' : 'Rate first. The forecast stays hidden until you save. Your rating is pooled, pseudonymised, with every pilot’s to calibrate the model.'}
+            {saved ? 'Saved. It is pooled, pseudonymised, with other consenting pilots’ ratings to calibrate the model.' : 'Rate first. The forecast stays hidden until you save. Your rating is pooled, pseudonymised, with other consenting pilots’ ratings to calibrate the model.'}
           </SheetDescription>
         </SheetHeader>
 

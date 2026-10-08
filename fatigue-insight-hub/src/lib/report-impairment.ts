@@ -139,7 +139,7 @@ export function assessPriorSleep(priorSleepHours: number): {
 /**
  * Assess Window of Circadian Low exposure during a duty.
  *
- * WOCL is defined as 02:00–05:59 home base time per AMC1 ORO.FTL.105(10).
+ * ORO.FTL.105(28) defines WOCL in the acclimatised zone; this view uses 02:00–05:59 home time as a reference.
  * Exposure to WOCL during duty significantly reduces circadian alertness.
  */
 export function assessWOCLExposure(woclHours: number): {

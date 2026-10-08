@@ -8,7 +8,7 @@ Parses grid/table layout rosters commonly used by airlines (CrewLink, etc.) wher
 - Multi-sector days have multiple flight entries stacked
 
 Design: Pattern-based recognition, works with ANY airline using similar grid layout
-Supports: Qatar Airways, Emirates, Etihad, and other airlines with CrewLink-style rosters
+Supports: Multiple airlines with CrewLink-style rosters
 """
 
 import re
@@ -122,7 +122,7 @@ class CrewLinkRosterParser:
     - Handles unknown airports gracefully (auto-creates with UTC)
     - Works with ANY airline using similar grid layout
     
-    Supported: Qatar Airways, Emirates, Etihad, and other airlines with CrewLink rosters
+    Supported: Multiple airlines with CrewLink rosters
     """
     
     def __init__(self, auto_create_airports: bool = True, timezone_format: str = 'auto',
@@ -777,7 +777,7 @@ class CrewLinkRosterParser:
         """
         Check if this column represents a training duty.
 
-        Training columns in Qatar CrewLink PDF have the pattern:
+        Training columns in CrewLink PDF have the pattern:
             RPT:HH:MM
             <TRAINING_CODE>    (e.g. OPTR, FFS, EBTGR, AFTD)
             DOH                (always at home base)
@@ -1105,7 +1105,7 @@ class CrewLinkRosterParser:
 
                 # Scan trailing lines for activity codes (IR, DH), line training
                 # annotations, and aircraft type.
-                # These appear AFTER the arrival time in Qatar CrewLink PDF columns.
+                # These appear AFTER the arrival time in CrewLink PDF columns.
                 # Known activity codes with operational meaning:
                 #   IR = Inflight Rest (pilot is relief crew, always 4-pilot augmented)
                 #   DH = Deadhead (pilot as passenger, not operating)

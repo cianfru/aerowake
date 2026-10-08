@@ -696,7 +696,7 @@ def analyse(inp: ReportInput) -> Dict:
             if pat['night_duty']:
                 findings.append(_finding('caution', 'circadian', 'Duty through the window of circadian low',
                                          f'{row["label"]} is on duty during 02:00–04:59 home-base time.',
-                                         d.report_utc, 'AMC1 ORO.FTL.105(10); ORO.FTL.105(8)', tz))
+                                         d.report_utc, 'ORO.FTL.105(28); ORO.FTL.105(8)', tz))
             elif pat['very_early_start'] or pat['early_start']:
                 findings.append(_finding('caution', 'circadian', 'Early report',
                                          f'Report at {_fmt(d.report_utc, tz)} requires waking in the early '

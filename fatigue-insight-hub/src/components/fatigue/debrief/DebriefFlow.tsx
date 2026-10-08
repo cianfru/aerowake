@@ -12,8 +12,7 @@ import { StudyEnrolmentDialog } from './StudyEnrolmentDialog';
 import { useDebriefs, useEnrolment } from './useStudy';
 
 /**
- * Opens the right step for a debrief: sign-in prompt for guests, the option to
- * contribute again for a pilot who opted out, then the blinded debrief sheet.
+ * Opens the right step for a debrief: sign-in prompt for guests, explicit study consent, then the blinded debrief sheet.
  * Mount only while open.
  */
 export function DebriefFlow({ duty, analysisId, onClose }: { duty: DutyAnalysis; analysisId?: string | null; onClose: () => void }) {
@@ -30,11 +29,12 @@ export function DebriefFlow({ duty, analysisId, onClose }: { duty: DutyAnalysis;
   if (!isAuthenticated) return <SignInPrompt onClose={onClose} />;
   if (enrolment.isError) return <ProblemDialog message={enrolment.error.message} onClose={onClose} />;
   if (!enrolment.data || debriefs.isLoading) return null;
-  // Every pilot contributes; only a pilot who opted out is asked to turn it back on.
-  if (!enrolment.data.enrolled && enrolment.data.withdrawn_at) {
+  // Study records require a separate, current consent for every pilot.
+  if (!enrolment.data.enrolled) {
     return (
       <StudyEnrolmentDialog
         open
+        rejoining={!!enrolment.data.withdrawn_at}
         onEnrolled={() => { joined.current = true; }}
         onOpenChange={(open) => { if (!open && !joined.current) onClose(); }}
       />

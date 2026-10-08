@@ -85,7 +85,7 @@ class EASAComplianceValidator:
         - Standard 2-pilot operations (Table 2 at reference time; Table 3
           when the state of acclimatisation is unknown)
         - Augmented crew 3/4-pilot operations (CS FTL.1.205(c)(2))
-        - ULR operations (Qatar FTL 7.18)
+        - ULR operations (Operator OM-A 7.18)
 
         ``reference_timezone`` is the time zone the crew member is
         acclimatised to (determine_acclimatisation); home base by default.
@@ -96,11 +96,30 @@ class EASAComplianceValidator:
         sectors = sum(not seg.is_deadhead for seg in duty.segments)
         actual_fdp = duty.fdp_hours
 
-        # ULR operations — Qatar FTL 7.18
+        # CS FTL.1.205(c) in-flight-rest extension is limited to three sectors.
+        # Do not grant an augmented allowance to an unsupported multi-sector duty.
+        if duty.is_augmented_crew and sectors > (augmented_params.max_sectors_augmented if augmented_params else 3):
+            return {
+                'max_fdp': None, 'extended_fdp': None, 'actual_fdp': actual_fdp,
+                'used_discretion': False, 'exceeds_discretion': False,
+                'planned_extension_fdp': None,
+                'reference': 'FDP not assessed: augmented in-flight-rest limits cover at most 3 operating sectors (CS FTL.1.205(c))',
+                'is_ulr': bool(duty.is_ulr), 'crew_composition': duty.crew_composition.value,
+            }
+
+        # ULR operations — Operator OM-A 7.18
         if getattr(duty, 'is_ulr', False) or (
             getattr(duty, 'is_ulr_operation', False) and
             getattr(duty, 'crew_composition', CrewComposition.STANDARD) == CrewComposition.AUGMENTED_4
         ):
+            if duty.rest_facility_class not in (None, RestFacilityClass.CLASS_1):
+                return {
+                    'max_fdp': None, 'extended_fdp': None, 'actual_fdp': actual_fdp,
+                    'used_discretion': False, 'exceeds_discretion': False,
+                    'planned_extension_fdp': None,
+                    'reference': 'ULR FDP not assessed: configured scheme requires class-1 rest facility',
+                    'is_ulr': True, 'crew_composition': duty.crew_composition.value,
+                }
             if ulr_params:
                 max_fdp = ulr_params.ulr_max_planned_fdp_hours
                 discretion = ulr_params.ulr_discretion_max_hours
@@ -114,7 +133,7 @@ class EASAComplianceValidator:
                 'used_discretion': actual_fdp > max_fdp,
                 'exceeds_discretion': actual_fdp > max_fdp + discretion,
                 'planned_extension_fdp': None,
-                'reference': 'ULR (operator approval)',
+                'reference': 'Configured ULR scheme (approval unverified)',
                 'is_ulr': True,
                 'crew_composition': getattr(duty, 'crew_composition', CrewComposition.STANDARD).value
                     if hasattr(getattr(duty, 'crew_composition', None), 'value') else 'standard',
@@ -142,8 +161,8 @@ class EASAComplianceValidator:
                     if hasattr(duty.crew_composition, 'value') else 'standard',
             }
 
-        # Qatar OM-A 7.6.3 Table 7-6 (same rows as ORO.FTL.205(b) Table 2) at reference time;
-        # Table 7-7 under Qatar Airways' approved FRM in an unknown state of acclimatisation.
+        # Operator OM-A 7.6.3 Table 7-6 (same rows as ORO.FTL.205(b) Table 2) at reference time;
+        # Table 7-7 under the supplied operator FRM scheme in an unknown state of acclimatisation.
         from models.data_models import AcclimatizationState
         from core.qatar_ftl import basic_max_fdp, extension_max_fdp, DISCRETION_HOURS
         minute = report_local.hour * 60 + report_local.minute
@@ -161,7 +180,7 @@ class EASAComplianceValidator:
             'used_discretion': used_discretion,
             'exceeds_discretion': actual_fdp > extended_fdp,
             'planned_extension_fdp': planned_extension,
-            'reference': 'ORO.FTL.205(b) Table 4, unknown acclimatisation (FRM)' if unknown else 'ORO.FTL.205(b) Table 2',
+            'reference': 'Configured scheme Table 7-7, unknown acclimatisation (FRM approval unverified)' if unknown else 'ORO.FTL.205(b) Table 2',
             'is_ulr': False,
             'crew_composition': getattr(duty, 'crew_composition', CrewComposition.STANDARD).value
                 if hasattr(getattr(duty, 'crew_composition', None), 'value') else 'standard',
@@ -211,7 +230,7 @@ class EASAComplianceValidator:
           late finish  — duty finishing 23:00–01:59
           night duty   — duty encroaching any portion of 02:00–04:59
         Reports 02:00–04:59 are night duties (not early starts).
-        WOCL encroachment (02:00–05:59, AMC1 ORO.FTL.105(10)) is reported
+        WOCL encroachment (02:00–05:59, ORO.FTL.105(28)) is reported
         separately as ``wocl_hours``.
         """
         wocl_encroachment = self.calculate_wocl_encroachment(

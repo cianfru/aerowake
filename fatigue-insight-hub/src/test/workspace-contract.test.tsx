@@ -54,9 +54,10 @@ describe('additive per-sector API contract', () => {
       }
     }
     expect(results.assumptions).toBeUndefined();
-    // Older responses carry no assumptions: the line states the model default.
-    expect(assumptionsLine(results)).toContain('average pre-duty nap');
-    expect(assumptionsLine(results)).toContain('last on-blocks');
+    // Older responses must not be given the current model's defaults retroactively.
+    expect(assumptionsLine(results)).toContain('does not identify all nap and headline-window assumptions');
+    expect(assumptionsLine(results)).not.toContain('average pre-duty nap');
+    expect(assumptionsLine(results)).not.toContain('last on-blocks');
   });
 
   it('colours calendar sectors by the model sector band, else by the duty peak band', () => {

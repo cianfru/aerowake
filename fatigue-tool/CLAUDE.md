@@ -14,7 +14,7 @@ Use [launch hardening](../docs/LAUNCH_HARDENING.md) and [roster reference](../do
 
 ## Project Overview
 
-Roster analysis and fatigue reporting for airline pilots. The current engine is aerowake-4.1-kss (Three Process Model, Ingre et al. 2014; 4.1 changed sleep estimation and the headline window, not the KSS core). Predictions and scoped checks are not operational fitness or compliance certification.
+Roster analysis and fatigue reporting for airline pilots. The current engine is aerowake-4.2-kss (Three Process Model, Ingre et al. 2014; 4.1 changed sleep estimation and the headline window, not the KSS core). Predictions and scoped checks are not operational fitness or compliance certification.
 
 **Purpose**: Predict pilot fatigue across multi-day rosters, identify WOCL (Window of Circadian Low, 02:00-05:59) risks, calculate sleep debt, and generate safety recommendations aligned with EU Regulation 965/2012 (EASA ORO.FTL).
 
@@ -37,7 +37,7 @@ fatigue-tool/
 ├── parsers/                       # Roster file parsing
 │   ├── __init__.py
 │   ├── roster_parser.py           # PDF/CSV parser + AirportDatabase
-│   └── qatar_crewlink_parser.py   # Qatar Airways CrewLink format
+│   └── qatar_crewlink_parser.py   # CrewLink format
 ├── visualization/                 # Charts and plots
 │   ├── __init__.py
 │   ├── chronogram.py              # 30-min resolution timeline
@@ -104,7 +104,7 @@ The `UnifiedSleepCalculator.estimate_sleep_blocks()` routes to one of 5 strategi
 | Recovery | Post-duty hotel/home | Environment-adjusted sleep block |
 | Normal | Default | 23:00-07:00 home bed |
 
-### Alertness Calculation (engine `aerowake-4.1-kss`, `core/alertness.py`)
+### Alertness Calculation (engine `aerowake-4.2-kss`, `core/alertness.py`)
 Open Three Process Model as validated on airline crew (Ingre et al. 2014, model 5c):
 ```
 X   = S_B + C + U            # homeostat with brake + circadian + ultradian
@@ -134,15 +134,15 @@ ORO.FTL.235 minimum rest; ORO.FTL.235(d) recovery rest (36h incl. 2 local nights
 ≤168h apart); FDP above the ORO.FTL.205 table. Disruptive elements follow
 ORO.FTL.105(8) (`EASAComplianceValidator.is_disruptive_duty`).
 
-### Augmented crew and Qatar FTL
-See `docs/QATAR_FTL.md`: IR = relief on that sector → augmented, whatever the rank; one crew
+### Augmented crew and operator FTL
+See `../docs/OPERATOR_FTL.md`: IR = relief on that sector → augmented, whatever the rank; one crew
 per pairing (IR leaving base → Crew B both legs; IR returning to base → Crew A both legs). Crew
 size (3/4, ULR) from the planned FDP for every long-haul duty without a pilot setting
 (`core/crew_inference.py`, run at the start of `simulate_roster`, before sleep); `crew_source`
-'roster_ir' | 'fdp' | 'pilot'. Pilot override: `duty_crew_overrides` `{composition, crew_set}`. All
+'roster_ir' | 'fdp' | 'pilot'. Pilot override: `duty_crew_overrides` `{composition, crew_set, rest_facility_class}`. All
 scored in-flight rest blocks are returned with `source` 'roster_ir' | 'planned' and
-`approved_plan` (Qatar figure). ULR = Qatar FTL 7.18 (`QatarFTL718Validator`), with the approved
-rest patterns `QATAR_ULR_REST_PATTERNS` (Figures 7-3..7-8). FDP limits are Qatar OM-A 7.6
+`approved_plan` (configured scheme figure). Current approval is unverified; ULR = configured operator OM-A 7.18 (`QatarFTL718Validator`), with the configured
+rest patterns `QATAR_ULR_REST_PATTERNS` (Figures 7-3..7-8). FDP limits are operator OM-A 7.6
 (`core/qatar_ftl.py`: Tables 7-6, 7-7, 7-8; Tables 7-9/7-10 in `AugmentedFDPParameters`); rest
 rules 7.6.6, 7.11, 7.13 in `core/qatar_rest.py`. Duties return `planned_extension_fdp_hours`
 and `fdp_limit_reference`.
@@ -275,8 +275,8 @@ Frontend expects ISO format datetimes and specific field names defined in Pydant
 When implementing features, reference these regulations:
 - **ORO.FTL.235** - Rest periods (requirements depend on home/away context)
 - **ORO.FTL.210 / .225** - Cumulative limits / standby
-- **AMC1 ORO.FTL.105(10)** - WOCL definition (02:00-05:59 home base time)
-- **AMC1 ORO.FTL.105(1)** - Acclimatization (±2h timezone band, 3 local nights)
+- **ORO.FTL.105(28)** - WOCL definition (02:00–05:59 in the acclimatised zone; UI uses a home-base reference)
+- **ORO.FTL.105(1)** - Acclimatisation by reference time, timezone difference and elapsed time
 
 ## Key Files for Context
 
@@ -288,4 +288,4 @@ When implementing features, reference these regulations:
 | `models/data_models.py` | All data structures, sleep quality logic |
 | `api/api_server.py` | REST API, Pydantic models, endpoint definitions |
 | `parsers/roster_parser.py` | PDF/CSV parsing, time validation, duty construction |
-| `parsers/qatar_crewlink_parser.py` | Qatar Airways CrewLink format parser |
+| `parsers/qatar_crewlink_parser.py` | CrewLink format parser |

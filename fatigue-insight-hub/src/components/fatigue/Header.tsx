@@ -1,3 +1,4 @@
+import { operatorLabel } from '@/lib/operator-label';
 import { useState } from 'react';
 import {
   Menu, Moon, Sun, LogIn, LogOut, Shield,
@@ -112,7 +113,7 @@ export function Header({ theme, onThemeChange }: HeaderProps) {
               <>
                 <span className="hidden max-w-[160px] truncate px-2 text-[13px] text-muted-foreground md:inline">
                   {user?.display_name || user?.email?.split('@')[0] || 'User'}
-                  {user?.company_name ? ` · ${user.company_name}` : ''}
+                  {user?.company_name ? ` · ${operatorLabel(user.company_name)}` : ''}
                 </span>
                 {user?.is_admin && (
                   <a

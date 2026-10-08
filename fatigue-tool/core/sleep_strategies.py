@@ -13,7 +13,7 @@ Each strategy follows the same pattern:
 Used as a mixin by UnifiedSleepCalculator.
 
 References:
-    Signal et al. (2009, 2013, 2014), Gander et al. (2013, 2014),
+    Signal et al. (2013, 2014, 2024), Gander et al. (2013, 2014),
     Roach et al. (2012), Arsintescu et al. (2022),
     Dijk & Czeisler (1994, 1995), Dinges et al. (1987)
 """
@@ -406,7 +406,7 @@ class SleepStrategyMixin:
 
         References:
             Arsintescu et al. (2022) J Sleep Res 31(3):e13521
-            Signal et al. (2013) Accid Anal Prev 53:30-37
+            Signal et al. (2013) Sleep 36:109-115 — in-flight sleep context
             Dijk & Czeisler (1994) Neurosci Lett 166(1):63-68  (WMZ)
 
         Returns:
@@ -527,7 +527,7 @@ class SleepStrategyMixin:
         duty: Duty,
         previous_duty: Optional[Duty]
     ) -> 'SleepStrategy':
-        """AUGMENTED_4 pre-duty sleep strategy per Qatar FTL 7.18.4.3.
+        """AUGMENTED_4 pre-duty sleep strategy per Operator OM-A 7.18.4.3.
 
         Generates two nights of sleep before the duty plus an optional
         pre-departure nap for evening departures, reflecting the 48h
@@ -711,7 +711,7 @@ class SleepStrategyMixin:
                 f"AUGMENTED_4 pre-duty: 2 nights {location_desc} sleep + "
                 f"{'pre-departure nap' if len(blocks) > 2 else 'no nap'} "
                 f"({total_effective:.1f}h effective). "
-                f"48h duty-free before a ULR departure (ULR approval)"
+                f"48h duty-free assumed before a ULR departure (configured scheme; approval unverified)"
             ),
             quality_analysis=quality_analyses
         )
@@ -1158,9 +1158,10 @@ class SleepStrategyMixin:
             sleep_start_hour=ns_hour,
             sleep_end_day=ne_day,
             sleep_end_hour=ne_hour,
-            basis=("Rest between duties is too short for one consolidated sleep, so it is split into "
-                   "a main sleep and this nap. Split sleep keeps performance close to one block when "
-                   "the total is the same (Jackson et al. 2014; Kosmadopoulos et al. 2017)."),
+            basis=("The model divides this sleep opportunity into a main sleep and a nap. "
+                   "Review both blocks: their timing and quality are assumptions. Split sleep has "
+                   "been studied experimentally (Jackson et al. 2014; Kosmadopoulos et al. 2014), "
+                   "but this does not guarantee the same personal recovery as a single block."),
         )
 
         total_effective = main_quality.effective_sleep_hours + nap_quality.effective_sleep_hours

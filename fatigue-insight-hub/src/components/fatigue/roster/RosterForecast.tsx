@@ -8,6 +8,8 @@ import { dutyDateLabel, dutyRoute } from './roster-utils';
 import { MonthStrip } from './MonthStrip';
 import { TextAction } from './primitives';
 import { SleepHabitsPanel } from '../SleepHabitsPanel';
+import { RosterContextBriefing } from './RosterContextBriefing';
+import { FATIGUE_INFO, InfoTooltip } from '@/components/ui/InfoTooltip';
 
 const hours = (n: number | undefined | null) => n != null && Number.isFinite(n) ? `${n.toFixed(1)}h` : '—';
 
@@ -18,6 +20,9 @@ export const WATCH_LEVELS = Array.from({ length: 8 }, (_, i) => 5 + i * 0.5);
 export function assumptionsLine(results: Pick<AnalysisResults, 'assumptions'>): string {
   const naps = results.assumptions?.napHabit;
   const window = results.assumptions?.headlineRiskWindow;
+  if (!naps || (window !== 'duty' && window !== 'fdp')) {
+    return 'Sleep is estimated. The saved analysis does not identify all nap and headline-window assumptions; re-analyse this roster to confirm them.';
+  }
   const rating = window === 'duty'
     ? 'rates each duty by its peak from report to release'
     : 'rates each duty by its peak from report to the last on-blocks';
@@ -35,9 +40,10 @@ interface ForecastProps {
   onConcern: (duty: DutyAnalysis, reference: number) => void;
   reference: number;
   onReferenceChange: (reference: number) => void;
+  onView?: (view: 'calendar' | 'recovery' | 'limits') => void;
 }
 
-export function RosterForecast({ results, reference, onReferenceChange, onDetails }: ForecastProps) {
+export function RosterForecast({ results, reference, onReferenceChange, onDetails, onView }: ForecastProps) {
   const rows = useMemo(() => buildRosterForecast(results, reference), [results, reference]);
   const watchHintId = useId();
   const first = rows.find(row => row.reachesWatch);
@@ -55,7 +61,7 @@ export function RosterForecast({ results, reference, onReferenceChange, onDetail
         <div className="space-y-1.5">
           <label htmlFor="watch-level" className="block text-xs font-medium">My watch level (KSS)</label>
           <select id="watch-level" aria-describedby={watchHintId} value={reference} onChange={e => onReferenceChange(Number(e.target.value))}
-            className="min-h-[38px] rounded-lg border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            className="min-h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             {WATCH_LEVELS.map(kss => <option key={kss} value={kss}>{kss.toFixed(1)}{kss === DEFAULT_WATCH_KSS ? ' (default)' : ''}</option>)}
           </select>
           <p id={watchHintId} className="max-w-[15rem] text-xs text-muted-foreground">Your own marker on the strip below; the model bands don&apos;t change.</p>
@@ -66,14 +72,14 @@ export function RosterForecast({ results, reference, onReferenceChange, onDetail
 
     <div className="forecast-facts" aria-live="polite">
       <div><p className="text-xs text-muted-foreground">First duty at or above your watch level</p>
-        <p className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">{first ? dutyDateLabel(first.duty) : assessed.length ? 'None this month' : 'Prediction unavailable'}</p>
+        <p className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">{first ? <button type="button" onClick={() => onDetails(first.duty)} className="min-h-11 rounded-md text-left underline decoration-border underline-offset-4 hover:decoration-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Review first watch duty on ${dutyDateLabel(first.duty)}`}>{dutyDateLabel(first.duty)}</button> : assessed.length ? assessed.length === rows.length ? 'None this month' : 'None among assessed duties' : 'Prediction unavailable'}</p>
         <p className="mt-1 text-sm text-muted-foreground">{first ? `${dutyRoute(first.duty)} · peak KSS ${first.peak!.toFixed(1)}` : `${assessed.length} of ${rows.length} duties have a prediction.`}</p>
       </div>
-      <div className="border-t border-border pt-5 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0"><p className="text-xs text-muted-foreground">Highest predicted sleepiness</p>
+      <div className="border-t border-border pt-5 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0"><p className="flex items-center gap-1.5 text-xs text-muted-foreground">Highest predicted sleepiness <InfoTooltip entry={FATIGUE_INFO.kss} /></p>
         {highest && highestLevel ? <>
           <p className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <span className={cn('text-[40px] font-semibold leading-none tracking-tight tabular', riskClasses(highestLevel).text)}>{highest.peak!.toFixed(1)}</span>
-            <span className="text-sm text-muted-foreground">KSS · {dutyDateLabel(highest.duty)}</span>
+            <button type="button" onClick={() => onDetails(highest.duty)} className="min-h-11 rounded-md text-left text-sm text-muted-foreground underline decoration-border underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Review highest predicted sleepiness on ${dutyDateLabel(highest.duty)}`}>KSS · {dutyDateLabel(highest.duty)}</button>
           </p>
           <p className="mt-2 text-xs text-muted-foreground">{RISK_LEVEL_LABELS[highestLevel]} band · KSS runs from 1 (extremely alert) to 9 (fighting sleep).</p>
         </> : <p className="mt-2 text-sm text-muted-foreground">Unavailable</p>}
@@ -81,6 +87,8 @@ export function RosterForecast({ results, reference, onReferenceChange, onDetail
     </div>
 
     <MonthStrip results={results} reference={reference} onDetails={onDetails} />
+
+    {onView && <RosterContextBriefing results={results} onDetails={onDetails} onView={onView} />}
 
     <div className="space-y-2 border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground">
       <p data-testid="forecast-assumptions">{assumptionsLine(results)}</p>

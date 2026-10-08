@@ -60,26 +60,34 @@ upgrades as described in [launch hardening](LAUNCH_HARDENING.md).
 
 ## Enrolment, consent and data protection
 
-Participation is the default for every signed-in pilot (`calibration-v2`): the
-model is calibrated on a pooled, pseudonymised average across all pilots, so the
-more pilots log, the better. A pilot's first in-flight rating, debrief or diary
-entry records participation on the account (`study_enrolled_at`,
-`study_consent_version`); there is no separate joining step. A pilot can stop
-contributing at any time (`study_withdrawn_at`); only then does the app show the
-information sheet again with an explicit "Contribute again" step, and new debriefs
-and diary entries are refused (403) while opted out. In-flight ratings from an
-opted-out pilot are kept for that pilot with `study_enrolled = false` and are left
-out of calibration. Guests' ratings stay on their device until they sign in. The
-information sheet reads its governance values from one place on each side
-(`fatigue-insight-hub/src/lib/study-config.ts`, `fatigue-tool/study/config.py`).
+Participation requires explicit, versioned opt-in (`calibration-v3-opt-in`). Signing
+in, saving a private in-flight rating or a prior automatic `calibration-v2`
+enrolment does not grant permission. The pilot reads the information sheet and
+checks an unchecked consent box before the API records the current version.
+Diary and debrief writes require that current grant; the ordinary roster tools
+and private in-flight log remain available without joining.
+
+In-flight rows are eligible only if consent is current and the recorded moment
+is at or after enrolment. Previously private ratings are never contributed
+retroactively. Joining clears any earlier contribution flags; stopping also
+clears existing in-flight contribution flags. Stop-and-delete covers debriefs,
+diary observations and in-flight rows, plus this account's queued and synced
+ratings on the device used to withdraw. Other devices' offline queues are not
+remotely erased; if later synced, those ratings stay private while withdrawn.
+Old-version study exports are historical personal records, not current grants;
+any future pooled analysis must check current account consent and row provenance.
+No automatic pooled calibration pipeline is provided by this repository.
+
+Governance values are mirrored in `fatigue-insight-hub/src/lib/study-config.ts`
+and `fatigue-tool/study/config.py`.
 Current values, pending owner confirmation:
 
 | Item | Value |
 |------|-------|
 | Data controller | the Aerowake project owner (a private individual) |
 | Contact | the in-app Support link |
-| Purpose | calibrating the Aerowake sleepiness model against what pilots actually feel, pooled and pseudonymised across all pilots; results will not be published |
-| Retention | until you stop contributing and delete it, or 24 months after your last activity |
+| Purpose | calibrating the Aerowake sleepiness model against what pilots actually feel, pooled and pseudonymised across participating pilots; results will not be published |
+| Retention | until the pilot deletes entries or their account; no automatic expiry currently exists |
 
 The sheet, the in-flight log and the debrief sheet state that ratings are pooled,
 pseudonymised, to calibrate the model; that entries are not a fatigue report to
@@ -89,12 +97,14 @@ single records or everything, and stop contributing; and that pseudonymised
 exports are not anonymous. Controlled rest is listed only "where your operator
 permits it". A debrief is not a fitness-for-duty assessment. If results were ever
 to be published, seek research ethics review and preregister first (see below).
-**Default participation of health-related data needs legal review before launch**
-(for example GDPR Art. 9 explicit consent and the pilot's home-country law, and a
-privacy notice at sign-up); that review remains a launch gate.
+**The service owner must still confirm the controller, a private contact channel,
+hosting/backup retention and the applicable legal basis before recruitment.**
+Explicit opt-in corrects the software flow; it does not establish legal approval.
+The formerly stated 24-month expiry had no deletion job and has been removed.
+Retention automation and a confirmed privacy notice remain release work.
 
 Withdrawal (`DELETE /api/study/enrolment?delete_data=true|false`) records the
-date and optionally deletes all debriefs and diary observations. Per-user limits:
+date and optionally deletes all debriefs, diary observations and in-flight ratings. Per-user limits:
 30 study writes and 60 reads per minute, 100 new study rows per rolling 24 hours
 and 3,000 stored debriefs.
 

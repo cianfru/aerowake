@@ -464,6 +464,7 @@ export function transformAnalysisResult(
         augmentationSuggested: duty.augmentation_suggested ?? false,
         crewSource: duty.crew_source ?? null,
         restFacilityClass: duty.rest_facility_class || null,
+        restFacilitySource: duty.rest_facility_source ?? null,
         isUlr: duty.is_ulr || false,
         acclimatizationState: duty.acclimatization_state || 'acclimatized',
         ulrCompliance: duty.ulr_compliance

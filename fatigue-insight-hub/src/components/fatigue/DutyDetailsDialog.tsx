@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { mapTimelinePoints } from '@/lib/transform-analysis';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { canBeAugmented } from '@/lib/crew';
-import type { CrewCompositionValue } from '@/lib/api-client';
+import type { CrewCompositionValue, RestFacilityClass } from '@/lib/api-client';
 import { DutyDebriefAction } from '@/components/fatigue/debrief/DutyDebriefAction';
 import { DutyAnalysis } from '@/types/fatigue';
 import { getDutyDetail } from '@/lib/api-client';
@@ -30,6 +30,8 @@ interface DutyDetailsDialogProps {
   onCrewReset?: (dutyId: string) => void;
   crewCompositionOverride?: CrewCompositionValue | null;
   onCrewCompositionChange?: (dutyId: string, composition: CrewCompositionValue | null) => void;
+  onRestFacilityChange?: (dutyId: string, facility: RestFacilityClass) => void;
+  restFacilityBusy?: boolean;
   /** Optional: start a fatigue report pre-filled for this duty. */
   onReportFatigue?: (duty: DutyAnalysis) => void;
 }
@@ -53,6 +55,8 @@ export function DutyDetailsDialog({
   onCrewReset,
   crewCompositionOverride,
   onCrewCompositionChange,
+  onRestFacilityChange,
+  restFacilityBusy,
   onReportFatigue,
 }: DutyDetailsDialogProps) {
   const [detailedDuty, setDetailedDuty] = useState<DutyAnalysis | null>(null);
@@ -161,6 +165,8 @@ export function DutyDetailsDialog({
                     onCrewChange={hasCrewContent ? onCrewChange : undefined}
                     onCrewReset={hasCrewContent ? onCrewReset : undefined}
                     hasCrewContent={!!hasCrewContent}
+                    onRestFacilityChange={onRestFacilityChange}
+                    restFacilityBusy={restFacilityBusy}
                     crewCompositionOverride={crewCompositionOverride}
                     onCrewCompositionChange={canBeAugmented(displayDuty) ? onCrewCompositionChange : undefined}
                   />

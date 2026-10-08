@@ -42,6 +42,8 @@ export interface InflightEntry {
 }
 
 let opening: Promise<IDBDatabase | null> | null = null;
+// Invalidates in-flight reads/uploads before an explicit local deletion.
+let inflightRevision = 0;
 
 function open(): Promise<IDBDatabase | null> {
   if (typeof indexedDB === 'undefined') return Promise.resolve(null);
@@ -94,7 +96,22 @@ export const offlineStore = {
     for (const e of all ?? []) if (e.status !== 'local') await run('inflight', 'readwrite', (s) => s.delete(e.clientId));
   },
   putInflight: (entry: InflightEntry) => run('inflight', 'readwrite', (s) => s.put(entry)),
-  deleteInflight: (clientId: string) => run('inflight', 'readwrite', (s) => s.delete(clientId)),
+  inflightRevision: () => inflightRevision,
+  deleteInflight: (clientId: string) => {
+    inflightRevision++;
+    return run('inflight', 'readwrite', (s) => s.delete(clientId));
+  },
+  /** Explicit delete-all only; sign-out must preserve unsynced ratings. */
+  async clearInflight(owner: string) {
+    inflightRevision++;
+    await run('inflight', 'readwrite', (s) => {
+      const cursor = s.index('owner').openCursor(IDBKeyRange.only(owner));
+      cursor.onsuccess = () => {
+        const row = cursor.result;
+        if (row) { row.delete(); row.continue(); }
+      };
+    });
+  },
   async listInflight(owner: string): Promise<InflightEntry[]> {
     const rows = await run<InflightEntry[]>('inflight', 'readonly', (s) => s.index('owner').getAll(owner));
     return (rows ?? []).sort((a, b) => Date.parse(b.recordedAtUtc) - Date.parse(a.recordedAtUtc));

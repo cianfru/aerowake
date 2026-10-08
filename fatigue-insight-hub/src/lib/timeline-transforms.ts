@@ -44,7 +44,7 @@ import {
 } from '@/lib/fatigue-utils';
 
 import { classifyKss, resolveKss, toUpperRisk, type RiskLevel } from '@/lib/risk-scale';
-import { utcDayHour } from '@/lib/timezone-utils';
+import { utcToTimezone } from '@/lib/timezone-utils';
 
 import type { DutyAnalysis, FlightSegment, RestDaySleep } from '@/types/fatigue';
 
@@ -55,9 +55,11 @@ type SleepFields = Omit<TimelineSleepBar, 'rowIndex' | 'startHour' | 'endHour' |
 // ---------------------------------------------------------------------------
 
 /** Extract day-of-month from a DutyAnalysis (timezone-safe). */
-function dutyDayOfMonth(duty: DutyAnalysis): number {
-  if (duty.dateString) return Number(duty.dateString.split('-')[2]);
-  return duty.date.getDate();
+function dutyDayOfMonth(duty: DutyAnalysis, month?: Date): number {
+  if (!month) return duty.dateString ? Number(duty.dateString.split('-')[2]) : duty.date.getDate();
+  const parts = duty.dateString?.split('-').map(Number);
+  const date = parts ? Date.UTC(parts[0], parts[1] - 1, parts[2]) : Date.UTC(duty.date.getFullYear(), duty.date.getMonth(), duty.date.getDate());
+  return Math.floor((date - Date.UTC(month.getFullYear(), month.getMonth(), 1)) / 86_400_000) + 1;
 }
 
 /** Duty peak KSS (backend max_kss, else the current model's index). */
@@ -142,7 +144,7 @@ const localTimes = (seg: FlightSegment): [number | undefined, number | undefined
   [parseTimeToHours(seg.departureTime), parseTimeToHours(seg.arrivalTime)];
 
 const utcTimes = (seg: FlightSegment): [number | undefined, number | undefined] =>
-  [parseUtcTimeStr(seg.departureTimeUtc) ?? undefined, parseUtcTimeStr(seg.arrivalTimeUtc) ?? undefined];
+  [parseUtcTimeStr(isoToZulu(seg.departureTimeUtc) ?? seg.departureTimeUtc) ?? undefined, parseUtcTimeStr(isoToZulu(seg.arrivalTimeUtc) ?? seg.arrivalTimeUtc) ?? undefined];
 
 /**
  * Clip a full-duty segment array to a single overnight bar slice.
@@ -179,11 +181,22 @@ function buildTrainingSegment(duty: DutyAnalysis, startHour: number, endHour: nu
   return { type: 'training', startHour, endHour, level: dutyBand(duty), kss: null, activityCode: duty.trainingCode ?? null };
 }
 
-/**
- * Where the duty peak sits in the grid: `checkInHour` on `startRow` plus the
- * time from report to the model's peak (peak_time_utc). No marker without one.
- */
-function peakMarker(duty: DutyAnalysis, startRow: number, checkInHour: number, maxRow: number): TimelinePeakMarker[] {
+type HomeMarkerClock = { month: Date; timezone: string };
+
+/** Resolve an instant on a wall-clock axis; elapsed hours cannot account for a DST change. */
+function homeMarkerPosition(instant: number, clock: HomeMarkerClock): { rowIndex: number; hour: number } | null {
+  try {
+    const local = utcToTimezone(new Date(instant).toISOString(), clock.timezone);
+    const monthStart = Date.UTC(clock.month.getFullYear(), clock.month.getMonth(), 1);
+    return {
+      rowIndex: Math.floor((Date.UTC(local.year, local.month - 1, local.day) - monthStart) / 86_400_000) + 1,
+      hour: local.hour,
+    };
+  } catch { return null; }
+}
+
+/** Place the actual peak instant on the selected clock, after validating it lies within duty. */
+function peakMarker(duty: DutyAnalysis, startRow: number, checkInHour: number, maxRow: number, homeClock?: HomeMarkerClock): TimelinePeakMarker[] {
   const kss = dutyPeak(duty);
   const peak = Date.parse(duty.peakTimeUtc ?? '');
   const report = Date.parse(duty.reportTimeUtc ?? '');
@@ -192,6 +205,11 @@ function peakMarker(duty: DutyAnalysis, startRow: number, checkInHour: number, m
   const offset = (peak - report) / 3_600_000;
   const span = Number.isFinite(release) ? (release - report) / 3_600_000 : duty.dutyHours;
   if (offset < -0.01 || offset > span + 0.01) return [];
+  if (homeClock) {
+    const position = homeMarkerPosition(peak, homeClock);
+    return position && position.rowIndex >= 1 && position.rowIndex <= maxRow
+      ? [{ ...position, kss, level: classifyKss(kss), duty }] : [];
+  }
   const continuous = checkInHour + Math.max(0, offset);
   const rowIndex = startRow + Math.floor(continuous / 24);
   if (rowIndex < 1 || rowIndex > maxRow) return [];
@@ -298,14 +316,14 @@ function addDaySleepBar(
  * starting that day, with its band. Notes such as WOCL or sleep live in the
  * duty tooltip, not the label column.
  */
-function buildMonthRowLabels(duties: DutyAnalysis[], month: Date): RowLabel[] {
+function buildMonthRowLabels(duties: DutyAnalysis[], month: Date, bars?: TimelineDutyBar[]): RowLabel[] {
   const dim = getDaysInMonth(month);
   const monthStart = startOfMonth(month);
   const labels: RowLabel[] = [];
 
   for (let d = 1; d <= dim; d++) {
     const dateObj = addDays(monthStart, d - 1);
-    const dayDuties = duties.filter((duty) => dutyDayOfMonth(duty) === d);
+    const dayDuties = bars ? [...new Set(bars.filter((bar) => bar.rowIndex === d).map((bar) => bar.duty))] : duties.filter((duty) => dutyDayOfMonth(duty, month) === d);
     const peaks = dayDuties.map(dutyPeak).filter((k): k is number => k != null);
     const peakKss = peaks.length ? Math.max(...peaks) : null;
     const level = dayDuties.length ? classifyKss(peakKss) : undefined;
@@ -335,8 +353,8 @@ function dutySlices(
   training: boolean,
 ): TimelineDutyBar[] {
   const overnight = endHour < startHour || (!training && startHour >= 16 && endHour < 10);
-  if (!overnight) return [{ rowIndex: startRow, startHour, endHour, duty, segments }];
-  return splitOvernightBar(startRow, startHour, endHour, maxRow).map((s) => ({
+  if (!overnight) return startRow >= 1 && startRow <= maxRow ? [{ rowIndex: startRow, startHour, endHour, duty, segments }] : [];
+  return splitOvernightBar(startRow, startHour, endHour, maxRow).filter((slice) => slice.rowIndex >= 1 && slice.rowIndex <= maxRow).map((s) => ({
     ...s,
     duty,
     segments: training
@@ -346,8 +364,14 @@ function dutySlices(
 }
 
 /** FDP limit marker, on the start row or the following one. */
-function fdpMarker(duty: DutyAnalysis, row: number, checkInHour: number, maxRow: number): TimelineFdpMarker[] {
-  if (!duty.maxFdpHours) return [];
+function fdpMarker(duty: DutyAnalysis, row: number, checkInHour: number, maxRow: number, homeClock?: HomeMarkerClock): TimelineFdpMarker[] {
+  if (!duty.maxFdpHours || !Number.isFinite(duty.maxFdpHours) || duty.maxFdpHours < 0) return [];
+  if (homeClock) {
+    const report = Date.parse(duty.reportTimeUtc ?? '');
+    const position = Number.isFinite(report) ? homeMarkerPosition(report + duty.maxFdpHours * 3_600_000, homeClock) : null;
+    return position && position.rowIndex >= 1 && position.rowIndex <= maxRow
+      ? [{ ...position, maxFdp: duty.maxFdpHours, duty }] : [];
+  }
   const end = checkInHour + duty.maxFdpHours;
   if (end <= 24) return [{ rowIndex: row, hour: end, maxFdp: duty.maxFdpHours, duty }];
   return row + 1 <= maxRow ? [{ rowIndex: row + 1, hour: end - 24, maxFdp: duty.maxFdpHours, duty }] : [];
@@ -373,8 +397,18 @@ export function homeBaseTransform(
   _statistics: { totalDuties: number; highRiskDuties: number; criticalRiskDuties: number },
   month: Date,
   restDaysSleep?: RestDaySleep[],
+  homeBaseTimezone?: string,
 ): TimelineData {
   const daysInMonth = getDaysInMonth(month);
+  const markerClock = homeBaseTimezone ? { month, timezone: homeBaseTimezone } : undefined;
+  const monthStart = Date.UTC(month.getFullYear(), month.getMonth(), 1);
+  const homeDay = (iso: string | undefined, fallback: number) => {
+    if (!homeBaseTimezone || !iso || !Number.isFinite(Date.parse(iso))) return fallback;
+    try {
+      const local = utcToTimezone(iso, homeBaseTimezone);
+      return Math.floor((Date.UTC(local.year, local.month - 1, local.day) - monthStart) / 86_400_000) + 1;
+    } catch { return fallback; }
+  };
   const dutyBars: TimelineDutyBar[] = [];
   const sleepBars: TimelineSleepBar[] = [];
   const irBars: TimelineIRBar[] = [];
@@ -382,7 +416,7 @@ export function homeBaseTransform(
   const peakMarkers: TimelinePeakMarker[] = [];
 
   for (const duty of duties) {
-    const dayOfMonth = dutyDayOfMonth(duty);
+    const dayOfMonth = dutyDayOfMonth(duty, month);
 
     // ---- Duty bars ----
     if (isTrainingDuty(duty)) {
@@ -390,7 +424,7 @@ export function homeBaseTransform(
       const endH = parseTimeToHours(duty.releaseTimeLocal);
       if (startH !== undefined && endH !== undefined) {
         dutyBars.push(...dutySlices(duty, dayOfMonth, startH, endH, [buildTrainingSegment(duty, startH, endH)], daysInMonth, true));
-        peakMarkers.push(...peakMarker(duty, dayOfMonth, startH, daysInMonth));
+        peakMarkers.push(...peakMarker(duty, dayOfMonth, startH, daysInMonth, markerClock));
       }
     } else if (duty.flightSegments.length > 0) {
       const [firstDep] = localTimes(duty.flightSegments[0]);
@@ -403,8 +437,8 @@ export function homeBaseTransform(
       if (checkInHour !== undefined && endHour !== undefined) {
         const segments = buildSegments(duty, checkInHour, endHour, localTimes);
         dutyBars.push(...dutySlices(duty, dayOfMonth, checkInHour, endHour, segments, daysInMonth, false));
-        fdpMarkers.push(...fdpMarker(duty, dayOfMonth, checkInHour, daysInMonth));
-        peakMarkers.push(...peakMarker(duty, dayOfMonth, checkInHour, daysInMonth));
+        fdpMarkers.push(...fdpMarker(duty, dayOfMonth, checkInHour, daysInMonth, markerClock));
+        peakMarkers.push(...peakMarker(duty, dayOfMonth, checkInHour, daysInMonth, markerClock));
       }
     }
 
@@ -423,8 +457,8 @@ export function homeBaseTransform(
       if (blocksWithPos.length >= 2) {
         blocksWithPos.forEach((block, blockIdx) => {
           const fields = baseSleepFields(est, duty, { blockIndex: blockIdx, block });
-          addDaySleepBar(sleepBars, fields, block.sleepStartDayHomeTz!, block.sleepStartHourHomeTz!,
-            block.sleepEndDayHomeTz!, block.sleepEndHourHomeTz!, daysInMonth);
+          addDaySleepBar(sleepBars, fields, homeDay(block.sleepStartUtc, block.sleepStartDayHomeTz!), block.sleepStartHourHomeTz!,
+            homeDay(block.sleepEndUtc, block.sleepEndDayHomeTz!), block.sleepEndHourHomeTz!, daysInMonth);
         });
       } else if (
         est.sleepStartDayHomeTz != null &&
@@ -432,8 +466,8 @@ export function homeBaseTransform(
         est.sleepEndDayHomeTz != null &&
         est.sleepEndHourHomeTz != null
       ) {
-        addDaySleepBar(sleepBars, baseSleepFields(est, duty), est.sleepStartDayHomeTz, est.sleepStartHourHomeTz,
-          est.sleepEndDayHomeTz, est.sleepEndHourHomeTz, daysInMonth);
+        addDaySleepBar(sleepBars, baseSleepFields(est, duty), homeDay(est.sleepStartIso, est.sleepStartDayHomeTz), est.sleepStartHourHomeTz,
+          homeDay(est.sleepEndIso, est.sleepEndDayHomeTz), est.sleepEndHourHomeTz, daysInMonth);
       }
     }
 
@@ -445,7 +479,7 @@ export function homeBaseTransform(
         block.endDayHomeTz == null ||
         block.endHourHomeTz == null
       ) continue;
-      for (const s of splitOvernightBar(block.startDayHomeTz, block.startHourHomeTz, block.endHourHomeTz, daysInMonth)) {
+      for (const s of splitOvernightBar(homeDay(block.startUtc, block.startDayHomeTz), block.startHourHomeTz, block.endHourHomeTz, daysInMonth)) {
         irBars.push({
           rowIndex: s.rowIndex,
           startHour: s.startHour,
@@ -470,8 +504,8 @@ export function homeBaseTransform(
         block.sleepEndHourHomeTz == null
       ) return;
       const fields = restDaySleepFields(restDay, blockIdx, block.sleepStartHourHomeTz, block.sleepEndHourHomeTz);
-      addDaySleepBar(sleepBars, fields, block.sleepStartDayHomeTz, block.sleepStartHourHomeTz,
-        block.sleepEndDayHomeTz, block.sleepEndHourHomeTz, daysInMonth);
+      addDaySleepBar(sleepBars, fields, homeDay(block.sleepStartUtc ?? block.sleepStartIso, block.sleepStartDayHomeTz), block.sleepStartHourHomeTz,
+        homeDay(block.sleepEndUtc ?? block.sleepEndIso, block.sleepEndDayHomeTz), block.sleepEndHourHomeTz, daysInMonth);
     });
   }
 
@@ -483,7 +517,7 @@ export function homeBaseTransform(
     fdpMarkers,
     peakMarkers,
     ...STATIC_BANDS(),
-    rowLabels: buildMonthRowLabels(duties, month),
+    rowLabels: buildMonthRowLabels(duties, month, dutyBars),
     totalRows: daysInMonth,
     xAxisLabel: 'Time of day (home base)',
   };
@@ -527,16 +561,53 @@ function addUtcSleepBar(
 /**
  * Transform DutyAnalysis[] into TimelineData for the UTC (Zulu) view.
  *
- * Duty bars use UTC sector times. Sleep bars prefer ISO timestamps converted
- * to UTC day/hour, falling back to location-TZ precomputed fields.
+ * Duty bars use UTC sector times. Sleep bars require explicit UTC timestamps; location-clock fields cannot
+ * be placed on a UTC axis without their timezone.
  */
+/** Home-base 02:00–06:00 reference on the UTC axis, including DST and date wrap.
+ * Quarter-hour cells represent all current IANA offsets without assuming a
+ * fixed offset for the month. Missing/invalid timezone means no guessed band.
+ */
+function utcHomeNightBands(month: Date, timezone?: string): WoclBand[] {
+  if (!timezone) return [];
+  const bands: WoclBand[] = [];
+  const monthStart = Date.UTC(month.getFullYear(), month.getMonth(), 1);
+  try {
+    for (let day = 1; day <= getDaysInMonth(month); day++) {
+      let start: number | null = null;
+      for (let step = 0; step <= 96; step++) {
+        const utcHour = step / 4;
+        const localHour = step < 96 ? utcToTimezone(new Date(monthStart + (day - 1) * 86_400_000 + utcHour * 3_600_000).toISOString(), timezone).hour : -1;
+        const inWindow = localHour >= WOCL_START && localHour < WOCL_END;
+        if (inWindow && start == null) start = utcHour;
+        if (!inWindow && start != null) {
+          bands.push({ rowIndex: day, startHour: start, endHour: utcHour });
+          start = null;
+        }
+      }
+    }
+  } catch { return []; }
+  return bands;
+}
+
 export function utcTransform(
   duties: DutyAnalysis[],
   _statistics: { totalDuties: number; highRiskDuties: number; criticalRiskDuties: number },
   month: Date,
   restDaysSleep?: RestDaySleep[],
+  homeBaseTimezone?: string,
 ): TimelineData {
   const daysInMonth = getDaysInMonth(month);
+  const monthStart = Date.UTC(month.getFullYear(), month.getMonth(), 1);
+  // A previous-month instant is row 0 (or less), never the same numbered
+  // day of this month. The slicers clip it to the actual visible dates.
+  const utcPosition = (iso: string) => {
+    const instant = new Date(iso);
+    return {
+      day: Math.floor((Date.UTC(instant.getUTCFullYear(), instant.getUTCMonth(), instant.getUTCDate()) - monthStart) / 86_400_000) + 1,
+      hour: instant.getUTCHours() + instant.getUTCMinutes() / 60,
+    };
+  };
   const dutyBars: TimelineDutyBar[] = [];
   const sleepBars: TimelineSleepBar[] = [];
   const irBars: TimelineIRBar[] = [];
@@ -544,13 +615,13 @@ export function utcTransform(
   const peakMarkers: TimelinePeakMarker[] = [];
 
   for (const duty of duties) {
-    const dayOfMonth = dutyDayOfMonth(duty);
+    const dayOfMonth = dutyDayOfMonth(duty, month);
 
     // ---- Duty bars ----
     if (isTrainingDuty(duty)) {
       if (duty.reportTimeUtc && duty.releaseTimeUtc) {
-        const start = utcDayHour(duty.reportTimeUtc);
-        const end = utcDayHour(duty.releaseTimeUtc);
+        const start = utcPosition(duty.reportTimeUtc);
+        const end = utcPosition(duty.releaseTimeUtc);
         dutyBars.push(...dutySlices(duty, start.day, start.hour, end.hour, [buildTrainingSegment(duty, start.hour, end.hour)], daysInMonth, true));
         peakMarkers.push(...peakMarker(duty, start.day, start.hour, daysInMonth));
       }
@@ -561,7 +632,7 @@ export function utcTransform(
       let checkInDay = dayOfMonth;
       let checkInHour: number | undefined;
       if (duty.reportTimeUtc && /^\d{4}-\d{2}-\d{2}T/.test(duty.reportTimeUtc)) {
-        const parsed = utcDayHour(duty.reportTimeUtc);
+        const parsed = utcPosition(duty.reportTimeUtc);
         checkInDay = parsed.day;
         checkInHour = parsed.hour;
       }
@@ -570,23 +641,17 @@ export function utcTransform(
         if (checkInHour < 0) checkInHour += 24;
       }
 
-      if (checkInHour !== undefined && lastArrUtc !== undefined) {
-        const endHour = lastArrUtc;
+      const releaseHour = duty.releaseTimeUtc ? parseUtcTimeStr(isoToZulu(duty.releaseTimeUtc) ?? duty.releaseTimeUtc) : null;
+      const endHour = releaseHour ?? lastArrUtc;
+      if (checkInHour !== undefined && endHour !== undefined) {
         const segments = buildSegments(duty, checkInHour, endHour, utcTimes);
-        const overnight = endHour < checkInHour;
-        if (overnight) {
-          for (const s of splitOvernightBar(checkInDay, checkInHour, endHour, daysInMonth)) {
-            dutyBars.push({ ...s, duty, segments: clipSegmentsToSlice(segments, s.startHour, s.endHour, !!s.isOvernightContinuation) });
-          }
-        } else {
-          dutyBars.push({ rowIndex: checkInDay, startHour: checkInHour, endHour, duty, segments });
-        }
+        dutyBars.push(...dutySlices(duty, checkInDay, checkInHour, endHour, segments, daysInMonth, false));
         fdpMarkers.push(...fdpMarker(duty, checkInDay, checkInHour, daysInMonth));
         peakMarkers.push(...peakMarker(duty, checkInDay, checkInHour, daysInMonth));
       }
     }
 
-    // ---- Sleep bars (ISO → UTC preferred, fallback to location-TZ precomputed) ----
+    // ---- Sleep bars (explicit ISO UTC instants only) ----
     const est = duty.sleepEstimate;
     if (est && est.sleepStrategy !== 'ulr_pre_duty') {
       const blocksWithUtc = (est.sleepBlocks ?? []).filter((b) => b.sleepStartUtc && b.sleepEndUtc);
@@ -594,8 +659,8 @@ export function utcTransform(
       if (blocksWithUtc.length >= 2) {
         blocksWithUtc.forEach((block, blockIdx) => {
           const fields = baseSleepFields(est, duty, { blockIndex: blockIdx, block });
-          const s = utcDayHour(block.sleepStartUtc!);
-          const e = utcDayHour(block.sleepEndUtc!);
+          const s = utcPosition(block.sleepStartUtc!);
+          const e = utcPosition(block.sleepEndUtc!);
           addUtcSleepBar(sleepBars, s.day, s.hour, e.day, e.hour, fields, daysInMonth);
         });
       } else {
@@ -605,11 +670,9 @@ export function utcTransform(
         let endHour: number | undefined;
 
         if (est.sleepStartIso && est.sleepEndIso) {
-          const s = utcDayHour(est.sleepStartIso);
-          const e = utcDayHour(est.sleepEndIso);
+          const s = utcPosition(est.sleepStartIso);
+          const e = utcPosition(est.sleepEndIso);
           [startDay, startHour, endDay, endHour] = [s.day, s.hour, e.day, e.hour];
-        } else if (est.sleepStartDay != null && est.sleepEndDay != null) {
-          [startDay, startHour, endDay, endHour] = [est.sleepStartDay, est.sleepStartHour ?? 0, est.sleepEndDay, est.sleepEndHour ?? 0];
         }
 
         if (startDay != null && startHour != null && endDay != null && endHour != null) {
@@ -621,8 +684,8 @@ export function utcTransform(
     // ---- In-flight rest bars (UTC ISO) ----
     for (const block of duty.inflightRestBlocks) {
       if (!block.startUtc || !block.endUtc) continue;
-      const start = utcDayHour(block.startUtc);
-      const end = utcDayHour(block.endUtc);
+      const start = utcPosition(block.startUtc);
+      const end = utcPosition(block.endUtc);
       for (const s of splitOvernightBar(start.day, start.hour, end.hour, daysInMonth)) {
         irBars.push({
           rowIndex: s.rowIndex,
@@ -647,11 +710,9 @@ export function utcTransform(
       let endHour: number | undefined;
 
       if (block.sleepStartIso && block.sleepEndIso) {
-        const s = utcDayHour(block.sleepStartIso);
-        const e = utcDayHour(block.sleepEndIso);
+        const s = utcPosition(block.sleepStartIso);
+        const e = utcPosition(block.sleepEndIso);
         [startDay, startHour, endDay, endHour] = [s.day, s.hour, e.day, e.hour];
-      } else if (block.sleepStartDay != null && block.sleepEndDay != null) {
-        [startDay, startHour, endDay, endHour] = [block.sleepStartDay, block.sleepStartHour ?? 0, block.sleepEndDay, block.sleepEndHour ?? 0];
       }
 
       if (startDay != null && startHour != null && endDay != null && endHour != null) {
@@ -667,8 +728,9 @@ export function utcTransform(
     inflightRestBars: irBars,
     fdpMarkers,
     peakMarkers,
-    ...STATIC_BANDS(),
-    rowLabels: buildMonthRowLabels(duties, month),
+    woclBands: utcHomeNightBands(month, homeBaseTimezone),
+    wmzBands: [],
+    rowLabels: buildMonthRowLabels(duties, month, dutyBars),
     totalRows: daysInMonth,
     xAxisLabel: 'Time of day (UTC)',
   };

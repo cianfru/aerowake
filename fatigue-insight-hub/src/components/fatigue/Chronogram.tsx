@@ -19,6 +19,7 @@ interface ChronogramProps {
   pilotName?: string;
   pilotBase?: string;
   pilotAircraft?: string;
+  homeBaseTimezone?: string;
   onDutySelect: (duty: DutyAnalysis) => void;
   selectedDuty: DutyAnalysis | null;
   restDaysSleep?: RestDaySleep[];
@@ -33,44 +34,44 @@ interface ChronogramProps {
 
 type ChronogramTab = 'homebase' | 'utc';
 
-export function Chronogram({ duties, statistics, month, pilotBase, onDutySelect, selectedDuty, restDaysSleep, analysisId, standbyPeriods, headingId = 'chronogram-heading', alertnessTimeline }: ChronogramProps) {
+export function Chronogram({ duties, statistics, month, pilotBase, homeBaseTimezone, onDutySelect, selectedDuty, restDaysSleep, analysisId, standbyPeriods, headingId = 'chronogram-heading', alertnessTimeline }: ChronogramProps) {
   const [activeTab, setActiveTab] = useState<ChronogramTab>('homebase');
   const sleepEdits = useSleepEdits(analysisId);
 
   const homeBaseData = useMemo(
     () => ({
-      ...homeBaseTransform(duties, statistics, month, restDaysSleep),
+      ...homeBaseTransform(duties, statistics, month, restDaysSleep, homeBaseTimezone),
       standbyBars: standbyBarsForMonth(standbyPeriods, month),
     }),
-    [duties, statistics, month, restDaysSleep, standbyPeriods],
+    [duties, statistics, month, restDaysSleep, standbyPeriods, homeBaseTimezone],
   );
 
   const utcData = useMemo(
-    () => utcTransform(duties, statistics, month, restDaysSleep),
-    [duties, statistics, month, restDaysSleep],
+    () => utcTransform(duties, statistics, month, restDaysSleep, homeBaseTimezone),
+    [duties, statistics, month, restDaysSleep, homeBaseTimezone],
   );
 
   return (
     <AlertnessSamplesContext.Provider value={alertnessTimeline ?? NO_SAMPLES}>
     <section id="roster-calendar" aria-labelledby={headingId} className="instrument-surface min-w-0 scroll-mt-32 space-y-5 px-3 sm:px-5 md:px-8">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ChronogramTab)}>
-        <div className="flex flex-wrap items-end justify-between gap-3 px-1 sm:px-0">
-          <div className="space-y-1">
-            <h2 id={headingId} tabIndex={-1} className="text-title font-semibold focus:outline-none">Roster calendar</h2>
-            <p className="text-sm text-muted-foreground">Each duty in its predicted sleepiness band, with estimated sleep. Select a bar for details.</p>
-          </div>
-          <TabsList className="h-auto gap-4 rounded-none bg-transparent p-0" aria-label="Calendar time reference">
+        <div className="space-y-1 px-1 sm:px-0">
+          <div className="flex items-center justify-between gap-2">
+            <h2 id={headingId} tabIndex={-1} className="text-lg font-semibold focus:outline-none sm:text-xl">Roster calendar</h2>
+          <TabsList className="h-auto shrink-0 gap-3 rounded-none bg-transparent p-0" aria-label="Calendar time reference">
             {([['homebase', 'Home base'], ['utc', 'UTC']] as const).map(([v, l]) => (
               <TabsTrigger
                 key={v}
                 value={v}
                 title={v === 'homebase' && pilotBase ? `Times in ${pilotBase} local time` : undefined}
-                className="rounded-none border-b-2 border-transparent px-0 pb-1 pt-0 text-[13px] text-muted-foreground shadow-none data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                className="min-h-11 rounded-none border-b-2 border-transparent px-0 pb-1 pt-0 text-[13px] text-muted-foreground shadow-none data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
               >
                 {l}
               </TabsTrigger>
             ))}
           </TabsList>
+          </div>
+          <p className="text-sm text-muted-foreground">Duties, sleep and body-clock timing.</p>
         </div>
 
         <TabsContent value="homebase" className="mt-4">
@@ -96,7 +97,7 @@ export function Chronogram({ duties, statistics, month, pilotBase, onDutySelect,
 
       {/* Apply bar — shows while sleep edits are pending */}
       {sleepEdits.hasEdits && (
-        <div className="sticky bottom-3 z-10 max-md:bottom-24 flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3" style={{ boxShadow: 'var(--shadow-elevated)' }}>
+        <div className="sticky bottom-3 z-10 max-md:bottom-24 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3" style={{ boxShadow: 'var(--shadow-elevated)' }}>
           <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
             {sleepEdits.editCount} sleep {sleepEdits.editCount > 1 ? 'edits' : 'edit'} pending
@@ -114,7 +115,7 @@ export function Chronogram({ duties, statistics, month, pilotBase, onDutySelect,
 
       {/* After recalculation, with no new edits pending */}
       {sleepEdits.hasOriginal && !sleepEdits.hasEdits && (
-        <div className="sticky bottom-3 z-10 max-md:bottom-24 flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-card px-4 py-3" style={{ boxShadow: 'var(--shadow-elevated)' }}>
+        <div className="sticky bottom-3 z-10 max-md:bottom-24 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-card px-4 py-3" style={{ boxShadow: 'var(--shadow-elevated)' }}>
           <span className="text-sm text-muted-foreground">Includes your sleep changes, saved with this roster</span>
           <Button variant="outline" size="sm" onClick={sleepEdits.resetToOriginal} disabled={sleepEdits.isApplying}>
             <RotateCcw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />

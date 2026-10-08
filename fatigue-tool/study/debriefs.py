@@ -13,12 +13,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from auth.dependencies import get_current_user
 from core.published_tpm import predict
-from db.models import DutyDebrief, PilotObservation
+from db.models import DutyDebrief, PilotObservation, InflightLog
 from db.session import get_db
 from study import config
 from study.limits import enforce_daily_cap, participant_id, throttle
@@ -332,19 +332,10 @@ def has_opted_out(user):
     return getattr(user, 'study_withdrawn_at', None) is not None
 
 
-def record_participation(user, now=None):
-    """Every pilot contributes: the first rating records participation under the
-    current notice (shown where the pilot saves it). A pilot who opted out stays out."""
-    if has_opted_out(user) or is_enrolled(user):
-        return
-    user.study_enrolled_at = now or utc_now()
-    user.study_consent_version = config.CONSENT_VERSION
-
-
 async def require_enrolled(user=Depends(get_current_user)):
-    if has_opted_out(user):
-        raise HTTPException(403, 'You have stopped contributing ratings. Turn it back on in your account to save debriefs.')
-    record_participation(user)
+    # A prior notice or a first rating is not affirmative, versioned consent.
+    if not is_enrolled(user):
+        raise HTTPException(403, 'Choose whether to contribute after reading the study information before saving a debrief or diary entry.')
     return user
 
 
@@ -374,6 +365,11 @@ async def enrol(body: EnrolIn, user=Depends(get_current_user), db=Depends(get_db
     throttle(user.id, 'study-write', config.WRITES_PER_MINUTE)
     if body.consent_version != config.CONSENT_VERSION:
         raise HTTPException(409, 'The study information has changed. Please read it again before joining.')
+    if is_enrolled(user):
+        return await _enrolment(user, db)  # safe retry does not reset valid contributions
+    # New consent covers future contributions only, never earlier private or
+    # implicitly enrolled ratings. Rejoining does not revive withdrawn data.
+    await db.execute(update(InflightLog).where(InflightLog.user_id == user.id).values(study_enrolled=False))
     user.study_enrolled_at = utc_now()
     user.study_consent_version = config.CONSENT_VERSION
     user.study_withdrawn_at = None
@@ -385,8 +381,11 @@ async def enrol(body: EnrolIn, user=Depends(get_current_user), db=Depends(get_db
 async def withdraw(delete_data: bool = Query(False), user=Depends(get_current_user), db=Depends(get_db)):
     throttle(user.id, 'study-write', config.WRITES_PER_MINUTE)
     user.study_withdrawn_at = utc_now()
-    deleted = dict(debriefs=0, observations=0)
+    deleted = dict(debriefs=0, observations=0, inflight=0)
+    # Existing ratings stay private after withdrawal, including on later re-enrolment.
+    await db.execute(update(InflightLog).where(InflightLog.user_id == user.id).values(study_enrolled=False))
     if delete_data:
+        deleted['inflight'] = (await db.execute(delete(InflightLog).where(InflightLog.user_id == user.id))).rowcount or 0
         deleted['debriefs'] = (await db.execute(delete(DutyDebrief).where(DutyDebrief.user_id == user.id))).rowcount or 0
         deleted['observations'] = (await db.execute(
             delete(PilotObservation).where(PilotObservation.user_id == user.id))).rowcount or 0

@@ -1,4 +1,4 @@
-"""Qatar Airways rest rules beyond the ORO.FTL.235 minimums, OM-A Chapter 7.
+"""Configured operator rest rules beyond the ORO.FTL.235 minimums, OM-A Chapter 7.
 
 Scoped to the supplied activities, like the rest of easa_checks:
 
@@ -46,7 +46,7 @@ def table_7_12(max_difference_hours: float, elapsed_hours: float) -> int:
 
 
 def _offset_hours(tz: str, at: datetime) -> float:
-    return pytz.timezone(tz).utcoffset(at.replace(tzinfo=None)).total_seconds() / 3600
+    return at.astimezone(pytz.timezone(tz)).utcoffset().total_seconds() / 3600
 
 
 def _signed_difference(duty, home_tz: str) -> float:
@@ -108,9 +108,11 @@ def run(roster, duties: Sequence, activities: Sequence, tz: str,
     base = roster.pilot_base
 
     # ---- 7.6.6(3) / 7.13.5(2) 14 h rest; 7.13.6 possible reduced rest --------------
-    for prev, nxt in zip(duties, duties[1:]):
+    for prev, nxt in zip(activities, activities[1:]):
         if not base:
             break
+        if prev.duty_type == DutyType.HOME_STANDBY:
+            continue
         rest = (nxt.report_time_utc - prev.release_time_utc).total_seconds() / 3600
         at_home = not prev.segments or prev.segments[-1].arrival_airport.code == base
         floor = 12.0 if at_home else 10.0
@@ -121,15 +123,16 @@ def run(roster, duties: Sequence, activities: Sequence, tz: str,
         if (augmented or zones) and rest < need - 1e-9:
             why = ('after an FDP extended by in-flight rest (augmented crew)' if augmented
                    else 'away from base after an FDP crossing 4 or more time zones (CS FTL.1.235(b))')
-            out.append(finding('min_rest', 'CS FTL.1.235(b); augmented-crew rest', 'warning', 'Rest shorter than 14 h',
+            out.append(finding('min_rest', 'Configured scheme §7.6.6 / §7.13.5 · compare CS FTL.1.235(b)', 'warning', 'Rest shorter than 14 h',
                                f'{h(rest)} between release {fmt(prev.release_time_utc, tz)} and report '
                                f'{fmt(nxt.report_time_utc, tz)}; {why} the minimum is {h(need)}.',
                                prev.release_time_utc, nxt.report_time_utc, rest, round(need, 2)))
-        elif floor - 1e-9 <= rest < prev.duty_hours - 1e-9:
-            out.append(finding('reduced_rest', 'ORO.FTL.235(c)', 'info', 'Possible reduced rest',
+        elif nxt.duty_type == DutyType.FLIGHT and floor - 1e-9 <= rest < prev.duty_hours - 1e-9:
+            out.append(finding('reduced_rest', 'Configured scheme §7.13.6 · compare ORO.FTL.235(c)', 'warning', 'Reduced rest needs approval and compensation',
                                f'{h(rest)} after a {h(prev.duty_hours)} duty ({fmt(prev.release_time_utc, tz)}). '
-                               'Under reduced rest the next rest is extended and the next FDP reduced by '
-                               'the difference; at most 2 between recovery rests.',
+                               'This is shorter than the preceding duty. Reduced-rest approval is not verified; '
+                               'the configured scheme also requires compensatory rest and a reduced next FDP. '
+                               'Those consequences are not assessed here.',
                                prev.release_time_utc, nxt.report_time_utc, rest, round(prev.duty_hours, 2)))
 
     # ---- 7.13.5(1) Table 7-12 and east-west transitions -----------------------------
@@ -149,7 +152,7 @@ def run(roster, duties: Sequence, activities: Sequence, tz: str,
                     elapsed = (last.release_time_utc - rotation[0].report_time_utc).total_seconds() / 3600
                     need = table_7_12(abs(signed), elapsed)
                     if rest_nights < need:
-                        out.append(finding('time_zone_rest', 'CS FTL.1.235(b)', 'warning',
+                        out.append(finding('time_zone_rest', 'Configured scheme §7.13.5 · compare CS FTL.1.235(b)', 'warning',
                                            'Too few local nights at base after a time-zone rotation',
                                            f'{rest_nights} local night{"s" if rest_nights != 1 else ""} at base after '
                                            f'returning {fmt(last.release_time_utc, tz)}; a rotation of '
@@ -160,7 +163,7 @@ def run(roster, duties: Sequence, activities: Sequence, tz: str,
                     and abs(signed) >= EAST_WEST_BACK_HOURS - 1e-9 and signed * previous_crossing[0] < 0:
                 nights = _local_nights_between(previous_crossing[1], rotation[0].report_time_utc, home_tz)
                 if nights < EAST_WEST_LOCAL_NIGHTS:
-                    out.append(finding('time_zone_rest', 'CS FTL.1.235(b)', 'warning',
+                    out.append(finding('time_zone_rest', 'Configured scheme §7.13.5 · compare CS FTL.1.235(b)', 'warning',
                                        'East-west transition without 3 local nights',
                                        f'{nights} local night{"s" if nights != 1 else ""} at base before the '
                                        f'{fmt(rotation[0].report_time_utc, tz)} rotation, which crosses time zones '
@@ -180,7 +183,7 @@ def run(roster, duties: Sequence, activities: Sequence, tz: str,
             prev_home = not prev.segments or prev.segments[-1].arrival_airport.code == base
             if prev_home and (p['late_finish'] or p['night_duty']) and n['early_start'] \
                     and _local_nights_between(prev.release_time_utc, nxt.report_time_utc, roster.home_base_timezone) < 1:
-                out.append(finding('disruptive', 'CS FTL.1.235(a)', 'warning',
+                out.append(finding('disruptive', 'Configured scheme §7.13.4 · compare CS FTL.1.235(a)', 'warning',
                                    'Late finish or night duty followed by an early start',
                                    f'No local night between release {fmt(prev.release_time_utc, tz)} and the '
                                    f'early start {fmt(nxt.report_time_utc, tz)} at base.',
@@ -189,7 +192,7 @@ def run(roster, duties: Sequence, activities: Sequence, tz: str,
         count = sum(1 for d in duties if a_end <= d.report_time_utc < b_start and disruptive[id(d)]['is_disruptive'])
         length = (b_end - b_start).total_seconds() / 3600
         if count >= DISRUPTIVE_COUNT and length < DISRUPTIVE_RECOVERY_HOURS - 1e-9:
-            out.append(finding('disruptive', 'CS FTL.1.235(a)', 'warning',
+            out.append(finding('disruptive', 'Configured scheme §7.13.4 · compare CS FTL.1.235(a)', 'warning',
                                'Recovery rest after 4 or more disruptive duties shorter than 60 h',
                                f'{count} early starts, late finishes or night duties before the recovery rest '
                                f'from {fmt(b_start, tz)}, which lasts {h(length)}; 60 h are required.',
@@ -207,7 +210,7 @@ def run(roster, duties: Sequence, activities: Sequence, tz: str,
         covers_month = activities and activities[0].report_time_utc <= month_start + timedelta(days=3) \
             and activities[-1].release_time_utc >= month_end - timedelta(days=3)
         if covers_month and len(long_ones) < LOCAL_DAYS_PER_MONTH:
-            out.append(finding('recovery_rest', 'ORO.FTL.235(d)', 'warning',
+            out.append(finding('recovery_rest', 'Configured scheme §7.13.7 · compare ORO.FTL.235(d)', 'warning',
                                'Fewer than two recovery rests of 2 local days this month',
                                f'{len(long_ones)} recovery rest{"s" if len(long_ones) != 1 else ""} in '
                                f'{roster.month} include 2 whole local days; the scheme requires this twice a month.',
@@ -217,7 +220,7 @@ def run(roster, duties: Sequence, activities: Sequence, tz: str,
     for s in getattr(roster, 'standbys', []):
         hours = (s.release_time_utc - s.report_time_utc).total_seconds() / 3600
         if hours > HOME_STANDBY_MAX_HOURS + 1e-9:
-            out.append(finding('standby', 'CS FTL.1.225(b)', 'warning', 'Standby longer than 16 h',
+            out.append(finding('standby', 'Configured scheme §7.11.3 · compare CS FTL.1.225(b)', 'warning', 'Standby longer than 16 h',
                                f'Standby from {fmt(s.report_time_utc, tz)} lasts {h(hours)}.',
                                s.report_time_utc, s.release_time_utc, hours, HOME_STANDBY_MAX_HOURS))
     return out

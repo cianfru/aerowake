@@ -1,11 +1,11 @@
-"""Qatar Airways FTL scheme, OM-A Chapter 7 (QCAA-approved), flight duty period tables.
+"""Configured operator FTL scheme, OM-A Chapter 7 (owner-supplied; current approval unverified), flight duty period tables.
 
 Values are transcribed from the operator's OM-A Chapter 7 supplied by the owner (October
 2026); the manual itself is not stored in the repository. Times are hours; start times
 are minutes after midnight at the reference time (7.6.1).
 
 * 7.6.3 Table 7-6  Maximum daily FDP, acclimatised crew members
-* 7.6.3 Table 7-7  Unknown state of acclimatisation, under Qatar Airways' approved FRM
+* 7.6.3 Table 7-7  Unknown state of acclimatisation, under the supplied operator FRM scheme
 * 7.6.5 Table 7-8  Maximum daily FDP with extension without in-flight rest
   (planned in advance, at most twice in any 7 consecutive days, not with in-flight rest)
 * 7.6.6 Tables 7-9 / 7-10  in-flight rest: AugmentedFDPParameters (extended_operations)

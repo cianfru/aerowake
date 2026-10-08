@@ -11,7 +11,7 @@ import { SLEEP_DEFICIT_LABELS, sleepDeficitClass } from '@/lib/risk-scale';
 import { formatHomeTime } from '@/lib/home-time';
 import { useAnalysis } from '@/contexts/AnalysisContext';
 import { SleepBlockList } from './sleep/SleepBlockList';
-import type { CrewCompositionValue } from '@/lib/api-client';
+import type { CrewCompositionValue, RestFacilityClass } from '@/lib/api-client';
 import { crewLabel, inflightSleepHours, isAugmented } from '@/lib/crew';
 
 const STRATEGY_LABELS: Record<string, string> = {
@@ -33,9 +33,9 @@ const STRATEGY_LABELS: Record<string, string> = {
 
 /** Why the model chose each sleep pattern (with the published basis). */
 const STRATEGY_RATIONALE: Record<string, string> = {
-  normal: 'Pilots on daytime schedules keep a consistent bedtime around 23:00 (Signal et al. 2009; Gander et al. 2013). Before reports earlier than 09:00, bedtime advances by up to 1.5h, limited by the evening wake-maintenance zone (Arsintescu et al. 2022; Dijk & Czeisler 1994).',
+  normal: 'Uses your selected usual night. Any advance before early reports is a modelling assumption, limited by the evening wake-maintenance zone (Roach et al. 2012; Dijk & Czeisler 1994).',
   anchor: 'Used when the local time is 3h or more from home base. Keeping sleep anchored to home-base time preserves circadian alignment on transmeridian trips (Minors & Waterhouse 1981, 1983).',
-  split: 'Used when rest is 9–10h, too short for one consolidated sleep. Split sleep preserves performance when total sleep is matched (Jackson et al. 2014; Kosmadopoulos et al. 2017).',
+  split: 'When the schedule divides sleep into separate opportunities, their timing and duration remain estimates (Jackson et al. 2014; Kosmadopoulos et al. 2014).',
   early_bedtime: 'Used for reports before 06:00. Early starts restrict prior sleep (Roach et al. 2012); bedtime is not earlier than 21:30 because of the wake-maintenance zone (Arsintescu et al. 2022).',
   restricted: 'Used when rest is under 9h: sleep is physically limited by the schedule. Repeated restriction degrades performance even with partial recovery (Van Dongen et al. 2003; Belenky et al. 2003).',
   extended: 'Used when rest exceeds 14h. Longer sleep after restriction supports partial recovery, with diminishing returns beyond about 9h (Banks et al. 2010; Kitamura et al. 2016).',
@@ -45,8 +45,8 @@ const STRATEGY_RATIONALE: Record<string, string> = {
   augmented_4_sleep: 'Ultra-long-range four-pilot operations: two normal nights before departure (Signal et al. 2014).',
   augmented_3: 'Three-pilot augmented operations: a 22:00 bedtime plus an optional pre-duty nap for night departures (Signal et al. 2014; Gander et al. 2013).',
   wocl_duty: 'Duties over 6h through the body-clock low: consolidated sleep is placed before the duty (Dijk & Czeisler 1995).',
-  inter_duty_recovery: 'One recovery block between duties; onset follows release time and sleep pressure (Signal et al. 2013; Banks et al. 2010).',
-  post_duty_recovery: 'Recovery after duty, with wake timing gated by the home-base body clock (Signal et al. 2013; Roach et al. 2025).',
+  inter_duty_recovery: 'Recovery sleep between duties is informed by Banks et al. (2010) and layover timing in Rempe et al. (2025). Placement, duration and sleep quality remain model assumptions.',
+  post_duty_recovery: 'Recovery after duty is informed by Banks et al. (2010) and layover timing in Rempe et al. (2025). Wake timing, duration and sleep quality remain model assumptions.',
 };
 
 interface DutyInfoColumnProps {
@@ -60,6 +60,8 @@ interface DutyInfoColumnProps {
   /** Pilot-stated crew for this duty (null = as read from the roster). */
   crewCompositionOverride?: CrewCompositionValue | null;
   onCrewCompositionChange?: (dutyId: string, composition: CrewCompositionValue | null) => void;
+  onRestFacilityChange?: (dutyId: string, facility: RestFacilityClass) => void;
+  restFacilityBusy?: boolean;
 }
 
 const isIso = (v?: string) => !!v && /^\d{4}-\d{2}-\d{2}T/.test(v) && Number.isFinite(Date.parse(v));
@@ -92,7 +94,7 @@ function SleepBlocks({ duty, homeTz }: { duty: DutyAnalysis; homeTz?: string }) 
 }
 
 /** Sleep before the duty, the 7-day shortfall, FDP and crew context. */
-export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, onCrewReset, hasCrewContent, crewCompositionOverride, onCrewCompositionChange }: DutyInfoColumnProps) {
+export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, onCrewReset, hasCrewContent, crewCompositionOverride, onCrewCompositionChange, onRestFacilityChange, restFacilityBusy }: DutyInfoColumnProps) {
   const isTraining = isTrainingDuty(duty);
   const [crewOpen, setCrewOpen] = useState(isAugmented(duty) || !!duty.augmentationSuggested);
   const est = duty.sleepEstimate;
@@ -166,6 +168,13 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
         />
       )}
 
+      {!isTraining && duty.flightSegments?.length > 0 && duty.maxFdpHours == null && (
+        <section className="rounded-2xl border border-border bg-card p-5">
+          <h3 className="text-[15px] font-semibold">Flight duty period · not assessed</h3>
+          <p className="mt-2 text-sm text-muted-foreground">{duty.fdpLimitReference ?? 'The supplied roster does not establish the acclimatisation or operational inputs needed for an FDP comparison.'}</p>
+        </section>
+      )}
+
       {hasCrewContent && (
         <Collapsible open={crewOpen} onOpenChange={setCrewOpen}>
           <CollapsibleTrigger className="flex w-full items-center justify-between rounded-2xl border border-border bg-card px-5 py-4 text-sm font-medium transition-colors hover:bg-secondary/60">
@@ -177,15 +186,32 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
             <ChevronDown className={cn('h-4 w-4 transition-transform', crewOpen && 'rotate-180')} aria-hidden="true" />
           </CollapsibleTrigger>
           <CollapsibleContent className="space-y-3 pt-3">
+            {isAugmented(duty) && (
+              <div className="space-y-2 rounded-xl border border-border bg-card p-3 text-sm">
+                <label htmlFor={`rest-facility-${duty.dutyId}`} className="block font-medium">Rest facility for this duty</label>
+                <select id={`rest-facility-${duty.dutyId}`} value={duty.restFacilityClass ?? 'class_1'}
+                  disabled={!onRestFacilityChange || restFacilityBusy}
+                  onChange={(event) => onRestFacilityChange?.(duty.dutyId || '', event.target.value as RestFacilityClass)}
+                  className="min-h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60">
+                  <option value="class_1">Class 1 · bunk</option>
+                  <option value="class_2">Class 2 · near-flat seat</option>
+                  <option value="class_3">Class 3 · reclining seat</option>
+                </select>
+                <p className="text-xs text-muted-foreground">{duty.restFacilitySource === 'pilot' ? 'You selected this facility. ' : 'Class 1 is assumed when the roster does not state a facility. '}Changing it updates the FDP comparison and estimated sleep benefit. Confirm the facility classification with your operator.</p>
+                <p className="text-xs text-muted-foreground">Sleep efficiency is modelled at 70% / 55% / 45% for classes 1 / 2 / 3; these are modelling assumptions, not measured sleep.</p>
+                {restFacilityBusy && <p role="status" className="text-xs text-primary">Updating the prediction…</p>}
+                {!onRestFacilityChange && <p className="text-xs text-muted-foreground">Open the original roster file to change this saved estimate.</p>}
+              </div>
+            )}
             {onCrewCompositionChange && (
               <div className="space-y-2 rounded-xl border border-border bg-card p-3 text-sm">
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="text-muted-foreground">Crew on this duty</span>
                   <div className="inline-flex rounded-lg bg-muted p-0.5" role="radiogroup" aria-label="Crew on this duty">
                     {([['standard', '2 pilots'], ['augmented_3', '3 pilots'], ['augmented_4', '4 pilots']] as const).map(([value, label]) => (
-                      <button key={value} type="button" role="radio" aria-checked={duty.crewComposition === value}
+                      <button key={value} type="button" role="radio" disabled={restFacilityBusy} aria-checked={duty.crewComposition === value}
                         onClick={() => { if (duty.crewComposition !== value) onCrewCompositionChange(duty.dutyId || '', value); }}
-                        className={cn('min-h-[32px] rounded-md px-3 text-xs font-medium transition-colors', duty.crewComposition === value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+                        className={cn('min-h-[44px] rounded-md px-3 text-xs font-medium transition-colors', duty.crewComposition === value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
                         {label}
                       </button>
                     ))}
@@ -201,7 +227,7 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                 )}
                 <p className="text-xs text-muted-foreground">
                   {duty.crewSource === 'fdp' && !crewCompositionOverride
-                    ? 'No IR (in-flight rest) on this duty, so the crew is estimated from the planned FDP: the smallest augmented crew the in-flight rest limit (CS FTL.1.205(c)) allows for a bunk (ULR routes and an FDP over 18 h are 4 pilots). Confirm it or choose the crew you flew. '
+                    ? 'No IR (in-flight rest) on this duty, so the crew is estimated from the planned FDP: the smallest augmented crew the in-flight rest limit (CS FTL.1.205(c)) allows for a bunk (the configured ULR route rules and an FDP over 18 h assume 4 pilots). Confirm it or choose the crew you flew. '
                     : 'IR (in-flight rest) on the roster marks an augmented crew, whatever your rank. Without IR the crew is estimated from the planned FDP and you can choose it here. '}
                   Changing the crew re-runs the analysis with the matching in-flight rest and FDP limits.
                 </p>
@@ -219,9 +245,10 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                       <button
                         key={cs}
                         type="button"
+                        disabled={restFacilityBusy}
                         aria-pressed={effective === cs}
                         onClick={() => { if (effective !== cs) onCrewChange(duty.dutyId || '', cs); }}
-                        className={cn('min-h-[32px] rounded-md px-3 text-xs font-medium transition-colors', effective === cs ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                        className={cn('min-h-[44px] rounded-md px-3 text-xs font-medium transition-colors', effective === cs ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
                       >
                         {cs === 'crew_a' ? 'A' : 'B'}
                       </button>
@@ -237,8 +264,14 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
 
             {duty.isUlr && duty.ulrCompliance && (
               <div className="space-y-2 rounded-xl border border-border bg-card p-3 text-sm">
-                <p className="font-medium">Ultra-long range: {duty.ulrCompliance.violations.length > 0 ? 'issues found' : 'no issues found'}</p>
-                <p className="font-mono text-xs text-muted-foreground tabular">Max FDP {(duty.ulrCompliance.maxPlannedFdp ?? 0).toFixed(1)}h · {duty.ulrCompliance.monthlyUlrCount}/{duty.ulrCompliance.monthlyLimit} this month</p>
+                <p className="font-medium">Ultra-long range: {duty.ulrCompliance.violations.length > 0 ? 'issues found' : duty.maxFdpHours == null ? 'partly assessed' : 'no threshold exceedances found'}</p>
+                <p className="font-mono text-xs text-muted-foreground tabular">{duty.maxFdpHours == null ? 'FDP not assessed' : `Reference FDP ${duty.ulrCompliance.maxPlannedFdp?.toFixed(1) ?? '—'}h`} · {duty.ulrCompliance.monthlyUlrCount ?? '—'}/{duty.ulrCompliance.monthlyLimit ?? '—'} this month</p>
+                <p className="text-xs text-muted-foreground">Configured scheme comparison. A route match does not establish operator approval or complete rest history.</p>
+                {duty.ulrCompliance.warnings.length > 0 && (
+                  <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground" aria-label="ULR assumptions and coverage">
+                    {duty.ulrCompliance.warnings.map((warning, i) => <li key={i}>{warning}</li>)}
+                  </ul>
+                )}
                 {duty.ulrCompliance.violations.length > 0 && (
                   <ul className="list-disc space-y-0.5 pl-5 text-xs text-risk-critical-ink">
                     {duty.ulrCompliance.violations.map((v, i) => <li key={i}>{v}</li>)}
@@ -251,10 +284,10 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
               <>
                 <CrewRestTimeline duty={duty} />
                 <p className="text-xs text-muted-foreground">
-                  In-flight sleep credited: <span className="font-mono tabular text-foreground">{inflightSleepHours(duty).toFixed(1)}h</span>
+                  Estimated in-flight sleep: <span className="font-mono tabular text-foreground">{inflightSleepHours(duty).toFixed(1)}h</span>
                   {duty.inflightRestBlocks[0]?.approvedPlan
-                    ? ` · times from the approved ULR rest plan for this city pair, Crew ${duty.ulrCrewSet === 'crew_a' ? 'A' : 'B'}`
-                    : duty.inflightRestBlocks.some((b) => b.source === 'planned') ? ' · from the standard rest rotation (the roster shows no IR sector) — adjust the crew above if yours differs' : ' · from the IR sectors on your roster'}
+                    ? ` · times from the configured ULR rest plan for this city pair; confirm current operator approval, Crew ${duty.ulrCrewSet === 'crew_a' ? 'A' : 'B'}`
+                    : duty.inflightRestBlocks.some((b) => b.source === 'planned') ? ' · from the standard rest rotation (the roster shows no IR sector) — adjust the crew above if yours differs' : ' · estimated from IR sectors on your roster; confirm the rest plan'}
                 </p>
                 <ul className="space-y-1 rounded-xl border border-border bg-card p-3 text-xs" aria-label="In-flight rest">
                   {duty.inflightRestBlocks.map((block, i) => (
@@ -263,7 +296,7 @@ export function DutyInfoColumn({ duty, homeTz, dutyCrewOverride, onCrewChange, o
                         {homeTz ? `${formatHomeTime(block.startUtc, homeTz)}–${formatHomeTime(block.endUtc, homeTz)}` : `${block.startUtc.slice(11, 16)}Z–${block.endUtc.slice(11, 16)}Z`}
                       </span>
                       <span className="font-mono tabular">
-                        {(block.effectiveSleepHours ?? 0).toFixed(1)}h sleep of {(block.durationHours ?? 0).toFixed(1)}h{block.isDuringWocl ? ' · in WOCL' : ''}{block.source === 'planned' ? ' · planned' : ''}
+                        {(block.effectiveSleepHours ?? 0).toFixed(1)}h modelled sleep of {(block.durationHours ?? 0).toFixed(1)}h{block.isDuringWocl ? ' · in WOCL' : ''}{block.source === 'planned' ? ' · planned' : ''}
                       </span>
                     </li>
                   ))}

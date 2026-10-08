@@ -24,7 +24,7 @@ from core.alertness import round_half_up
 from core.strategy_references import get_strategy_references
 from models.data_models import SleepBlock
 
-WOCL_START_HOUR = 2   # AMC1 ORO.FTL.105(10): 02:00–05:59
+WOCL_START_HOUR = 2   # ORO.FTL.105(28): 02:00–05:59
 WOCL_END_HOUR = 6
 
 

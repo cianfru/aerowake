@@ -3,12 +3,12 @@ Extended Operations: Augmented Crew & ULR
 ==========================================
 
 EASA CS FTL.1.205 augmented crew FDP limits (3-pilot and 4-pilot)
-Qatar FTL Chapter 7.18 Ultra Long Range operations
-Qatar FTL Section 7.6.1 Table 7-1 Acclimatization
+Operator OM-A Chapter 7.18 Ultra Long Range operations
+Operator OM-A Section 7.6.1 Table 7-1 Acclimatization
 
 Classes:
     AugmentedFDPParameters: CS FTL.1.205(c)(2) FDP limit table
-    ULRParameters: Qatar FTL 7.18 regulatory parameters
+    ULRParameters: Operator OM-A 7.18 regulatory parameters
     AcclimatizationCalculator: Table 7-1 acclimatization state
     AugmentedCrewRestPlanner: 3-pilot in-flight rest planning
     ULRRestPlanner: 4-pilot Crew A/B rest rotation
@@ -107,7 +107,7 @@ class AugmentedFDPParameters:
 @dataclass
 class QatarFTL718Parameters:
     """
-    Regulatory parameters per Qatar Airways FTL Chapter 7.18 (ULR operations).
+    Regulatory parameters per the supplied operator FTL Chapter 7.18 (ULR operations).
     """
     # FDP limits
     ulr_fdp_threshold_hours: float = 18.0     # FDP > 18h = ULR
@@ -132,7 +132,7 @@ class QatarFTL718Parameters:
     # Monthly limits
     max_ulr_per_calendar_month: int = 2
 
-    # ULR city pairs, Qatar OM-A 7.18.3 Note: "Flights to and from AKL will be planned as ULR.
+    # ULR city pairs, Operator OM-A 7.18.3 Note: "Flights to and from AKL will be planned as ULR.
     # Flights to and from DFW and MIA may be planned as ULR depending on the season."
     # Seasonal pairs are ULR only when the scheduled FDP exceeds 18 h (7.18.1).
     permanent_ulr_pairs: List[Tuple[str, str]] = field(default_factory=lambda: [
@@ -144,7 +144,7 @@ class QatarFTL718Parameters:
     ])
 
 
-# Approved in-flight rest patterns, Qatar FTL 7.18.11 Figures 7-3 to 7-8.
+# Approved in-flight rest patterns, Operator OM-A 7.18.11 Figures 7-3 to 7-8.
 # Hours from off-blocks for each crew's rest periods, read from the labelled
 # durations in each figure (laid end to end they add up exactly to the block
 # time and to each crew's rest total in the figure's break-down table).
@@ -178,7 +178,7 @@ QATAR_ULR_REST_PATTERNS: Dict[Tuple[str, str], Dict] = {
 
 class AcclimatizationCalculator:
     """
-    Determines crew acclimatization state per Qatar FTL Section 7.6.1.
+    Determines crew acclimatization state per Operator OM-A Section 7.6.1.
 
     Table 7-1 maps (time_zone_difference, time_elapsed_since_arrival) to state:
         B = acclimatized to departure (base) time zone
@@ -369,7 +369,7 @@ class ULRRestPlanner:
     """
     Generates in-flight rest rotation plans for ULR operations (4-pilot).
 
-    Per Qatar FTL 7.18.9:
+    Per Operator OM-A 7.18.9:
     - Crew B stays on DOH time
     - Crew A adjusts slightly toward destination time
     - Rest allocated during WOCL windows when possible
@@ -380,7 +380,7 @@ class ULRRestPlanner:
     The analyzed pilot selects Crew A or Crew B since it is assigned per rotation.
 
     References:
-        Qatar FTL 7.18.9.3, 7.18.11
+        Operator OM-A 7.18.9.3, 7.18.11
         Signal et al. (2014) Aviat Space Environ Med 85:1199-1208
     """
 
@@ -410,20 +410,20 @@ class ULRRestPlanner:
             return InFlightRestPlan(
                 rest_periods=[],
                 crew_composition=duty.crew_composition,  # Use duty's actual composition
-                rest_facility_class=RestFacilityClass.CLASS_1,
+                rest_facility_class=duty.rest_facility_class or RestFacilityClass.CLASS_1,
             )
 
         # ULR typically single-sector
         seg = max(duty.segments, key=lambda s: s.block_time_hours)
         flight_hours = seg.block_time_hours
 
-        # Approved Qatar rest pattern for this city pair (7.18.11), when one exists.
+        # Configured operator rest pattern for this city pair (7.18.11), when one exists.
         approved = self.approved_pattern(seg, crew_set, pytz.timezone(home_timezone), duty.report_time_utc)
         if approved is not None:
             return InFlightRestPlan(
                 rest_periods=approved,
                 crew_composition=duty.crew_composition,
-                rest_facility_class=RestFacilityClass.CLASS_1,
+                rest_facility_class=duty.rest_facility_class or RestFacilityClass.CLASS_1,
             )
 
         # Protect first 90min and last 90min (all pilots on deck)
@@ -437,7 +437,7 @@ class ULRRestPlanner:
             return InFlightRestPlan(
                 rest_periods=[],
                 crew_composition=duty.crew_composition,  # Use duty's actual composition
-                rest_facility_class=RestFacilityClass.CLASS_1,
+                rest_facility_class=duty.rest_facility_class or RestFacilityClass.CLASS_1,
             )
 
         home_tz = pytz.timezone(home_timezone)
@@ -468,12 +468,12 @@ class ULRRestPlanner:
         return InFlightRestPlan(
             rest_periods=periods,
             crew_composition=duty.crew_composition,  # Use duty's actual composition
-            rest_facility_class=RestFacilityClass.CLASS_1,
+            rest_facility_class=duty.rest_facility_class or RestFacilityClass.CLASS_1,
         )
 
     @staticmethod
     def approved_pattern(seg, crew_set, home_tz, report_utc) -> Optional[List[InFlightRestPeriod]]:
-        """Rest periods from the approved Qatar pattern (Figures 7-3 to 7-8).
+        """Rest periods from the configured operator pattern (Figures 7-3 to 7-8).
 
         Offsets are scaled to the scheduled block time, so a seasonal or
         delayed schedule keeps the approved proportions of the rotation.
@@ -613,7 +613,7 @@ class ULRRestPlanner:
 
 class QatarFTL718Validator:
     """
-    Validates AUGMENTED_4 / ULR compliance requirements per Qatar FTL 7.18.
+    Validates AUGMENTED_4 / ULR compliance requirements per Operator OM-A 7.18.
     """
 
     def __init__(self, ulr_params: 'QatarFTL718Parameters' = None):
@@ -627,7 +627,18 @@ class QatarFTL718Validator:
     ) -> ULRComplianceResult:
         """Validate all ULR-specific compliance requirements."""
         violations = []
-        warnings = []
+        warnings = [
+            "Configured ULR scheme comparison: current operator and city-pair approvals are unverified.",
+            "Crew size, rest facility and the planned rest pattern must match the actual operation.",
+        ]
+        if roster is None or duty_index is None or duty_index == 0:
+            warnings.append("Pre-ULR rest before the first supplied duty is not assessed: earlier history is missing.")
+        if roster is None or duty_index is None or duty_index >= len(roster.duties) - 1:
+            warnings.append("Post-ULR rest after the last supplied duty is not assessed: later activities are missing.")
+
+        facility_supported = duty.rest_facility_class in (None, RestFacilityClass.CLASS_1)
+        if not facility_supported:
+            warnings.append("ULR FDP is not assessed for the selected rest facility: the configured ULR scheme assumes a class-1 bunk. Rest remains a modelling scenario, not an approved plan.")
 
         # 1. FDP limit check
         fdp = duty.fdp_hours
@@ -636,12 +647,12 @@ class QatarFTL718Validator:
             if fdp <= self.params.ulr_max_planned_fdp_hours + self.params.ulr_discretion_max_hours:
                 warnings.append(
                     f"ULR FDP {fdp:.1f}h exceeds planned limit of "
-                    f"{self.params.ulr_max_planned_fdp_hours}h — commander's discretion required"
+                    f"{self.params.ulr_max_planned_fdp_hours}h — above the planned maximum; discretion cannot be planned"
                 )
                 if fdp > self.params.ulr_max_planned_fdp_hours + self.params.ulr_discretion_report_threshold:
                     warnings.append(
                         f"ULR discretion >{self.params.ulr_discretion_report_threshold}h — "
-                        "must be reported to QCAA"
+                        "reporting is required under the configured operator scheme; confirm the applicable process"
                     )
                 fdp_ok = True  # Within discretion
             else:
@@ -661,7 +672,7 @@ class QatarFTL718Validator:
         if approved is not None:
             plan = approved['crew_a'] + approved['crew_b']
             if len(plan) < self.params.ulr_min_rest_periods or max(e - s for s, e in plan) < self.params.ulr_min_long_rest_hours:
-                violations.append("The approved rest plan for this city pair has fewer than 2 rest periods or none of 4 h")
+                violations.append("The configured rest plan for this city pair has fewer than 2 rest periods or none of 4 h")
                 rest_ok = False
         elif duty.inflight_rest_plan:
             periods = duty.inflight_rest_plan.rest_periods
@@ -758,8 +769,10 @@ class QatarFTL718Validator:
             post_ulr_rest_compliant=post_ok,
             monthly_ulr_count=monthly_count,
             monthly_ulr_compliant=monthly_ok,
+            max_planned_fdp=self.params.ulr_max_planned_fdp_hours,
+            monthly_limit=self.params.max_ulr_per_calendar_month,
             crew_acclimatized=acclimatized,
-            fdp_within_limit=fdp_ok,
+            fdp_within_limit=fdp_ok and facility_supported,
             rest_periods_valid=rest_ok,
             violations=violations,
             warnings=warnings,

@@ -11,7 +11,7 @@ export function AboutPage() {
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Aerowake</h1>
         <p className="text-sm md:text-base text-muted-foreground max-w-lg mx-auto leading-relaxed">
           A biomathematical fatigue prediction tool for airline pilots.
-          Upload your roster, see how alert you'll be on every duty.
+          Upload your roster to explore predicted sleepiness and the assumptions behind each duty.
         </p>
         <div className="flex justify-center gap-2 flex-wrap">
           <Badge variant="info">v{APP_VERSION}</Badge>
@@ -52,8 +52,8 @@ export function AboutPage() {
           />
           <PillarCard
             icon={<Shield className="h-4 w-4" />}
-            title="EASA-aligned"
-            description="ORO.FTL compliance validation, WOCL detection, FDP limits, and acclimatization tracking built in."
+            title="Scoped FTL checks"
+            description="Review limits, supplied history and operator-scheme assumptions. These checks cannot certify operational compliance."
           />
         </div>
       </div>

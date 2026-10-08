@@ -8,7 +8,7 @@ export function FtlPreview() {
   return <div className="space-y-5">
     <div className="flex flex-wrap items-baseline justify-between gap-2">
       <p className="flex items-center gap-2 text-sm font-medium text-[color:var(--lp-142e45)]"><Check aria-hidden="true" className="h-4 w-4 text-[color:var(--lp-087478)]" />No exceedances found in the supplied activities</p>
-      <p className="text-xs text-[color:var(--lp-526579)]">QCAA / EASA flight time limitations</p>
+      <p className="text-xs text-[color:var(--lp-526579)]">Scoped flight-time limitation checks</p>
     </div>
     <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {TOUR_FTL.map((row) => <li key={row.label} className="rounded-xl border border-[color:var(--lp-dbe7ed)] bg-[color:var(--lp-f3f8fa)] p-3.5">

@@ -166,12 +166,35 @@ describe('DutyDebriefAction', () => {
     expect(screen.getByRole('button', { name: /^contribute again$/i })).toBeDisabled();
   });
 
-  it('goes straight to the debrief for a pilot who never opted out', async () => {
+  it('opens the study form only after saving the pilot’s explicit consent', async () => {
+    let joined = false;
+    const fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (url.endsWith('/api/study/enrolment')) {
+        if (init?.method === 'PUT') joined = true;
+        return Promise.resolve(json({ ...ENROLLED, enrolled: joined }));
+      }
+      return Promise.resolve(json({ debriefs: [] }));
+    });
+    vi.stubGlobal('fetch', fetch);
+    render(wrap(<DutyDebriefAction duty={FLOWN} analysisId="a1" now={NOW} />));
+    fireEvent.click(await screen.findByRole('button', { name: /debrief this flown duty/i }));
+    const checkbox = await screen.findByRole('checkbox');
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole('button', { name: /agree and contribute/i }));
+    expect(await screen.findByText(/The forecast stays hidden until you save/)).toBeInTheDocument();
+    const request = fetch.mock.calls.find(([, init]) => init?.method === 'PUT')?.[1];
+    expect(JSON.parse(String(request?.body))).toEqual({ consent_version: 'calibration-v3-opt-in', accepted: true });
+  });
+
+  it('requires unchecked explicit consent for a pilot who never joined', async () => {
     vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(json(url.endsWith('/api/study/enrolment') ? { ...ENROLLED, enrolled: false, withdrawn_at: null } : { debriefs: [] }))));
     render(wrap(<DutyDebriefAction duty={FLOWN} analysisId="a1" now={NOW} />));
     fireEvent.click(await screen.findByRole('button', { name: /debrief this flown duty/i }));
-    expect(await screen.findByText(/pooled, pseudonymised/)).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: /contribute again/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /help improve the model/i })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    expect(screen.getByRole('button', { name: /agree and contribute/i })).toBeDisabled();
+    expect(screen.queryByText(/The forecast stays hidden until you save/)).not.toBeInTheDocument();
   });
 });
 
@@ -179,7 +202,7 @@ describe('DebriefQueue', () => {
   it('lists flown duties awaiting a debrief without revealing the forecast', async () => {
     vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(json(url.endsWith('/api/study/enrolment') ? ENROLLED : { debriefs: [] }))));
     render(wrap(<DebriefQueue now={NOW} />));
-    expect(await screen.findByRole('heading', { name: '1 flown duty to debrief' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '1 past duty to debrief' })).toBeInTheDocument();
     expect(screen.getByText('AAA–BBB–AAA')).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/6\.6|High/);
   });

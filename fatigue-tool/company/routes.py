@@ -66,6 +66,14 @@ async def get_or_create_company(
     )
     company = result.scalar_one_or_none()
 
+    # Neutral display aliases must resolve the existing operator identity rather
+    # than splitting an organisation into a second company. Never rename stored data.
+    if company is None and icao_code:
+        matching = await db.execute(
+            select(Company).where(Company.icao_code == icao_code.upper()).order_by(Company.id).limit(1)
+        )
+        company = matching.scalar_one_or_none()
+
     if company is None:
         company = Company(
             id=uuid.uuid4(),

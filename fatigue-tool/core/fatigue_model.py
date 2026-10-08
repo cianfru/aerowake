@@ -126,9 +126,9 @@ class BorbelyFatigueModel:
         current_tz = pytz.timezone(current_tz_str)
         home_tz = pytz.timezone(home_base_tz_str)
         
-        naive_time = current_utc.replace(tzinfo=None)
-        home_offset = home_tz.localize(naive_time).utcoffset().total_seconds() / 3600
-        current_offset = current_tz.localize(naive_time).utcoffset().total_seconds() / 3600
+        # Resolve offsets at the actual instant, including DST transitions.
+        home_offset = current_utc.astimezone(home_tz).utcoffset().total_seconds() / 3600
+        current_offset = current_utc.astimezone(current_tz).utcoffset().total_seconds() / 3600
         
         target_shift = current_offset - home_offset
         # Process A, Ingre et al. (2014) eq. 1.10: each day the body clock
@@ -791,7 +791,7 @@ class BorbelyFatigueModel:
         
         These thresholds are based on:
         - Dawson & Reid (1997): Performance impairment equivalent to 0.05% BAC
-        - EASA AMC1 ORO.FTL.105(10): WOCL 02:00-05:59
+        - EASA ORO.FTL.105(28): WOCL 02:00-05:59
         - Van Dongen et al. (2003): Cumulative effects of sleep restriction
         
         We also require BOTH conditions to be significantly exceeded to avoid
@@ -1036,8 +1036,8 @@ class BorbelyFatigueModel:
                 duty.extended_fdp_hours = None
                 duty.used_discretion = False
 
-            # Qatar FTL 7.18 compliance validation for AUGMENTED_4 duties
-            if duty.crew_composition == CrewComposition.AUGMENTED_4:
+            # Configured operator ULR comparison applies only to ULR duties.
+            if duty.crew_composition == CrewComposition.AUGMENTED_4 and (duty.is_ulr or duty.is_ulr_operation):
                 ulr_params = self.config.ulr_params if hasattr(self.config, 'ulr_params') else None
                 ulr_validator = ULRComplianceValidator(ulr_params)
                 ulr_result = ulr_validator.validate_ulr_duty(duty, roster, i)

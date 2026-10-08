@@ -4,12 +4,12 @@ CrewLink marks an augmented sector with `IR` (In-flight Rest). IR is treated as 
 the pilot's rank; a duty without IR is not known to be augmented, so its crew size is an
 estimate from the FDP the duty needs (flagged `crew_source` 'fdp', the pilot can choose):
 
-* FDP above the most a 2-pilot crew may be planned for — Qatar OM-A 7.6.5 Table 7-8 (planned
+* FDP above the most a 2-pilot crew may be planned for — Operator OM-A 7.6.5 Table 7-8 (planned
   extension) where an extension is allowed at that start time, else 7.6.3 Table 7-6 / 7-7 —
   cannot be flown by 2 pilots;
 * the smallest augmented crew whose maximum covers it is taken — 3 pilots up to the
   OM-A 7.6.6 Table 7-9 / 7-10 limit, else 4 (rest facility class 1, the long-haul bunk);
-* FDP > 18 h, or a flight to or from AKL, is ULR: 4 pilots (Qatar OM-A 7.18.1, 7.18.3; DFW
+* FDP > 18 h, or a flight to or from AKL, is ULR: 4 pilots (Operator OM-A 7.18.1, 7.18.3; DFW
   and MIA are ULR only in the season their scheduled FDP exceeds 18 h).
 
 A duty between the basic maximum and the Table 7-8 extension may be a planned extension
@@ -30,7 +30,7 @@ LONG_SECTOR_BLOCK_HOURS = 7.0
 
 
 def _is_ulr(duty, ulr_params) -> bool:
-    """Qatar OM-A 7.18.1/7.18.3: ULR = an approved city pair with a scheduled FDP over 18 h.
+    """Operator OM-A 7.18.1/7.18.3: ULR = an approved city pair with a scheduled FDP over 18 h.
     Flights to and from AKL are always planned as ULR; DFW and MIA only in the season when
     the scheduled FDP exceeds 18 h, so for them (and any other pair) the FDP decides."""
     if duty.fdp_hours > ulr_params.ulr_fdp_threshold_hours:
@@ -51,7 +51,7 @@ def required_crew(duty, validator, augmented_params, ulr_params,
     two_pilot = limits.get('planned_extension_fdp') or limits['max_fdp']
     if not two_pilot or duty.fdp_hours <= two_pilot + 1e-6:
         return None
-    three = augmented_params.get_max_fdp(CrewComposition.AUGMENTED_3, RestFacilityClass.CLASS_1, duty.segments)
+    three = augmented_params.get_max_fdp(CrewComposition.AUGMENTED_3, duty.rest_facility_class or RestFacilityClass.CLASS_1, duty.segments)
     return CrewComposition.AUGMENTED_3 if duty.fdp_hours <= three + 1e-6 else CrewComposition.AUGMENTED_4
 
 
@@ -73,7 +73,7 @@ def infer_crew(duties, acclimatisation: Dict, validator, augmented_params, ulr_p
         from_roster = getattr(duty, 'crew_source', None) == 'roster_ir'
         if from_roster:
             # IR: augmented for certain; the FDP decides between 3 and 4 pilots.
-            three = augmented_params.get_max_fdp(CrewComposition.AUGMENTED_3, RestFacilityClass.CLASS_1, duty.segments)
+            three = augmented_params.get_max_fdp(CrewComposition.AUGMENTED_3, duty.rest_facility_class or RestFacilityClass.CLASS_1, duty.segments)
             need = (CrewComposition.AUGMENTED_4 if _is_ulr(duty, ulr_params) or duty.fdp_hours > three + 1e-6
                     else CrewComposition.AUGMENTED_3)
         elif accl.get('basis') == 'unknown' and not _is_ulr(duty, ulr_params):
@@ -87,7 +87,7 @@ def infer_crew(duties, acclimatisation: Dict, validator, augmented_params, ulr_p
         duty.rest_facility_class = duty.rest_facility_class or RestFacilityClass.CLASS_1
         if need == CrewComposition.AUGMENTED_4:
             # Crew A/B comes from the IR sector when the roster has one. Without IR it is
-            # not known: Crew A (operates the outbound from base, Qatar FTL 7.18.9.3)
+            # not known: Crew A (operates the outbound from base, Operator OM-A 7.18.9.3)
             # for the whole pairing, which the pilot can switch.
             if duty.ulr_crew_set is None:
                 duty.ulr_crew_set = ULRCrewSet.CREW_A

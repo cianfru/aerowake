@@ -99,7 +99,7 @@ export function DutyBarTooltip({ bar, widthPercent, leftPercent, selectedDuty, o
     ? [isoToZulu(duty.reportTimeUtc), isoToZulu(duty.releaseTimeUtc)].filter(Boolean).join('–')
     : duty.reportTimeLocal && duty.releaseTimeLocal ? `${duty.reportTimeLocal}–${duty.releaseTimeLocal}` : '';
   const fdp = duty.actualFdpHours ?? duty.dutyHours;
-  const isSelected = selectedDuty?.date.getTime() === duty.date.getTime();
+  const isSelected = selectedDuty === duty || (duty.dutyId != null && selectedDuty?.dutyId === duty.dutyId);
 
   const samples = useContext(AlertnessSamplesContext);
   const widths = bar.segments.map((segment) => variant === 'elapsed' && segment.widthPercent != null

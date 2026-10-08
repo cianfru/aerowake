@@ -1,10 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { addDays, format, getDaysInMonth, isWeekend, startOfMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { RISK_LEVEL_LABELS, classifyKss, riskCssColor } from '@/lib/risk-scale';
 import { homeDayKey } from '@/lib/home-time';
 import type { AnalysisResults, DutyAnalysis } from '@/types/fatigue';
 import { dutyPeakKss, dutyRoute } from './roster-utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface MonthStripProps {
   results: AnalysisResults;
@@ -62,6 +64,10 @@ function sleepByDay(results: AnalysisResults, tz: string): Map<string, number> {
  */
 export function MonthStrip({ results, reference, onDetails }: MonthStripProps) {
   const tz = results.homeBaseTimezone || 'UTC';
+  const mobile = useIsMobile();
+  const [view, setView] = useState<'week' | 'month' | null>(null);
+  const [week, setWeek] = useState(0);
+  const weekly = (view ?? (mobile ? 'week' : 'month')) === 'week';
 
   const days = useMemo<DayCell[]>(() => {
     const first = startOfMonth(results.month);
@@ -89,10 +95,13 @@ export function MonthStrip({ results, reference, onDetails }: MonthStripProps) {
   }, [results, tz]);
 
   const refTop = PLOT_H - barHeight(reference);
+  const start = Math.min(week * 7, Math.floor((days.length - 1) / 7) * 7);
+  const visibleDays = weekly ? days.slice(start, start + 7) : days;
+  const rangeLabel = `${format(visibleDays[0].date, 'd')}–${format(visibleDays[visibleDays.length - 1].date, 'd MMM')}`;
 
   return (
     <figure className="space-y-2" aria-labelledby="month-strip-caption">
-      <div className="flex items-baseline justify-between gap-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
         <figcaption id="month-strip-caption" className="text-sm font-medium">Month at a glance</figcaption>
         <p className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5"><span aria-hidden="true" className="w-4 border-t border-dashed border-foreground/70" />Your watch level {reference.toFixed(1)}</span>
@@ -100,11 +109,25 @@ export function MonthStrip({ results, reference, onDetails }: MonthStripProps) {
         </p>
       </div>
 
-      <div className="relative">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <div className="flex gap-1" role="group" aria-label="Month strip range">
+          {(['week', 'month'] as const).map(option => <button key={option} type="button" aria-pressed={(option === 'week') === weekly}
+            className={cn('min-h-11 rounded-lg px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', (option === 'week') === weekly ? 'bg-muted text-foreground' : 'text-muted-foreground')}
+            onClick={() => setView(option)}>{option === 'week' ? '7 days' : 'Full month'}</button>)}
+        </div>
+        {weekly && <div className="flex items-center gap-2">
+          <button type="button" aria-label="Previous 7 days of duty peaks" disabled={start === 0} onClick={() => setWeek(Math.max(0, week - 1))} className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"><ChevronLeft className="h-4 w-4" aria-hidden="true" /></button>
+          <p className="min-w-[5.5rem] text-center text-xs tabular" aria-live="polite">{rangeLabel}</p>
+          <button type="button" aria-label="Next 7 days of duty peaks" disabled={start + 7 >= days.length} onClick={() => setWeek(week + 1)} className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"><ChevronRight className="h-4 w-4" aria-hidden="true" /></button>
+        </div>}
+      </div>
+
+      <div className="overflow-x-auto pb-1">
+      <div className={cn('relative', !weekly && 'max-sm:min-w-[960px]')}>
         {/* Watch-level hairline across the plot */}
         <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 z-10 border-t border-dashed border-foreground/60" style={{ top: refTop }} />
-        <ol className="grid gap-px" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }} aria-label="Duty peaks and estimated sleep by day">
-          {days.map((day) => {
+        <ol className="grid gap-px" style={{ gridTemplateColumns: `repeat(${weekly ? 7 : days.length}, minmax(0, 1fr))` }} aria-label="Duty peaks and estimated sleep by day">
+          {visibleDays.map((day) => {
             const label = format(day.date, 'EEE d MMM');
             const level = day.peak != null ? classifyKss(day.peak) : null;
             const sleepText = day.sleepHours != null ? `${day.sleepHours.toFixed(1)}h estimated sleep` : 'no estimated sleep ended this day';
@@ -125,7 +148,7 @@ export function MonthStrip({ results, reference, onDetails }: MonthStripProps) {
                     <span className="absolute inset-x-[10%] top-px rounded-b-[2px] bg-primary/35" style={{ height: Math.max(2, (Math.min(SLEEP_MAX, day.sleepHours) / SLEEP_MAX) * (SLEEP_H - 1)) }} />
                   )}
                 </span>
-                <span aria-hidden="true" className={cn('block pt-1 text-center font-mono text-[10px] leading-none tabular', day.duty ? 'text-foreground' : 'text-muted-foreground', (day.date.getDate() - 1) % 7 !== 0 && 'max-sm:invisible')}>
+                <span aria-hidden="true" className={cn('block pt-2 text-center font-mono text-xs leading-none tabular', day.duty ? 'text-foreground' : 'text-muted-foreground')}>
                   {day.date.getDate()}
                 </span>
               </>
@@ -151,6 +174,8 @@ export function MonthStrip({ results, reference, onDetails }: MonthStripProps) {
           })}
         </ol>
       </div>
+      </div>
+      <p className="text-xs leading-relaxed text-muted-foreground">Tap a duty for its forecast. Bar height is peak KSS; the lower teal bar is estimated sleep ending that day.{!weekly && <span className="sm:hidden"> Swipe to see all dates.</span>}</p>
     </figure>
   );
 }

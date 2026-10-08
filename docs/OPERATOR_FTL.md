@@ -1,41 +1,45 @@
-# Qatar Airways FTL — what Aerowake encodes
+# Configured operator FTL scheme — provenance and limits
 
-Aerowake's first users are Qatar Airways pilots (Doha base). Qatar Airways operates
-under its QCAA-approved FTL scheme (Operations Manual Part A, Chapter 7), not EASA
-ORO.FTL directly. This note records which Qatar rules are in the code, where, and
-which values still need confirming against the current OM-A Chapter 7. **Update it
-whenever an FTL value changes.** Never invent a regulatory value: if a table is not
-confirmed here, the app must label the check as not assessed.
+Aerowake compares supplied rosters with a configured FTL scheme. The repository
+contains an owner-supplied transcription of a private Operations Manual Part A,
+Chapter 7, alongside public EASA comparison references. **A roster upload does
+not verify the operator, current manual revision, jurisdiction or approval.**
+Do not treat public EASA citations as proof that the private rules apply to every
+pilot, or that an operator approval is current.
 
-**User-facing references.** The app is operator-neutral: findings, tooltips and
-coverage text cite the QCAA / EASA flight time limitations (ORO.FTL / CS FTL),
-never the operator's manual. Values are unchanged; the mapping is FDP Table 7-6 →
-ORO.FTL.205(b) Table 2, 7-7 → ORO.FTL.205(b) Table 4, 7-8 → CS FTL.1.205(a),
-7-9/7-10 → CS FTL.1.205(c), discretion → ORO.FTL.205(f), minimum and reduced rest
-→ ORO.FTL.235(a)–(c), time-zone rest → CS FTL.1.235(b), disruptive schedules →
-CS FTL.1.235(a), recovery rest → ORO.FTL.235(d), standby → ORO.FTL.225 /
-CS FTL.1.225. The only operator-specific items shown are the ultra-long-range city
-pairs with their approved rest plans ("ULR (operator approval)") and how the
-augmented crew is handled. The OM-A paragraph numbers below stay as internal
-provenance in code comments and this note.
+The manual was supplied by the owner in October 2026 and is not stored in this
+repository. Its currency and the applicability of FRM, reduced-rest and ULR
+approvals have not been independently established. No regulatory values were
+changed during the product audit. Tests pin the transcription, not legal validity.
 
-## Encoded from Qatar FTL
+**Presentation contract.** Basic acclimatised FDP comparisons cite
+ORO.FTL.205(b) Table 2. Rules transcribed from the operator manual retain neutral
+“configured scheme” references and their OM-A paragraph/table provenance. Public
+ORO.FTL / CS FTL references are explicitly comparisons. Unknown-state FRM limits
+and ULR limits say that approval is unverified. The roster FTL view always exposes
+that scope; no operator brand or inferred airline is treated as approval.
+
+Public source: [EASA Easy Access Rules for Air Operations, Regulation (EU)
+965/2012](https://www.easa.europa.eu/en/document-library/easy-access-rules/easy-access-rules-air-operations-regulation-eu-no-9652012).
+The competent authority and the operator’s current approved scheme take precedence.
+
+## Encoded operator rules
 
 | Rule | Value in code | Where |
 |---|---|---|
-| 7.18 ULR definition | FDP > 18 h | `core/extended_operations.py` `QatarFTL718Parameters` |
-| 7.18 maximum planned ULR FDP | 20 h; commander's discretion up to 3 h, > 2 h reported to QCAA | same |
+| 7.18 ULR definition | FDP > 18 h | `core/extended_operations.py` `ULRParameters` |
+| 7.18 maximum planned ULR FDP | 20 h; commander's discretion up to 3 h, > 2 h reported to the competent authority under this scheme | same |
 | 7.18 ULR crew | 4 pilots (2 captains + 2 first officers) | same |
 | 7.18.9 in-flight rest | at least 2 rest periods, one of at least 4 h | same; `ULRRestPlanner` |
 | 7.18 pre-ULR rest | 48 h duty-free including 2 local nights | same |
 | 7.18 post-ULR rest | 4 local nights at base; away: 48 h including 2 local nights | same |
 | 7.18 monthly limit | at most 2 ULR duties per calendar month | same |
-| 7.18.3 ULR city pairs | AKL always ULR; DFW and MIA ULR "depending on the season", i.e. only when the scheduled FDP > 18 h (7.18.1) | `QatarFTL718Parameters`, `crew_inference._is_ulr` |
+| 7.18.3 ULR city pairs | AKL always ULR; DFW and MIA ULR "depending on the season", i.e. only when the scheduled FDP > 18 h (7.18.1) | `ULRParameters`, `crew_inference._is_ulr` |
 | 7.6.1 Table 7-1 acclimatisation | B/X/D by time-zone difference and elapsed time; rows > 2 & < 4, ≥ 4 & ≤ 6, > 6 & ≤ 9, > 9 & ≤ 12 (exactly 4 h is the second row) | `AcclimatizationCalculator`; used by `compliance.determine_acclimatisation` |
-| 7.18.4.3 pre-ULR | 48 h free of duty **including 2 local nights**, checked before departures from base | `QatarFTL718Validator` |
+| 7.18.4.3 pre-ULR | 48 h free of duty **including 2 local nights**, checked before departures from base | `ULRComplianceValidator` |
 | 7.18.4.3 post-ULR | at base: **4 consecutive local nights**; away: 48 h including 2 local nights (arrival time zone) | same |
-| 7.18.11 rest patterns | Figures 7-3 to 7-8, per crew (table below), scaled to the scheduled block | `QATAR_ULR_REST_PATTERNS`, `ULRRestPlanner.approved_pattern` |
-| 7.18.6 / 7.18.7 | discretion: FDP + up to 3 h (> 2 h reported to QCAA); reduced rest away ≥ 24 h incl. 1 local night | params (reduced rest not yet checked) |
+| 7.18.11 rest patterns | Figures 7-3 to 7-8, per crew (table below), scaled to the scheduled block | `configured city-pair patterns`, `ULRRestPlanner.approved_pattern` |
+| 7.18.6 / 7.18.7 | discretion: FDP + up to 3 h (> 2 h reported to the competent authority under this scheme); reduced rest away ≥ 24 h incl. 1 local night | params (reduced rest not yet checked) |
 | 7.6.3 Table 7-6 maximum daily FDP, acclimatised | by start at reference time and sectors (same rows as ORO.FTL.205(b) Table 2) | `core/qatar_ftl.py` `basic_max_fdp`; `compliance.calculate_fdp_limits` |
 | 7.6.3 Table 7-7 unknown state of acclimatisation (approved FRM) | 12:00 for 1–2 sectors, −0:30 per sector, 9:00 at 8 | same |
 | 7.6.5 Table 7-8 planned extension without in-flight rest | by start time and 1–5 sectors; not allowed 19:00–06:14; at most twice in 7 days; +2 h pre/post rest or +4 h post | `extension_max_fdp`; `easa_checks` (`fdp_max` info, `fdp_extension`) |
@@ -49,7 +53,7 @@ provenance in code comments and this note.
 | 7.13.5 time zones | Table 7-12 local nights at base after a rotation with ≥ 4 h difference; 14 h away after a ≥ 4 h FDP; 3 local nights between east-west rotations | `qatar_rest.table_7_12` |
 | 7.13.6 reduced rest | never below 12 h / 10 h; noted between that floor and the preceding duty | `qatar_rest` (`reduced_rest`) |
 | 7.13.7 recovery rest | 36 h incl. 2 local nights, ≤ 168 h apart; 2 local days twice a month | `easa_checks`, `qatar_rest` |
-| Compliance check | `QatarFTL718Validator` → `ulr_compliance` on each ULR duty | API `DutyResponse.ulr_compliance` |
+| Compliance check | `ULRComplianceValidator` → `ulr_compliance` on each ULR duty | API `DutyResponse.ulr_compliance` |
 
 Source: OM-A Chapter 7 (full chapter supplied by the owner, October 2026; the manual itself is
 not stored in the repository). Tables are pinned cell by cell in `tests/test_qatar_ftl.py`.
@@ -77,7 +81,7 @@ rotation (no rest in the first/last 90 min).
 
 - **Detection.** `IR` = **In-flight Rest** (CrewLink activity code on a sector, confirmed by
   the owner): on that sector the pilot is the augmenting crew taking in-flight rest rather
-  than the crew operating the departure. Qatar FTL 7.18.9.3: Crew A operates the outbound from base, Crew B the
+  than the crew operating the departure. Operator OM-A 7.18.9.3: Crew A operates the outbound from base, Crew B the
   return, and a pilot is in one crew for the whole pairing. So IR on the sector departing
   base → Crew B on both legs; IR on the sector arriving at base → Crew A on both legs
   (`parsers/roster_parser.py::auto_detect_crew_augmentation`). Both crews rest in flight on
@@ -107,6 +111,26 @@ rotation (no rest in the first/last 90 min).
   to be confirmed by the pilot). Watch cards and duty details show a crew badge
   ("4 pilots · ULR · Crew B", "3 pilots").
 
+## Audit fixes and coverage
+
+- Private FRM and ULR approvals are explicitly unverified. A calculated comparison
+  never receives a complete “passed” FDP coverage verdict from a roster alone.
+- Rest below the preceding duty now produces a warning: approval and compensation
+  cannot be inferred from a gap that merely clears the 12 h / 10 h floor.
+- Rest-boundary checks include intervening home standby; standby is not counted as
+  uninterrupted rest. A short gap after standby is flagged for call-out review,
+  without inventing a mandatory 12-hour rest after a legitimate call-out. The
+  call-out relationship and any FDP reduction remain unassessed.
+- Time-zone offsets are resolved at the actual UTC instant, including daylight-saving
+  transitions, rather than interpreting UTC clock fields as local wall time.
+- ULR warnings and missing history before/after the supplied roster are surfaced in
+  duty details. A planned FDP cannot use discretion as scheduled capacity.
+- Crew, rest facilities, ULR city pairs and rest rotations remain model assumptions
+  until confirmed. Pilots can choose the facility class; its FDP and sleep-efficiency
+  inputs are recalculated and retained in replay. ULR with a class-2/3 facility has no
+  FDP verdict because this configured ULR scheme assumes a class-1 bunk. A full
+  operator-profile selection/approval registry is not yet implemented; do not market these checks as universal regulatory certification.
+
 ## Not yet modelled
 
 | Item | OM-A | Why |
@@ -115,7 +139,7 @@ rotation (no rest in the first/last 90 min).
 | Split duty (+50 % of a break ≥ 3 h) | 7.6.7 | breaks are not identified on the roster |
 | Reduced-rest consequences (next rest extended, next FDP reduced, ≤ 2 between recovery rests) | 7.13.6 | reduced rest is not marked on the roster; it is only noted |
 | Delayed reporting | 7.7.2 | not on the roster |
-| Rest facility class other than class 1 | 7.6.6 | assumed bunk (class 1) unless the pilot sets it |
+| Rest facility class other than class 1 | 7.6.6 | bunk (class 1) defaults remain; pilots can select class 1/2/3 per augmented duty and re-run with the original roster file |
 | Reporting times (Tables 7-2 – 7-5) | 7.6.2 | the roster's printed report time is used |
 
 When the OM-A is revised, update `core/qatar_ftl.py` / `core/qatar_rest.py`, cite the paragraph,

@@ -7,11 +7,14 @@ import { dutyDateLabel, dutyPeakKss, dutyRiskLevel, dutyRoute, dutyTimes } from 
 import { RiskLabel, SeverityRule, TextAction } from './primitives';
 import { DutyDebriefAction } from '@/components/fatigue/debrief/DutyDebriefAction';
 import { useAnalysis } from '@/contexts/AnalysisContext';
+import { FATIGUE_INFO, InfoTooltip } from '@/components/ui/InfoTooltip';
+import { formatHomeTime } from '@/lib/home-time';
 
 interface DutyWatchCardProps {
   duty: DutyAnalysis;
   onDetails: (duty: DutyAnalysis) => void;
   onReportFatigue: (duty: DutyAnalysis) => void;
+  onConcern?: (duty: DutyAnalysis) => void;
   /** Reasons already stated once for the card's band group. */
   sharedReasons?: ReadonlySet<string>;
 }
@@ -21,8 +24,10 @@ interface DutyWatchCardProps {
  * what sets it apart · predicted peak KSS as the headline figure · two text
  * actions. The band's verbal anchor and shared reasons live in the group header.
  */
-export function DutyWatchCard({ duty, onDetails, onReportFatigue, sharedReasons }: DutyWatchCardProps) {
-  const analysisId = useAnalysis().state.analysisResults?.analysisId;
+export function DutyWatchCard({ duty, onDetails, onReportFatigue, onConcern, sharedReasons }: DutyWatchCardProps) {
+  const results = useAnalysis().state.analysisResults;
+  const analysisId = results?.analysisId;
+  const peakTime = formatHomeTime(duty.peakTimeUtc, results?.homeBaseTimezone);
   const level = dutyRiskLevel(duty);
   const rc = riskClasses(level);
   const kss = dutyPeakKss(duty);
@@ -55,10 +60,21 @@ export function DutyWatchCard({ duty, onDetails, onReportFatigue, sharedReasons 
               <span className="ml-1 font-sans text-xs font-normal text-muted-foreground">KSS</span>
             </p>
             <RiskLabel level={level} />
+            {peakTime && <p className="text-xs text-muted-foreground">Peak at {peakTime} home base</p>}
           </div>
         )}
 
         <div className="min-w-0 space-y-2 md:col-start-1 md:row-start-2">
+          <dl className="grid grid-cols-3 gap-x-3 gap-y-2 pb-1 text-xs" aria-label="Estimated fatigue context">
+            {([
+              ['Sleep before', duty.priorSleep, FATIGUE_INFO.priorSleep],
+              ['Longest awake', duty.maxHoursAwake, FATIGUE_INFO.hoursAwake],
+              ['Body-clock low', duty.woclExposure, FATIGUE_INFO.wocl],
+            ] as const).map(([label, value, entry]) => <div key={label} className="min-w-0">
+              <dt className="flex flex-wrap items-center gap-x-1 text-muted-foreground">{label}<InfoTooltip entry={entry} /></dt>
+              <dd className="mt-0.5 font-mono text-sm tabular">{value != null && Number.isFinite(value) ? `${value.toFixed(1)}h` : '—'}</dd>
+            </div>)}
+          </dl>
           {reasons.length > 0 && (
             <ul className="space-y-1 text-sm text-foreground/80" aria-label="Why this duty is flagged">
               {reasons.map((r, i) => (
@@ -73,7 +89,8 @@ export function DutyWatchCard({ duty, onDetails, onReportFatigue, sharedReasons 
             <TextAction onClick={() => onDetails(duty)} ariaLabel={`Details for duty on ${date}`}>
               Details
             </TextAction>
-            <TextAction onClick={() => onReportFatigue(duty)} ariaLabel={`Report fatigue for duty on ${date}`} emphasis>
+            {onConcern && duty.dutyId && <TextAction onClick={() => onConcern(duty)} ariaLabel={`Raise roster concern for ${date}`} emphasis>Raise a roster concern</TextAction>}
+            <TextAction onClick={() => onReportFatigue(duty)} ariaLabel={`Report fatigue for duty on ${date}`}>
               Report fatigue <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
             </TextAction>
             <DutyDebriefAction duty={duty} analysisId={analysisId} />

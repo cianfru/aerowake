@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { DutyAnalysis } from '@/types/fatigue';
-import { DutyDetailTimeline } from '@/hooks/useContinuousTimelineData';
+import type { DutyDetailTimeline } from '@/types/duty-timeline';
 import { ProcessBreakdownChart } from './ProcessBreakdownChart';
 
 interface PerformanceColumnProps {
